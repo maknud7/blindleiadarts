@@ -1,13 +1,15 @@
+@import url("../packages/ui-assets/brand-tokens.css");
+
 :root {
-  --bg: #101315;
-  --panel: #172025;
-  --panel-soft: #223139;
-  --ink: #f5f7f7;
-  --muted: rgba(245, 247, 247, 0.7);
+  --bg: #09131a;
+  --panel: rgba(11, 49, 69, 0.92);
+  --panel-soft: #1a4c64;
+  --ink: #f7fbfc;
+  --muted: rgba(247, 251, 252, 0.74);
   --line: rgba(255, 255, 255, 0.1);
-  --accent: #d95c2f;
+  --accent: var(--bd-brand-700);
   --green: #2d8b66;
-  --yellow: #f0aa3d;
+  --yellow: #d7c092;
 }
 
 * { box-sizing: border-box; }
@@ -16,9 +18,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(217, 92, 47, 0.2), transparent 22rem),
-    radial-gradient(circle at bottom right, rgba(45, 139, 102, 0.22), transparent 24rem),
-    linear-gradient(180deg, #0f1315 0%, #12181c 100%);
+    radial-gradient(circle at top left, rgba(58, 120, 152, 0.22), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(215, 192, 146, 0.12), transparent 24rem),
+    linear-gradient(180deg, #09131a 0%, #0d1b24 100%);
   color: var(--ink);
   font-family: "Trebuchet MS", "Gill Sans", sans-serif;
 }
@@ -46,6 +48,22 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.brandline {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  padding: 0.35rem;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--line);
 }
 
 .eyebrow {
@@ -90,7 +108,7 @@ select {
 }
 
 button {
-  background: linear-gradient(135deg, var(--accent), #a94522);
+  background: linear-gradient(135deg, var(--accent), var(--bd-brand-900));
   color: white;
   font-weight: 700;
   cursor: pointer;
@@ -166,8 +184,8 @@ button.ghost,
 }
 
 .player-box.active {
-  border-color: rgba(240, 170, 61, 0.5);
-  background: rgba(240, 170, 61, 0.12);
+  border-color: rgba(215, 192, 146, 0.55);
+  background: rgba(215, 192, 146, 0.13);
 }
 
 .player-box strong {
@@ -204,8 +222,13 @@ button.ghost,
   .score-header,
   .setup,
   .visit-form,
-  .actions {
+  .actions,
+  .brandline {
     flex-direction: column;
+  }
+
+  .brandline {
+    align-items: flex-start;
   }
 
   .quick-grid {

@@ -1,15 +1,17 @@
+@import url("../packages/ui-assets/brand-tokens.css");
+
 :root {
-  --bg: #efe9de;
-  --bg-deep: #e4ebdf;
-  --ink: #122026;
-  --muted: rgba(18, 32, 38, 0.66);
+  --bg: var(--bd-sand-50);
+  --bg-deep: #eef4f4;
+  --ink: var(--bd-ink);
+  --muted: rgba(16, 35, 47, 0.68);
   --card: rgba(255, 255, 255, 0.84);
   --card-strong: #ffffff;
-  --line: rgba(18, 32, 38, 0.12);
-  --accent: #cb5328;
-  --accent-soft: #f5ddd4;
-  --forest: #264d42;
-  --shadow: 0 24px 64px rgba(18, 32, 38, 0.12);
+  --line: var(--bd-line);
+  --accent: var(--bd-brand-800);
+  --accent-soft: var(--bd-brand-100);
+  --forest: var(--bd-brand-700);
+  --shadow: var(--bd-shadow);
   --radius: 24px;
 }
 
@@ -23,8 +25,8 @@ body {
   font-family: "Trebuchet MS", "Gill Sans", sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(circle at top left, rgba(203, 83, 40, 0.16), transparent 24rem),
-    radial-gradient(circle at right center, rgba(38, 77, 66, 0.18), transparent 28rem),
+    radial-gradient(circle at top left, rgba(17, 67, 93, 0.16), transparent 24rem),
+    radial-gradient(circle at right center, rgba(58, 120, 152, 0.18), transparent 28rem),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
 }
 
@@ -60,16 +62,15 @@ body {
   padding: 0.4rem 0;
 }
 
-.brand-mark {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--forest));
-  color: white;
-  font-weight: 700;
-  font-size: 1.4rem;
+.brand-logo {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  padding: 0.35rem;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(11, 49, 69, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7);
 }
 
 .eyebrow {
@@ -195,7 +196,7 @@ select {
 }
 
 button {
-  background: linear-gradient(135deg, var(--accent), #b64620);
+  background: linear-gradient(135deg, var(--accent), var(--forest));
   color: white;
   border: none;
   font-weight: 700;
@@ -276,7 +277,9 @@ button.ghost {
     grid-template-columns: 1fr;
   }
 
-  .hero {
+  .hero,
+  .brand {
     flex-direction: column;
+    align-items: flex-start;
   }
 }

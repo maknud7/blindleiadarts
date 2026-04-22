@@ -1,0 +1,13 @@
+:root {
+  --bd-brand-900: #0b3145;
+  --bd-brand-800: #11435d;
+  --bd-brand-700: #1a5a78;
+  --bd-brand-500: #3a7898;
+  --bd-brand-100: #dcebf2;
+  --bd-sand-50: #fbf8f2;
+  --bd-sand-100: #f1ece3;
+  --bd-sand-200: #e6dfd3;
+  --bd-ink: #10232f;
+  --bd-line: rgba(11, 49, 69, 0.12);
+  --bd-shadow: 0 24px 64px rgba(11, 49, 69, 0.14);
+}

@@ -5,25 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blindleia Darts</title>
   <style>
+    @import url("./packages/ui-assets/brand-tokens.css");
+
     :root {
-      --ink: #0f1b1f;
-      --mist: #eef3ef;
+      --ink: var(--bd-ink);
+      --mist: #eef4f4;
       --card: #ffffff;
-      --accent: #c84c27;
-      --accent-soft: #f2dfd8;
-      --forest: #285446;
-      --line: rgba(15, 27, 31, 0.12);
+      --accent: var(--bd-brand-800);
+      --accent-soft: var(--bd-brand-100);
+      --forest: var(--bd-brand-700);
+      --line: var(--bd-line);
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       min-height: 100vh;
       font-family: "Trebuchet MS", "Gill Sans", sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(200, 76, 39, 0.18), transparent 26rem),
-        radial-gradient(circle at bottom right, rgba(40, 84, 70, 0.18), transparent 30rem),
-        linear-gradient(180deg, #f8f7f4 0%, #eef3ef 100%);
+        radial-gradient(circle at top left, rgba(17, 67, 93, 0.18), transparent 26rem),
+        radial-gradient(circle at bottom right, rgba(58, 120, 152, 0.18), transparent 30rem),
+        linear-gradient(180deg, #fbf8f2 0%, #eef4f4 100%);
       color: var(--ink);
       display: grid;
       place-items: center;
@@ -31,27 +34,46 @@
     }
 
     main {
-      width: min(960px, 100%);
-      background: rgba(255,255,255,0.88);
+      width: min(1080px, 100%);
+      background: rgba(255,255,255,0.9);
       border: 1px solid var(--line);
       border-radius: 28px;
       backdrop-filter: blur(12px);
       padding: 2rem;
-      box-shadow: 0 24px 80px rgba(15, 27, 31, 0.12);
+      box-shadow: var(--bd-shadow);
     }
 
     h1 {
-      margin: 0 0 0.75rem;
+      margin: 0;
       font-family: Georgia, "Times New Roman", serif;
-      font-size: clamp(2.5rem, 6vw, 4.8rem);
+      font-size: clamp(2.4rem, 6vw, 4.8rem);
       line-height: 0.95;
     }
 
     p {
       margin: 0;
-      font-size: 1.1rem;
-      max-width: 42rem;
-      color: rgba(15, 27, 31, 0.8);
+      font-size: 1.08rem;
+      max-width: 44rem;
+      color: rgba(16, 35, 47, 0.8);
+    }
+
+    .brandlockup {
+      display: flex;
+      align-items: center;
+      gap: 1.4rem;
+      margin: 1rem 0 1.25rem;
+    }
+
+    .brandlockup img {
+      width: min(210px, 30vw);
+      height: auto;
+      object-fit: contain;
+    }
+
+    .brandcopy {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
     }
 
     .grid {
@@ -77,7 +99,7 @@
 
     a.card:hover {
       transform: translateY(-3px);
-      border-color: rgba(200, 76, 39, 0.35);
+      border-color: rgba(17, 67, 93, 0.35);
       box-shadow: 0 14px 30px rgba(15, 27, 31, 0.08);
     }
 
@@ -104,12 +126,29 @@
       color: rgba(15, 27, 31, 0.65);
       line-height: 1.45;
     }
+
+    @media (max-width: 760px) {
+      .brandlockup {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .brandlockup img {
+        width: min(240px, 60vw);
+      }
+    }
   </style>
 </head>
 <body>
   <main>
-    <span class="eyebrow">Blindleia Darts Platform</span>
-    <h1>Klubbportal, turneringsdrift og kiosk i samme løsning.</h1>
+    <span class="eyebrow">Blindleia Dartklubb Platform</span>
+    <div class="brandlockup">
+      <img src="./static/club-logos/blindleia-dartklubb-logo.png" alt="Blindleia Dartklubb logo">
+      <div class="brandcopy">
+        <h1>Klubbportal, turneringsdrift og kiosk i samme løsning.</h1>
+        <p>Samlet lokal runtime for portal, admin, kiosk og venueskjerm med tydelig klubbskille i bunnen.</p>
+      </div>
+    </div>
     <p>Testmiljøet er nå organisert som en lokal turneringsplattform med tydelig skille mellom medlem/portal, admin/backoffice, kiosk og skjerm.</p>
     <div class="grid">
       <a class="card" href="./admin/">

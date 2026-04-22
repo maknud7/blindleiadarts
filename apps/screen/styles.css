@@ -1,11 +1,13 @@
+@import url("../packages/ui-assets/brand-tokens.css");
+
 :root {
-  --bg: #0b0f13;
-  --panel: #121820;
+  --bg: #081219;
+  --panel: rgba(11, 49, 69, 0.9);
   --line: rgba(255,255,255,0.1);
   --ink: #f6f7f9;
   --muted: rgba(246,247,249,0.72);
-  --accent: #ef8f3c;
-  --blue: #2b4f7e;
+  --accent: #d7c092;
+  --blue: var(--bd-brand-700);
 }
 
 * { box-sizing: border-box; }
@@ -14,9 +16,9 @@ body {
   min-height: 100vh;
   font-family: "Trebuchet MS", "Gill Sans", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(239, 143, 60, 0.18), transparent 20rem),
-    radial-gradient(circle at bottom right, rgba(43, 79, 126, 0.22), transparent 24rem),
-    linear-gradient(180deg, #0b0f13 0%, #10161e 100%);
+    radial-gradient(circle at top left, rgba(215, 192, 146, 0.18), transparent 20rem),
+    radial-gradient(circle at bottom right, rgba(26, 90, 120, 0.22), transparent 24rem),
+    linear-gradient(180deg, #081219 0%, #0d1820 100%);
   color: var(--ink);
 }
 
@@ -40,6 +42,22 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.brandline {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-logo {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  padding: 0.35rem;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--line);
 }
 
 .eyebrow {
@@ -72,7 +90,7 @@ select {
 }
 
 button {
-  background: linear-gradient(135deg, var(--accent), #ce7025);
+  background: linear-gradient(135deg, var(--bd-brand-700), var(--bd-brand-900));
   color: white;
   border: none;
 }
@@ -109,8 +127,13 @@ button {
 
 @media (max-width: 980px) {
   .hero,
-  .controls {
+  .controls,
+  .brandline {
     flex-direction: column;
+  }
+
+  .brandline {
+    align-items: flex-start;
   }
 
   .grid,
