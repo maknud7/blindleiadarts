@@ -10,8 +10,10 @@ return static function (mysqli $mysqli, string $prefix): void {
     $tournamentName = 'Blindleia Test Cup';
     $tournamentSlug = 'blindleia-test-cup';
     $kiosks = [
-        ['code' => 'BOARD-1', 'name' => 'Board 1', 'board_number' => 1, 'sponsor_label' => 'Sparebanken Sør', 'scoring_mode' => 'manual'],
-        ['code' => 'BOARD-2', 'name' => 'Board 2', 'board_number' => 2, 'sponsor_label' => 'Meny Lillesand', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-1', 'name' => 'Board 1', 'board_number' => 1, 'sponsor_label' => 'Sparebanken Norge', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-2', 'name' => 'Board 2', 'board_number' => 2, 'sponsor_label' => 'MENY Lillesand', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-3', 'name' => 'Board 3', 'board_number' => 3, 'sponsor_label' => 'Montér Lillesand', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-4', 'name' => 'Board 4', 'board_number' => 4, 'sponsor_label' => 'Circle K E18 Lillesand', 'scoring_mode' => 'manual'],
     ];
     $samplePlayers = [
         'Andre Kendrick',
@@ -106,6 +108,24 @@ return static function (mysqli $mysqli, string $prefix): void {
             $insertKiosk->execute();
             $kioskId = (int) $insertKiosk->insert_id;
             $insertKiosk->close();
+        } else {
+            $sponsorLogoUrl = null;
+            $updateKiosk = $mysqli->prepare(
+                "UPDATE `{$prefix}kiosks`
+                 SET `name` = ?, `board_number` = ?, `sponsor_label` = ?, `sponsor_logo_url` = ?, `scoring_mode` = ?
+                 WHERE `id` = ?"
+            );
+            $updateKiosk->bind_param(
+                'sisssi',
+                $kiosk['name'],
+                $kiosk['board_number'],
+                $kiosk['sponsor_label'],
+                $sponsorLogoUrl,
+                $kiosk['scoring_mode'],
+                $kioskId
+            );
+            $updateKiosk->execute();
+            $updateKiosk->close();
         }
 
         $kioskIds[$kiosk['code']] = $kioskId;
