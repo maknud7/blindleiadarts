@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Blindleia\Dartkiosk\Api\Support;
 
+use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeConfig;
 use RuntimeException;
 
 final class Config
@@ -74,5 +75,23 @@ final class Config
     public function dbTablePrefix(): string
     {
         return (string) (($this->config['db']['table_prefix'] ?? '') ?: '');
+    }
+
+    public function challonge(): ChallongeConfig
+    {
+        /** @var array<string, mixed> $challonge */
+        $challonge = is_array($this->config['challonge'] ?? null) ? $this->config['challonge'] : [];
+
+        /** @var array<int, string> $defaultScopes */
+        $defaultScopes = is_array($challonge['default_scopes'] ?? null) ? $challonge['default_scopes'] : [];
+
+        return new ChallongeConfig(
+            (string) (($challonge['api_base_url'] ?? 'https://api.challonge.com/v2.1') ?: 'https://api.challonge.com/v2.1'),
+            (string) (($challonge['oauth_authorize_url'] ?? 'https://api.challonge.com/oauth/authorize') ?: 'https://api.challonge.com/oauth/authorize'),
+            (string) (($challonge['oauth_token_url'] ?? 'https://api.challonge.com/oauth/token') ?: 'https://api.challonge.com/oauth/token'),
+            (string) (($challonge['client_id'] ?? '') ?: ''),
+            (string) (($challonge['client_secret'] ?? '') ?: ''),
+            $defaultScopes
+        );
     }
 }

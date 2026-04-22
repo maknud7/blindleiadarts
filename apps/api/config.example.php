@@ -12,4 +12,17 @@ return [
         'password' => 'database_password',
         'table_prefix' => 'bd_test_',
     ],
+    'challonge' => [
+        'api_base_url' => 'https://api.challonge.com/v2.1',
+        'oauth_authorize_url' => 'https://api.challonge.com/oauth/authorize',
+        'oauth_token_url' => 'https://api.challonge.com/oauth/token',
+        'client_id' => '',
+        'client_secret' => '',
+        'default_scopes' => [
+            'me',
+            'tournaments:read',
+            'participants:read',
+            'matches:read',
+        ],
+    ],
 ];

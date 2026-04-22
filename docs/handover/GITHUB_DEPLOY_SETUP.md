@@ -29,6 +29,8 @@ Add these repository secrets under `Settings -> Secrets and variables -> Actions
 - `DB_NAME` = `ingentingorg02`
 - `DB_USERNAME` = `ingentingorg02`
 - `DB_PASSWORD` = database password
+- `CHALLONGE_CLIENT_ID` = Challonge OAuth client id
+- `CHALLONGE_CLIENT_SECRET` = Challonge OAuth client secret
 
 ## GitHub Variables To Add
 
@@ -38,6 +40,7 @@ Add these repository variables:
 - `TEST_STATIC_BASE_URL`
 - `PROD_BASE_URL`
 - `PROD_STATIC_BASE_URL`
+- `CHALLONGE_DEFAULT_SCOPES`
 
 Examples:
 
@@ -45,6 +48,7 @@ Examples:
 - `TEST_STATIC_BASE_URL` -> URL for the test static folder
 - `PROD_BASE_URL` -> URL for the production app root
 - `PROD_STATIC_BASE_URL` -> URL for the production static folder
+- `CHALLONGE_DEFAULT_SCOPES` -> optional comma-separated scopes such as `me,tournaments:read,participants:read,matches:read`
 
 ## One-Time Remote Folder Setup
 

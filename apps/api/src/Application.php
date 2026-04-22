@@ -9,6 +9,7 @@ use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuth;
 use mysqli_sql_exception;
 use Throwable;
 
@@ -66,6 +67,7 @@ final class Application
                 'routes' => [
                     'GET /v1/health',
                     'GET /v1/kiosks/{code}/state',
+                    'GET /v1/connectors/challonge/authorize-url',
                 ],
             ]);
         }
@@ -97,6 +99,43 @@ final class Application
             }
 
             return JsonResponse::ok($state);
+        }
+
+        if ($method === 'GET' && $path === 'v1/connectors/challonge/authorize-url') {
+            $challonge = $config->challonge();
+
+            if (!$challonge->isConfigured()) {
+                return JsonResponse::error(
+                    503,
+                    'challonge_not_configured',
+                    'Challonge OAuth credentials are not configured on the server.'
+                );
+            }
+
+            $redirectUri = isset($_GET['redirect_uri']) ? trim((string) $_GET['redirect_uri']) : '';
+
+            if ($redirectUri === '') {
+                return JsonResponse::error(
+                    422,
+                    'redirect_uri_required',
+                    'Query parameter redirect_uri is required.'
+                );
+            }
+
+            $scopes = isset($_GET['scopes'])
+                ? array_values(array_filter(array_map('trim', explode(',', (string) $_GET['scopes']))))
+                : [];
+
+            $communityId = isset($_GET['community_id']) ? trim((string) $_GET['community_id']) : null;
+            $stateToken = isset($_GET['state']) ? trim((string) $_GET['state']) : null;
+
+            $oauth = new ChallongeOAuth($challonge);
+
+            return JsonResponse::ok([
+                'provider' => 'challonge',
+                'authorize_url' => $oauth->buildAuthorizationUrl($redirectUri, $scopes, $communityId, $stateToken),
+                'scopes' => $scopes !== [] ? $scopes : $challonge->defaultScopes(),
+            ]);
         }
 
         return JsonResponse::error(404, 'not_found', 'The requested endpoint was not found.');

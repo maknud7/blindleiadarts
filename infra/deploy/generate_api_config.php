@@ -39,6 +39,17 @@ $config = [
         'password' => env_required('DB_PASSWORD'),
         'table_prefix' => env_required('DB_TABLE_PREFIX'),
     ],
+    'challonge' => [
+        'api_base_url' => getenv('CHALLONGE_API_BASE_URL') ?: 'https://api.challonge.com/v2.1',
+        'oauth_authorize_url' => getenv('CHALLONGE_OAUTH_AUTHORIZE_URL') ?: 'https://api.challonge.com/oauth/authorize',
+        'oauth_token_url' => getenv('CHALLONGE_OAUTH_TOKEN_URL') ?: 'https://api.challonge.com/oauth/token',
+        'client_id' => getenv('CHALLONGE_CLIENT_ID') ?: '',
+        'client_secret' => getenv('CHALLONGE_CLIENT_SECRET') ?: '',
+        'default_scopes' => array_values(array_filter(array_map(
+            static fn (string $value): string => trim($value),
+            explode(',', getenv('CHALLONGE_DEFAULT_SCOPES') ?: 'me,tournaments:read,participants:read,matches:read')
+        ))),
+    ],
 ];
 
 $directory = dirname($output);
@@ -56,4 +67,3 @@ if (file_put_contents($output, $contents) === false) {
 }
 
 fwrite(STDOUT, "Wrote API config to {$output}" . PHP_EOL);
-
