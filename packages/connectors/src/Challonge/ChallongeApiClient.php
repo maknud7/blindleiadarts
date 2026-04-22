@@ -45,6 +45,7 @@ final class ChallongeApiClient
         $url = $this->config->apiBaseUrl() . '/' . ltrim($path, '/');
         $headers = [
             'Accept: application/json',
+            'Content-Type: application/vnd.api+json',
             'Authorization-Type: v2',
             'Authorization: Bearer ' . $accessToken,
         ];
@@ -61,7 +62,6 @@ final class ChallongeApiClient
 
         if ($payload !== null) {
             $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $headers[] = 'Content-Type: application/json';
             curl_setopt($handle, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($handle, CURLOPT_POSTFIELDS, $body);
         }
