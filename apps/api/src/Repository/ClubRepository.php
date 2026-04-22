@@ -220,7 +220,9 @@ final class ClubRepository
     public function listKiosksByClubId(int $clubId): array
     {
         $sql = sprintf(
-            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active, last_seen_at
+            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode,
+                    CASE WHEN pairing_token_hash IS NULL OR pairing_token_hash = "" THEN 0 ELSE 1 END AS is_paired,
+                    paired_device_name, paired_at, is_active, last_seen_at
              FROM `%1$skiosks`
              WHERE club_id = ?
              ORDER BY board_number ASC, name ASC',
@@ -253,8 +255,8 @@ final class ClubRepository
         $isActive = 1;
 
         $sql = sprintf(
-            'INSERT INTO `%1$skiosks` (club_id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO `%1$skiosks` (club_id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, pairing_token_hash, paired_device_name, paired_at, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)',
             $this->tablePrefix
         );
 
@@ -311,6 +313,32 @@ final class ClubRepository
             $kioskId,
             $clubId
         );
+        $statement->execute();
+        $statement->close();
+
+        return $this->findKioskById($clubId, $kioskId);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function resetKioskPairing(int $clubId, int $kioskId): ?array
+    {
+        $existing = $this->findKioskById($clubId, $kioskId);
+
+        if ($existing === null) {
+            return null;
+        }
+
+        $sql = sprintf(
+            'UPDATE `%1$skiosks`
+             SET pairing_token_hash = NULL, paired_device_name = NULL, paired_at = NULL
+             WHERE id = ? AND club_id = ?',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('ii', $kioskId, $clubId);
         $statement->execute();
         $statement->close();
 
@@ -424,7 +452,9 @@ final class ClubRepository
     private function findKioskById(int $clubId, int $kioskId): ?array
     {
         $sql = sprintf(
-            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active, last_seen_at
+            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode,
+                    CASE WHEN pairing_token_hash IS NULL OR pairing_token_hash = "" THEN 0 ELSE 1 END AS is_paired,
+                    paired_device_name, paired_at, is_active, last_seen_at
              FROM `%1$skiosks`
              WHERE id = ? AND club_id = ?
              LIMIT 1',

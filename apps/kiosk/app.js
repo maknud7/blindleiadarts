@@ -2,6 +2,7 @@ const API_ROOT = "../api/v1";
 
 const state = {
   kioskCode: localStorage.getItem("bd:kioskCode") || "",
+  pairingToken: localStorage.getItem("bd:kioskPairingToken") || "",
   snapshot: null,
   pollHandle: null,
   inputMode: localStorage.getItem("bd:kioskInputMode") || "sum",
@@ -26,6 +27,7 @@ const elements = {
   matchState: document.getElementById("matchState"),
   kioskMeta: document.getElementById("kioskMeta"),
   refreshButton: document.getElementById("refreshButton"),
+  unpairButton: document.getElementById("unpairButton"),
   startMatchButton: document.getElementById("startMatchButton"),
   undoButton: document.getElementById("undoButton"),
   playerABox: document.getElementById("playerABox"),
@@ -60,9 +62,19 @@ const elements = {
 };
 
 async function api(path, { method = "GET", body } = {}) {
+  const headers = {};
+
+  if (body) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (state.pairingToken) {
+    headers["X-Kiosk-Pairing-Token"] = state.pairingToken;
+  }
+
   const response = await fetch(`${API_ROOT}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
@@ -82,6 +94,36 @@ function showToast(message) {
   state.toastHandle = window.setTimeout(() => {
     elements.toast.classList.add("hidden");
   }, 2400);
+}
+
+function persistPairing(code, token) {
+  state.kioskCode = code;
+  state.pairingToken = token;
+  localStorage.setItem("bd:kioskCode", code);
+  localStorage.setItem("bd:kioskPairingToken", token);
+}
+
+function clearPairing() {
+  state.kioskCode = "";
+  state.pairingToken = "";
+  localStorage.removeItem("bd:kioskCode");
+  localStorage.removeItem("bd:kioskPairingToken");
+}
+
+function ensurePairingToken() {
+  if (!state.pairingToken) {
+    state.pairingToken = window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `kiosk-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  localStorage.setItem("bd:kioskPairingToken", state.pairingToken);
+  return state.pairingToken;
+}
+
+function deviceName() {
+  const host = window.location.hostname || "tablet";
+  return `Nettbrett ${host}`;
 }
 
 function resetInputBuffers() {
@@ -136,7 +178,7 @@ function applyClubBranding(club) {
     .join("")
     .toUpperCase();
 
-  elements.brandTitle.textContent = club?.name ? `${club.name} kiosk` : "Kampflyt ved skiva";
+  elements.brandTitle.textContent = club?.name ? `${club.name} kiosk` : "Board kiosk";
   elements.brandFallback.textContent = initials || "KL";
 
   if (club?.logo_url) {
@@ -157,9 +199,11 @@ function renderIdle(snapshot) {
 
   elements.idleState.classList.remove("hidden");
   elements.matchState.classList.add("hidden");
-  elements.laneTitle.textContent = kiosk?.sponsor_label ? `${boardTitle} · ${kiosk.sponsor_label}` : boardTitle;
+  elements.unpairButton.classList.remove("hidden");
+  elements.kioskSetupForm.classList.add("hidden");
+  elements.laneTitle.textContent = kiosk?.sponsor_label ? `${boardTitle} - ${kiosk.sponsor_label}` : boardTitle;
   elements.idleLane.textContent = boardTitle;
-  elements.idleSponsor.textContent = kiosk?.sponsor_label || "Venter på neste tildelte kamp";
+  elements.idleSponsor.textContent = kiosk?.sponsor_label || "Venter pa neste tildelte kamp";
 
   if (kiosk?.club?.logo_url) {
     elements.idleClubLogo.src = kiosk.club.logo_url;
@@ -183,8 +227,12 @@ function renderDisconnected() {
   elements.idleState.classList.remove("hidden");
   elements.matchState.classList.add("hidden");
   elements.laneTitle.textContent = "Board -";
-  elements.idleLane.textContent = "Koble til kiosk";
-  elements.idleSponsor.textContent = "Legg inn kiosk-koden fra admin for å hente boardets kampflyt.";
+  elements.kioskSetupForm.classList.remove("hidden");
+  elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
+  elements.idleLane.textContent = state.kioskCode ? "Kiosk frakoblet" : "Par nettbrett";
+  elements.idleSponsor.textContent = state.kioskCode
+    ? "Denne enheten trenger ny paring eller har mistet tilgang."
+    : "Legg inn kiosk-koden fra admin for aa pare dette nettbrettet fast til et board.";
   elements.idleClubLogo.hidden = true;
   elements.idleSponsorLogo.hidden = true;
 }
@@ -195,7 +243,7 @@ function renderRecentVisits(match) {
   elements.recentVisits.innerHTML = visits.length
     ? visits.map((visit) => `
         <div class="pill">
-          ${visit.player_name} · Visit ${visit.visit_number} · ${visit.score}${Number(visit.is_bust) === 1 ? " · Bust" : ""}${visit.input_mode ? ` · ${visit.input_mode}` : ""}
+          ${visit.player_name} - Visit ${visit.visit_number} - ${visit.score}${Number(visit.is_bust) === 1 ? " - Bust" : ""}${visit.input_mode ? ` - ${visit.input_mode}` : ""}
         </div>
       `).join("")
     : `<div class="pill">Ingen visits registrert ennå.</div>`;
@@ -213,7 +261,7 @@ function renderSumPanel() {
   elements.sumDisplay.classList.toggle("error", score > 180);
 
   if (!rawValue) {
-    elements.sumAfter.textContent = "Gjenstår: -";
+    elements.sumAfter.textContent = "Gjenstar: -";
     elements.sumAfter.className = "after-pill";
     return;
   }
@@ -230,7 +278,7 @@ function renderSumPanel() {
     return;
   }
 
-  elements.sumAfter.textContent = `Gjenstår: ${remainingAfter}`;
+  elements.sumAfter.textContent = `Gjenstar: ${remainingAfter}`;
   elements.sumAfter.className = "after-pill ok";
 }
 
@@ -248,7 +296,7 @@ function renderDartPanel() {
   elements.dartSumChip.textContent = `Sum: ${score}`;
 
   if (!state.darts.length) {
-    elements.dartAfterChip.textContent = "Gjenstår: -";
+    elements.dartAfterChip.textContent = "Gjenstar: -";
     elements.dartAfterChip.className = "chip";
   } else if (checkout) {
     elements.dartAfterChip.textContent = "Checkout";
@@ -257,7 +305,7 @@ function renderDartPanel() {
     elements.dartAfterChip.textContent = "Bust";
     elements.dartAfterChip.className = "chip bad";
   } else {
-    elements.dartAfterChip.textContent = `Gjenstår: ${remainingAfter}`;
+    elements.dartAfterChip.textContent = `Gjenstar: ${remainingAfter}`;
     elements.dartAfterChip.className = "chip";
   }
 
@@ -275,7 +323,7 @@ function renderInputMode() {
   elements.modeDartButton.disabled = !manualMode;
 
   if (!manualMode) {
-    elements.kioskModeHint.textContent = "Denne kiosken er satt til Scolia og venter på eksterne kast/eventer.";
+    elements.kioskModeHint.textContent = "Denne kiosken er satt til Scolia og venter pa eksterne eventer.";
     return;
   }
 
@@ -297,17 +345,19 @@ function renderMatch(snapshot) {
 
   elements.idleState.classList.add("hidden");
   elements.matchState.classList.remove("hidden");
+  elements.kioskSetupForm.classList.add("hidden");
+  elements.unpairButton.classList.remove("hidden");
   elements.kioskCodeInput.value = kiosk.code;
-  elements.laneTitle.textContent = kiosk.sponsor_label ? `Board ${kiosk.board_number} · ${kiosk.sponsor_label}` : `Board ${kiosk.board_number}`;
+  elements.laneTitle.textContent = kiosk.sponsor_label ? `Board ${kiosk.board_number} - ${kiosk.sponsor_label}` : `Board ${kiosk.board_number}`;
   elements.kioskMeta.innerHTML = `
     <span class="pill">${kiosk.name}</span>
     <span class="pill">${kiosk.code}</span>
     <span class="pill">${kiosk.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</span>
+    ${kiosk.paired_device_name ? `<span class="pill">${kiosk.paired_device_name}</span>` : ""}
     ${kiosk.sponsor_label ? `<span class="pill">${kiosk.sponsor_label}</span>` : ""}
   `;
 
   elements.startMatchButton.classList.toggle("hidden", snapshot.state !== "assigned");
-
   elements.playerABox.classList.toggle("active", currentIsA);
   elements.playerBBox.classList.toggle("active", currentIsB);
   elements.playerAName.textContent = match.player_a.display_name;
@@ -316,7 +366,7 @@ function renderMatch(snapshot) {
   elements.playerBRemaining.textContent = match.player_b.remaining;
   elements.playerALegs.textContent = `${match.player_a.legs_won} legs`;
   elements.playerBLegs.textContent = `${match.player_b.legs_won} legs`;
-  elements.legInfo.textContent = `Leg ${match.current_leg.leg_number} · Best of ${match.best_of_legs} · ${match.status}`;
+  elements.legInfo.textContent = `Leg ${match.current_leg.leg_number} - Best of ${match.best_of_legs} - ${match.status}`;
 
   renderInputMode();
   renderSumPanel();
@@ -353,6 +403,39 @@ async function loadState() {
 
   state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`);
   renderState();
+}
+
+async function pairKiosk() {
+  const kioskCode = elements.kioskCodeInput.value.trim().toUpperCase();
+
+  if (!kioskCode) {
+    showToast("Legg inn kiosk-koden forst.");
+    return;
+  }
+
+  const pairingToken = ensurePairingToken();
+  state.snapshot = await api("/kiosks/pair", {
+    method: "POST",
+    body: {
+      code: kioskCode,
+      pairing_token: pairingToken,
+      device_name: deviceName(),
+    },
+  });
+
+  persistPairing(kioskCode, pairingToken);
+  renderState();
+}
+
+async function unpairKiosk() {
+  if (state.kioskCode && state.pairingToken) {
+    await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/unpair`, { method: "POST" });
+  }
+
+  window.clearInterval(state.pollHandle);
+  clearPairing();
+  state.snapshot = null;
+  renderDisconnected();
 }
 
 async function startMatch() {
@@ -554,10 +637,20 @@ function startPolling() {
 function bindEvents() {
   elements.kioskSetupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    state.kioskCode = elements.kioskCodeInput.value.trim();
-    localStorage.setItem("bd:kioskCode", state.kioskCode);
-    await loadState();
-    startPolling();
+
+    try {
+      await pairKiosk();
+      startPolling();
+      showToast("Nettbrettet er paret med kiosken.");
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+
+  elements.unpairButton.addEventListener("click", () => {
+    unpairKiosk()
+      .then(() => showToast("Paringen er fjernet fra nettbrettet."))
+      .catch((error) => showToast(error.message));
   });
 
   elements.refreshButton.addEventListener("click", () => {
@@ -641,8 +734,13 @@ async function bootstrap() {
     return;
   }
 
-  await loadState();
-  startPolling();
+  try {
+    await loadState();
+    startPolling();
+  } catch (error) {
+    renderDisconnected();
+    showToast(error.message);
+  }
 }
 
 bootstrap();

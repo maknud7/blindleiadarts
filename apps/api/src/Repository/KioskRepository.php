@@ -21,9 +21,9 @@ final class KioskRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function findKioskStateByCode(string $kioskCode): ?array
+    public function findKioskStateByCode(string $kioskCode, ?string $pairingToken = null): ?array
     {
-        $kiosk = $this->findKioskByCode($kioskCode);
+        $kiosk = $this->requireKioskAccessByCode($kioskCode, $pairingToken);
 
         if ($kiosk === null) {
             return null;
@@ -35,9 +35,9 @@ final class KioskRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function startAssignedMatchByCode(string $kioskCode): ?array
+    public function startAssignedMatchByCode(string $kioskCode, ?string $pairingToken = null): ?array
     {
-        $kiosk = $this->findKioskByCode($kioskCode);
+        $kiosk = $this->requireKioskAccessByCode($kioskCode, $pairingToken);
 
         if ($kiosk === null) {
             return null;
@@ -73,9 +73,9 @@ final class KioskRepository
      * @param array<string, mixed> $payload
      * @return array<string, mixed>|null
      */
-    public function recordVisitByCode(string $kioskCode, array $payload): ?array
+    public function recordVisitByCode(string $kioskCode, array $payload, ?string $pairingToken = null): ?array
     {
-        $kiosk = $this->findKioskByCode($kioskCode);
+        $kiosk = $this->requireKioskAccessByCode($kioskCode, $pairingToken);
 
         if ($kiosk === null) {
             return null;
@@ -151,9 +151,9 @@ final class KioskRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function undoLastVisitByCode(string $kioskCode): ?array
+    public function undoLastVisitByCode(string $kioskCode, ?string $pairingToken = null): ?array
     {
-        $kiosk = $this->findKioskByCode($kioskCode);
+        $kiosk = $this->requireKioskAccessByCode($kioskCode, $pairingToken);
 
         if ($kiosk === null) {
             return null;
@@ -188,6 +188,78 @@ final class KioskRepository
         $statement->close();
 
         return $this->buildKioskState($kiosk);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function pairKioskByCode(string $kioskCode, string $pairingToken, ?string $deviceName = null): ?array
+    {
+        $kiosk = $this->findKioskByCode($kioskCode);
+
+        if ($kiosk === null) {
+            return null;
+        }
+
+        $deviceName = $this->normalizeDeviceName($deviceName);
+        $existingHash = (string) ($kiosk['pairing_token_hash'] ?? '');
+
+        if ($existingHash !== '') {
+            if (!password_verify($pairingToken, $existingHash)) {
+                throw new KioskAccessException(
+                    'kiosk_paired_to_other_device',
+                    'Denne kiosken er allerede paret mot et annet nettbrett.',
+                    409
+                );
+            }
+
+            $this->touchKioskPairing((int) $kiosk['id'], $deviceName, false);
+            $kiosk = $this->findKioskByCode($kioskCode);
+            return $kiosk !== null ? $this->buildKioskState($kiosk) : null;
+        }
+
+        $tokenHash = password_hash($pairingToken, PASSWORD_DEFAULT);
+        $sql = sprintf(
+            'UPDATE `%1$skiosks`
+             SET pairing_token_hash = ?, paired_device_name = ?, paired_at = NOW(), last_seen_at = NOW()
+             WHERE id = ?',
+            $this->tablePrefix
+        );
+        $statement = $this->connection->prepare($sql);
+        $kioskId = (int) $kiosk['id'];
+        $statement->bind_param('ssi', $tokenHash, $deviceName, $kioskId);
+        $statement->execute();
+        $statement->close();
+
+        $kiosk = $this->findKioskByCode($kioskCode);
+        return $kiosk !== null ? $this->buildKioskState($kiosk) : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function unpairKioskByCode(string $kioskCode, ?string $pairingToken = null): ?array
+    {
+        $kiosk = $this->requireKioskAccessByCode($kioskCode, $pairingToken);
+
+        if ($kiosk === null) {
+            return null;
+        }
+
+        $sql = sprintf(
+            'UPDATE `%1$skiosks`
+             SET pairing_token_hash = NULL, paired_device_name = NULL, paired_at = NULL
+             WHERE id = ?',
+            $this->tablePrefix
+        );
+        $statement = $this->connection->prepare($sql);
+        $kioskId = (int) $kiosk['id'];
+        $statement->bind_param('i', $kioskId);
+        $statement->execute();
+        $statement->close();
+
+        $freshKiosk = $this->findKioskByCode($kioskCode);
+        return $freshKiosk !== null ? $this->buildKioskState($freshKiosk) : null;
     }
 
     /**
@@ -282,6 +354,9 @@ final class KioskRepository
             'sponsor_label' => $kiosk['sponsor_label'],
             'sponsor_logo_url' => $kiosk['sponsor_logo_url'],
             'scoring_mode' => $kiosk['scoring_mode'] ?? 'manual',
+            'is_paired' => !empty($kiosk['pairing_token_hash']),
+            'paired_device_name' => $kiosk['paired_device_name'] ?? null,
+            'paired_at' => $kiosk['paired_at'] ?? null,
         ];
     }
 
@@ -301,7 +376,10 @@ final class KioskRepository
                 k.board_number,
                 k.sponsor_label,
                 k.sponsor_logo_url,
-                k.scoring_mode
+                k.scoring_mode,
+                k.pairing_token_hash,
+                k.paired_device_name,
+                k.paired_at
              FROM `%1$skiosks` k
              INNER JOIN `%1$sclubs` c ON c.id = k.club_id
              WHERE code = ?
@@ -317,6 +395,82 @@ final class KioskRepository
         $statement->close();
 
         return $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function requireKioskAccessByCode(string $kioskCode, ?string $pairingToken): ?array
+    {
+        $kiosk = $this->findKioskByCode($kioskCode);
+
+        if ($kiosk === null) {
+            return null;
+        }
+
+        $existingHash = (string) ($kiosk['pairing_token_hash'] ?? '');
+
+        if ($existingHash === '') {
+            return $kiosk;
+        }
+
+        if (!is_string($pairingToken) || trim($pairingToken) === '') {
+            throw new KioskAccessException(
+                'kiosk_pairing_required',
+                'Denne kiosken er paret til et nettbrett og krever gyldig paringstoken.',
+                403
+            );
+        }
+
+        if (!password_verify($pairingToken, $existingHash)) {
+            throw new KioskAccessException(
+                'kiosk_paired_to_other_device',
+                'Denne kiosken er allerede paret mot et annet nettbrett.',
+                409
+            );
+        }
+
+        $this->touchKioskPairing((int) $kiosk['id'], null, true);
+
+        return $this->findKioskByCode($kioskCode);
+    }
+
+    private function touchKioskPairing(int $kioskId, ?string $deviceName = null, bool $keepPairingDate = true): void
+    {
+        if ($deviceName !== null) {
+            $sql = sprintf(
+                'UPDATE `%1$skiosks`
+                 SET last_seen_at = NOW(), paired_device_name = ?, paired_at = %2$s
+                 WHERE id = ?',
+                $this->tablePrefix,
+                $keepPairingDate ? 'paired_at' : 'NOW()'
+            );
+            $statement = $this->connection->prepare($sql);
+            $statement->bind_param('si', $deviceName, $kioskId);
+            $statement->execute();
+            $statement->close();
+            return;
+        }
+
+        $sql = sprintf(
+            'UPDATE `%1$skiosks` SET last_seen_at = NOW() WHERE id = ?',
+            $this->tablePrefix
+        );
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $kioskId);
+        $statement->execute();
+        $statement->close();
+    }
+
+    private function normalizeDeviceName(?string $deviceName): string
+    {
+        $deviceName = trim((string) $deviceName);
+
+        if ($deviceName === '') {
+            return 'Nettbrett';
+        }
+
+        return substr($deviceName, 0, 150);
     }
 
     /**

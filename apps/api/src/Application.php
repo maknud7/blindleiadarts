@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
 use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
+use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
@@ -42,6 +43,12 @@ final class Application
             $database = new Database($config);
 
             $response = $this->dispatch($request, $config, $database);
+        } catch (KioskAccessException $exception) {
+            $response = JsonResponse::error(
+                $exception->statusCode(),
+                $exception->errorCode(),
+                $exception->getMessage()
+            );
         } catch (mysqli_sql_exception $exception) {
             $response = JsonResponse::error(
                 500,
@@ -97,12 +104,15 @@ final class Application
                     'GET /v1/clubs/{id}/kiosks',
                     'POST /v1/clubs/{id}/kiosks',
                     'PATCH /v1/clubs/{id}/kiosks/{kioskId}',
+                    'POST /v1/clubs/{id}/kiosks/{kioskId}/reset-pairing',
                     'GET /v1/tournaments/{id}',
                     'GET /v1/tournaments/{id}/matches',
                     'POST /v1/tournaments/{id}/register',
                     'POST /v1/tournaments/{id}/matches',
                     'POST /v1/matches/{id}/assign-kiosk',
                     'GET /v1/kiosks/{code}/state',
+                    'POST /v1/kiosks/pair',
+                    'POST /v1/kiosks/{code}/unpair',
                     'POST /v1/kiosks/{code}/start-match',
                     'POST /v1/kiosks/{code}/visit',
                     'POST /v1/kiosks/{code}/undo',
@@ -342,6 +352,30 @@ final class Application
             ]);
         }
 
+        if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/kiosks/(\d+)/reset-pairing$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $kiosk = $clubRepository->resetKioskPairing((int) $matches[1], (int) $matches[2]);
+
+            if ($kiosk === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'Kiosk was not found for the selected club.');
+            }
+
+            return JsonResponse::ok([
+                'kiosk' => $kiosk,
+            ]);
+        }
+
         if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)$#', $path, $matches) === 1) {
             $tournament = $tournamentRepository->findById((int) $matches[1]);
 
@@ -424,9 +458,32 @@ final class Application
             ]);
         }
 
+        if ($method === 'POST' && $path === 'v1/kiosks/pair') {
+            $payload = $request->jsonBody();
+            $kioskCode = trim((string) ($payload['code'] ?? ''));
+            $pairingToken = trim((string) ($payload['pairing_token'] ?? ''));
+            $deviceName = trim((string) ($payload['device_name'] ?? ''));
+
+            if ($kioskCode === '' || $pairingToken === '') {
+                return JsonResponse::error(
+                    422,
+                    'kiosk_pairing_payload_required',
+                    'Both code and pairing_token are required to pair a kiosk.'
+                );
+            }
+
+            $state = $kioskRepository->pairKioskByCode($kioskCode, $pairingToken, $deviceName !== '' ? $deviceName : null);
+
+            if ($state === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
+            }
+
+            return JsonResponse::ok($state);
+        }
+
         if ($method === 'GET' && preg_match('#^v1/kiosks/([^/]+)/state$#', $path, $matches) === 1) {
             $kioskCode = urldecode($matches[1]);
-            $state = $kioskRepository->findKioskStateByCode($kioskCode);
+            $state = $kioskRepository->findKioskStateByCode($kioskCode, $request->header('x-kiosk-pairing-token'));
 
             if ($state === null) {
                 return JsonResponse::error(
@@ -440,8 +497,24 @@ final class Application
             return JsonResponse::ok($state);
         }
 
+        if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/unpair$#', $path, $matches) === 1) {
+            $state = $kioskRepository->unpairKioskByCode(
+                urldecode($matches[1]),
+                $request->header('x-kiosk-pairing-token')
+            );
+
+            if ($state === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
+            }
+
+            return JsonResponse::ok($state);
+        }
+
         if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/start-match$#', $path, $matches) === 1) {
-            $state = $kioskRepository->startAssignedMatchByCode(urldecode($matches[1]));
+            $state = $kioskRepository->startAssignedMatchByCode(
+                urldecode($matches[1]),
+                $request->header('x-kiosk-pairing-token')
+            );
 
             if ($state === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
@@ -452,7 +525,11 @@ final class Application
 
         if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/visit$#', $path, $matches) === 1) {
             $payload = $request->jsonBody();
-            $state = $kioskRepository->recordVisitByCode(urldecode($matches[1]), $payload);
+            $state = $kioskRepository->recordVisitByCode(
+                urldecode($matches[1]),
+                $payload,
+                $request->header('x-kiosk-pairing-token')
+            );
 
             if ($state === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
@@ -462,7 +539,10 @@ final class Application
         }
 
         if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/undo$#', $path, $matches) === 1) {
-            $state = $kioskRepository->undoLastVisitByCode(urldecode($matches[1]));
+            $state = $kioskRepository->undoLastVisitByCode(
+                urldecode($matches[1]),
+                $request->header('x-kiosk-pairing-token')
+            );
 
             if ($state === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');

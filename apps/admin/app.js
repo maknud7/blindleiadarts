@@ -177,6 +177,8 @@ function renderClub() {
             <span class="pill">${kiosk.code}</span>
             ${kiosk.sponsor_label ? `<span class="pill">${kiosk.sponsor_label}</span>` : ""}
             <span class="pill">${formatScoringMode(kiosk.scoring_mode)}</span>
+            <span class="pill">${Number(kiosk.is_paired) === 1 ? "Paret" : "Ikke paret"}</span>
+            ${kiosk.paired_device_name ? `<span class="pill">${kiosk.paired_device_name}</span>` : ""}
           </div>
           <form class="stack" data-kiosk-settings="${kiosk.id}">
             <select name="scoring_mode">
@@ -185,6 +187,7 @@ function renderClub() {
             </select>
             <button type="submit" class="ghost">Lagre kioskinnstillinger</button>
           </form>
+          <button type="button" class="ghost" data-reset-kiosk-pairing="${kiosk.id}">Nullstill paring</button>
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kiosker opprettet ennå.</p></div>`;
@@ -387,6 +390,26 @@ function bindEvents() {
       });
 
       setStatus("Kioskinnstillinger lagret.", "success");
+      await loadClubContext();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.kioskList.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-reset-kiosk-pairing]");
+
+    if (!button) {
+      return;
+    }
+
+    try {
+      await api(`/clubs/${state.selectedClubId}/kiosks/${Number(button.dataset.resetKioskPairing)}/reset-pairing`, {
+        method: "POST",
+        auth: true,
+      });
+
+      setStatus("Kioskparing nullstilt.", "success");
       await loadClubContext();
     } catch (error) {
       setStatus(error.message, "error");
