@@ -51,6 +51,25 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.PROD_CHALLONGE_REDIRECT_URI }}
 
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Ensure remote production directories exist
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/prod
+        run: |
+          {
+            echo "mkdir ${REMOTE_ROOT}"
+            find dist/prod -type d | sed 's#^dist/prod##' | sed '/^$/d' | while read -r dir; do
+              echo "mkdir ${REMOTE_ROOT}${dir}"
+            done
+            echo "quit"
+          } > sftp-batch.txt
+          sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}" || true
+
       - name: Deploy production via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
         with:
