@@ -325,11 +325,6 @@ final class Application
             }
 
             $payload = $request->jsonBody();
-            $code = trim((string) ($payload['code'] ?? ''));
-
-            if ($code === '') {
-                return JsonResponse::error(422, 'kiosk_code_required', 'Kiosk code is required.');
-            }
 
             return JsonResponse::ok([
                 'kiosk' => $clubRepository->createKiosk((int) $matches[1], $payload),

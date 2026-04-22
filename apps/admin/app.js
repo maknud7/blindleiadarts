@@ -540,7 +540,7 @@ function bindEvents() {
 
   elements.kioskForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await submitAdminForm(elements.kioskForm, `/clubs/${state.selectedClubId}/kiosks`, "Kiosk opprettet.");
+    await submitAdminForm(elements.kioskForm, `/clubs/${state.selectedClubId}/kiosks`, "Kiosk opprettet med automatisk generert kode.");
   });
 
   elements.tournamentForm.addEventListener("submit", async (event) => {

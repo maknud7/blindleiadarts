@@ -246,9 +246,11 @@ final class ClubRepository
      */
     public function createKiosk(int $clubId, array $payload): array
     {
-        $code = trim((string) ($payload['code'] ?? ''));
-        $name = trim((string) ($payload['name'] ?? $code));
-        $boardNumber = (int) ($payload['board_number'] ?? 0);
+        $club = $this->findById($clubId);
+        $boardNumber = max(1, (int) ($payload['board_number'] ?? 0));
+        $generatedCode = $this->generateKioskCode($club['slug'] ?? $club['name'] ?? 'club', $boardNumber);
+        $code = trim((string) ($payload['code'] ?? $generatedCode));
+        $name = trim((string) ($payload['name'] ?? sprintf('Board %d', $boardNumber)));
         $sponsorLabel = $this->nullableString($payload['sponsor_label'] ?? null);
         $sponsorLogoUrl = $this->nullableString($payload['sponsor_logo_url'] ?? null);
         $scoringMode = $this->normalizeScoringMode($payload['scoring_mode'] ?? null);
@@ -474,5 +476,36 @@ final class ClubRepository
     private function normalizeScoringMode(mixed $value): string
     {
         return is_string($value) && trim($value) === 'scolia' ? 'scolia' : 'manual';
+    }
+
+    private function generateKioskCode(string $clubReference, int $boardNumber): string
+    {
+        $base = strtoupper($this->slugify($clubReference));
+        $base = str_replace('-', '', $base);
+        $base = substr($base !== '' ? $base : 'CLUB', 0, 8);
+
+        do {
+            $suffix = strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+            $code = sprintf('%s-B%02d-%s', $base, $boardNumber, $suffix);
+        } while ($this->kioskCodeExists($code));
+
+        return $code;
+    }
+
+    private function kioskCodeExists(string $code): bool
+    {
+        $sql = sprintf(
+            'SELECT id FROM `%1$skiosks` WHERE code = ? LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('s', $code);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc();
+        $statement->close();
+
+        return $row !== null;
     }
 }
