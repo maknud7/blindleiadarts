@@ -52,9 +52,25 @@ Because the workflow uses SFTP-only upload, these folders should exist on the se
 
 ```text
 /www/blindleiadarts/test
+/www/blindleiadarts/test/admin
+/www/blindleiadarts/test/api
+/www/blindleiadarts/test/kiosk
+/www/blindleiadarts/test/packages
+/www/blindleiadarts/test/screen
 /www/blindleiadarts/prod
+/www/blindleiadarts/prod/admin
+/www/blindleiadarts/prod/api
+/www/blindleiadarts/prod/kiosk
+/www/blindleiadarts/prod/packages
+/www/blindleiadarts/prod/screen
 /www/blindleiadarts/test/static
+/www/blindleiadarts/test/static/club-logos
+/www/blindleiadarts/test/static/players
+/www/blindleiadarts/test/static/sponsors
 /www/blindleiadarts/prod/static
+/www/blindleiadarts/prod/static/club-logos
+/www/blindleiadarts/prod/static/players
+/www/blindleiadarts/prod/static/sponsors
 ```
 
 If you want, I can create them later as soon as the SFTP password starts being accepted.
@@ -75,4 +91,3 @@ If you want, I can create them later as soon as the SFTP password starts being a
 - test uses prefix `bd_test_`
 - production uses prefix `bd_prod_`
 - production deployment is intentionally manual for safety
-
