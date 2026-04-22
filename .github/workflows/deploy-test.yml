@@ -43,6 +43,25 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Create remote directory structure
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/test
+        run: |
+          {
+            echo "mkdir ${REMOTE_ROOT}"
+            find dist/test -type d | sed 's#^dist/test##' | sed '/^$/d' | while read -r dir; do
+              echo "mkdir ${REMOTE_ROOT}${dir}"
+            done
+            echo "quit"
+          } > sftp-batch.txt
+          sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
       - name: Deploy test via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
         with:
