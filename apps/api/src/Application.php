@@ -102,6 +102,7 @@ final class Application
                     'GET /v1/clubs/{id}/tournaments',
                     'POST /v1/clubs/{id}/tournaments',
                     'GET /v1/clubs/{id}/kiosks',
+                    'GET /v1/clubs/{id}/match-calls',
                     'POST /v1/clubs/{id}/kiosks',
                     'PATCH /v1/clubs/{id}/kiosks/{kioskId}',
                     'POST /v1/clubs/{id}/kiosks/{kioskId}/reset-pairing',
@@ -300,6 +301,13 @@ final class Application
             return JsonResponse::ok([
                 'club_id' => (int) $matches[1],
                 'items' => $clubRepository->listKiosksByClubId((int) $matches[1]),
+            ]);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/match-calls$#', $path, $matches) === 1) {
+            return JsonResponse::ok([
+                'club_id' => (int) $matches[1],
+                'items' => $tournamentRepository->listMatchCallsByClubId((int) $matches[1]),
             ]);
         }
 

@@ -59,6 +59,51 @@ final class TournamentRepository
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listMatchCallsByClubId(int $clubId): array
+    {
+        $sql = sprintf(
+            'SELECT
+                m.id,
+                m.tournament_id,
+                t.name AS tournament_name,
+                m.kiosk_id,
+                m.round_label,
+                m.bracket_label,
+                m.status,
+                m.best_of_legs,
+                m.legs_to_win,
+                m.player_a_id,
+                pa.display_name AS player_a_name,
+                m.player_b_id,
+                pb.display_name AS player_b_name,
+                k.code AS kiosk_code,
+                k.name AS kiosk_name,
+                k.board_number
+             FROM `%1$smatches` m
+             INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
+             INNER JOIN `%1$splayers` pa ON pa.id = m.player_a_id
+             INNER JOIN `%1$splayers` pb ON pb.id = m.player_b_id
+             LEFT JOIN `%1$skiosks` k ON k.id = m.kiosk_id
+             WHERE t.club_id = ?
+               AND m.status IN ("pending", "assigned", "in_progress")
+             ORDER BY FIELD(m.status, "in_progress", "assigned", "pending"), m.id ASC',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public function findById(int $tournamentId): ?array

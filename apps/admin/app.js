@@ -4,6 +4,7 @@ const state = {
   clubs: [],
   selectedClubId: Number(localStorage.getItem("bd:selectedClubId") || 0),
   clubDashboard: null,
+  matchCalls: [],
   tournaments: [],
   me: null,
   token: localStorage.getItem("bd:token") || "",
@@ -25,6 +26,7 @@ const elements = {
   heroMetrics: document.getElementById("heroMetrics"),
   tournamentList: document.getElementById("tournamentList"),
   kioskList: document.getElementById("kioskList"),
+  boardCallList: document.getElementById("boardCallList"),
   playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
   adminSection: document.getElementById("adminSection"),
@@ -99,6 +101,16 @@ async function loadClubs() {
   renderClubSelect();
 }
 
+async function loadMatchCalls() {
+  if (!state.selectedClubId) {
+    state.matchCalls = [];
+    return;
+  }
+
+  const data = await api(`/clubs/${state.selectedClubId}/match-calls`);
+  state.matchCalls = data.items;
+}
+
 async function loadClubContext() {
   if (!state.selectedClubId) {
     return;
@@ -111,6 +123,7 @@ async function loadClubContext() {
 
   state.clubDashboard = dashboardData;
   state.tournaments = tournamentsData.items;
+  await loadMatchCalls();
   renderClub();
 }
 
@@ -220,6 +233,33 @@ function renderClub() {
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kamper registrert ennå.</p></div>`;
+
+  elements.boardCallList.innerHTML = state.matchCalls.length
+    ? state.matchCalls.map((match) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${match.player_a_name} vs ${match.player_b_name}</strong>
+            <span class="pill">${match.status}</span>
+          </div>
+          <p class="muted">${match.tournament_name}${match.round_label ? ` · ${match.round_label}` : ""}${match.bracket_label ? ` · ${match.bracket_label}` : ""}</p>
+          <div class="pill-row">
+            ${match.board_number ? `<span class="pill">Board ${match.board_number}</span>` : `<span class="pill">Ikke tildelt</span>`}
+            ${match.kiosk_code ? `<span class="pill">${match.kiosk_code}</span>` : ""}
+          </div>
+          <form class="stack" data-assign-match="${match.id}">
+            <select name="kiosk_id">
+              <option value="">Velg board</option>
+              ${(dashboard.kiosks || []).map((kiosk) => `
+                <option value="${kiosk.id}" ${Number(kiosk.id) === Number(match.kiosk_id) ? "selected" : ""}>
+                  Board ${kiosk.board_number} · ${kiosk.name}
+                </option>
+              `).join("")}
+            </select>
+            <button type="submit" class="ghost">Tildel til board</button>
+          </form>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen ventende eller aktive kamper å tildele akkurat nå.</p></div>`;
 
   populateAdminSelects();
 }
@@ -410,6 +450,35 @@ function bindEvents() {
       });
 
       setStatus("Kioskparing nullstilt.", "success");
+      await loadClubContext();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.boardCallList.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-assign-match]");
+
+    if (!form) {
+      return;
+    }
+
+    event.preventDefault();
+    const kioskId = Number(new FormData(form).get("kiosk_id") || 0);
+
+    if (kioskId <= 0) {
+      setStatus("Velg et board før du tildeler kampen.", "error");
+      return;
+    }
+
+    try {
+      await api(`/matches/${Number(form.dataset.assignMatch)}/assign-kiosk`, {
+        method: "POST",
+        body: { kiosk_id: kioskId },
+        auth: true,
+      });
+
+      setStatus("Kamp tildelt til board.", "success");
       await loadClubContext();
     } catch (error) {
       setStatus(error.message, "error");
