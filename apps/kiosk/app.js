@@ -18,6 +18,11 @@ const elements = {
   brandLogo: document.getElementById("brandLogo"),
   brandFallback: document.getElementById("brandFallback"),
   brandTitle: document.getElementById("brandTitle"),
+  previewBadge: document.getElementById("previewBadge"),
+  settingsButton: document.getElementById("settingsButton"),
+  settingsDialog: document.getElementById("settingsDialog"),
+  settingsCloseButton: document.getElementById("settingsCloseButton"),
+  pairingSummary: document.getElementById("pairingSummary"),
   laneTitle: document.getElementById("laneTitle"),
   idleState: document.getElementById("idleState"),
   idleLane: document.getElementById("idleLane"),
@@ -87,6 +92,18 @@ async function api(path, { method = "GET", body } = {}) {
   return payload.data;
 }
 
+function enablePreviewModeIfNeeded() {
+  const params = new URLSearchParams(window.location.search);
+  const explicitPreview = params.get("preview");
+  const isDesktop = Math.min(window.innerWidth, window.innerHeight) >= 900;
+  const isTestHost = window.location.hostname.startsWith("test.");
+
+  if (explicitPreview === "ipad" || (isTestHost && isDesktop)) {
+    document.body.classList.add("preview-ipad");
+    elements.previewBadge.classList.remove("hidden");
+  }
+}
+
 function showToast(message) {
   window.clearTimeout(state.toastHandle);
   elements.toast.textContent = message;
@@ -124,6 +141,33 @@ function ensurePairingToken() {
 function deviceName() {
   const host = window.location.hostname || "tablet";
   return `Nettbrett ${host}`;
+}
+
+function updatePairingSummary(snapshot = state.snapshot) {
+  if (!state.kioskCode) {
+    elements.pairingSummary.textContent = "Nettbrettet er ikke paret ennå.";
+    return;
+  }
+
+  const kiosk = snapshot?.kiosk;
+  if (!kiosk) {
+    elements.pairingSummary.textContent = `Paret mot ${state.kioskCode}. Åpne eller oppdater kiosk for å hente boardstatus.`;
+    return;
+  }
+
+  elements.pairingSummary.textContent = kiosk.paired_device_name
+    ? `Paret mot ${kiosk.code} på ${kiosk.paired_device_name}.`
+    : `Paret mot ${kiosk.code}.`;
+}
+
+function openSettings() {
+  updatePairingSummary();
+  elements.kioskCodeInput.value = state.kioskCode;
+  elements.settingsDialog.showModal();
+}
+
+function closeSettings() {
+  elements.settingsDialog.close();
 }
 
 function resetInputBuffers() {
@@ -199,11 +243,10 @@ function renderIdle(snapshot) {
 
   elements.idleState.classList.remove("hidden");
   elements.matchState.classList.add("hidden");
-  elements.unpairButton.classList.remove("hidden");
-  elements.kioskSetupForm.classList.add("hidden");
-  elements.laneTitle.textContent = kiosk?.sponsor_label ? `${boardTitle} - ${kiosk.sponsor_label}` : boardTitle;
+  elements.laneTitle.textContent = kiosk?.sponsor_label ? `${boardTitle} · ${kiosk.sponsor_label}` : boardTitle;
   elements.idleLane.textContent = boardTitle;
-  elements.idleSponsor.textContent = kiosk?.sponsor_label || "Venter pa neste tildelte kamp";
+  elements.idleSponsor.textContent = kiosk?.sponsor_label || "Venter på neste tildelte kamp";
+  elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
 
   if (kiosk?.club?.logo_url) {
     elements.idleClubLogo.src = kiosk.club.logo_url;
@@ -227,14 +270,14 @@ function renderDisconnected() {
   elements.idleState.classList.remove("hidden");
   elements.matchState.classList.add("hidden");
   elements.laneTitle.textContent = "Board -";
-  elements.kioskSetupForm.classList.remove("hidden");
-  elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
   elements.idleLane.textContent = state.kioskCode ? "Kiosk frakoblet" : "Par nettbrett";
   elements.idleSponsor.textContent = state.kioskCode
     ? "Denne enheten trenger ny paring eller har mistet tilgang."
-    : "Legg inn kiosk-koden fra admin for aa pare dette nettbrettet fast til et board.";
+    : "Åpne tannhjulet og legg inn kiosk-koden for å pare dette nettbrettet.";
   elements.idleClubLogo.hidden = true;
   elements.idleSponsorLogo.hidden = true;
+  elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
+  updatePairingSummary(null);
 }
 
 function renderRecentVisits(match) {
@@ -243,7 +286,7 @@ function renderRecentVisits(match) {
   elements.recentVisits.innerHTML = visits.length
     ? visits.map((visit) => `
         <div class="pill">
-          ${visit.player_name} - Visit ${visit.visit_number} - ${visit.score}${Number(visit.is_bust) === 1 ? " - Bust" : ""}${visit.input_mode ? ` - ${visit.input_mode}` : ""}
+          ${visit.player_name} · Visit ${visit.visit_number} · ${visit.score}${Number(visit.is_bust) === 1 ? " · Bust" : ""}
         </div>
       `).join("")
     : `<div class="pill">Ingen visits registrert ennå.</div>`;
@@ -261,7 +304,7 @@ function renderSumPanel() {
   elements.sumDisplay.classList.toggle("error", score > 180);
 
   if (!rawValue) {
-    elements.sumAfter.textContent = "Gjenstar: -";
+    elements.sumAfter.textContent = "Gjenstår: -";
     elements.sumAfter.className = "after-pill";
     return;
   }
@@ -278,7 +321,7 @@ function renderSumPanel() {
     return;
   }
 
-  elements.sumAfter.textContent = `Gjenstar: ${remainingAfter}`;
+  elements.sumAfter.textContent = `Gjenstår: ${remainingAfter}`;
   elements.sumAfter.className = "after-pill ok";
 }
 
@@ -296,7 +339,7 @@ function renderDartPanel() {
   elements.dartSumChip.textContent = `Sum: ${score}`;
 
   if (!state.darts.length) {
-    elements.dartAfterChip.textContent = "Gjenstar: -";
+    elements.dartAfterChip.textContent = "Gjenstår: -";
     elements.dartAfterChip.className = "chip";
   } else if (checkout) {
     elements.dartAfterChip.textContent = "Checkout";
@@ -305,7 +348,7 @@ function renderDartPanel() {
     elements.dartAfterChip.textContent = "Bust";
     elements.dartAfterChip.className = "chip bad";
   } else {
-    elements.dartAfterChip.textContent = `Gjenstar: ${remainingAfter}`;
+    elements.dartAfterChip.textContent = `Gjenstår: ${remainingAfter}`;
     elements.dartAfterChip.className = "chip";
   }
 
@@ -323,11 +366,11 @@ function renderInputMode() {
   elements.modeDartButton.disabled = !manualMode;
 
   if (!manualMode) {
-    elements.kioskModeHint.textContent = "Denne kiosken er satt til Scolia og venter pa eksterne eventer.";
+    elements.kioskModeHint.textContent = "Scolia-modus er aktiv. Manuell scoring er skjult.";
     return;
   }
 
-  elements.kioskModeHint.textContent = `Aktiv spiller: ${currentPlayerName()}. Du kan bytte mellom totalsum og per pil.`;
+  elements.kioskModeHint.textContent = `Aktiv spiller: ${currentPlayerName()}`;
   elements.modeSumButton.classList.toggle("active", state.inputMode === "sum");
   elements.modeDartButton.classList.toggle("active", state.inputMode === "per_dart");
   elements.sumPanel.classList.toggle("hidden", state.inputMode !== "sum");
@@ -342,22 +385,21 @@ function renderMatch(snapshot) {
   const currentIsB = currentPlayerId === match.player_b.id;
 
   applyClubBranding(kiosk.club);
+  updatePairingSummary(snapshot);
 
   elements.idleState.classList.add("hidden");
   elements.matchState.classList.remove("hidden");
-  elements.kioskSetupForm.classList.add("hidden");
-  elements.unpairButton.classList.remove("hidden");
   elements.kioskCodeInput.value = kiosk.code;
-  elements.laneTitle.textContent = kiosk.sponsor_label ? `Board ${kiosk.board_number} - ${kiosk.sponsor_label}` : `Board ${kiosk.board_number}`;
+  elements.laneTitle.textContent = kiosk.sponsor_label ? `Board ${kiosk.board_number} · ${kiosk.sponsor_label}` : `Board ${kiosk.board_number}`;
   elements.kioskMeta.innerHTML = `
     <span class="pill">${kiosk.name}</span>
     <span class="pill">${kiosk.code}</span>
     <span class="pill">${kiosk.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</span>
-    ${kiosk.paired_device_name ? `<span class="pill">${kiosk.paired_device_name}</span>` : ""}
-    ${kiosk.sponsor_label ? `<span class="pill">${kiosk.sponsor_label}</span>` : ""}
   `;
 
+  elements.unpairButton.classList.remove("hidden");
   elements.startMatchButton.classList.toggle("hidden", snapshot.state !== "assigned");
+  elements.undoButton.classList.toggle("hidden", snapshot.state === "assigned");
   elements.playerABox.classList.toggle("active", currentIsA);
   elements.playerBBox.classList.toggle("active", currentIsB);
   elements.playerAName.textContent = match.player_a.display_name;
@@ -366,7 +408,7 @@ function renderMatch(snapshot) {
   elements.playerBRemaining.textContent = match.player_b.remaining;
   elements.playerALegs.textContent = `${match.player_a.legs_won} legs`;
   elements.playerBLegs.textContent = `${match.player_b.legs_won} legs`;
-  elements.legInfo.textContent = `Leg ${match.current_leg.leg_number} - Best of ${match.best_of_legs} - ${match.status}`;
+  elements.legInfo.textContent = `Leg ${match.current_leg.leg_number} · ${match.status}`;
 
   renderInputMode();
   renderSumPanel();
@@ -385,6 +427,8 @@ function renderState() {
   if (snapshot.kiosk?.club) {
     applyClubBranding(snapshot.kiosk.club);
   }
+
+  updatePairingSummary(snapshot);
 
   if (snapshot.state === "idle" || !snapshot.match) {
     renderIdle(snapshot);
@@ -409,7 +453,7 @@ async function pairKiosk() {
   const kioskCode = elements.kioskCodeInput.value.trim().toUpperCase();
 
   if (!kioskCode) {
-    showToast("Legg inn kiosk-koden forst.");
+    showToast("Legg inn kiosk-koden først.");
     return;
   }
 
@@ -425,6 +469,7 @@ async function pairKiosk() {
 
   persistPairing(kioskCode, pairingToken);
   renderState();
+  closeSettings();
 }
 
 async function unpairKiosk() {
@@ -435,6 +480,7 @@ async function unpairKiosk() {
   window.clearInterval(state.pollHandle);
   clearPairing();
   state.snapshot = null;
+  closeSettings();
   renderDisconnected();
 }
 
@@ -635,6 +681,14 @@ function startPolling() {
 }
 
 function bindEvents() {
+  elements.settingsButton.addEventListener("click", openSettings);
+  elements.settingsCloseButton.addEventListener("click", closeSettings);
+  elements.settingsDialog.addEventListener("click", (event) => {
+    if (event.target === elements.settingsDialog) {
+      closeSettings();
+    }
+  });
+
   elements.kioskSetupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -654,7 +708,12 @@ function bindEvents() {
   });
 
   elements.refreshButton.addEventListener("click", () => {
-    loadState().catch((error) => showToast(error.message));
+    loadState()
+      .then(() => {
+        closeSettings();
+        showToast("Kiosk oppdatert.");
+      })
+      .catch((error) => showToast(error.message));
   });
 
   elements.startMatchButton.addEventListener("click", () => {
@@ -725,6 +784,7 @@ function bindEvents() {
 }
 
 async function bootstrap() {
+  enablePreviewModeIfNeeded();
   renderNumberGrid();
   bindEvents();
   elements.kioskCodeInput.value = state.kioskCode;
