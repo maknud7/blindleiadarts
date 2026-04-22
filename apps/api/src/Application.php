@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
+use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
@@ -76,6 +77,8 @@ final class Application
                 'version' => 'v1',
                 'routes' => [
                     'GET /v1/health',
+                    'POST /v1/auth/login',
+                    'GET /v1/auth/me',
                     'GET /v1/kiosks/{code}/state',
                     'GET /v1/connectors/challonge/authorizations',
                     'GET /v1/connectors/challonge/authorize-url',
@@ -97,6 +100,75 @@ final class Application
                     'name' => $config->dbName(),
                     'table_prefix' => $config->dbTablePrefix(),
                 ],
+            ]);
+        }
+
+        if ($method === 'POST' && $path === 'v1/auth/login') {
+            $payload = $request->jsonBody();
+            $username = trim((string) ($payload['username'] ?? ''));
+            $password = (string) ($payload['password'] ?? '');
+
+            if ($username === '' || $password === '') {
+                return JsonResponse::error(
+                    422,
+                    'credentials_required',
+                    'Both username and password are required.'
+                );
+            }
+
+            $users = new UserAccountRepository($database);
+            $user = $users->findByUsername($username);
+
+            if ($user === null || !password_verify($password, (string) $user['password_hash'])) {
+                return JsonResponse::error(
+                    401,
+                    'invalid_credentials',
+                    'Invalid username or password.'
+                );
+            }
+
+            if ((int) ($user['is_active'] ?? 0) !== 1) {
+                return JsonResponse::error(
+                    403,
+                    'account_inactive',
+                    'This account is inactive.'
+                );
+            }
+
+            $session = $users->createSession((int) $user['id']);
+
+            return JsonResponse::ok([
+                'token_type' => 'Bearer',
+                'access_token' => $session['token'],
+                'expires_at' => $session['expires_at'],
+                'user' => $this->formatUser($user),
+            ]);
+        }
+
+        if ($method === 'GET' && $path === 'v1/auth/me') {
+            $token = $request->bearerToken();
+
+            if ($token === null) {
+                return JsonResponse::error(
+                    401,
+                    'missing_bearer_token',
+                    'Authorization header with Bearer token is required.'
+                );
+            }
+
+            $users = new UserAccountRepository($database);
+            $user = $users->findBySessionToken($token);
+
+            if ($user === null) {
+                return JsonResponse::error(
+                    401,
+                    'invalid_session',
+                    'Session token is invalid or expired.'
+                );
+            }
+
+            return JsonResponse::ok([
+                'user' => $this->formatUser($user),
             ]);
         }
 
@@ -356,6 +428,26 @@ final class Application
         }
 
         return $authorization;
+    }
+
+    /**
+     * @param array<string, mixed> $user
+     * @return array<string, mixed>
+     */
+    private function formatUser(array $user): array
+    {
+        return [
+            'id' => isset($user['id']) ? (int) $user['id'] : null,
+            'username' => $user['username'] ?? null,
+            'display_name' => $user['display_name'] ?? null,
+            'role' => $user['role'] ?? null,
+            'contact_email' => $user['contact_email'] ?? null,
+            'contact_phone' => $user['contact_phone'] ?? null,
+            'player' => [
+                'id' => isset($user['player_id']) && $user['player_id'] !== null ? (int) $user['player_id'] : null,
+                'display_name' => $user['player_display_name'] ?? null,
+            ],
+        ];
     }
 
     /**

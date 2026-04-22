@@ -29,6 +29,17 @@ function run_multi_query(mysqli $mysqli, string $sql): void
     } while ($mysqli->more_results() && $mysqli->next_result());
 }
 
+function run_php_migration(mysqli $mysqli, string $file, string $prefix): void
+{
+    $migration = require $file;
+
+    if (!is_callable($migration)) {
+        throw new RuntimeException("PHP migration must return a callable: {$file}");
+    }
+
+    $migration($mysqli, $prefix);
+}
+
 $root = dirname(__DIR__, 2);
 $migrationsDir = $root . DIRECTORY_SEPARATOR . 'infra' . DIRECTORY_SEPARATOR . 'sql' . DIRECTORY_SEPARATOR . 'migrations';
 $prefix = required_env('DB_TABLE_PREFIX');
@@ -38,8 +49,10 @@ if (!is_dir($migrationsDir)) {
     exit(0);
 }
 
-$files = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.sql');
-sort($files);
+$sqlFiles = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.sql') ?: [];
+$phpFiles = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.php') ?: [];
+$files = array_merge($sqlFiles, $phpFiles);
+sort($files, SORT_STRING);
 
 $mysqli = new mysqli(
     required_env('DB_HOST'),
@@ -79,16 +92,22 @@ foreach ($files as $file) {
         continue;
     }
 
-    $sql = file_get_contents($file);
-
-    if ($sql === false) {
-        throw new RuntimeException("Failed to read migration file: {$file}");
-    }
-
-    $sql = str_replace('{{TABLE_PREFIX}}', $prefix, $sql);
-
     fwrite(STDOUT, "Applying migration: {$name}" . PHP_EOL);
-    run_multi_query($mysqli, $sql);
+
+    if (str_ends_with($file, '.sql')) {
+        $sql = file_get_contents($file);
+
+        if ($sql === false) {
+            throw new RuntimeException("Failed to read migration file: {$file}");
+        }
+
+        $sql = str_replace('{{TABLE_PREFIX}}', $prefix, $sql);
+        run_multi_query($mysqli, $sql);
+    } elseif (str_ends_with($file, '.php')) {
+        run_php_migration($mysqli, $file, $prefix);
+    } else {
+        throw new RuntimeException("Unsupported migration file type: {$file}");
+    }
 
     $statement = $mysqli->prepare(
         "INSERT INTO `{$migrationsTable}` (`migration_name`) VALUES (?)"
