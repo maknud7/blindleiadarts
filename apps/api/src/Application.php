@@ -6,12 +6,14 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
 use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
+use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
+use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
-use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeApiClient;
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuth;
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuthClient;
@@ -70,6 +72,11 @@ final class Application
         $method = $request->method();
         $path = trim($request->path(), '/');
 
+        $clubRepository = new ClubRepository($database);
+        $tournamentRepository = new TournamentRepository($database);
+        $userRepository = new UserAccountRepository($database);
+        $kioskRepository = new KioskRepository($database);
+
         if ($method === 'GET' && $path === '') {
             return JsonResponse::ok([
                 'name' => 'Blindleia Dartkiosk API',
@@ -79,7 +86,25 @@ final class Application
                     'GET /v1/health',
                     'POST /v1/auth/login',
                     'GET /v1/auth/me',
+                    'GET /v1/me/dashboard',
+                    'GET /v1/clubs',
+                    'POST /v1/clubs',
+                    'GET /v1/clubs/{id}/dashboard',
+                    'GET /v1/clubs/{id}/players',
+                    'POST /v1/clubs/{id}/players',
+                    'GET /v1/clubs/{id}/tournaments',
+                    'POST /v1/clubs/{id}/tournaments',
+                    'GET /v1/clubs/{id}/kiosks',
+                    'POST /v1/clubs/{id}/kiosks',
+                    'GET /v1/tournaments/{id}',
+                    'GET /v1/tournaments/{id}/matches',
+                    'POST /v1/tournaments/{id}/register',
+                    'POST /v1/tournaments/{id}/matches',
+                    'POST /v1/matches/{id}/assign-kiosk',
                     'GET /v1/kiosks/{code}/state',
+                    'POST /v1/kiosks/{code}/start-match',
+                    'POST /v1/kiosks/{code}/visit',
+                    'POST /v1/kiosks/{code}/undo',
                     'GET /v1/connectors/challonge/authorizations',
                     'GET /v1/connectors/challonge/authorize-url',
                     'GET /v1/connectors/challonge/authorizations/{id}/tournaments',
@@ -109,33 +134,20 @@ final class Application
             $password = (string) ($payload['password'] ?? '');
 
             if ($username === '' || $password === '') {
-                return JsonResponse::error(
-                    422,
-                    'credentials_required',
-                    'Both username and password are required.'
-                );
+                return JsonResponse::error(422, 'credentials_required', 'Both username and password are required.');
             }
 
-            $users = new UserAccountRepository($database);
-            $user = $users->findByUsername($username);
+            $user = $userRepository->findByUsername($username);
 
             if ($user === null || !password_verify($password, (string) $user['password_hash'])) {
-                return JsonResponse::error(
-                    401,
-                    'invalid_credentials',
-                    'Invalid username or password.'
-                );
+                return JsonResponse::error(401, 'invalid_credentials', 'Invalid username or password.');
             }
 
             if ((int) ($user['is_active'] ?? 0) !== 1) {
-                return JsonResponse::error(
-                    403,
-                    'account_inactive',
-                    'This account is inactive.'
-                );
+                return JsonResponse::error(403, 'account_inactive', 'This account is inactive.');
             }
 
-            $session = $users->createSession((int) $user['id']);
+            $session = $userRepository->createSession((int) $user['id']);
 
             return JsonResponse::ok([
                 'token_type' => 'Bearer',
@@ -146,25 +158,10 @@ final class Application
         }
 
         if ($method === 'GET' && $path === 'v1/auth/me') {
-            $token = $request->bearerToken();
+            $user = $this->requireAuthenticatedUser($request, $userRepository);
 
-            if ($token === null) {
-                return JsonResponse::error(
-                    401,
-                    'missing_bearer_token',
-                    'Authorization header with Bearer token is required.'
-                );
-            }
-
-            $users = new UserAccountRepository($database);
-            $user = $users->findBySessionToken($token);
-
-            if ($user === null) {
-                return JsonResponse::error(
-                    401,
-                    'invalid_session',
-                    'Session token is invalid or expired.'
-                );
+            if ($user instanceof JsonResponse) {
+                return $user;
             }
 
             return JsonResponse::ok([
@@ -172,10 +169,221 @@ final class Application
             ]);
         }
 
+        if ($method === 'GET' && $path === 'v1/me/dashboard') {
+            $user = $this->requireAuthenticatedUser($request, $userRepository);
+
+            if ($user instanceof JsonResponse) {
+                return $user;
+            }
+
+            $dashboard = $tournamentRepository->getMemberDashboard((int) $user['id']);
+
+            return JsonResponse::ok([
+                'user' => $this->formatUser($user),
+                'dashboard' => $dashboard,
+            ]);
+        }
+
+        if ($method === 'GET' && $path === 'v1/clubs') {
+            return JsonResponse::ok([
+                'items' => $clubRepository->listClubs(),
+            ]);
+        }
+
+        if ($method === 'POST' && $path === 'v1/clubs') {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $name = trim((string) ($payload['name'] ?? ''));
+
+            if ($name === '') {
+                return JsonResponse::error(422, 'club_name_required', 'Club name is required.');
+            }
+
+            return JsonResponse::ok([
+                'club' => $clubRepository->createClub($payload),
+            ], 201);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/dashboard$#', $path, $matches) === 1) {
+            $dashboard = $clubRepository->getDashboard((int) $matches[1]);
+
+            if ($dashboard === null) {
+                return JsonResponse::error(404, 'club_not_found', 'Club was not found.');
+            }
+
+            return JsonResponse::ok($dashboard);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/players$#', $path, $matches) === 1) {
+            return JsonResponse::ok([
+                'club_id' => (int) $matches[1],
+                'items' => $clubRepository->listPlayersByClubId((int) $matches[1]),
+            ]);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/players$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $displayName = trim((string) ($payload['display_name'] ?? ''));
+
+            if ($displayName === '') {
+                return JsonResponse::error(422, 'player_name_required', 'Player display name is required.');
+            }
+
+            return JsonResponse::ok([
+                'player' => $clubRepository->createPlayer((int) $matches[1], $payload),
+            ], 201);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/tournaments$#', $path, $matches) === 1) {
+            return JsonResponse::ok([
+                'club_id' => (int) $matches[1],
+                'items' => $tournamentRepository->listByClubId((int) $matches[1]),
+            ]);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/tournaments$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $name = trim((string) ($payload['name'] ?? ''));
+
+            if ($name === '') {
+                return JsonResponse::error(422, 'tournament_name_required', 'Tournament name is required.');
+            }
+
+            $tournament = $tournamentRepository->createTournament((int) $matches[1], $payload);
+
+            return JsonResponse::ok([
+                'tournament' => $tournament,
+            ], 201);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
+            return JsonResponse::ok([
+                'club_id' => (int) $matches[1],
+                'items' => $clubRepository->listKiosksByClubId((int) $matches[1]),
+            ]);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $code = trim((string) ($payload['code'] ?? ''));
+
+            if ($code === '') {
+                return JsonResponse::error(422, 'kiosk_code_required', 'Kiosk code is required.');
+            }
+
+            return JsonResponse::ok([
+                'kiosk' => $clubRepository->createKiosk((int) $matches[1], $payload),
+            ], 201);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)$#', $path, $matches) === 1) {
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            return JsonResponse::ok([
+                'tournament' => $tournament,
+            ]);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)/matches$#', $path, $matches) === 1) {
+            return JsonResponse::ok([
+                'tournament_id' => (int) $matches[1],
+                'items' => $tournamentRepository->listMatches((int) $matches[1]),
+            ]);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/register$#', $path, $matches) === 1) {
+            $user = $this->requireAuthenticatedUser($request, $userRepository);
+
+            if ($user instanceof JsonResponse) {
+                return $user;
+            }
+
+            $playerId = isset($user['player_id']) && $user['player_id'] !== null ? (int) $user['player_id'] : 0;
+
+            if ($playerId <= 0) {
+                return JsonResponse::error(422, 'player_profile_missing', 'This account is not linked to a player profile.');
+            }
+
+            return JsonResponse::ok([
+                'registration' => $tournamentRepository->registerPlayer((int) $matches[1], $playerId),
+            ], 201);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/matches$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $playerAId = (int) ($payload['player_a_id'] ?? 0);
+            $playerBId = (int) ($payload['player_b_id'] ?? 0);
+
+            if ($playerAId <= 0 || $playerBId <= 0 || $playerAId === $playerBId) {
+                return JsonResponse::error(422, 'invalid_match_players', 'Two distinct players are required to create a match.');
+            }
+
+            return JsonResponse::ok([
+                'match' => $tournamentRepository->createMatch((int) $matches[1], $payload),
+            ], 201);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/matches/(\d+)/assign-kiosk$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $kioskId = (int) ($payload['kiosk_id'] ?? 0);
+
+            if ($kioskId <= 0) {
+                return JsonResponse::error(422, 'kiosk_required', 'kiosk_id is required.');
+            }
+
+            $match = $tournamentRepository->assignMatchToKiosk((int) $matches[1], $kioskId);
+
+            if ($match === null) {
+                return JsonResponse::error(404, 'match_not_found', 'Match was not found.');
+            }
+
+            return JsonResponse::ok([
+                'match' => $match,
+            ]);
+        }
+
         if ($method === 'GET' && preg_match('#^v1/kiosks/([^/]+)/state$#', $path, $matches) === 1) {
-            $repository = new KioskRepository($database);
             $kioskCode = urldecode($matches[1]);
-            $state = $repository->findKioskStateByCode($kioskCode);
+            $state = $kioskRepository->findKioskStateByCode($kioskCode);
 
             if ($state === null) {
                 return JsonResponse::error(
@@ -184,6 +392,37 @@ final class Application
                     'No kiosk exists for the supplied kiosk code.',
                     ['kiosk_code' => $kioskCode]
                 );
+            }
+
+            return JsonResponse::ok($state);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/start-match$#', $path, $matches) === 1) {
+            $state = $kioskRepository->startAssignedMatchByCode(urldecode($matches[1]));
+
+            if ($state === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
+            }
+
+            return JsonResponse::ok($state);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/visit$#', $path, $matches) === 1) {
+            $payload = $request->jsonBody();
+            $state = $kioskRepository->recordVisitByCode(urldecode($matches[1]), $payload);
+
+            if ($state === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
+            }
+
+            return JsonResponse::ok($state);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/kiosks/([^/]+)/undo$#', $path, $matches) === 1) {
+            $state = $kioskRepository->undoLastVisitByCode(urldecode($matches[1]));
+
+            if ($state === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
 
             return JsonResponse::ok($state);
@@ -201,11 +440,9 @@ final class Application
             }
 
             $redirectUri = isset($_GET['redirect_uri']) ? trim((string) $_GET['redirect_uri']) : '';
-
             $scopes = isset($_GET['scopes'])
                 ? array_values(array_filter(array_map('trim', explode(',', (string) $_GET['scopes']))))
                 : [];
-
             $communityId = isset($_GET['community_id']) ? trim((string) $_GET['community_id']) : null;
             $stateToken = isset($_GET['state']) ? trim((string) $_GET['state']) : null;
 
@@ -263,11 +500,7 @@ final class Application
             }
 
             if ($code === '') {
-                return JsonResponse::error(
-                    422,
-                    'authorization_code_required',
-                    'Query parameter code is required.'
-                );
+                return JsonResponse::error(422, 'authorization_code_required', 'Query parameter code is required.');
             }
 
             $oauth = new ChallongeOAuth($challonge);
@@ -324,6 +557,7 @@ final class Application
 
         if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments$#', $path, $matches) === 1) {
             $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+
             if ($authorization instanceof JsonResponse) {
                 return $authorization;
             }
@@ -338,6 +572,7 @@ final class Application
 
         if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/participants$#', $path, $matches) === 1) {
             $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+
             if ($authorization instanceof JsonResponse) {
                 return $authorization;
             }
@@ -353,6 +588,7 @@ final class Application
 
         if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/matches$#', $path, $matches) === 1) {
             $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+
             if ($authorization instanceof JsonResponse) {
                 return $authorization;
             }
@@ -371,6 +607,7 @@ final class Application
             && preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/import$#', $path, $matches) === 1
         ) {
             $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+
             if ($authorization instanceof JsonResponse) {
                 return $authorization;
             }
@@ -409,6 +646,48 @@ final class Application
         }
 
         return $config instanceof Config && $config->appEnv() !== 'prod';
+    }
+
+    /**
+     * @return array<string, mixed>|JsonResponse
+     */
+    private function requireAuthenticatedUser(Request $request, UserAccountRepository $users): array|JsonResponse
+    {
+        $token = $request->bearerToken();
+
+        if ($token === null) {
+            return JsonResponse::error(
+                401,
+                'missing_bearer_token',
+                'Authorization header with Bearer token is required.'
+            );
+        }
+
+        $user = $users->findBySessionToken($token);
+
+        if ($user === null) {
+            return JsonResponse::error(401, 'invalid_session', 'Session token is invalid or expired.');
+        }
+
+        return $user;
+    }
+
+    /**
+     * @return array<string, mixed>|JsonResponse
+     */
+    private function requireAdminUser(Request $request, UserAccountRepository $users): array|JsonResponse
+    {
+        $user = $this->requireAuthenticatedUser($request, $users);
+
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if (($user['role'] ?? 'player') !== 'admin') {
+            return JsonResponse::error(403, 'admin_required', 'Admin role is required for this endpoint.');
+        }
+
+        return $user;
     }
 
     /**

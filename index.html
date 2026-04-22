@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blindleia Darts</title>
+  <style>
+    :root {
+      --ink: #0f1b1f;
+      --mist: #eef3ef;
+      --card: #ffffff;
+      --accent: #c84c27;
+      --accent-soft: #f2dfd8;
+      --forest: #285446;
+      --line: rgba(15, 27, 31, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(200, 76, 39, 0.18), transparent 26rem),
+        radial-gradient(circle at bottom right, rgba(40, 84, 70, 0.18), transparent 30rem),
+        linear-gradient(180deg, #f8f7f4 0%, #eef3ef 100%);
+      color: var(--ink);
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+    }
+
+    main {
+      width: min(960px, 100%);
+      background: rgba(255,255,255,0.88);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      backdrop-filter: blur(12px);
+      padding: 2rem;
+      box-shadow: 0 24px 80px rgba(15, 27, 31, 0.12);
+    }
+
+    h1 {
+      margin: 0 0 0.75rem;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.5rem, 6vw, 4.8rem);
+      line-height: 0.95;
+    }
+
+    p {
+      margin: 0;
+      font-size: 1.1rem;
+      max-width: 42rem;
+      color: rgba(15, 27, 31, 0.8);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    a.card {
+      text-decoration: none;
+      color: inherit;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      min-height: 180px;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+
+    a.card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(200, 76, 39, 0.35);
+      box-shadow: 0 14px 30px rgba(15, 27, 31, 0.08);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.4rem 0.7rem;
+      width: fit-content;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    strong {
+      font-size: 1.35rem;
+    }
+
+    small {
+      font-size: 0.94rem;
+      color: rgba(15, 27, 31, 0.65);
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="eyebrow">Blindleia Darts Platform</span>
+    <h1>Klubbportal, turneringsdrift og kiosk i samme løsning.</h1>
+    <p>Testmiljøet er nå organisert som en lokal turneringsplattform med tydelig skille mellom medlem/portal, admin/backoffice, kiosk og skjerm.</p>
+    <div class="grid">
+      <a class="card" href="./admin/">
+        <strong>Portal og Admin</strong>
+        <small>Klubbvalg, innlogging, turneringspåmelding, spilleroversikt, turneringsstyring og kioskoppsett.</small>
+      </a>
+      <a class="card" href="./kiosk/">
+        <strong>Kiosk V1</strong>
+        <small>Board-side flyt for assigned matches, start av kamp, sum-input, undo og live scoreboard per kiosk.</small>
+      </a>
+      <a class="card" href="./screen/">
+        <strong>Venue Screen</strong>
+        <small>Live oversikt over kiosker, aktive turneringer og siste kamper for valgt klubb.</small>
+      </a>
+      <a class="card" href="./api/">
+        <strong>API</strong>
+        <small>Intern API-first runtime for portal, kiosk, screen og senere connector-publishing.</small>
+      </a>
+    </div>
+  </main>
+</body>
+</html>

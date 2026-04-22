@@ -2,10 +2,12 @@
 
 Board-side kiosk UI for live match input.
 
-Primary concerns:
+Current v1 capabilities:
 
 - assigned match lookup by kiosk
 - current state polling / sync
-- sum input and per-dart input
-- bust, checkout, undo, idle mode
+- start assigned match
+- sum input mode
+- bust handling
+- undo last visit
 - branded waiting screen per board

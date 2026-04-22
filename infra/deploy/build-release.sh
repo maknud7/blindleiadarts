@@ -38,5 +38,8 @@ if [[ -f "$ROOT_DIR/README.md" ]]; then
   cp "$ROOT_DIR/README.md" "$OUT_DIR/README.md"
 fi
 
-echo "Built release package at $OUT_DIR"
+if [[ -f "$ROOT_DIR/index.html" ]]; then
+  cp "$ROOT_DIR/index.html" "$OUT_DIR/index.html"
+fi
 
+echo "Built release package at $OUT_DIR"

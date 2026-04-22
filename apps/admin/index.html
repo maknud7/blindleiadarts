@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blindleia Darts Portal</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">BD</span>
+        <div>
+          <p class="eyebrow">Multi-Club Portal</p>
+          <h1>Blindleia Darts</h1>
+        </div>
+      </div>
+
+      <div class="panel">
+        <label for="clubSelect">Aktiv klubb</label>
+        <select id="clubSelect"></select>
+        <button id="refreshClubButton" class="ghost">Last inn klubbdata på nytt</button>
+      </div>
+
+      <div class="panel">
+        <h2>Innlogging</h2>
+        <form id="loginForm" class="stack">
+          <input id="loginUsername" name="username" type="text" placeholder="Brukernavn" autocomplete="username">
+          <input id="loginPassword" name="password" type="password" placeholder="Passord" autocomplete="current-password">
+          <button type="submit">Logg inn</button>
+        </form>
+        <div id="authSummary" class="mini-card hidden"></div>
+        <button id="logoutButton" class="ghost hidden">Logg ut</button>
+        <p class="help">Test/dev-brukere ligger allerede seeded i API-et.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Status</h2>
+        <div id="statusArea" class="status-list"></div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Turneringsdrift lokalt</p>
+          <h2>Påmelding, turneringer, kiosker og styring samlet i én v1.</h2>
+          <p id="clubIntro">Velg klubb for å laste inn portal og driftspanel.</p>
+        </div>
+        <div class="hero-metrics" id="heroMetrics"></div>
+      </section>
+
+      <section class="grid two">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Member Portal</p>
+              <h3>Dine turneringer</h3>
+            </div>
+          </div>
+          <div id="memberDashboard" class="stack gap-lg"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Tournament Browse</p>
+              <h3>Aktive turneringer</h3>
+            </div>
+          </div>
+          <div id="tournamentCards" class="stack"></div>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Club Runtime</p>
+            <h3>Kiosker og siste kamper</h3>
+          </div>
+        </div>
+        <div class="grid two">
+          <div>
+            <h4>Kiosker</h4>
+            <div id="kioskList" class="stack"></div>
+          </div>
+          <div>
+            <h4>Siste kamper</h4>
+            <div id="recentMatches" class="stack"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="adminSection" class="card hidden">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Admin Studio</p>
+            <h3>Klubber, spillere, turneringer og kiosker</h3>
+          </div>
+        </div>
+        <div class="grid three">
+          <form id="clubForm" class="card inset stack">
+            <h4>Ny klubb</h4>
+            <input name="name" placeholder="Klubbnavn">
+            <input name="slug" placeholder="Slug (valgfritt)">
+            <input name="logo_url" placeholder="Logo-URL (valgfritt)">
+            <button type="submit">Opprett klubb</button>
+          </form>
+
+          <form id="playerForm" class="card inset stack">
+            <h4>Ny spiller</h4>
+            <input name="display_name" placeholder="Visningsnavn">
+            <input name="username" placeholder="Brukernavn (valgfritt)">
+            <input name="password" placeholder="Passord (valgfritt)">
+            <input name="contact_email" placeholder="E-post (valgfritt)">
+            <input name="contact_phone" placeholder="Telefon (valgfritt)">
+            <button type="submit">Opprett spiller</button>
+          </form>
+
+          <form id="kioskForm" class="card inset stack">
+            <h4>Ny kiosk</h4>
+            <input name="code" placeholder="Kode, f.eks. BOARD-1">
+            <input name="name" placeholder="Navn">
+            <input name="board_number" type="number" placeholder="Boardnummer">
+            <input name="sponsor_label" placeholder="Sponsorlabel">
+            <button type="submit">Opprett kiosk</button>
+          </form>
+        </div>
+
+        <div class="grid two">
+          <form id="tournamentForm" class="card inset stack">
+            <h4>Ny turnering</h4>
+            <input name="name" placeholder="Turneringsnavn">
+            <input name="slug" placeholder="Slug (valgfritt)">
+            <select name="provider_system">
+              <option value="local">Local</option>
+              <option value="challonge">Challonge</option>
+            </select>
+            <select name="status">
+              <option value="draft">Draft</option>
+              <option value="ready">Ready</option>
+              <option value="in_progress">In progress</option>
+            </select>
+            <input name="start_at" type="datetime-local">
+            <button type="submit">Opprett turnering</button>
+          </form>
+
+          <form id="matchForm" class="card inset stack">
+            <h4>Ny kamp</h4>
+            <select id="matchTournamentId" name="tournament_id"></select>
+            <select id="matchPlayerA" name="player_a_id"></select>
+            <select id="matchPlayerB" name="player_b_id"></select>
+            <select id="matchKioskId" name="kiosk_id"></select>
+            <input name="round_label" placeholder="Round label">
+            <input name="bracket_label" placeholder="Bracket label">
+            <button type="submit">Opprett kamp</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js" type="module"></script>
+</body>
+</html>
