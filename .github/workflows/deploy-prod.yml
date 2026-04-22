@@ -62,9 +62,9 @@ jobs:
           REMOTE_ROOT: /www/blindleiadarts/prod
         run: |
           {
-            echo "mkdir ${REMOTE_ROOT}"
+            echo "-mkdir ${REMOTE_ROOT}"
             find dist/prod -type d | sed 's#^dist/prod##' | sed '/^$/d' | while read -r dir; do
-              echo "mkdir ${REMOTE_ROOT}${dir}"
+              echo "-mkdir ${REMOTE_ROOT}${dir}"
             done
             echo "quit"
           } > sftp-batch.txt
