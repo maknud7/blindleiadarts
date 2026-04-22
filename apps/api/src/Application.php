@@ -192,7 +192,7 @@ final class Application
         }
 
         if ($method === 'POST' && $path === 'v1/clubs') {
-            $admin = $this->requireAdminUser($request, $userRepository);
+            $admin = $this->requireSuperAdminUser($request, $userRepository);
 
             if ($admin instanceof JsonResponse) {
                 return $admin;
@@ -234,6 +234,12 @@ final class Application
                 return $admin;
             }
 
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
             $payload = $request->jsonBody();
             $displayName = trim((string) ($payload['display_name'] ?? ''));
 
@@ -258,6 +264,12 @@ final class Application
 
             if ($admin instanceof JsonResponse) {
                 return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
             }
 
             $payload = $request->jsonBody();
@@ -288,6 +300,12 @@ final class Application
                 return $admin;
             }
 
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
             $payload = $request->jsonBody();
             $code = trim((string) ($payload['code'] ?? ''));
 
@@ -305,6 +323,12 @@ final class Application
 
             if ($admin instanceof JsonResponse) {
                 return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
             }
 
             $kiosk = $clubRepository->updateKiosk((int) $matches[1], (int) $matches[2], $request->jsonBody());
@@ -702,11 +726,52 @@ final class Application
             return $user;
         }
 
-        if (($user['role'] ?? 'player') !== 'admin') {
+        $role = (string) ($user['role'] ?? 'player');
+
+        if (!in_array($role, ['club_admin', 'super_admin'], true)) {
             return JsonResponse::error(403, 'admin_required', 'Admin role is required for this endpoint.');
         }
 
         return $user;
+    }
+
+    /**
+     * @return array<string, mixed>|JsonResponse
+     */
+    private function requireSuperAdminUser(Request $request, UserAccountRepository $users): array|JsonResponse
+    {
+        $user = $this->requireAdminUser($request, $users);
+
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if (($user['role'] ?? null) !== 'super_admin') {
+            return JsonResponse::error(403, 'super_admin_required', 'Super admin role is required for this endpoint.');
+        }
+
+        return $user;
+    }
+
+    /**
+     * @param array<string, mixed> $user
+     * @return true|JsonResponse
+     */
+    private function assertCanManageClub(array $user, int $clubId): true|JsonResponse
+    {
+        if (($user['role'] ?? null) === 'super_admin') {
+            return true;
+        }
+
+        $playerClubId = isset($user['player_club_id']) && $user['player_club_id'] !== null
+            ? (int) $user['player_club_id']
+            : null;
+
+        if (($user['role'] ?? null) === 'club_admin' && $playerClubId === $clubId) {
+            return true;
+        }
+
+        return JsonResponse::error(403, 'club_admin_scope_denied', 'This admin account does not manage the selected club.');
     }
 
     /**
@@ -739,11 +804,13 @@ final class Application
             'username' => $user['username'] ?? null,
             'display_name' => $user['display_name'] ?? null,
             'role' => $user['role'] ?? null,
+            'is_super_admin' => ($user['role'] ?? null) === 'super_admin',
             'contact_email' => $user['contact_email'] ?? null,
             'contact_phone' => $user['contact_phone'] ?? null,
             'player' => [
                 'id' => isset($user['player_id']) && $user['player_id'] !== null ? (int) $user['player_id'] : null,
                 'display_name' => $user['player_display_name'] ?? null,
+                'club_id' => isset($user['player_club_id']) && $user['player_club_id'] !== null ? (int) $user['player_club_id'] : null,
             ],
         ];
     }

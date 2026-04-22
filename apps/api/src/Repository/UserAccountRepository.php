@@ -35,7 +35,8 @@ final class UserAccountRepository
                 mp.contact_email,
                 mp.contact_phone,
                 mp.player_id,
-                p.display_name AS player_display_name
+                p.display_name AS player_display_name,
+                p.club_id AS player_club_id
              FROM `%1$suser_accounts` ua
              LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
              LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
@@ -70,6 +71,7 @@ final class UserAccountRepository
                 mp.contact_email,
                 mp.contact_phone,
                 mp.player_id,
+                p.club_id AS player_club_id,
                 p.display_name AS player_display_name,
                 s.id AS session_id,
                 s.expires_at,

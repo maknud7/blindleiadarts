@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blindleia Darts Spillerportal</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="brandline">
+        <div class="brand-badge">
+          <img id="brandLogo" class="brand-logo hidden" alt="Klubblogo">
+          <span id="brandFallback" class="brand-fallback">KL</span>
+        </div>
+        <div>
+          <p class="eyebrow">Spillerportal</p>
+          <h1 id="brandTitle">Din dartdag på mobilen</h1>
+        </div>
+      </div>
+      <p id="clubIntro" class="muted">Velg klubb og logg inn for å melde deg på turneringer og følge egen statistikk.</p>
+    </header>
+
+    <section class="card stack">
+      <label for="clubSelect">Klubb</label>
+      <select id="clubSelect"></select>
+      <button id="refreshButton" class="ghost">Oppdater</button>
+    </section>
+
+    <section class="card stack">
+      <h2>Logg inn</h2>
+      <form id="loginForm" class="stack">
+        <input id="loginUsername" type="text" placeholder="Brukernavn" autocomplete="username">
+        <input id="loginPassword" type="password" placeholder="Passord" autocomplete="current-password">
+        <button type="submit">Logg inn</button>
+      </form>
+      <div id="authSummary" class="mini-card hidden"></div>
+      <button id="logoutButton" class="ghost hidden">Logg ut</button>
+      <div id="statusArea" class="stack"></div>
+    </section>
+
+    <section class="card stack">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Mine tall</p>
+          <h2>Statistikk og ranking</h2>
+        </div>
+      </div>
+      <div id="statsGrid" class="stats-grid"></div>
+      <div id="rankingList" class="stack"></div>
+    </section>
+
+    <section class="card stack">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Mine turneringer</p>
+          <h2>Påmeldinger</h2>
+        </div>
+      </div>
+      <div id="registrationList" class="stack"></div>
+    </section>
+
+    <section class="card stack">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Turneringer</p>
+          <h2>Åpne turneringer i klubben</h2>
+        </div>
+      </div>
+      <div id="tournamentList" class="stack"></div>
+    </section>
+  </div>
+
+  <script src="./app.js" type="module"></script>
+</body>
+</html>

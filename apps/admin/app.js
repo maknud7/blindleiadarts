@@ -6,7 +6,6 @@ const state = {
   clubDashboard: null,
   tournaments: [],
   me: null,
-  memberDashboard: null,
   token: localStorage.getItem("bd:token") || "",
 };
 
@@ -24,9 +23,9 @@ const elements = {
   statusArea: document.getElementById("statusArea"),
   clubIntro: document.getElementById("clubIntro"),
   heroMetrics: document.getElementById("heroMetrics"),
-  memberDashboard: document.getElementById("memberDashboard"),
-  tournamentCards: document.getElementById("tournamentCards"),
+  tournamentList: document.getElementById("tournamentList"),
   kioskList: document.getElementById("kioskList"),
+  playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
   adminSection: document.getElementById("adminSection"),
   clubForm: document.getElementById("clubForm"),
@@ -118,28 +117,18 @@ async function loadClubContext() {
 async function loadCurrentUser() {
   if (!state.token) {
     state.me = null;
-    state.memberDashboard = null;
     renderAuth();
-    renderMemberDashboard();
     return;
   }
 
   try {
-    const [meData, dashboardData] = await Promise.all([
-      api("/auth/me", { auth: true }),
-      api("/me/dashboard", { auth: true }),
-    ]);
-
+    const meData = await api("/auth/me", { auth: true });
     state.me = meData.user;
-    state.memberDashboard = dashboardData.dashboard;
     renderAuth();
-    renderMemberDashboard();
   } catch (error) {
     persistToken("");
     state.me = null;
-    state.memberDashboard = null;
     renderAuth();
-    renderMemberDashboard();
     setStatus(error.message, "error");
   }
 }
@@ -158,12 +147,24 @@ function renderClub() {
   }
 
   applyClubBranding(dashboard.club);
-  elements.clubIntro.textContent = `${dashboard.club.name} er lastet inn. Portal, kioskadmin og turneringsstyring er alltid klubbspesifikk.`;
+  elements.clubIntro.textContent = `${dashboard.club.name} er lastet inn. Denne flaten er rendyrket for administrasjon av klubb, kiosk og turnering.`;
   elements.heroMetrics.innerHTML = `
     <div class="metric"><small>Spillere</small><strong>${dashboard.players.length}</strong></div>
     <div class="metric"><small>Kiosker</small><strong>${dashboard.kiosks.length}</strong></div>
     <div class="metric"><small>Turneringer</small><strong>${dashboard.tournaments.length}</strong></div>
   `;
+
+  elements.playerList.innerHTML = dashboard.players.length
+    ? dashboard.players.map((player) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${player.display_name}</strong>
+            <span class="pill">${player.role || "player"}</span>
+          </div>
+          <p class="muted">${player.username || "Ingen bruker"}${player.user_account_id ? ` · konto #${player.user_account_id}` : ""}</p>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen spillere opprettet ennå.</p></div>`;
 
   elements.kioskList.innerHTML = dashboard.kiosks.length
     ? dashboard.kiosks.map((kiosk) => `
@@ -188,26 +189,15 @@ function renderClub() {
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kiosker opprettet ennå.</p></div>`;
 
-  elements.recentMatches.innerHTML = dashboard.recent_matches.length
-    ? dashboard.recent_matches.map((match) => `
-        <div class="list-item">
-          <div class="row"><strong>${match.player_a_name} vs ${match.player_b_name}</strong><span class="muted">${match.status}</span></div>
-          <p class="muted">${match.tournament_name}${match.board_number ? ` · Board ${match.board_number}` : ""}${match.winner_name ? ` · Vinner: ${match.winner_name}` : ""}</p>
-        </div>
-      `).join("")
-    : `<div class="mini-card"><p class="muted">Ingen kamper registrert ennå.</p></div>`;
-
-  elements.tournamentCards.innerHTML = state.tournaments.length
+  elements.tournamentList.innerHTML = state.tournaments.length
     ? state.tournaments.map((tournament) => `
         <div class="list-item">
           <div class="row">
-            <div>
-              <strong>${tournament.name}</strong>
-              <p class="muted">${tournament.provider_system} · ${tournament.status}</p>
-            </div>
-            <button data-register="${tournament.id}" ${state.me ? "" : "disabled"}>Meld på</button>
+            <strong>${tournament.name}</strong>
+            <span class="pill">${tournament.status}</span>
           </div>
           <div class="pill-row">
+            <span class="pill">${tournament.provider_system}</span>
             <span class="pill">${tournament.registration_count} påmeldte</span>
             <span class="pill">${tournament.match_count} kamper</span>
             ${tournament.start_at ? `<span class="pill">${new Date(tournament.start_at).toLocaleString("no-NO")}</span>` : ""}
@@ -215,6 +205,18 @@ function renderClub() {
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen turneringer opprettet ennå.</p></div>`;
+
+  elements.recentMatches.innerHTML = dashboard.recent_matches.length
+    ? dashboard.recent_matches.map((match) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${match.player_a_name} vs ${match.player_b_name}</strong>
+            <span class="pill">${match.status}</span>
+          </div>
+          <p class="muted">${match.tournament_name}${match.board_number ? ` · Board ${match.board_number}` : ""}${match.winner_name ? ` · Vinner: ${match.winner_name}` : ""}</p>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen kamper registrert ennå.</p></div>`;
 
   populateAdminSelects();
 }
@@ -228,7 +230,7 @@ function applyClubBranding(club) {
     .join("")
     .toUpperCase();
 
-  elements.brandTitle.textContent = club?.name || "Klubbportal";
+  elements.brandTitle.textContent = club?.name || "Klubbadministrasjon";
   elements.brandFallback.textContent = initials || "KL";
 
   if (club?.logo_url) {
@@ -250,7 +252,7 @@ function renderAuth() {
     elements.authSummary.innerHTML = `
       <strong>${state.me.display_name}</strong>
       <p class="muted">${state.me.username} · ${state.me.role}</p>
-      <p class="muted">${state.me.player?.display_name || "Ingen spillerprofil koblet"}</p>
+      <p class="muted">${state.me.is_super_admin ? "Har tilgang til alle klubber" : "Har klubbspesifikk adminrolle"}</p>
     `;
   } else {
     elements.authSummary.classList.add("hidden");
@@ -258,42 +260,13 @@ function renderAuth() {
     elements.authSummary.innerHTML = "";
   }
 
-  const isAdmin = state.me?.role === "admin";
+  const isAdmin = ["super_admin", "club_admin"].includes(state.me?.role || "");
   elements.adminSection.classList.toggle("hidden", !isAdmin);
-}
 
-function renderMemberDashboard() {
-  if (!state.me || !state.memberDashboard) {
-    elements.memberDashboard.innerHTML = `
-      <div class="mini-card">
-        <strong>Logg inn for medlemsside</strong>
-        <p class="muted">Når du er logget inn får du egne påmeldinger, spillerstatistikk og etter hvert full historikk.</p>
-      </div>
-    `;
-    return;
-  }
-
-  const stats = state.memberDashboard.stats || {};
-  const registrations = state.memberDashboard.registrations || [];
-
-  elements.memberDashboard.innerHTML = `
-    <div class="pill-row">
-      <span class="pill">${stats.matches_played || 0} kamper</span>
-      <span class="pill">${stats.matches_won || 0} seire</span>
-      <span class="pill">${stats.legs_won || 0} legs vunnet</span>
-      <span class="pill">${Number(stats.average_visit_score || 0).toFixed(2)} avg. visit</span>
-    </div>
-    <div class="stack">
-      ${registrations.length
-        ? registrations.map((entry) => `
-            <div class="list-item">
-              <strong>${entry.tournament_name}</strong>
-              <p class="muted">${entry.club_name} · ${entry.status}</p>
-            </div>
-          `).join("")
-        : `<div class="mini-card"><p class="muted">Ingen påmeldinger ennå.</p></div>`}
-    </div>
-  `;
+  const canCreateClubs = state.me?.role === "super_admin";
+  elements.clubForm.querySelectorAll("input, button").forEach((element) => {
+    element.disabled = !canCreateClubs;
+  });
 }
 
 function populateAdminSelects() {
@@ -310,7 +283,7 @@ function populateAdminSelects() {
 
   elements.matchPlayerA.innerHTML = playerOptions;
   elements.matchPlayerB.innerHTML = playerOptions;
-  elements.matchKioskId.innerHTML = [`<option value="">Ingen kiosk ennå</option>`]
+  elements.matchKioskId.innerHTML = [`<option value="">Ingen kiosk</option>`]
     .concat(kiosks.map((kiosk) => `<option value="${kiosk.id}">${kiosk.name} (${kiosk.code})</option>`))
     .join("");
 }
@@ -335,20 +308,6 @@ async function handleLogin(event) {
     await loadCurrentUser();
     setStatus("Innlogging lykkes.", "success");
     elements.loginForm.reset();
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-}
-
-async function handleTournamentRegister(tournamentId) {
-  try {
-    await api(`/tournaments/${tournamentId}/register`, {
-      method: "POST",
-      auth: true,
-    });
-
-    setStatus("Spiller ble meldt på turneringen.", "success");
-    await Promise.all([loadClubContext(), loadCurrentUser()]);
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -401,22 +360,11 @@ function bindEvents() {
 
   elements.loginForm.addEventListener("submit", handleLogin);
 
-  elements.logoutButton.addEventListener("click", async () => {
+  elements.logoutButton.addEventListener("click", () => {
     persistToken("");
     state.me = null;
-    state.memberDashboard = null;
     renderAuth();
-    renderMemberDashboard();
-    setStatus("Logget ut lokalt i portalen.", "success");
-  });
-
-  elements.tournamentCards.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-register]");
-    if (!button) {
-      return;
-    }
-
-    await handleTournamentRegister(Number(button.dataset.register));
+    setStatus("Logget ut lokalt i admin.", "success");
   });
 
   elements.kioskList.addEventListener("submit", async (event) => {
@@ -491,7 +439,7 @@ async function bootstrap() {
   try {
     await loadClubs();
     await Promise.all([loadClubContext(), loadCurrentUser()]);
-    setStatus("Portal v1 er klar.", "success");
+    setStatus("Admin Studio er klar.", "success");
   } catch (error) {
     setStatus(error.message, "error");
   }

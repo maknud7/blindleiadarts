@@ -28,6 +28,7 @@ copy_dir "$ROOT_DIR/apps/api" "$OUT_DIR/api"
 copy_dir "$ROOT_DIR/apps/kiosk" "$OUT_DIR/kiosk"
 copy_dir "$ROOT_DIR/apps/screen" "$OUT_DIR/screen"
 copy_dir "$ROOT_DIR/apps/admin" "$OUT_DIR/admin"
+copy_dir "$ROOT_DIR/apps/player" "$OUT_DIR/player"
 copy_dir "$ROOT_DIR/packages" "$OUT_DIR/packages"
 
 mkdir -p "$OUT_DIR/static/club-logos"
