@@ -96,6 +96,7 @@ final class Application
                     'POST /v1/clubs/{id}/tournaments',
                     'GET /v1/clubs/{id}/kiosks',
                     'POST /v1/clubs/{id}/kiosks',
+                    'PATCH /v1/clubs/{id}/kiosks/{kioskId}',
                     'GET /v1/tournaments/{id}',
                     'GET /v1/tournaments/{id}/matches',
                     'POST /v1/tournaments/{id}/register',
@@ -297,6 +298,24 @@ final class Application
             return JsonResponse::ok([
                 'kiosk' => $clubRepository->createKiosk((int) $matches[1], $payload),
             ], 201);
+        }
+
+        if ($method === 'PATCH' && preg_match('#^v1/clubs/(\d+)/kiosks/(\d+)$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $kiosk = $clubRepository->updateKiosk((int) $matches[1], (int) $matches[2], $request->jsonBody());
+
+            if ($kiosk === null) {
+                return JsonResponse::error(404, 'kiosk_not_found', 'Kiosk was not found for the selected club.');
+            }
+
+            return JsonResponse::ok([
+                'kiosk' => $kiosk,
+            ]);
         }
 
         if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)$#', $path, $matches) === 1) {

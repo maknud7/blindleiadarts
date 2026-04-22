@@ -97,16 +97,16 @@ final class KioskRepository
         }
 
         $leg = $this->ensureCurrentLeg((int) $match['id']);
-        $score = max(0, (int) ($payload['score'] ?? 0));
-        $dartsUsed = min(3, max(1, (int) ($payload['darts_used'] ?? 3)));
         $inputMode = (string) ($payload['input_mode'] ?? 'sum');
         $darts = is_array($payload['darts'] ?? null) ? $payload['darts'] : [];
+        $score = $this->resolveVisitScore($inputMode, $payload, $darts);
+        $dartsUsed = min(3, max(1, (int) ($payload['darts_used'] ?? 3)));
 
         $remaining = $this->calculateRemainingScores((int) $match['id'], (int) $leg['id']);
         $currentPlayerId = $this->determineCurrentPlayerId($match, $leg);
         $remainingBefore = $remaining[$currentPlayerId] ?? 501;
         $remainingAfter = $remainingBefore - $score;
-        $isBust = $score > 180 || $remainingAfter < 0 || $remainingAfter === 1;
+        $isBust = $this->isBustVisit($remainingBefore, $remainingAfter, $score, $inputMode, $darts);
 
         if ($isBust) {
             $remainingAfter = $remainingBefore;
@@ -281,6 +281,7 @@ final class KioskRepository
             'board_number' => (int) $kiosk['board_number'],
             'sponsor_label' => $kiosk['sponsor_label'],
             'sponsor_logo_url' => $kiosk['sponsor_logo_url'],
+            'scoring_mode' => $kiosk['scoring_mode'] ?? 'manual',
         ];
     }
 
@@ -299,7 +300,8 @@ final class KioskRepository
                 k.name,
                 k.board_number,
                 k.sponsor_label,
-                k.sponsor_logo_url
+                k.sponsor_logo_url,
+                k.scoring_mode
              FROM `%1$skiosks` k
              INNER JOIN `%1$sclubs` c ON c.id = k.club_id
              WHERE code = ?
@@ -767,5 +769,104 @@ final class KioskRepository
         $statement->close();
 
         return $row;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $darts
+     */
+    private function resolveVisitScore(string $inputMode, array $payload, array $darts): int
+    {
+        if ($inputMode === 'per_dart') {
+            return $this->calculateDartsScore($darts);
+        }
+
+        return max(0, (int) ($payload['score'] ?? 0));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $darts
+     */
+    private function calculateDartsScore(array $darts): int
+    {
+        $score = 0;
+
+        foreach ($darts as $dart) {
+            $multiplier = strtoupper(trim((string) ($dart['multiplier'] ?? $dart['m'] ?? 'S')));
+            $value = $dart['value'] ?? $dart['v'] ?? 0;
+
+            if (is_string($value) && strtoupper($value) === 'BULL') {
+                $score += $multiplier === 'D' ? 50 : 25;
+                continue;
+            }
+
+            $numericValue = max(0, (int) $value);
+
+            if ($numericValue === 0) {
+                continue;
+            }
+
+            $score += match ($multiplier) {
+                'D' => $numericValue * 2,
+                'T' => $numericValue * 3,
+                default => $numericValue,
+            };
+        }
+
+        return $score;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $darts
+     */
+    private function isBustVisit(int $remainingBefore, int $remainingAfter, int $score, string $inputMode, array $darts): bool
+    {
+        if ($score > 180 || $remainingAfter < 0 || $remainingAfter === 1) {
+            return true;
+        }
+
+        if ($remainingAfter !== 0) {
+            return false;
+        }
+
+        if ($inputMode === 'per_dart') {
+            return !$this->isDoubleOutDartSequence($darts);
+        }
+
+        return !$this->isCheckoutNumber($remainingBefore);
+    }
+
+    private function isCheckoutNumber(int $remainingBefore): bool
+    {
+        if ($remainingBefore <= 1 || $remainingBefore > 170) {
+            return false;
+        }
+
+        return !in_array($remainingBefore, [159, 162, 163, 165, 166, 168, 169], true);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $darts
+     */
+    private function isDoubleOutDartSequence(array $darts): bool
+    {
+        for ($index = count($darts) - 1; $index >= 0; $index--) {
+            $dart = $darts[$index];
+            $multiplier = strtoupper(trim((string) ($dart['multiplier'] ?? $dart['m'] ?? 'S')));
+            $value = $dart['value'] ?? $dart['v'] ?? 0;
+
+            if (is_string($value) && strtoupper($value) === 'BULL') {
+                return $multiplier === 'D';
+            }
+
+            $numericValue = (int) $value;
+
+            if ($numericValue <= 0) {
+                continue;
+            }
+
+            return $multiplier === 'D';
+        }
+
+        return false;
     }
 }

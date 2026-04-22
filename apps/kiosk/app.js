@@ -1,8 +1,14 @@
 const API_ROOT = "../api/v1";
+
 const state = {
   kioskCode: localStorage.getItem("bd:kioskCode") || "",
   snapshot: null,
   pollHandle: null,
+  inputMode: localStorage.getItem("bd:kioskInputMode") || "sum",
+  sumValue: "",
+  darts: [],
+  multiplier: "S",
+  toastHandle: null,
 };
 
 const elements = {
@@ -11,14 +17,46 @@ const elements = {
   brandLogo: document.getElementById("brandLogo"),
   brandFallback: document.getElementById("brandFallback"),
   brandTitle: document.getElementById("brandTitle"),
+  laneTitle: document.getElementById("laneTitle"),
+  idleState: document.getElementById("idleState"),
+  idleLane: document.getElementById("idleLane"),
+  idleSponsor: document.getElementById("idleSponsor"),
+  idleClubLogo: document.getElementById("idleClubLogo"),
+  idleSponsorLogo: document.getElementById("idleSponsorLogo"),
+  matchState: document.getElementById("matchState"),
+  kioskMeta: document.getElementById("kioskMeta"),
   refreshButton: document.getElementById("refreshButton"),
   startMatchButton: document.getElementById("startMatchButton"),
   undoButton: document.getElementById("undoButton"),
-  stateArea: document.getElementById("stateArea"),
-  kioskMeta: document.getElementById("kioskMeta"),
-  visitForm: document.getElementById("visitForm"),
-  scoreInput: document.getElementById("scoreInput"),
-  dartsUsedInput: document.getElementById("dartsUsedInput"),
+  playerABox: document.getElementById("playerABox"),
+  playerBBox: document.getElementById("playerBBox"),
+  playerAName: document.getElementById("playerAName"),
+  playerBName: document.getElementById("playerBName"),
+  playerARemaining: document.getElementById("playerARemaining"),
+  playerBRemaining: document.getElementById("playerBRemaining"),
+  playerALegs: document.getElementById("playerALegs"),
+  playerBLegs: document.getElementById("playerBLegs"),
+  legInfo: document.getElementById("legInfo"),
+  kioskModeHint: document.getElementById("kioskModeHint"),
+  modeSumButton: document.getElementById("modeSumButton"),
+  modeDartButton: document.getElementById("modeDartButton"),
+  manualPanel: document.getElementById("manualPanel"),
+  scoliaPanel: document.getElementById("scoliaPanel"),
+  sumPanel: document.getElementById("sumPanel"),
+  dartPanel: document.getElementById("dartPanel"),
+  sumDisplay: document.getElementById("sumDisplay"),
+  sumAfter: document.getElementById("sumAfter"),
+  recentVisits: document.getElementById("recentVisits"),
+  dartChip1: document.getElementById("dartChip1"),
+  dartChip2: document.getElementById("dartChip2"),
+  dartChip3: document.getElementById("dartChip3"),
+  dartSumChip: document.getElementById("dartSumChip"),
+  dartAfterChip: document.getElementById("dartAfterChip"),
+  numberGrid: document.getElementById("numberGrid"),
+  dartUndoButton: document.getElementById("dartUndoButton"),
+  dartSubmitButton: document.getElementById("dartSubmitButton"),
+  checkoutDialog: document.getElementById("checkoutDialog"),
+  toast: document.getElementById("toast"),
 };
 
 async function api(path, { method = "GET", body } = {}) {
@@ -37,106 +75,56 @@ async function api(path, { method = "GET", body } = {}) {
   return payload.data;
 }
 
-async function loadState() {
-  if (!state.kioskCode) {
-    renderDisconnected();
-    return;
-  }
-
-  try {
-    state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`);
-    renderState();
-  } catch (error) {
-    state.snapshot = null;
-    renderError(error.message);
-  }
+function showToast(message) {
+  window.clearTimeout(state.toastHandle);
+  elements.toast.textContent = message;
+  elements.toast.classList.remove("hidden");
+  state.toastHandle = window.setTimeout(() => {
+    elements.toast.classList.add("hidden");
+  }, 2400);
 }
 
-function renderDisconnected() {
-  elements.kioskMeta.innerHTML = `<span class="pill">Ingen kiosk valgt</span>`;
-  elements.stateArea.innerHTML = `
-    <div class="waiting">
-      <h2>Koble kiosken til et board</h2>
-      <p class="muted">Skriv inn kiosk-koden fra adminpanelet for å hente assigned match og lokal scoringsflyt.</p>
-    </div>
-  `;
-  elements.startMatchButton.classList.add("hidden");
+function resetInputBuffers() {
+  state.sumValue = "";
+  state.darts = [];
+  state.multiplier = "S";
 }
 
-function renderError(message) {
-  elements.kioskMeta.innerHTML = `<span class="pill">${state.kioskCode}</span>`;
-  elements.stateArea.innerHTML = `
-    <div class="waiting">
-      <h2>Klarte ikke å laste kioskstate</h2>
-      <p class="muted">${message}</p>
-    </div>
-  `;
-  elements.startMatchButton.classList.add("hidden");
+function persistInputMode(mode) {
+  state.inputMode = mode;
+  localStorage.setItem("bd:kioskInputMode", mode);
 }
 
-function renderState() {
-  const snapshot = state.snapshot;
-  const kiosk = snapshot.kiosk;
+function isManualMode() {
+  return (state.snapshot?.kiosk?.scoring_mode || "manual") === "manual";
+}
 
-  applyClubBranding(kiosk.club);
+function currentMatch() {
+  return state.snapshot?.match || null;
+}
 
-  elements.kioskCodeInput.value = kiosk.code;
-  elements.kioskMeta.innerHTML = `
-    <span class="pill">${kiosk.name}</span>
-    <span class="pill">Board ${kiosk.board_number}</span>
-    ${kiosk.sponsor_label ? `<span class="pill">${kiosk.sponsor_label}</span>` : ""}
-  `;
+function currentRemaining() {
+  const match = currentMatch();
 
-  if (snapshot.state === "idle") {
-    elements.startMatchButton.classList.add("hidden");
-    elements.stateArea.innerHTML = `
-      <div class="waiting">
-        <h2>Venter på ny kamp</h2>
-        <p class="muted">${snapshot.message || "Ingen assigned kamp på denne kiosken akkurat nå."}</p>
-      </div>
-    `;
-    return;
+  if (!match) {
+    return 0;
   }
 
-  const match = snapshot.match;
-  const currentPlayerId = match.current_player_id;
-  const recentVisits = (match.recent_visits || []).map((visit) => `
-    <div class="visit-item">
-      <strong>${visit.player_name}</strong>
-      <p class="muted">Visit ${visit.visit_number} · Score ${visit.score}${Number(visit.is_bust) === 1 ? " · Bust" : ""}</p>
-    </div>
-  `).join("");
+  return match.current_player_id === match.player_a.id
+    ? Number(match.player_a.remaining || 0)
+    : Number(match.player_b.remaining || 0);
+}
 
-  elements.startMatchButton.classList.toggle("hidden", snapshot.state !== "assigned");
-  elements.stateArea.innerHTML = `
-    <div class="match-card">
-      <div class="row">
-        <div>
-          <p class="eyebrow">${match.round_label || "Kamp"}</p>
-          <h2>${match.player_a.display_name} vs ${match.player_b.display_name}</h2>
-          <p class="muted">${match.bracket_label || "Lokal runtime"} · ${match.status}</p>
-        </div>
-      </div>
-      <div class="score-grid">
-        <div class="player-box ${currentPlayerId === match.player_a.id ? "active" : ""}">
-          <p>${match.player_a.display_name}</p>
-          <strong>${match.player_a.remaining}</strong>
-          <p class="muted">${match.player_a.legs_won} legs vunnet</p>
-        </div>
-        <div class="player-box ${currentPlayerId === match.player_b.id ? "active" : ""}">
-          <p>${match.player_b.display_name}</p>
-          <strong>${match.player_b.remaining}</strong>
-          <p class="muted">${match.player_b.legs_won} legs vunnet</p>
-        </div>
-      </div>
-      <div class="pill">
-        Leg ${match.current_leg.leg_number} · Første spiller ${match.current_leg.starting_player_id}
-      </div>
-    </div>
-    <div class="stack">
-      ${recentVisits || `<div class="visit-item"><p class="muted">Ingen visits registrert ennå.</p></div>`}
-    </div>
-  `;
+function currentPlayerName() {
+  const match = currentMatch();
+
+  if (!match) {
+    return "Spiller";
+  }
+
+  return match.current_player_id === match.player_a.id
+    ? match.player_a.display_name
+    : match.player_b.display_name;
 }
 
 function applyClubBranding(club) {
@@ -148,9 +136,7 @@ function applyClubBranding(club) {
     .join("")
     .toUpperCase();
 
-  elements.brandTitle.textContent = club?.name
-    ? `${club.name} kiosk`
-    : "Board-side matchflyt";
+  elements.brandTitle.textContent = club?.name ? `${club.name} kiosk` : "Kampflyt ved skiva";
   elements.brandFallback.textContent = initials || "KL";
 
   if (club?.logo_url) {
@@ -165,53 +151,401 @@ function applyClubBranding(club) {
   }
 }
 
-async function startMatch() {
-  if (!state.kioskCode) {
+function renderIdle(snapshot) {
+  const kiosk = snapshot?.kiosk;
+  const boardTitle = kiosk ? `Board ${kiosk.board_number}` : "Board -";
+
+  elements.idleState.classList.remove("hidden");
+  elements.matchState.classList.add("hidden");
+  elements.laneTitle.textContent = kiosk?.sponsor_label ? `${boardTitle} · ${kiosk.sponsor_label}` : boardTitle;
+  elements.idleLane.textContent = boardTitle;
+  elements.idleSponsor.textContent = kiosk?.sponsor_label || "Venter på neste tildelte kamp";
+
+  if (kiosk?.club?.logo_url) {
+    elements.idleClubLogo.src = kiosk.club.logo_url;
+    elements.idleClubLogo.hidden = false;
+  } else {
+    elements.idleClubLogo.removeAttribute("src");
+    elements.idleClubLogo.hidden = true;
+  }
+
+  if (kiosk?.sponsor_logo_url) {
+    elements.idleSponsorLogo.src = kiosk.sponsor_logo_url;
+    elements.idleSponsorLogo.hidden = false;
+  } else {
+    elements.idleSponsorLogo.removeAttribute("src");
+    elements.idleSponsorLogo.hidden = true;
+  }
+}
+
+function renderDisconnected() {
+  applyClubBranding(null);
+  elements.idleState.classList.remove("hidden");
+  elements.matchState.classList.add("hidden");
+  elements.laneTitle.textContent = "Board -";
+  elements.idleLane.textContent = "Koble til kiosk";
+  elements.idleSponsor.textContent = "Legg inn kiosk-koden fra admin for å hente boardets kampflyt.";
+  elements.idleClubLogo.hidden = true;
+  elements.idleSponsorLogo.hidden = true;
+}
+
+function renderRecentVisits(match) {
+  const visits = match.recent_visits || [];
+
+  elements.recentVisits.innerHTML = visits.length
+    ? visits.map((visit) => `
+        <div class="pill">
+          ${visit.player_name} · Visit ${visit.visit_number} · ${visit.score}${Number(visit.is_bust) === 1 ? " · Bust" : ""}${visit.input_mode ? ` · ${visit.input_mode}` : ""}
+        </div>
+      `).join("")
+    : `<div class="pill">Ingen visits registrert ennå.</div>`;
+}
+
+function renderSumPanel() {
+  const rawValue = state.sumValue;
+  const score = Number(rawValue || 0);
+  const remainingBefore = currentRemaining();
+  const remainingAfter = remainingBefore - score;
+  const isCheckout = remainingAfter === 0 && isCheckoutNumber(remainingBefore);
+  const isBust = score > 180 || remainingAfter < 0 || remainingAfter === 1 || (remainingAfter === 0 && !isCheckout);
+
+  elements.sumDisplay.textContent = rawValue || "-";
+  elements.sumDisplay.classList.toggle("error", score > 180);
+
+  if (!rawValue) {
+    elements.sumAfter.textContent = "Gjenstår: -";
+    elements.sumAfter.className = "after-pill";
     return;
   }
 
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/start-match`, { method: "POST" });
+  if (isCheckout) {
+    elements.sumAfter.textContent = "Checkout";
+    elements.sumAfter.className = "after-pill ok";
+    return;
+  }
+
+  if (isBust) {
+    elements.sumAfter.textContent = "Bust";
+    elements.sumAfter.className = "after-pill bad";
+    return;
+  }
+
+  elements.sumAfter.textContent = `Gjenstår: ${remainingAfter}`;
+  elements.sumAfter.className = "after-pill ok";
+}
+
+function renderDartPanel() {
+  const labels = state.darts.map(formatDartLabel);
+  const score = calculateDartScore(state.darts);
+  const remainingBefore = currentRemaining();
+  const remainingAfter = remainingBefore - score;
+  const checkout = remainingAfter === 0 && isDoubleOutSequence(state.darts);
+  const bust = score > 180 || remainingAfter < 0 || remainingAfter === 1 || (remainingAfter === 0 && !checkout);
+
+  elements.dartChip1.textContent = `Pil 1: ${labels[0] || "-"}`;
+  elements.dartChip2.textContent = `Pil 2: ${labels[1] || "-"}`;
+  elements.dartChip3.textContent = `Pil 3: ${labels[2] || "-"}`;
+  elements.dartSumChip.textContent = `Sum: ${score}`;
+
+  if (!state.darts.length) {
+    elements.dartAfterChip.textContent = "Gjenstår: -";
+    elements.dartAfterChip.className = "chip";
+  } else if (checkout) {
+    elements.dartAfterChip.textContent = "Checkout";
+    elements.dartAfterChip.className = "chip ok";
+  } else if (bust) {
+    elements.dartAfterChip.textContent = "Bust";
+    elements.dartAfterChip.className = "chip bad";
+  } else {
+    elements.dartAfterChip.textContent = `Gjenstår: ${remainingAfter}`;
+    elements.dartAfterChip.className = "chip";
+  }
+
+  document.querySelectorAll("[data-multiplier]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.multiplier === state.multiplier);
+  });
+}
+
+function renderInputMode() {
+  const manualMode = isManualMode();
+
+  elements.manualPanel.classList.toggle("hidden", !manualMode);
+  elements.scoliaPanel.classList.toggle("hidden", manualMode);
+  elements.modeSumButton.disabled = !manualMode;
+  elements.modeDartButton.disabled = !manualMode;
+
+  if (!manualMode) {
+    elements.kioskModeHint.textContent = "Denne kiosken er satt til Scolia og venter på eksterne kast/eventer.";
+    return;
+  }
+
+  elements.kioskModeHint.textContent = `Aktiv spiller: ${currentPlayerName()}. Du kan bytte mellom totalsum og per pil.`;
+  elements.modeSumButton.classList.toggle("active", state.inputMode === "sum");
+  elements.modeDartButton.classList.toggle("active", state.inputMode === "per_dart");
+  elements.sumPanel.classList.toggle("hidden", state.inputMode !== "sum");
+  elements.dartPanel.classList.toggle("hidden", state.inputMode !== "per_dart");
+}
+
+function renderMatch(snapshot) {
+  const kiosk = snapshot.kiosk;
+  const match = snapshot.match;
+  const currentPlayerId = match.current_player_id;
+  const currentIsA = currentPlayerId === match.player_a.id;
+  const currentIsB = currentPlayerId === match.player_b.id;
+
+  applyClubBranding(kiosk.club);
+
+  elements.idleState.classList.add("hidden");
+  elements.matchState.classList.remove("hidden");
+  elements.kioskCodeInput.value = kiosk.code;
+  elements.laneTitle.textContent = kiosk.sponsor_label ? `Board ${kiosk.board_number} · ${kiosk.sponsor_label}` : `Board ${kiosk.board_number}`;
+  elements.kioskMeta.innerHTML = `
+    <span class="pill">${kiosk.name}</span>
+    <span class="pill">${kiosk.code}</span>
+    <span class="pill">${kiosk.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</span>
+    ${kiosk.sponsor_label ? `<span class="pill">${kiosk.sponsor_label}</span>` : ""}
+  `;
+
+  elements.startMatchButton.classList.toggle("hidden", snapshot.state !== "assigned");
+
+  elements.playerABox.classList.toggle("active", currentIsA);
+  elements.playerBBox.classList.toggle("active", currentIsB);
+  elements.playerAName.textContent = match.player_a.display_name;
+  elements.playerBName.textContent = match.player_b.display_name;
+  elements.playerARemaining.textContent = match.player_a.remaining;
+  elements.playerBRemaining.textContent = match.player_b.remaining;
+  elements.playerALegs.textContent = `${match.player_a.legs_won} legs`;
+  elements.playerBLegs.textContent = `${match.player_b.legs_won} legs`;
+  elements.legInfo.textContent = `Leg ${match.current_leg.leg_number} · Best of ${match.best_of_legs} · ${match.status}`;
+
+  renderInputMode();
+  renderSumPanel();
+  renderDartPanel();
+  renderRecentVisits(match);
+}
+
+function renderState() {
+  const snapshot = state.snapshot;
+
+  if (!snapshot) {
+    renderDisconnected();
+    return;
+  }
+
+  if (snapshot.kiosk?.club) {
+    applyClubBranding(snapshot.kiosk.club);
+  }
+
+  if (snapshot.state === "idle" || !snapshot.match) {
+    renderIdle(snapshot);
+    return;
+  }
+
+  renderMatch(snapshot);
+}
+
+async function loadState() {
+  if (!state.kioskCode) {
+    state.snapshot = null;
+    renderDisconnected();
+    return;
+  }
+
+  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`);
   renderState();
 }
 
-async function submitVisit(score) {
-  if (!state.kioskCode) {
-    return;
-  }
-
-  const value = Number(score ?? elements.scoreInput.value);
-
-  if (Number.isNaN(value)) {
-    return;
-  }
-
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
-    method: "POST",
-    body: {
-      score: value,
-      darts_used: Number(elements.dartsUsedInput.value || 3),
-      input_mode: "sum",
-    },
-  });
-
-  elements.scoreInput.value = "";
+async function startMatch() {
+  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/start-match`, { method: "POST" });
+  resetInputBuffers();
   renderState();
 }
 
 async function undoVisit() {
-  if (!state.kioskCode) {
-    return;
-  }
-
   state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/undo`, { method: "POST" });
+  resetInputBuffers();
   renderState();
 }
 
-function startPolling() {
-  if (state.pollHandle) {
-    window.clearInterval(state.pollHandle);
+async function requestCheckoutDartsUsed() {
+  return new Promise((resolve) => {
+    elements.checkoutDialog.showModal();
+
+    const onClick = (event) => {
+      const button = event.target.closest("[data-darts-used]");
+
+      if (!button) {
+        return;
+      }
+
+      elements.checkoutDialog.close();
+      elements.checkoutDialog.removeEventListener("click", onClick);
+      resolve(Number(button.dataset.dartsUsed));
+    };
+
+    elements.checkoutDialog.addEventListener("click", onClick);
+  });
+}
+
+async function submitSumVisit(forcedScore = null) {
+  if (!isManualMode()) {
+    showToast("Kiosken er satt til Scolia-modus.");
+    return;
   }
 
+  const rawScore = forcedScore ?? (state.sumValue === "" ? 0 : state.sumValue);
+  const score = Number(rawScore);
+
+  if (!Number.isFinite(score) || score < 0) {
+    return;
+  }
+
+  const remainingBefore = currentRemaining();
+  const isCheckout = remainingBefore - score === 0 && isCheckoutNumber(remainingBefore);
+  const dartsUsed = isCheckout ? await requestCheckoutDartsUsed() : 3;
+
+  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
+    method: "POST",
+    body: {
+      score,
+      darts_used: dartsUsed,
+      input_mode: "sum",
+    },
+  });
+
+  resetInputBuffers();
+  renderState();
+}
+
+async function submitDartVisit() {
+  if (!isManualMode()) {
+    showToast("Kiosken er satt til Scolia-modus.");
+    return;
+  }
+
+  if (!state.darts.length) {
+    return;
+  }
+
+  const remainingBefore = currentRemaining();
+  const score = calculateDartScore(state.darts);
+  const isCheckout = remainingBefore - score === 0 && isDoubleOutSequence(state.darts);
+  const darts = isCheckout ? state.darts.slice() : padDartsToThree(state.darts);
+
+  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
+    method: "POST",
+    body: {
+      input_mode: "per_dart",
+      darts_used: isCheckout ? state.darts.length : 3,
+      darts: darts.map((dart) => ({
+        multiplier: dart.multiplier,
+        value: dart.value,
+      })),
+    },
+  });
+
+  resetInputBuffers();
+  renderState();
+}
+
+function setInputMode(mode) {
+  persistInputMode(mode);
+  renderInputMode();
+}
+
+function handleSumKey(key) {
+  if (key === "del") {
+    state.sumValue = state.sumValue.slice(0, -1);
+  } else if (key === "ok") {
+    submitSumVisit().catch((error) => showToast(error.message));
+    return;
+  } else if (state.sumValue.length < 3) {
+    state.sumValue += key;
+  }
+
+  renderSumPanel();
+}
+
+function addDart(entry) {
+  if (state.darts.length >= 3) {
+    return;
+  }
+
+  state.darts.push(entry);
+  state.multiplier = "S";
+  renderDartPanel();
+}
+
+function formatDartLabel(dart) {
+  if (dart.value === 0) {
+    return "MISS";
+  }
+
+  if (dart.value === "BULL") {
+    return dart.multiplier === "D" ? "DBull" : "Bull";
+  }
+
+  return dart.multiplier === "S" ? `${dart.value}` : `${dart.multiplier}${dart.value}`;
+}
+
+function calculateDartScore(darts) {
+  return darts.reduce((sum, dart) => {
+    if (dart.value === "BULL") {
+      return sum + (dart.multiplier === "D" ? 50 : 25);
+    }
+
+    if (dart.value === 0) {
+      return sum;
+    }
+
+    return sum + (dart.multiplier === "D" ? dart.value * 2 : dart.multiplier === "T" ? dart.value * 3 : dart.value);
+  }, 0);
+}
+
+function isCheckoutNumber(remainingBefore) {
+  if (remainingBefore <= 1 || remainingBefore > 170) {
+    return false;
+  }
+
+  return ![159, 162, 163, 165, 166, 168, 169].includes(remainingBefore);
+}
+
+function isDoubleOutSequence(darts) {
+  for (let index = darts.length - 1; index >= 0; index -= 1) {
+    const dart = darts[index];
+
+    if (dart.value === 0) {
+      continue;
+    }
+
+    if (dart.value === "BULL") {
+      return dart.multiplier === "D";
+    }
+
+    return dart.multiplier === "D";
+  }
+
+  return false;
+}
+
+function padDartsToThree(darts) {
+  const padded = darts.slice();
+
+  while (padded.length < 3) {
+    padded.push({ multiplier: "S", value: 0 });
+  }
+
+  return padded;
+}
+
+function renderNumberGrid() {
+  elements.numberGrid.innerHTML = Array.from({ length: 20 }, (_, offset) => 20 - offset)
+    .map((value) => `<button type="button" class="quick" data-number="${value}">${value}</button>`)
+    .join("");
+}
+
+function startPolling() {
+  window.clearInterval(state.pollHandle);
   state.pollHandle = window.setInterval(() => {
     loadState().catch(() => undefined);
   }, 5000);
@@ -226,34 +560,87 @@ function bindEvents() {
     startPolling();
   });
 
-  elements.refreshButton.addEventListener("click", () => loadState());
-  elements.startMatchButton.addEventListener("click", () => startMatch().catch((error) => renderError(error.message)));
-  elements.undoButton.addEventListener("click", () => undoVisit().catch((error) => renderError(error.message)));
+  elements.refreshButton.addEventListener("click", () => {
+    loadState().catch((error) => showToast(error.message));
+  });
 
-  elements.visitForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  elements.startMatchButton.addEventListener("click", () => {
+    startMatch().catch((error) => showToast(error.message));
+  });
 
-    try {
-      await submitVisit();
-    } catch (error) {
-      renderError(error.message);
-    }
+  elements.undoButton.addEventListener("click", () => {
+    undoVisit().catch((error) => showToast(error.message));
+  });
+
+  elements.modeSumButton.addEventListener("click", () => setInputMode("sum"));
+  elements.modeDartButton.addEventListener("click", () => setInputMode("per_dart"));
+
+  document.querySelectorAll("[data-key]").forEach((button) => {
+    button.addEventListener("click", () => handleSumKey(button.dataset.key));
   });
 
   document.querySelectorAll("[data-score]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      try {
-        await submitVisit(Number(button.dataset.score));
-      } catch (error) {
-        renderError(error.message);
-      }
+    button.addEventListener("click", () => {
+      submitSumVisit(Number(button.dataset.score)).catch((error) => showToast(error.message));
     });
+  });
+
+  document.querySelectorAll("[data-multiplier]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.multiplier = button.dataset.multiplier;
+      renderDartPanel();
+    });
+  });
+
+  elements.numberGrid.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-number]");
+
+    if (!button) {
+      return;
+    }
+
+    addDart({
+      multiplier: state.multiplier,
+      value: Number(button.dataset.number),
+    });
+  });
+
+  document.querySelectorAll("[data-special]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const special = button.dataset.special;
+
+      if (special === "miss") {
+        addDart({ multiplier: "S", value: 0 });
+        return;
+      }
+
+      addDart({
+        multiplier: special === "dbull" ? "D" : "S",
+        value: "BULL",
+      });
+    });
+  });
+
+  elements.dartUndoButton.addEventListener("click", () => {
+    state.darts.pop();
+    renderDartPanel();
+  });
+
+  elements.dartSubmitButton.addEventListener("click", () => {
+    submitDartVisit().catch((error) => showToast(error.message));
   });
 }
 
 async function bootstrap() {
+  renderNumberGrid();
   bindEvents();
   elements.kioskCodeInput.value = state.kioskCode;
+
+  if (!state.kioskCode) {
+    renderDisconnected();
+    return;
+  }
+
   await loadState();
   startPolling();
 }

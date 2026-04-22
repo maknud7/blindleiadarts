@@ -158,7 +158,7 @@ function renderClub() {
   }
 
   applyClubBranding(dashboard.club);
-  elements.clubIntro.textContent = `${dashboard.club.name} er lastet inn. Alt i portalen og adminstudioet er eksplisitt knyttet til valgt klubb.`;
+  elements.clubIntro.textContent = `${dashboard.club.name} er lastet inn. Portal, kioskadmin og turneringsstyring er alltid klubbspesifikk.`;
   elements.heroMetrics.innerHTML = `
     <div class="metric"><small>Spillere</small><strong>${dashboard.players.length}</strong></div>
     <div class="metric"><small>Kiosker</small><strong>${dashboard.kiosks.length}</strong></div>
@@ -168,11 +168,22 @@ function renderClub() {
   elements.kioskList.innerHTML = dashboard.kiosks.length
     ? dashboard.kiosks.map((kiosk) => `
         <div class="list-item">
-          <div class="row"><strong>${kiosk.name}</strong><span class="muted">Board ${kiosk.board_number}</span></div>
+          <div class="row">
+            <strong>${kiosk.name}</strong>
+            <span class="muted">Board ${kiosk.board_number}</span>
+          </div>
           <div class="pill-row">
             <span class="pill">${kiosk.code}</span>
             ${kiosk.sponsor_label ? `<span class="pill">${kiosk.sponsor_label}</span>` : ""}
+            <span class="pill">${formatScoringMode(kiosk.scoring_mode)}</span>
           </div>
+          <form class="stack" data-kiosk-settings="${kiosk.id}">
+            <select name="scoring_mode">
+              <option value="manual" ${kiosk.scoring_mode === "manual" ? "selected" : ""}>Manuell scoring</option>
+              <option value="scolia" ${kiosk.scoring_mode === "scolia" ? "selected" : ""}>Scolia-eventer</option>
+            </select>
+            <button type="submit" class="ghost">Lagre kioskinnstillinger</button>
+          </form>
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kiosker opprettet ennå.</p></div>`;
@@ -304,6 +315,10 @@ function populateAdminSelects() {
     .join("");
 }
 
+function formatScoringMode(mode) {
+  return mode === "scolia" ? "Scolia" : "Manuell";
+}
+
 async function handleLogin(event) {
   event.preventDefault();
 
@@ -402,6 +417,32 @@ function bindEvents() {
     }
 
     await handleTournamentRegister(Number(button.dataset.register));
+  });
+
+  elements.kioskList.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-kiosk-settings]");
+
+    if (!form) {
+      return;
+    }
+
+    event.preventDefault();
+
+    try {
+      const body = collectFormValues(form);
+      const kioskId = Number(form.dataset.kioskSettings);
+
+      await api(`/clubs/${state.selectedClubId}/kiosks/${kioskId}`, {
+        method: "PATCH",
+        body,
+        auth: true,
+      });
+
+      setStatus("Kioskinnstillinger lagret.", "success");
+      await loadClubContext();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
   });
 
   elements.clubForm.addEventListener("submit", async (event) => {

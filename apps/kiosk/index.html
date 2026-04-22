@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Blindleia Darts Kiosk</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -15,59 +15,176 @@
           <span id="brandFallback" class="brand-fallback">KL</span>
         </div>
         <div>
-          <p class="eyebrow">Kiosk V1</p>
-          <h1 id="brandTitle">Board-side matchflyt</h1>
+          <p class="eyebrow">Board Kiosk</p>
+          <h1 id="brandTitle">Kampflyt ved skiva</h1>
         </div>
       </div>
+
       <form id="kioskSetupForm" class="setup">
         <input id="kioskCodeInput" placeholder="Kiosk-kode, f.eks. BOARD-1">
-        <button type="submit">Koble til kiosk</button>
+        <button type="submit">Koble til</button>
       </form>
     </header>
 
+    <div class="lane-title-wrap">
+      <div id="laneTitle" class="lane-title">Board -</div>
+    </div>
+
     <main class="layout">
-      <section class="scorecard">
-        <div class="score-header">
-          <div id="kioskMeta" class="meta"></div>
-          <div class="actions">
-            <button id="refreshButton" class="ghost">Oppdater</button>
-            <button id="startMatchButton" class="hidden">Start kamp</button>
-            <button id="undoButton" class="ghost">Undo siste visit</button>
+      <section id="idleState" class="panel waiting-state">
+        <div class="idle">
+          <span class="badge">Klar for neste kamp</span>
+          <div id="idleLane" class="idle-big">Board -</div>
+          <div id="idleSponsor" class="idle-sponsor"></div>
+          <div class="logos">
+            <img id="idleClubLogo" alt="Klubblogo" hidden>
+            <img id="idleSponsorLogo" alt="Sponsorlogo" hidden>
           </div>
         </div>
-        <div id="stateArea" class="state-area"></div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Visit Input</p>
-            <h2>Legg inn score</h2>
+      <section id="matchState" class="stack hidden">
+        <section class="scorecard">
+          <div class="score-header">
+            <div id="kioskMeta" class="meta"></div>
+            <div class="actions">
+              <button id="refreshButton" class="ghost" type="button">Oppdater</button>
+              <button id="startMatchButton" class="hidden" type="button">Start kamp</button>
+              <button id="undoButton" class="ghost" type="button">Angre siste visit</button>
+            </div>
           </div>
-        </div>
-        <form id="visitForm" class="visit-form">
-          <input id="scoreInput" name="score" type="number" min="0" max="180" placeholder="Score">
-          <select id="dartsUsedInput" name="darts_used">
-            <option value="3">3 darts</option>
-            <option value="2">2 darts</option>
-            <option value="1">1 dart</option>
-          </select>
-          <button type="submit">Registrer visit</button>
-        </form>
 
-        <div class="quick-grid">
-          <button class="quick" data-score="26">26</button>
-          <button class="quick" data-score="45">45</button>
-          <button class="quick" data-score="60">60</button>
-          <button class="quick" data-score="81">81</button>
-          <button class="quick" data-score="100">100</button>
-          <button class="quick" data-score="121">121</button>
-          <button class="quick" data-score="140">140</button>
-          <button class="quick" data-score="180">180</button>
-        </div>
+          <div class="score-grid">
+            <article id="playerABox" class="player-box">
+              <p class="player-label">Spiller A</p>
+              <h2 id="playerAName">-</h2>
+              <div id="playerARemaining" class="remaining">501</div>
+              <p id="playerALegs" class="muted">0 legs</p>
+            </article>
+
+            <div class="center-info">
+              <div id="legInfo" class="pill">Leg 1 · Best of 3</div>
+              <div class="mode-segment">
+                <button id="modeSumButton" type="button" class="mode active">SUM per visit</button>
+                <button id="modeDartButton" type="button" class="mode">PER pil</button>
+              </div>
+              <div id="kioskModeHint" class="muted small"></div>
+            </div>
+
+            <article id="playerBBox" class="player-box">
+              <p class="player-label">Spiller B</p>
+              <h2 id="playerBName">-</h2>
+              <div id="playerBRemaining" class="remaining">501</div>
+              <p id="playerBLegs" class="muted">0 legs</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="manualPanel" class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Scoring</p>
+              <h3>Registrer visit</h3>
+            </div>
+          </div>
+
+          <section id="sumPanel" class="stack">
+            <div class="sum-display-row">
+              <div id="sumDisplay" class="sum-display">-</div>
+              <div class="stack compact">
+                <div id="sumAfter" class="after-pill">Gjenstår: -</div>
+                <div class="muted small">Bruk SUM når spilleren taster totalsummen for hele visiten.</div>
+              </div>
+            </div>
+            <div class="keypad">
+              <button type="button" class="key" data-key="1">1</button>
+              <button type="button" class="key" data-key="2">2</button>
+              <button type="button" class="key" data-key="3">3</button>
+              <button type="button" class="key" data-key="4">4</button>
+              <button type="button" class="key" data-key="5">5</button>
+              <button type="button" class="key" data-key="6">6</button>
+              <button type="button" class="key" data-key="7">7</button>
+              <button type="button" class="key" data-key="8">8</button>
+              <button type="button" class="key" data-key="9">9</button>
+              <button type="button" class="key ghost" data-key="del">⌫</button>
+              <button type="button" class="key" data-key="0">0</button>
+              <button type="button" class="key ok" data-key="ok">OK</button>
+            </div>
+            <div class="quick-grid">
+              <button type="button" class="quick" data-score="26">26</button>
+              <button type="button" class="quick" data-score="45">45</button>
+              <button type="button" class="quick" data-score="60">60</button>
+              <button type="button" class="quick" data-score="81">81</button>
+              <button type="button" class="quick" data-score="100">100</button>
+              <button type="button" class="quick" data-score="121">121</button>
+              <button type="button" class="quick" data-score="140">140</button>
+              <button type="button" class="quick" data-score="180">180</button>
+            </div>
+          </section>
+
+          <section id="dartPanel" class="stack hidden">
+            <div class="chips">
+              <div id="dartChip1" class="chip">Pil 1: -</div>
+              <div id="dartChip2" class="chip">Pil 2: -</div>
+              <div id="dartChip3" class="chip">Pil 3: -</div>
+              <div id="dartSumChip" class="chip">Sum: 0</div>
+              <div id="dartAfterChip" class="chip">Gjenstår: -</div>
+            </div>
+
+            <div class="dart-layout">
+              <div class="multiplier-column">
+                <button type="button" class="multiplier active" data-multiplier="S">S</button>
+                <button type="button" class="multiplier" data-multiplier="D">D</button>
+                <button type="button" class="multiplier" data-multiplier="T">T</button>
+              </div>
+
+              <div class="dart-selectors">
+                <div id="numberGrid" class="number-grid"></div>
+                <div class="quick-row">
+                  <button type="button" class="quick" data-special="bull">Bull (25)</button>
+                  <button type="button" class="quick" data-special="dbull">DBull (50)</button>
+                  <button type="button" class="quick" data-special="miss">Miss (0)</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="keypad two">
+              <button type="button" id="dartUndoButton" class="key ghost">⌫</button>
+              <button type="button" id="dartSubmitButton" class="key ok">OK</button>
+            </div>
+          </section>
+
+          <section id="scoliaPanel" class="scolia-panel hidden">
+            <strong>Scolia-modus er aktivert for denne kiosken.</strong>
+            <p class="muted">Boardet er klargjort for å motta kast via API senere. Manuell scoring er låst til kioskadmin bytter tilbake til manuell modus.</p>
+          </section>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Live Feed</p>
+              <h3>Siste visits</h3>
+            </div>
+          </div>
+          <div id="recentVisits" class="stack"></div>
+        </section>
       </section>
     </main>
   </div>
+
+  <dialog id="checkoutDialog" class="dialog">
+    <form method="dialog" class="stack">
+      <h3>Hvor mange piler ble brukt?</h3>
+      <div class="dialog-actions">
+        <button type="button" data-darts-used="1">1 pil</button>
+        <button type="button" data-darts-used="2">2 piler</button>
+        <button type="button" data-darts-used="3">3 piler</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script src="./app.js" type="module"></script>
 </body>

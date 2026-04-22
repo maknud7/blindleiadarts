@@ -220,7 +220,7 @@ final class ClubRepository
     public function listKiosksByClubId(int $clubId): array
     {
         $sql = sprintf(
-            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, is_active, last_seen_at
+            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active, last_seen_at
              FROM `%1$skiosks`
              WHERE club_id = ?
              ORDER BY board_number ASC, name ASC',
@@ -249,36 +249,72 @@ final class ClubRepository
         $boardNumber = (int) ($payload['board_number'] ?? 0);
         $sponsorLabel = $this->nullableString($payload['sponsor_label'] ?? null);
         $sponsorLogoUrl = $this->nullableString($payload['sponsor_logo_url'] ?? null);
+        $scoringMode = $this->normalizeScoringMode($payload['scoring_mode'] ?? null);
         $isActive = 1;
 
         $sql = sprintf(
-            'INSERT INTO `%1$skiosks` (club_id, code, name, board_number, sponsor_label, sponsor_logo_url, is_active)
-             VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO `%1$skiosks` (club_id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             $this->tablePrefix
         );
 
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('ississi', $clubId, $code, $name, $boardNumber, $sponsorLabel, $sponsorLogoUrl, $isActive);
+        $statement->bind_param('ississsi', $clubId, $code, $name, $boardNumber, $sponsorLabel, $sponsorLogoUrl, $scoringMode, $isActive);
         $statement->execute();
         $kioskId = (int) $statement->insert_id;
         $statement->close();
 
+        return $this->findKioskById($clubId, $kioskId) ?? [];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>|null
+     */
+    public function updateKiosk(int $clubId, int $kioskId, array $payload): ?array
+    {
+        $existing = $this->findKioskById($clubId, $kioskId);
+
+        if ($existing === null) {
+            return null;
+        }
+
+        $code = trim((string) ($payload['code'] ?? $existing['code']));
+        $name = trim((string) ($payload['name'] ?? $existing['name']));
+        $boardNumber = isset($payload['board_number']) ? (int) $payload['board_number'] : (int) $existing['board_number'];
+        $sponsorLabel = array_key_exists('sponsor_label', $payload)
+            ? $this->nullableString($payload['sponsor_label'])
+            : $this->nullableString($existing['sponsor_label'] ?? null);
+        $sponsorLogoUrl = array_key_exists('sponsor_logo_url', $payload)
+            ? $this->nullableString($payload['sponsor_logo_url'])
+            : $this->nullableString($existing['sponsor_logo_url'] ?? null);
+        $scoringMode = $this->normalizeScoringMode($payload['scoring_mode'] ?? $existing['scoring_mode'] ?? null);
+        $isActive = isset($payload['is_active']) ? ((int) $payload['is_active'] === 1 ? 1 : 0) : (int) $existing['is_active'];
+
         $sql = sprintf(
-            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, is_active, last_seen_at
-             FROM `%1$skiosks`
-             WHERE id = ?
-             LIMIT 1',
+            'UPDATE `%1$skiosks`
+             SET code = ?, name = ?, board_number = ?, sponsor_label = ?, sponsor_logo_url = ?, scoring_mode = ?, is_active = ?
+             WHERE id = ? AND club_id = ?',
             $this->tablePrefix
         );
 
-        $reload = $this->connection->prepare($sql);
-        $reload->bind_param('i', $kioskId);
-        $reload->execute();
-        $result = $reload->get_result();
-        $row = $result->fetch_assoc() ?: [];
-        $reload->close();
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param(
+            'ssisssiii',
+            $code,
+            $name,
+            $boardNumber,
+            $sponsorLabel,
+            $sponsorLogoUrl,
+            $scoringMode,
+            $isActive,
+            $kioskId,
+            $clubId
+        );
+        $statement->execute();
+        $statement->close();
 
-        return $row;
+        return $this->findKioskById($clubId, $kioskId);
     }
 
     /**
@@ -380,5 +416,33 @@ final class ClubRepository
 
         $trimmed = trim($value);
         return $trimmed !== '' ? $trimmed : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findKioskById(int $clubId, int $kioskId): ?array
+    {
+        $sql = sprintf(
+            'SELECT id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active, last_seen_at
+             FROM `%1$skiosks`
+             WHERE id = ? AND club_id = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('ii', $kioskId, $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: null;
+        $statement->close();
+
+        return $row;
+    }
+
+    private function normalizeScoringMode(mixed $value): string
+    {
+        return is_string($value) && trim($value) === 'scolia' ? 'scolia' : 'manual';
     }
 }

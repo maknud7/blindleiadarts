@@ -86,6 +86,7 @@
         <div class="grid two">
           <div>
             <h4>Kiosker</h4>
+            <p class="help">Bytt mellom manuell scoring og Scolia-klargjort kiosk per board.</p>
             <div id="kioskList" class="stack"></div>
           </div>
           <div>
@@ -127,6 +128,11 @@
             <input name="name" placeholder="Navn">
             <input name="board_number" type="number" placeholder="Boardnummer">
             <input name="sponsor_label" placeholder="Sponsorlabel">
+            <input name="sponsor_logo_url" placeholder="Sponsorlogo-URL">
+            <select name="scoring_mode">
+              <option value="manual">Manuell scoring</option>
+              <option value="scolia">Scolia-eventer</option>
+            </select>
             <button type="submit">Opprett kiosk</button>
           </form>
         </div>
