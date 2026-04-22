@@ -5,6 +5,7 @@ Production-oriented tournament platform for Blindleia Dartklubb with three prima
 - kiosk tablets at each board
 - public screen / venue display
 - club admin backoffice
+- future member portal for players and club members
 
 The platform is designed to run the venue locally without depending on Challonge or other external systems at runtime. External systems are supported through generic provider connectors.
 
@@ -44,6 +45,7 @@ The platform is designed to run the venue locally without depending on Challonge
 - `apps/kiosk`: match input UI for each board kiosk.
 - `apps/screen`: public venue display for live boards and rankings.
 - `apps/admin`: future club admin backoffice.
+- future member-facing login area for registrations, stats, and member self-service.
 
 ## Priority Roadmap
 
@@ -54,6 +56,8 @@ The platform is designed to run the venue locally without depending on Challonge
 5. Add admin media upload flows for club and sponsor branding.
 6. Introduce generic provider framework.
 7. Implement Challonge as the first connector.
+8. Add member login, tournament registration, and personal stats.
+9. Expand the platform toward club operations such as payments and bookkeeping support.
 
 ## Milestones
 
@@ -75,3 +79,16 @@ GitHub-first deployment files are included for:
 - manual database migrations for test and production using table prefixes in one shared database
 
 Setup details are documented in `docs/handover/GITHUB_DEPLOY_SETUP.md`.
+
+## Longer-Term Product Scope
+
+The platform is expected to grow beyond venue runtime into a broader club system with:
+
+- player and member login
+- tournament signup and self-service
+- personal statistics such as averages, checkout data, and ELO
+- member payment tracking
+- grasrotandel follow-up
+- bookkeeping and club operations support
+
+These capabilities should be added as separate bounded areas around the same core platform rather than folded directly into kiosk-specific runtime code.

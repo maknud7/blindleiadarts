@@ -21,6 +21,8 @@ The platform should support the full venue match flow:
 - maintain ELO and Order of Merit rankings
 - support club branding, sponsor branding, and future multi-club usage
 
+Longer term, the same platform should also support player/member self-service and broader club operations such as registrations, personal statistics, membership payments, grasrotandel follow-up, and bookkeeping-related workflows.
+
 ## Current Deployment Shape
 
 - `ingenting.org/BD/` -> main project root
@@ -40,6 +42,8 @@ If hosting remains PHP-first, preserve that operational reality while still sepa
 6. Add upload and storage conventions for images.
 7. Build the generic provider framework.
 8. Implement Challonge as the first provider.
+9. Prepare for future member login and registration flows without coupling them to kiosk runtime.
+10. Prepare a separate club-operations domain for payments and bookkeeping support.
 
 ## Working Rules For Future Contributors
 
