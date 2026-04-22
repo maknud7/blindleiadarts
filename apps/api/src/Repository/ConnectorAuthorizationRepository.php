@@ -72,4 +72,54 @@ final class ConnectorAuthorizationRepository
 
         return $id;
     }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listByProvider(string $providerKey): array
+    {
+        $sql = sprintf(
+            'SELECT id, provider_key, authorization_type, external_subject_id, external_subject_name, token_type, scope, expires_at, created_at, updated_at
+             FROM `%1$sconnector_authorizations`
+             WHERE provider_key = ?
+             ORDER BY id DESC',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('s', $providerKey);
+        $statement->execute();
+        $result = $statement->get_result();
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findById(int $id): ?array
+    {
+        $sql = sprintf(
+            'SELECT *
+             FROM `%1$sconnector_authorizations`
+             WHERE id = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $id);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: null;
+        $statement->close();
+
+        if ($row !== null && is_string($row['payload_json'] ?? null) && $row['payload_json'] !== '') {
+            $row['payload_json'] = json_decode($row['payload_json'], true);
+        }
+
+        return $row;
+    }
 }

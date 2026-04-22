@@ -9,6 +9,11 @@ interface TournamentProviderInterface
     public function providerKey(): string;
 
     /**
+     * @return array<string, mixed>
+     */
+    public function getTournament(string $accessToken, string $tournamentId): array;
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function listTournaments(string $accessToken): array;

@@ -12,7 +12,12 @@ Guidelines:
 
 - `GET /v1/health`
 - `GET /v1/kiosks/{code}/state`
+- `GET /v1/connectors/challonge/authorizations`
 - `GET /v1/connectors/challonge/authorize-url?redirect_uri=...`
+- `GET /v1/connectors/challonge/authorizations/{id}/tournaments`
+- `GET /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/participants`
+- `GET /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/matches`
+- `POST /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/import`
 - `GET /v1/connectors/challonge/callback`
 
 ## Notes

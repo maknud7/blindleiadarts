@@ -53,7 +53,12 @@ When we want to create or manage tournaments fully through our app, we will like
 
 ## Current Backend Endpoints
 
+- `GET /api/v1/connectors/challonge/authorizations`
 - `GET /api/v1/connectors/challonge/authorize-url`
+- `GET /api/v1/connectors/challonge/authorizations/{id}/tournaments`
+- `GET /api/v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/participants`
+- `GET /api/v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/matches`
+- `POST /api/v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/import`
 - `GET /api/v1/connectors/challonge/callback`
 
 ## Important Security Note

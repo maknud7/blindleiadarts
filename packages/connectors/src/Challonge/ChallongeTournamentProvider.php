@@ -21,6 +21,16 @@ final class ChallongeTournamentProvider implements TournamentProviderInterface
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function getTournament(string $accessToken, string $tournamentId): array
+    {
+        $response = $this->client->get('/tournaments/' . rawurlencode($tournamentId) . '.json', $accessToken);
+        $data = $response['data'] ?? [];
+        return is_array($data) ? $data : [];
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function listTournaments(string $accessToken): array

@@ -10,9 +10,11 @@ use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeApiClient;
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuth;
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuthClient;
+use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeTournamentProvider;
 use DateInterval;
 use DateTimeImmutable;
 use mysqli_sql_exception;
@@ -75,7 +77,12 @@ final class Application
                 'routes' => [
                     'GET /v1/health',
                     'GET /v1/kiosks/{code}/state',
+                    'GET /v1/connectors/challonge/authorizations',
                     'GET /v1/connectors/challonge/authorize-url',
+                    'GET /v1/connectors/challonge/authorizations/{id}/tournaments',
+                    'GET /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/participants',
+                    'GET /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/matches',
+                    'POST /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/import',
                     'GET /v1/connectors/challonge/callback',
                 ],
             ]);
@@ -146,6 +153,14 @@ final class Application
                 'authorize_url' => $oauth->buildAuthorizationUrl($resolvedRedirectUri, $scopes, $communityId, $stateToken),
                 'redirect_uri' => $resolvedRedirectUri,
                 'scopes' => $scopes !== [] ? $scopes : $challonge->defaultScopes(),
+            ]);
+        }
+
+        if ($method === 'GET' && $path === 'v1/connectors/challonge/authorizations') {
+            $repository = new ConnectorAuthorizationRepository($database);
+
+            return JsonResponse::ok([
+                'items' => $repository->listByProvider('challonge'),
             ]);
         }
 
@@ -235,6 +250,78 @@ final class Application
             ]);
         }
 
+        if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments$#', $path, $matches) === 1) {
+            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+            if ($authorization instanceof JsonResponse) {
+                return $authorization;
+            }
+
+            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
+
+            return JsonResponse::ok([
+                'authorization_id' => (int) $authorization['id'],
+                'items' => $provider->listTournaments((string) $authorization['access_token']),
+            ]);
+        }
+
+        if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/participants$#', $path, $matches) === 1) {
+            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+            if ($authorization instanceof JsonResponse) {
+                return $authorization;
+            }
+
+            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
+
+            return JsonResponse::ok([
+                'authorization_id' => (int) $authorization['id'],
+                'tournament_id' => urldecode($matches[2]),
+                'items' => $provider->listParticipants((string) $authorization['access_token'], urldecode($matches[2])),
+            ]);
+        }
+
+        if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/matches$#', $path, $matches) === 1) {
+            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+            if ($authorization instanceof JsonResponse) {
+                return $authorization;
+            }
+
+            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
+
+            return JsonResponse::ok([
+                'authorization_id' => (int) $authorization['id'],
+                'tournament_id' => urldecode($matches[2]),
+                'items' => $provider->listMatches((string) $authorization['access_token'], urldecode($matches[2])),
+            ]);
+        }
+
+        if (
+            $method === 'POST'
+            && preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/import$#', $path, $matches) === 1
+        ) {
+            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
+            if ($authorization instanceof JsonResponse) {
+                return $authorization;
+            }
+
+            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
+            $tournamentId = urldecode($matches[2]);
+            $accessToken = (string) $authorization['access_token'];
+
+            $tournament = $provider->getTournament($accessToken, $tournamentId);
+            $participants = $provider->listParticipants($accessToken, $tournamentId);
+            $matchesData = $provider->listMatches($accessToken, $tournamentId);
+
+            $importService = new ChallongeImportService($database);
+            $summary = $importService->importTournament($tournament, $participants, $matchesData);
+
+            return JsonResponse::ok([
+                'provider' => 'challonge',
+                'authorization_id' => (int) $authorization['id'],
+                'tournament_id' => $tournamentId,
+                'import_summary' => $summary,
+            ], 201);
+        }
+
         return JsonResponse::error(404, 'not_found', 'The requested endpoint was not found.');
     }
 
@@ -250,6 +337,25 @@ final class Application
         }
 
         return $config instanceof Config && $config->appEnv() !== 'prod';
+    }
+
+    /**
+     * @return array<string, mixed>|JsonResponse
+     */
+    private function requireAuthorization(Database $database, int $authorizationId): array|JsonResponse
+    {
+        $repository = new ConnectorAuthorizationRepository($database);
+        $authorization = $repository->findById($authorizationId);
+
+        if ($authorization === null || (string) ($authorization['provider_key'] ?? '') !== 'challonge') {
+            return JsonResponse::error(
+                404,
+                'authorization_not_found',
+                'No Challonge authorization exists for the supplied id.'
+            );
+        }
+
+        return $authorization;
     }
 
     /**
