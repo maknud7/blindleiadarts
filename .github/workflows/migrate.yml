@@ -3,6 +3,10 @@ name: Run Database Migrations
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: Git ref to migrate
+        required: true
+        default: develop
       target:
         description: Environment to migrate
         required: true
@@ -25,6 +29,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -50,4 +56,3 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: ${{ env.DB_TABLE_PREFIX }}
-
