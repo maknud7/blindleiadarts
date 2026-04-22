@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <test|prod>" >&2
+  exit 1
+fi
+
+ENVIRONMENT="$1"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OUT_DIR="$ROOT_DIR/dist/$ENVIRONMENT"
+
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
+
+copy_dir() {
+  local source="$1"
+  local target="$2"
+
+  if [[ -d "$source" ]]; then
+    cp -R "$source" "$target"
+  else
+    mkdir -p "$target"
+  fi
+}
+
+copy_dir "$ROOT_DIR/apps/api" "$OUT_DIR/api"
+copy_dir "$ROOT_DIR/apps/kiosk" "$OUT_DIR/kiosk"
+copy_dir "$ROOT_DIR/apps/screen" "$OUT_DIR/screen"
+copy_dir "$ROOT_DIR/apps/admin" "$OUT_DIR/admin"
+copy_dir "$ROOT_DIR/packages" "$OUT_DIR/packages"
+
+mkdir -p "$OUT_DIR/static/club-logos"
+mkdir -p "$OUT_DIR/static/sponsors"
+mkdir -p "$OUT_DIR/static/players"
+
+if [[ -f "$ROOT_DIR/README.md" ]]; then
+  cp "$ROOT_DIR/README.md" "$OUT_DIR/README.md"
+fi
+
+echo "Built release package at $OUT_DIR"
+
