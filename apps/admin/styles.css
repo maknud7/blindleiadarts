@@ -62,15 +62,34 @@ body {
   padding: 0.4rem 0;
 }
 
-.brand-logo {
+.brand-badge {
   width: 84px;
   height: 84px;
-  object-fit: contain;
-  padding: 0.35rem;
   border-radius: 22px;
+  display: grid;
+  place-items: center;
   background: rgba(255,255,255,0.82);
   border: 1px solid rgba(11, 49, 69, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7);
+  overflow: hidden;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.35rem;
+}
+
+.brand-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--accent), var(--forest));
+  color: white;
+  font-weight: 700;
+  font-size: 1.4rem;
 }
 
 .eyebrow {

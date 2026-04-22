@@ -273,6 +273,11 @@ final class KioskRepository
             'id' => (int) $kiosk['id'],
             'code' => $kiosk['code'],
             'name' => $kiosk['name'],
+            'club' => [
+                'id' => isset($kiosk['club_id']) ? (int) $kiosk['club_id'] : null,
+                'name' => $kiosk['club_name'] ?? null,
+                'logo_url' => $kiosk['club_logo_url'] ?? null,
+            ],
             'board_number' => (int) $kiosk['board_number'],
             'sponsor_label' => $kiosk['sponsor_label'],
             'sponsor_logo_url' => $kiosk['sponsor_logo_url'],
@@ -285,8 +290,18 @@ final class KioskRepository
     private function findKioskByCode(string $kioskCode): ?array
     {
         $sql = sprintf(
-            'SELECT id, club_id, code, name, board_number, sponsor_label, sponsor_logo_url
-             FROM `%1$skiosks`
+            'SELECT
+                k.id,
+                k.club_id,
+                c.name AS club_name,
+                c.logo_url AS club_logo_url,
+                k.code,
+                k.name,
+                k.board_number,
+                k.sponsor_label,
+                k.sponsor_logo_url
+             FROM `%1$skiosks` k
+             INNER JOIN `%1$sclubs` c ON c.id = k.club_id
              WHERE code = ?
              LIMIT 1',
             $this->tablePrefix

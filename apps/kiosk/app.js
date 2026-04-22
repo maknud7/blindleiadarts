@@ -8,6 +8,9 @@ const state = {
 const elements = {
   kioskSetupForm: document.getElementById("kioskSetupForm"),
   kioskCodeInput: document.getElementById("kioskCodeInput"),
+  brandLogo: document.getElementById("brandLogo"),
+  brandFallback: document.getElementById("brandFallback"),
+  brandTitle: document.getElementById("brandTitle"),
   refreshButton: document.getElementById("refreshButton"),
   startMatchButton: document.getElementById("startMatchButton"),
   undoButton: document.getElementById("undoButton"),
@@ -75,6 +78,8 @@ function renderState() {
   const snapshot = state.snapshot;
   const kiosk = snapshot.kiosk;
 
+  applyClubBranding(kiosk.club);
+
   elements.kioskCodeInput.value = kiosk.code;
   elements.kioskMeta.innerHTML = `
     <span class="pill">${kiosk.name}</span>
@@ -132,6 +137,32 @@ function renderState() {
       ${recentVisits || `<div class="visit-item"><p class="muted">Ingen visits registrert ennå.</p></div>`}
     </div>
   `;
+}
+
+function applyClubBranding(club) {
+  const initials = (club?.name || "Klubb")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  elements.brandTitle.textContent = club?.name
+    ? `${club.name} kiosk`
+    : "Board-side matchflyt";
+  elements.brandFallback.textContent = initials || "KL";
+
+  if (club?.logo_url) {
+    elements.brandLogo.src = club.logo_url;
+    elements.brandLogo.alt = `${club.name} logo`;
+    elements.brandLogo.classList.remove("hidden");
+    elements.brandFallback.classList.add("hidden");
+  } else {
+    elements.brandLogo.removeAttribute("src");
+    elements.brandLogo.classList.add("hidden");
+    elements.brandFallback.classList.remove("hidden");
+  }
 }
 
 async function startMatch() {

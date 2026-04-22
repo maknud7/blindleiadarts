@@ -13,6 +13,9 @@ const state = {
 const elements = {
   clubSelect: document.getElementById("clubSelect"),
   refreshClubButton: document.getElementById("refreshClubButton"),
+  brandLogo: document.getElementById("brandLogo"),
+  brandFallback: document.getElementById("brandFallback"),
+  brandTitle: document.getElementById("brandTitle"),
   loginForm: document.getElementById("loginForm"),
   loginUsername: document.getElementById("loginUsername"),
   loginPassword: document.getElementById("loginPassword"),
@@ -154,6 +157,7 @@ function renderClub() {
     return;
   }
 
+  applyClubBranding(dashboard.club);
   elements.clubIntro.textContent = `${dashboard.club.name} er lastet inn. Alt i portalen og adminstudioet er eksplisitt knyttet til valgt klubb.`;
   elements.heroMetrics.innerHTML = `
     <div class="metric"><small>Spillere</small><strong>${dashboard.players.length}</strong></div>
@@ -202,6 +206,30 @@ function renderClub() {
     : `<div class="mini-card"><p class="muted">Ingen turneringer opprettet ennå.</p></div>`;
 
   populateAdminSelects();
+}
+
+function applyClubBranding(club) {
+  const initials = (club?.name || "Klubb")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  elements.brandTitle.textContent = club?.name || "Klubbportal";
+  elements.brandFallback.textContent = initials || "KL";
+
+  if (club?.logo_url) {
+    elements.brandLogo.src = club.logo_url;
+    elements.brandLogo.alt = `${club.name} logo`;
+    elements.brandLogo.classList.remove("hidden");
+    elements.brandFallback.classList.add("hidden");
+  } else {
+    elements.brandLogo.removeAttribute("src");
+    elements.brandLogo.classList.add("hidden");
+    elements.brandFallback.classList.remove("hidden");
+  }
 }
 
 function renderAuth() {

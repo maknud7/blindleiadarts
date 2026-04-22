@@ -8,6 +8,9 @@ const state = {
 
 const elements = {
   clubSelect: document.getElementById("clubSelect"),
+  brandLogo: document.getElementById("brandLogo"),
+  brandFallback: document.getElementById("brandFallback"),
+  brandTitle: document.getElementById("brandTitle"),
   refreshButton: document.getElementById("refreshButton"),
   kioskGrid: document.getElementById("kioskGrid"),
   tournamentList: document.getElementById("tournamentList"),
@@ -54,6 +57,8 @@ function render() {
     return;
   }
 
+  applyClubBranding(dashboard.club);
+
   elements.kioskGrid.innerHTML = dashboard.kiosks.length
     ? dashboard.kiosks.map((kiosk) => `
         <div class="tile">
@@ -81,6 +86,32 @@ function render() {
         </div>
       `).join("")
     : `<div class="list-item"><p class="muted">Ingen kamper ennå.</p></div>`;
+}
+
+function applyClubBranding(club) {
+  const initials = (club?.name || "Klubb")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  elements.brandTitle.textContent = club?.name
+    ? `Live oversikt for ${club.name}`
+    : "Live oversikt for klubb og boards";
+  elements.brandFallback.textContent = initials || "KL";
+
+  if (club?.logo_url) {
+    elements.brandLogo.src = club.logo_url;
+    elements.brandLogo.alt = `${club.name} logo`;
+    elements.brandLogo.classList.remove("hidden");
+    elements.brandFallback.classList.add("hidden");
+  } else {
+    elements.brandLogo.removeAttribute("src");
+    elements.brandLogo.classList.add("hidden");
+    elements.brandFallback.classList.remove("hidden");
+  }
 }
 
 function bindEvents() {
