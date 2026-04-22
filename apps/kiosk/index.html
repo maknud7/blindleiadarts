@@ -23,7 +23,6 @@
         </div>
 
         <div class="top-actions">
-          <div id="laneTitle" class="lane-title">Board -</div>
           <button id="settingsButton" class="icon-button" type="button" aria-label="Åpne innstillinger">⚙</button>
         </div>
       </header>
@@ -41,11 +40,38 @@
           </div>
         </section>
 
+        <section id="assignedState" class="panel assigned-state hidden">
+          <div class="assigned-layout">
+            <div class="assigned-top">
+              <span class="badge">Klar til kampstart</span>
+              <div id="assignedLane" class="idle-big">Board -</div>
+              <div id="assignedSponsor" class="assigned-sponsor"></div>
+              <img id="assignedSponsorLogo" alt="Sponsorlogo" hidden>
+            </div>
+
+            <div class="assigned-players">
+              <div class="assigned-player">
+                <p class="player-label">Spiller A</p>
+                <h2 id="assignedPlayerAName">-</h2>
+              </div>
+              <div class="assigned-versus">VS</div>
+              <div class="assigned-player">
+                <p class="player-label">Spiller B</p>
+                <h2 id="assignedPlayerBName">-</h2>
+              </div>
+            </div>
+
+            <div class="assigned-footer">
+              <div id="assignedLegInfo" class="pill">Best of 3</div>
+              <button id="assignedStartButton" type="button">Start kamp</button>
+            </div>
+          </div>
+        </section>
+
         <section id="matchState" class="stack hidden">
           <section class="scorecard">
             <div class="score-header">
               <div class="stack compact">
-                <div id="kioskMeta" class="meta"></div>
                 <div id="legInfo" class="pill">Leg 1 · Best of 3</div>
               </div>
               <div class="match-actions">
@@ -67,7 +93,6 @@
                   <button id="modeSumButton" type="button" class="mode active">Sum</button>
                   <button id="modeDartButton" type="button" class="mode">Per pil</button>
                 </div>
-                <div id="kioskModeHint" class="muted small"></div>
               </div>
 
               <article id="playerBBox" class="player-box">
@@ -154,11 +179,6 @@
               <p class="muted">Denne kiosken venter på eksterne eventer. Manuell scoring er skjult.</p>
             </section>
           </section>
-
-          <details class="details-card activity-card">
-            <summary>Siste visits</summary>
-            <div id="recentVisits" class="stack"></div>
-          </details>
         </section>
       </main>
     </div>
@@ -175,6 +195,7 @@
       </div>
 
       <p id="pairingSummary" class="muted">Nettbrettet er ikke paret ennå.</p>
+      <div id="settingsMeta" class="meta"></div>
 
       <div class="stack">
         <label for="kioskCodeInput">Kiosk-kode</label>
