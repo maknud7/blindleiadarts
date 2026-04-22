@@ -30,6 +30,7 @@ final class Application
     public function run(): void
     {
         $request = Request::fromGlobals();
+        $config = null;
 
         try {
             $config = Config::load($this->rootPath);
@@ -42,7 +43,8 @@ final class Application
                 'database_error',
                 'Database query failed.',
                 [
-                    'details' => $this->isDebug() ? $exception->getMessage() : null,
+                    'details' => $this->shouldExposeDetails($config) ? $exception->getMessage() : null,
+                    'exception' => $this->shouldExposeDetails($config) ? $exception::class : null,
                 ]
             );
         } catch (Throwable $exception) {
@@ -51,7 +53,8 @@ final class Application
                 'internal_server_error',
                 'Unexpected server error.',
                 [
-                    'details' => $this->isDebug() ? $exception->getMessage() : null,
+                    'details' => $this->shouldExposeDetails($config) ? $exception->getMessage() : null,
+                    'exception' => $this->shouldExposeDetails($config) ? $exception::class : null,
                 ]
             );
         }
@@ -238,6 +241,15 @@ final class Application
     private function isDebug(): bool
     {
         return isset($_GET['debug']) && $_GET['debug'] === '1';
+    }
+
+    private function shouldExposeDetails(?Config $config): bool
+    {
+        if ($this->isDebug()) {
+            return true;
+        }
+
+        return $config instanceof Config && $config->appEnv() !== 'prod';
     }
 
     /**
