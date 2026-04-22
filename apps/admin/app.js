@@ -8,6 +8,7 @@ const state = {
   tournaments: [],
   me: null,
   token: localStorage.getItem("bd:token") || "",
+  activeView: localStorage.getItem("bd:adminView") || "overview",
 };
 
 const elements = {
@@ -21,6 +22,8 @@ const elements = {
   loginPassword: document.getElementById("loginPassword"),
   logoutButton: document.getElementById("logoutButton"),
   authSummary: document.getElementById("authSummary"),
+  navPanel: document.getElementById("navPanel"),
+  adminNav: document.getElementById("adminNav"),
   statusArea: document.getElementById("statusArea"),
   clubIntro: document.getElementById("clubIntro"),
   heroMetrics: document.getElementById("heroMetrics"),
@@ -305,10 +308,40 @@ function renderAuth() {
 
   const isAdmin = ["super_admin", "club_admin"].includes(state.me?.role || "");
   elements.adminSection.classList.toggle("hidden", !isAdmin);
+  elements.navPanel.classList.toggle("hidden", !isAdmin);
 
   const canCreateClubs = state.me?.role === "super_admin";
   elements.clubForm.querySelectorAll("input, button").forEach((element) => {
     element.disabled = !canCreateClubs;
+  });
+
+  if (!isAdmin && state.activeView !== "overview") {
+    setActiveView("overview");
+  }
+
+  renderActiveView();
+}
+
+function setActiveView(view) {
+  state.activeView = view;
+  localStorage.setItem("bd:adminView", view);
+  renderActiveView();
+}
+
+function renderActiveView() {
+  const isAdmin = ["super_admin", "club_admin"].includes(state.me?.role || "");
+  const activeView = isAdmin ? state.activeView : "overview";
+
+  document.querySelectorAll("[data-view-button]").forEach((button) => {
+    const view = button.dataset.viewButton;
+    const shouldShow = view === "overview" || isAdmin;
+    button.classList.toggle("hidden", !shouldShow);
+    button.classList.toggle("active", view === activeView);
+  });
+
+  document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.viewPanel !== activeView);
+    panel.classList.toggle("active", panel.dataset.viewPanel === activeView);
   });
 }
 
@@ -408,6 +441,16 @@ function bindEvents() {
     state.me = null;
     renderAuth();
     setStatus("Logget ut lokalt i admin.", "success");
+  });
+
+  elements.adminNav.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-view-button]");
+
+    if (!button) {
+      return;
+    }
+
+    setActiveView(button.dataset.viewButton);
   });
 
   elements.kioskList.addEventListener("submit", async (event) => {
@@ -527,6 +570,7 @@ function bindEvents() {
 
 async function bootstrap() {
   bindEvents();
+  renderActiveView();
 
   try {
     await loadClubs();

@@ -127,6 +127,12 @@ h1,
   gap: 1.2rem;
 }
 
+.view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
 .hero {
   padding: 1.4rem;
   display: flex;
@@ -195,6 +201,12 @@ h1,
   gap: 0.75rem;
 }
 
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
 .gap-lg {
   gap: 1rem;
 }
@@ -233,6 +245,18 @@ button.ghost {
   background: rgba(255,255,255,0.7);
   color: var(--ink);
   border: 1px solid var(--line);
+}
+
+.nav-button {
+  text-align: left;
+  background: rgba(255,255,255,0.72);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.nav-button.active {
+  background: linear-gradient(135deg, var(--accent), var(--forest));
+  color: white;
 }
 
 .mini-card,

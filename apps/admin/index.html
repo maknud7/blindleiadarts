@@ -38,191 +38,202 @@
         <p class="help">Adminflaten er kun for administratorer. Spillere får egen mobilportal.</p>
       </div>
 
+      <div id="navPanel" class="panel stack hidden">
+        <h2>Meny</h2>
+        <div id="adminNav" class="admin-nav">
+          <button type="button" class="nav-button active" data-view-button="overview">Oversikt</button>
+          <button type="button" class="nav-button" data-view-button="boards">Boards og kiosker</button>
+          <button type="button" class="nav-button" data-view-button="tournaments">Turneringer</button>
+          <button type="button" class="nav-button" data-view-button="players">Spillere</button>
+          <button type="button" class="nav-button" data-view-button="matches">Kamper</button>
+        </div>
+      </div>
+
       <div class="panel stack">
         <h2>Driftsstatus</h2>
         <div id="statusArea" class="status-list"></div>
       </div>
-
-      <div class="panel stack">
-        <h2>Hurtignavigasjon</h2>
-        <a class="ghost-link" href="#overviewSection">Oversikt</a>
-        <a class="ghost-link" href="#playersSection">Spillere</a>
-        <a class="ghost-link" href="#kiosksSection">Kiosker</a>
-        <a class="ghost-link" href="#tournamentsSection">Turneringer</a>
-        <a class="ghost-link" href="#boardCallsSection">Board Calls</a>
-        <a class="ghost-link" href="#matchesSection">Kamper</a>
-      </div>
     </aside>
 
     <main class="content">
-      <section id="overviewSection" class="hero">
-        <div>
-          <p class="eyebrow">Admin Runtime</p>
-          <h2>Styr klubb, kioskdrift og turneringsflyt fra ett sted.</h2>
-          <p id="clubIntro">Velg klubb for å laste inn adminoversikt, turneringer, spillere og boards.</p>
-        </div>
-        <div id="heroMetrics" class="hero-metrics"></div>
-      </section>
-
-      <section class="grid two">
-        <article class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Tournament Runtime</p>
-              <h3>Turneringer i valgt klubb</h3>
-            </div>
+      <section id="overviewView" class="view-section active" data-view-panel="overview">
+        <section id="overviewSection" class="hero">
+          <div>
+            <p class="eyebrow">Admin Runtime</p>
+            <h2>Styr klubb, kioskdrift og turneringsflyt uten å drukne i detaljer.</h2>
+            <p id="clubIntro">Velg klubb for å laste inn adminoversikt, turneringer, spillere og boards.</p>
           </div>
-          <div id="tournamentList" class="stack"></div>
-        </article>
+          <div id="heroMetrics" class="hero-metrics"></div>
+        </section>
 
-        <article class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Latest Matches</p>
-              <h3>Siste og aktive kamper</h3>
+        <section class="grid two">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Tournament Runtime</p>
+                <h3>Turneringer i valgt klubb</h3>
+              </div>
             </div>
-          </div>
-          <div id="recentMatches" class="stack"></div>
-        </article>
+            <div id="tournamentList" class="stack"></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Latest Matches</p>
+                <h3>Siste og aktive kamper</h3>
+              </div>
+            </div>
+            <div id="recentMatches" class="stack"></div>
+          </article>
+        </section>
       </section>
 
       <section id="adminSection" class="stack hidden">
-        <section id="playersSection" class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Player Admin</p>
-              <h3>Spillere og brukere</h3>
+        <section id="boardsView" class="view-section hidden" data-view-panel="boards">
+          <section id="kiosksSection" class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Board Admin</p>
+                <h3>Kiosker og boardinnstillinger</h3>
+              </div>
             </div>
-          </div>
-          <div class="grid two">
-            <div class="stack">
-              <div id="playerList" class="stack"></div>
+            <div class="grid two">
+              <div class="stack">
+                <p class="help">Hver kiosk er et fysisk board. Her styrer du scoring-modus, og du kan nullstille fast paring hvis et nettbrett skal byttes.</p>
+                <div id="kioskList" class="stack"></div>
+              </div>
+              <form id="kioskForm" class="card inset stack">
+                <h4>Ny kiosk</h4>
+                <input name="code" placeholder="Kode, f.eks. BOARD-1">
+                <input name="name" placeholder="Navn">
+                <input name="board_number" type="number" placeholder="Boardnummer">
+                <input name="sponsor_label" placeholder="Sponsorlabel">
+                <input name="sponsor_logo_url" placeholder="Sponsorlogo-URL">
+                <select name="scoring_mode">
+                  <option value="manual">Manuell scoring</option>
+                  <option value="scolia">Scolia-eventer</option>
+                </select>
+                <button type="submit">Opprett kiosk</button>
+              </form>
             </div>
-            <form id="playerForm" class="card inset stack">
-              <h4>Ny spiller og bruker</h4>
-              <input name="display_name" placeholder="Visningsnavn">
-              <input name="username" placeholder="Brukernavn">
-              <input name="password" placeholder="Passord">
-              <input name="contact_email" placeholder="E-post">
-              <input name="contact_phone" placeholder="Telefon">
-              <button type="submit">Opprett spillerkonto</button>
-            </form>
-          </div>
+          </section>
+
+          <section id="boardCallsSection" class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Board Calls</p>
+                <h3>Tildel kamper til boards</h3>
+              </div>
+            </div>
+            <div class="grid two">
+              <div>
+                <p class="help">Velg et board på hver kamp som venter. Dette er arbeidsflaten under turneringskvelden.</p>
+                <div id="boardCallList" class="stack"></div>
+              </div>
+              <div class="card inset stack">
+                <h4>Slik tester du</h4>
+                <p class="muted">1. Opprett eller bruk en kiosk.</p>
+                <p class="muted">2. Opprett eller bruk en kamp.</p>
+                <p class="muted">3. Tildel kampen til et board her.</p>
+                <p class="muted">4. Åpne samme board på kiosken og se at kampen dukker opp.</p>
+              </div>
+            </div>
+          </section>
         </section>
 
-        <section id="kiosksSection" class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Board Admin</p>
-              <h3>Kiosker og boardinnstillinger</h3>
+        <section id="tournamentsView" class="view-section hidden" data-view-panel="tournaments">
+          <section id="tournamentsSection" class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Tournament Admin</p>
+                <h3>Turneringsoppsett</h3>
+              </div>
             </div>
-          </div>
-          <div class="grid two">
-            <div class="stack">
-              <p class="help">Hver kiosk er et fysisk board. Her styrer du scoring-modus, og du kan nullstille fast paring hvis et nettbrett skal byttes.</p>
-              <div id="kioskList" class="stack"></div>
+            <div class="grid two">
+              <form id="tournamentForm" class="card inset stack">
+                <h4>Ny turnering</h4>
+                <input name="name" placeholder="Turneringsnavn">
+                <input name="slug" placeholder="Slug (valgfritt)">
+                <select name="provider_system">
+                  <option value="local">Local</option>
+                  <option value="challonge">Challonge</option>
+                </select>
+                <select name="status">
+                  <option value="draft">Draft</option>
+                  <option value="ready">Ready</option>
+                  <option value="in_progress">In progress</option>
+                </select>
+                <input name="start_at" type="datetime-local">
+                <button type="submit">Opprett turnering</button>
+              </form>
+
+              <form id="clubForm" class="card inset stack">
+                <h4>Ny klubb</h4>
+                <input name="name" placeholder="Klubbnavn">
+                <input name="slug" placeholder="Slug (valgfritt)">
+                <input name="logo_url" placeholder="Logo-URL (valgfritt)">
+                <button type="submit">Opprett klubb</button>
+              </form>
             </div>
-            <form id="kioskForm" class="card inset stack">
-              <h4>Ny kiosk</h4>
-              <input name="code" placeholder="Kode, f.eks. BOARD-1">
-              <input name="name" placeholder="Navn">
-              <input name="board_number" type="number" placeholder="Boardnummer">
-              <input name="sponsor_label" placeholder="Sponsorlabel">
-              <input name="sponsor_logo_url" placeholder="Sponsorlogo-URL">
-              <select name="scoring_mode">
-                <option value="manual">Manuell scoring</option>
-                <option value="scolia">Scolia-eventer</option>
-              </select>
-              <button type="submit">Opprett kiosk</button>
-            </form>
-          </div>
+          </section>
         </section>
 
-        <section id="tournamentsSection" class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Tournament Admin</p>
-              <h3>Turneringsoppsett</h3>
+        <section id="playersView" class="view-section hidden" data-view-panel="players">
+          <section id="playersSection" class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Player Admin</p>
+                <h3>Spillere og brukere</h3>
+              </div>
             </div>
-          </div>
-          <div class="grid two">
-            <form id="tournamentForm" class="card inset stack">
-              <h4>Ny turnering</h4>
-              <input name="name" placeholder="Turneringsnavn">
-              <input name="slug" placeholder="Slug (valgfritt)">
-              <select name="provider_system">
-                <option value="local">Local</option>
-                <option value="challonge">Challonge</option>
-              </select>
-              <select name="status">
-                <option value="draft">Draft</option>
-                <option value="ready">Ready</option>
-                <option value="in_progress">In progress</option>
-              </select>
-              <input name="start_at" type="datetime-local">
-              <button type="submit">Opprett turnering</button>
-            </form>
-
-            <form id="clubForm" class="card inset stack">
-              <h4>Ny klubb</h4>
-              <input name="name" placeholder="Klubbnavn">
-              <input name="slug" placeholder="Slug (valgfritt)">
-              <input name="logo_url" placeholder="Logo-URL (valgfritt)">
-              <button type="submit">Opprett klubb</button>
-            </form>
-          </div>
+            <div class="grid two">
+              <div class="stack">
+                <div id="playerList" class="stack"></div>
+              </div>
+              <form id="playerForm" class="card inset stack">
+                <h4>Ny spiller og bruker</h4>
+                <input name="display_name" placeholder="Visningsnavn">
+                <input name="username" placeholder="Brukernavn">
+                <input name="password" placeholder="Passord">
+                <input name="contact_email" placeholder="E-post">
+                <input name="contact_phone" placeholder="Telefon">
+                <button type="submit">Opprett spillerkonto</button>
+              </form>
+            </div>
+          </section>
         </section>
 
-        <section id="boardCallsSection" class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Board Calls</p>
-              <h3>Tildel kamper til boards</h3>
+        <section id="matchesView" class="view-section hidden" data-view-panel="matches">
+          <section id="matchesSection" class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Match Admin</p>
+                <h3>Opprett og tildel kamper</h3>
+              </div>
             </div>
-          </div>
-          <div class="grid two">
-            <div>
-              <p class="help">Velg et board på hver kamp som venter. Dette er testflaten for rask tildeling i turneringskvelden.</p>
-              <div id="boardCallList" class="stack"></div>
-            </div>
-            <div class="card inset stack">
-              <h4>Slik tester du</h4>
-              <p class="muted">1. Opprett eller bruk en kiosk.</p>
-              <p class="muted">2. Opprett eller bruk en kamp.</p>
-              <p class="muted">3. Tildel kampen til et board her.</p>
-              <p class="muted">4. Åpne samme board på kiosken og se at kampen dukker opp.</p>
-            </div>
-          </div>
-        </section>
+            <div class="grid two">
+              <form id="matchForm" class="card inset stack">
+                <h4>Ny kamp</h4>
+                <select id="matchTournamentId" name="tournament_id"></select>
+                <select id="matchPlayerA" name="player_a_id"></select>
+                <select id="matchPlayerB" name="player_b_id"></select>
+                <select id="matchKioskId" name="kiosk_id"></select>
+                <input name="round_label" placeholder="Round label">
+                <input name="bracket_label" placeholder="Bracket label">
+                <button type="submit">Opprett kamp</button>
+              </form>
 
-        <section id="matchesSection" class="card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Match Admin</p>
-              <h3>Opprett og tildel kamper</h3>
+              <div class="card inset stack">
+                <h4>Testdata og neste steg</h4>
+                <p class="muted">Testmiljøet seedes med eksempelspillere, kiosker, en demo-turnering og kamper så du faktisk har noe å klikke på.</p>
+                <p class="muted">Denne flaten er kun for administrasjon. Spilleropplevelsen ligger i egen mobilportal.</p>
+                <a class="ghost-link" href="../player/">Åpne spillerportalen</a>
+                <a class="ghost-link" href="../kiosk/">Åpne kiosk</a>
+                <a class="ghost-link" href="../screen/">Åpne venue screen</a>
+              </div>
             </div>
-          </div>
-          <div class="grid two">
-            <form id="matchForm" class="card inset stack">
-              <h4>Ny kamp</h4>
-              <select id="matchTournamentId" name="tournament_id"></select>
-              <select id="matchPlayerA" name="player_a_id"></select>
-              <select id="matchPlayerB" name="player_b_id"></select>
-              <select id="matchKioskId" name="kiosk_id"></select>
-              <input name="round_label" placeholder="Round label">
-              <input name="bracket_label" placeholder="Bracket label">
-              <button type="submit">Opprett kamp</button>
-            </form>
-
-            <div class="card inset stack">
-              <h4>Testdata og neste steg</h4>
-              <p class="muted">Testmiljøet seedes med eksempelspillere, kiosker, en demo-turnering og kamper så du faktisk har noe å klikke på.</p>
-              <p class="muted">Denne flaten er kun for administrasjon. Spilleropplevelsen ligger i egen mobilportal.</p>
-              <a class="ghost-link" href="../player/">Åpne spillerportalen</a>
-              <a class="ghost-link" href="../kiosk/">Åpne kiosk</a>
-              <a class="ghost-link" href="../screen/">Åpne venue screen</a>
-            </div>
-          </div>
+          </section>
         </section>
       </section>
     </main>
