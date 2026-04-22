@@ -30,7 +30,7 @@ final class ChallongeOAuthClient
             throw new RuntimeException('Challonge redirect URI is not configured.');
         }
 
-        $payload = http_build_query([
+        $query = http_build_query([
             'grant_type' => 'authorization_code',
             'code' => $code,
             'client_id' => $this->config->clientId(),
@@ -38,7 +38,7 @@ final class ChallongeOAuthClient
             'redirect_uri' => $uri,
         ]);
 
-        $handle = curl_init($this->config->oauthTokenUrl());
+        $handle = curl_init($this->config->oauthTokenUrl() . '?' . $query);
 
         if ($handle === false) {
             throw new RuntimeException('Failed to initialize cURL.');
@@ -48,9 +48,7 @@ final class ChallongeOAuthClient
         curl_setopt($handle, CURLOPT_POST, true);
         curl_setopt($handle, CURLOPT_HTTPHEADER, [
             'Accept: application/json',
-            'Content-Type: application/x-www-form-urlencoded',
         ]);
-        curl_setopt($handle, CURLOPT_POSTFIELDS, $payload);
 
         $responseBody = curl_exec($handle);
         $statusCode = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
