@@ -43,6 +43,7 @@ $config = [
         'api_base_url' => getenv('CHALLONGE_API_BASE_URL') ?: 'https://api.challonge.com/v2.1',
         'oauth_authorize_url' => getenv('CHALLONGE_OAUTH_AUTHORIZE_URL') ?: 'https://api.challonge.com/oauth/authorize',
         'oauth_token_url' => getenv('CHALLONGE_OAUTH_TOKEN_URL') ?: 'https://api.challonge.com/oauth/token',
+        'redirect_uri' => getenv('CHALLONGE_REDIRECT_URI') ?: '',
         'client_id' => getenv('CHALLONGE_CLIENT_ID') ?: '',
         'client_secret' => getenv('CHALLONGE_CLIENT_SECRET') ?: '',
         'default_scopes' => array_values(array_filter(array_map(

@@ -45,6 +45,7 @@ final class ChallongeApiClient
         $url = $this->config->apiBaseUrl() . '/' . ltrim($path, '/');
         $headers = [
             'Accept: application/json',
+            'Authorization-Type: v2',
             'Authorization: Bearer ' . $accessToken,
         ];
 

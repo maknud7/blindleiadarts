@@ -13,6 +13,7 @@ Guidelines:
 - `GET /v1/health`
 - `GET /v1/kiosks/{code}/state`
 - `GET /v1/connectors/challonge/authorize-url?redirect_uri=...`
+- `GET /v1/connectors/challonge/callback`
 
 ## Notes
 

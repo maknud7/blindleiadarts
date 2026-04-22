@@ -45,11 +45,16 @@ When we want to create or manage tournaments fully through our app, we will like
 
 1. Admin chooses Challonge as tournament provider.
 2. Admin starts OAuth from our backend.
-3. Backend receives authorization code and exchanges it for tokens.
+3. Backend receives authorization code on our callback endpoint and exchanges it for tokens.
 4. Tokens are stored server-side only.
 5. Import jobs pull tournaments, participants, and matches into local tables.
 6. Venue runtime uses only local data.
 7. Optional publish-back updates Challonge through the connector.
+
+## Current Backend Endpoints
+
+- `GET /api/v1/connectors/challonge/authorize-url`
+- `GET /api/v1/connectors/challonge/callback`
 
 ## Important Security Note
 

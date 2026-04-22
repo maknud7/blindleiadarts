@@ -37,4 +37,13 @@ final class ChallongeOAuth
 
         return $this->config->oauthAuthorizeUrl() . '?' . http_build_query($query);
     }
+
+    public function resolveRedirectUri(?string $override = null): string
+    {
+        if ($override !== null && $override !== '') {
+            return $override;
+        }
+
+        return $this->config->redirectUri();
+    }
 }

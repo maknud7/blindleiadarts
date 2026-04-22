@@ -41,6 +41,8 @@ Add these repository variables:
 - `PROD_BASE_URL`
 - `PROD_STATIC_BASE_URL`
 - `CHALLONGE_DEFAULT_SCOPES`
+- `TEST_CHALLONGE_REDIRECT_URI`
+- `PROD_CHALLONGE_REDIRECT_URI`
 
 Examples:
 
@@ -49,6 +51,8 @@ Examples:
 - `PROD_BASE_URL` -> URL for the production app root
 - `PROD_STATIC_BASE_URL` -> URL for the production static folder
 - `CHALLONGE_DEFAULT_SCOPES` -> optional comma-separated scopes such as `me,tournaments:read,participants:read,matches:read`
+- `TEST_CHALLONGE_REDIRECT_URI` -> for example `https://test.blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback`
+- `PROD_CHALLONGE_REDIRECT_URI` -> for example `https://blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback`
 
 ## One-Time Remote Folder Setup
 

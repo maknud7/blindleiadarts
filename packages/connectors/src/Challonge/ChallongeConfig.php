@@ -9,6 +9,7 @@ final class ChallongeConfig
     private string $apiBaseUrl;
     private string $oauthAuthorizeUrl;
     private string $oauthTokenUrl;
+    private string $redirectUri;
     private string $clientId;
     private string $clientSecret;
 
@@ -24,6 +25,7 @@ final class ChallongeConfig
         string $apiBaseUrl,
         string $oauthAuthorizeUrl,
         string $oauthTokenUrl,
+        string $redirectUri,
         string $clientId,
         string $clientSecret,
         array $defaultScopes
@@ -31,6 +33,7 @@ final class ChallongeConfig
         $this->apiBaseUrl = rtrim($apiBaseUrl, '/');
         $this->oauthAuthorizeUrl = $oauthAuthorizeUrl;
         $this->oauthTokenUrl = $oauthTokenUrl;
+        $this->redirectUri = $redirectUri;
         $this->clientId = $clientId;
         $this->clientSecret = $clientSecret;
         $this->defaultScopes = array_values(array_filter($defaultScopes));
@@ -49,6 +52,11 @@ final class ChallongeConfig
     public function oauthTokenUrl(): string
     {
         return $this->oauthTokenUrl;
+    }
+
+    public function redirectUri(): string
+    {
+        return $this->redirectUri;
     }
 
     public function clientId(): string

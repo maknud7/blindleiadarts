@@ -89,6 +89,7 @@ final class Config
             (string) (($challonge['api_base_url'] ?? 'https://api.challonge.com/v2.1') ?: 'https://api.challonge.com/v2.1'),
             (string) (($challonge['oauth_authorize_url'] ?? 'https://api.challonge.com/oauth/authorize') ?: 'https://api.challonge.com/oauth/authorize'),
             (string) (($challonge['oauth_token_url'] ?? 'https://api.challonge.com/oauth/token') ?: 'https://api.challonge.com/oauth/token'),
+            (string) (($challonge['redirect_uri'] ?? '') ?: ''),
             (string) (($challonge['client_id'] ?? '') ?: ''),
             (string) (($challonge['client_secret'] ?? '') ?: ''),
             $defaultScopes
