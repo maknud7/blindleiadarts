@@ -8,52 +8,124 @@
 </head>
 <body>
   <div class="screen-shell">
-    <header class="screen-header">
-      <div class="brandline">
-        <div class="brand-badge">
-          <img id="brandLogo" class="brand-logo hidden" alt="Klubblogo">
-          <span id="brandFallback" class="brand-fallback">KL</span>
-        </div>
-        <div class="brand-copy">
-          <p class="eyebrow">Venue Screen</p>
-          <h1 id="brandTitle">Blindleia Dartklubb</h1>
-          <p id="tournamentLabel" class="tournament-label">Ingen aktiv turnering</p>
-        </div>
-      </div>
-      <div class="header-side">
-        <div id="headerMeta" class="header-meta"></div>
-        <button id="refreshButton" class="ghost-button" type="button">Oppdater</button>
-      </div>
-    </header>
-
-    <main class="screen-layout">
-      <section class="screen-panel live-panel">
-        <div class="panel-head">
-          <h2>Live kamper</h2>
-          <p class="panel-subtitle">Skiver i lokalet akkurat nå</p>
-        </div>
-        <div id="boardsGrid" class="boards-grid"></div>
-      </section>
-
-      <aside class="screen-panel side-panel">
-        <section class="side-module">
-          <div class="panel-head compact">
-            <h2>Neste kamper</h2>
-            <p class="panel-subtitle">Det som står for tur</p>
-          </div>
-          <div id="nextMatches" class="stack"></div>
-        </section>
-      </aside>
-    </main>
-
-    <section id="fallbackPanel" class="fallback-panel hidden">
-      <div class="fallback-card">
-        <img id="fallbackLogo" class="fallback-logo hidden" alt="Klubblogo">
-        <div id="fallbackLogoMark" class="fallback-mark">KL</div>
-        <h2 id="fallbackTitle">Velkommen</h2>
-        <p id="fallbackMessage">Ingen aktiv turnering akkurat nå.</p>
+    <section id="connectView" class="connect-view">
+      <div class="connect-card">
+        <p class="eyebrow">Venue Screen</p>
+        <h1>Koble skjermen til en klubb</h1>
+        <p class="connect-copy">Alle klubber bruker samme adresse. Tast inn skjermkoden fra admin for a lase denne skjermen til riktig klubb.</p>
+        <form id="connectForm" class="connect-form">
+          <input id="connectCode" name="code" type="text" inputmode="text" autocomplete="one-time-code" placeholder="F.eks. BLI-SCREEN" maxlength="32">
+          <button type="submit">Koble til skjerm</button>
+        </form>
+        <p id="connectStatus" class="connect-status"></p>
       </div>
     </section>
+
+    <div id="screenView" class="screen-view hidden">
+      <header class="screen-header">
+        <div class="brandline">
+          <div class="brand-badge">
+            <img id="brandLogo" class="brand-logo hidden" alt="Klubblogo">
+            <span id="brandFallback" class="brand-fallback">KL</span>
+          </div>
+          <div class="brand-copy">
+            <p class="eyebrow">Venue Screen</p>
+            <h1 id="brandTitle">Dartklubb</h1>
+            <p id="tournamentLabel" class="tournament-label">Ingen aktiv turnering</p>
+          </div>
+        </div>
+        <div class="header-side">
+          <div class="screen-device">
+            <span class="device-label">Skjerm</span>
+            <strong id="screenDeviceLabel">Venue Screen</strong>
+          </div>
+          <div id="headerMeta" class="header-meta"></div>
+          <div class="header-actions">
+            <button id="refreshButton" class="ghost-button" type="button">Oppdater</button>
+            <button id="changeClubButton" class="ghost-button" type="button">Bytt klubb</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="screen-layout">
+        <section class="screen-panel live-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Live kamper</h2>
+              <p class="panel-subtitle">Aktive og tildelte boards akkurat na</p>
+            </div>
+            <div class="panel-meta">
+              <span class="pill">Skive = kiosk</span>
+              <span class="pill">Viser nyeste startet turnering</span>
+            </div>
+          </div>
+          <div id="boardsGrid" class="boards-grid"></div>
+        </section>
+
+        <aside class="screen-sidebar">
+          <section class="screen-panel side-module">
+            <div class="panel-head compact">
+              <h2>Neste kamper</h2>
+              <p class="panel-subtitle">Det som star for tur</p>
+            </div>
+            <div id="nextMatches" class="stack"></div>
+          </section>
+
+          <section class="screen-panel side-module standings-module">
+            <div class="panel-head compact">
+              <h2>Tabell</h2>
+              <p class="panel-subtitle">Rangert pa seiere og leg-diff</p>
+            </div>
+            <div id="standingsList" class="stack compact-stack"></div>
+          </section>
+        </aside>
+
+        <section class="screen-panel stats-panel">
+          <div class="stats-grid">
+            <section class="stat-module">
+              <div class="panel-head compact">
+                <h3>ELO</h3>
+                <p class="panel-subtitle">Topp 5 i klubben</p>
+              </div>
+              <div id="eloList" class="stack compact-stack"></div>
+            </section>
+
+            <section class="stat-module">
+              <div class="panel-head compact">
+                <h3>Order of Merit</h3>
+                <p class="panel-subtitle">Poengtabell</p>
+              </div>
+              <div id="oomList" class="stack compact-stack"></div>
+            </section>
+
+            <section class="stat-module">
+              <div class="panel-head compact">
+                <h3>Storste visits</h3>
+                <p class="panel-subtitle">Dagens hoyeste scoringer</p>
+              </div>
+              <div id="topVisitsList" class="stack compact-stack"></div>
+            </section>
+
+            <section class="stat-module">
+              <div class="panel-head compact">
+                <h3>Beste matchsnitt</h3>
+                <p class="panel-subtitle">Hoyeste 3-darts average</p>
+              </div>
+              <div id="bestAverageList" class="stack compact-stack"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+
+      <section id="fallbackPanel" class="fallback-panel hidden">
+        <div class="fallback-card">
+          <img id="fallbackLogo" class="fallback-logo hidden" alt="Klubblogo">
+          <div id="fallbackLogoMark" class="fallback-mark">KL</div>
+          <h2 id="fallbackTitle">Velkommen</h2>
+          <p id="fallbackMessage">Ingen aktiv turnering akkurat na.</p>
+        </div>
+      </section>
+    </div>
   </div>
 
   <script src="./app.js" type="module"></script>

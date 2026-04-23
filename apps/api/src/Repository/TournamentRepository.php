@@ -127,10 +127,10 @@ final class TournamentRepository
              LEFT JOIN `%1$stournament_players` tp ON tp.tournament_id = t.id AND tp.status <> "withdrawn"
              LEFT JOIN `%1$smatches` m ON m.tournament_id = t.id
              WHERE t.club_id = ?
-               AND t.status IN ("in_progress", "ready", "draft")
+               AND t.status IN ("in_progress", "ready")
              GROUP BY t.id, t.club_id, t.season_id, t.name, t.slug, t.provider_system, t.status, t.max_visits_per_leg, t.start_at, t.end_at
              ORDER BY
-                FIELD(t.status, "in_progress", "ready", "draft"),
+                FIELD(t.status, "in_progress", "ready"),
                 CASE WHEN t.start_at IS NULL THEN 1 ELSE 0 END ASC,
                 t.start_at DESC,
                 t.id DESC
@@ -390,6 +390,186 @@ final class TournamentRepository
         /** @var array<int, array<string, mixed>> $rows */
         $rows = $result->fetch_all(MYSQLI_ASSOC);
         $statement->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listScreenRankings(int $tournamentId, ?int $seasonId, string $rankingType, int $limit = 5): array
+    {
+        $sql = sprintf(
+            'SELECT
+                p.id,
+                p.display_name,
+                rs.points,
+                rs.position,
+                rs.scope_type,
+                rs.calculated_at
+             FROM `%1$stournament_players` tp
+             INNER JOIN `%1$splayers` p ON p.id = tp.player_id
+             LEFT JOIN `%1$sranking_snapshots` rs ON rs.id = (
+                SELECT rs2.id
+                FROM `%1$sranking_snapshots` rs2
+                WHERE rs2.player_id = tp.player_id
+                  AND rs2.ranking_type = ?
+                  AND (
+                    rs2.tournament_id = ?
+                    OR rs2.season_id <=> ?
+                  )
+                ORDER BY
+                    CASE WHEN rs2.tournament_id = ? THEN 0 ELSE 1 END,
+                    rs2.calculated_at DESC,
+                    rs2.id DESC
+                LIMIT 1
+             )
+             WHERE tp.tournament_id = ?
+               AND tp.status <> "withdrawn"
+             ORDER BY
+                CASE WHEN rs.position IS NULL THEN 1 ELSE 0 END ASC,
+                rs.position ASC,
+                rs.points DESC,
+                p.display_name ASC
+             LIMIT %2$d',
+            $this->tablePrefix,
+            $limit
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('siiii', $rankingType, $tournamentId, $seasonId, $tournamentId, $tournamentId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listTopVisitsByTournamentId(int $tournamentId, int $limit = 5): array
+    {
+        $rows = $this->listTopVisits($tournamentId, $limit, true);
+
+        if ($rows !== []) {
+            return $rows;
+        }
+
+        return $this->listTopVisits($tournamentId, $limit, false);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listBestMatchAveragesByTournamentId(int $tournamentId, int $limit = 5): array
+    {
+        $sql = sprintf(
+            'SELECT
+                m.id AS match_id,
+                m.round_label,
+                m.bracket_label,
+                p.id AS player_id,
+                p.display_name,
+                ROUND(AVG(v.score) * 3, 2) AS three_dart_average,
+                ROUND(AVG(v.score), 2) AS visit_average,
+                COUNT(v.id) AS visits_logged
+             FROM `%1$svisits` v
+             INNER JOIN `%1$smatches` m ON m.id = v.match_id
+             INNER JOIN `%1$splayers` p ON p.id = v.player_id
+             WHERE m.tournament_id = ?
+               AND v.is_bust = 0
+             GROUP BY m.id, m.round_label, m.bracket_label, p.id, p.display_name
+             HAVING COUNT(v.id) > 0
+             ORDER BY three_dart_average DESC, visits_logged DESC, p.display_name ASC
+             LIMIT %2$d',
+            $this->tablePrefix,
+            $limit
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $tournamentId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listStandingsByTournamentId(int $tournamentId, int $limit = 8): array
+    {
+        $sql = sprintf(
+            'SELECT
+                p.id,
+                p.display_name,
+                (
+                    SELECT COUNT(*)
+                    FROM `%1$smatches` mw
+                    WHERE mw.tournament_id = tp.tournament_id
+                      AND mw.status = "completed"
+                      AND mw.winner_player_id = p.id
+                ) AS wins,
+                (
+                    SELECT COUNT(*)
+                    FROM `%1$smatches` ml
+                    WHERE ml.tournament_id = tp.tournament_id
+                      AND ml.status = "completed"
+                      AND (ml.player_a_id = p.id OR ml.player_b_id = p.id)
+                      AND ml.winner_player_id IS NOT NULL
+                      AND ml.winner_player_id <> p.id
+                ) AS losses,
+                (
+                    SELECT COUNT(*)
+                    FROM `%1$slegs` lw
+                    INNER JOIN `%1$smatches` mw2 ON mw2.id = lw.match_id
+                    WHERE mw2.tournament_id = tp.tournament_id
+                      AND lw.winner_player_id = p.id
+                ) AS legs_won,
+                (
+                    SELECT COUNT(*)
+                    FROM `%1$slegs` ll
+                    INNER JOIN `%1$smatches` ml2 ON ml2.id = ll.match_id
+                    WHERE ml2.tournament_id = tp.tournament_id
+                      AND (ml2.player_a_id = p.id OR ml2.player_b_id = p.id)
+                      AND ll.winner_player_id IS NOT NULL
+                      AND ll.winner_player_id <> p.id
+                ) AS legs_lost
+             FROM `%1$stournament_players` tp
+             INNER JOIN `%1$splayers` p ON p.id = tp.player_id
+             WHERE tp.tournament_id = ?
+               AND tp.status <> "withdrawn"
+             ORDER BY wins DESC, (legs_won - legs_lost) DESC, p.display_name ASC
+             LIMIT %2$d',
+            $this->tablePrefix,
+            $limit
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $tournamentId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        foreach ($rows as &$row) {
+            $wins = (int) ($row['wins'] ?? 0);
+            $losses = (int) ($row['losses'] ?? 0);
+            $legsWon = (int) ($row['legs_won'] ?? 0);
+            $legsLost = (int) ($row['legs_lost'] ?? 0);
+
+            $row['match_points'] = $wins * 2;
+            $row['leg_diff'] = $legsWon - $legsLost;
+            $row['record'] = sprintf('%d-%d', $wins, $losses);
+        }
+        unset($row);
 
         return $rows;
     }
@@ -672,5 +852,45 @@ final class TournamentRepository
 
         $trimmed = trim($value);
         return $trimmed !== '' ? $trimmed : null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listTopVisits(int $tournamentId, int $limit, bool $todayOnly): array
+    {
+        $todaySql = $todayOnly ? ' AND DATE(v.created_at) = CURDATE()' : '';
+
+        $sql = sprintf(
+            'SELECT
+                v.id,
+                v.score,
+                v.created_at,
+                p.display_name,
+                k.board_number,
+                k.sponsor_label
+             FROM `%1$svisits` v
+             INNER JOIN `%1$smatches` m ON m.id = v.match_id
+             INNER JOIN `%1$splayers` p ON p.id = v.player_id
+             LEFT JOIN `%1$skiosks` k ON k.id = m.kiosk_id
+             WHERE m.tournament_id = ?
+               AND v.is_bust = 0
+               AND v.score > 0%3$s
+             ORDER BY v.score DESC, v.created_at DESC
+             LIMIT %2$d',
+            $this->tablePrefix,
+            $limit,
+            $todaySql
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $tournamentId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
     }
 }

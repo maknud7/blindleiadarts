@@ -6,6 +6,7 @@ const state = {
   clubDashboard: null,
   matchCalls: [],
   pairingRequests: [],
+  screenDevices: [],
   tournaments: [],
   me: null,
   token: localStorage.getItem("bd:token") || "",
@@ -38,10 +39,12 @@ const elements = {
   boardCallList: document.getElementById("boardCallList"),
   playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
+  screenDeviceList: document.getElementById("screenDeviceList"),
   adminSection: document.getElementById("adminSection"),
   clubForm: document.getElementById("clubForm"),
   playerForm: document.getElementById("playerForm"),
   kioskForm: document.getElementById("kioskForm"),
+  screenDeviceForm: document.getElementById("screenDeviceForm"),
   tournamentForm: document.getElementById("tournamentForm"),
   matchForm: document.getElementById("matchForm"),
   matchTournamentId: document.getElementById("matchTournamentId"),
@@ -147,6 +150,16 @@ async function loadPairingRequests() {
   state.pairingRequests = data.items;
 }
 
+async function loadScreenDevices() {
+  if (!state.selectedClubId || !state.token) {
+    state.screenDevices = [];
+    return;
+  }
+
+  const data = await api(`/clubs/${state.selectedClubId}/screen-devices`, { auth: true });
+  state.screenDevices = data.items;
+}
+
 async function loadClubContext() {
   if (!state.selectedClubId) {
     return;
@@ -161,6 +174,7 @@ async function loadClubContext() {
   state.tournaments = tournamentsData.items;
   await loadMatchCalls();
   await loadPairingRequests();
+  await loadScreenDevices();
   renderClub();
   await startLiveUpdates();
 }
@@ -396,6 +410,22 @@ function renderClub() {
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kamper registrert ennå.</p></div>`;
+
+  elements.screenDeviceList.innerHTML = state.screenDevices.length
+    ? state.screenDevices.map((device) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${device.label || "Venue Screen"}</strong>
+            <span class="pill">${device.access_code}</span>
+          </div>
+          <div class="pill-row">
+            <span class="pill">${Number(device.is_active) === 1 ? "Aktiv" : "Inaktiv"}</span>
+            ${device.last_connected_at ? `<span class="pill">Sist brukt ${new Date(device.last_connected_at).toLocaleString("no-NO")}</span>` : `<span class="pill">Ikke brukt ennå</span>`}
+          </div>
+          <p class="muted">Aapne ../screen/ og tast inn denne koden pa oppstartsskjermen.</p>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen skjermkoder opprettet ennå.</p></div>`;
 
   elements.boardCallList.innerHTML = state.matchCalls.length
     ? state.matchCalls.map((match) => `
@@ -732,6 +762,11 @@ function bindEvents() {
   elements.kioskForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await submitAdminForm(elements.kioskForm, `/clubs/${state.selectedClubId}/kiosks`, "Kiosk opprettet med automatisk generert kode.");
+  });
+
+  elements.screenDeviceForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitAdminForm(elements.screenDeviceForm, `/clubs/${state.selectedClubId}/screen-devices`, "Skjermkode opprettet.");
   });
 
   elements.tournamentForm.addEventListener("submit", async (event) => {

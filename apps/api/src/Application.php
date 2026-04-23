@@ -10,6 +10,7 @@ use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
 use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
+use Blindleia\Dartkiosk\Api\Repository\ScreenRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
 use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
@@ -96,6 +97,7 @@ final class Application
                 'routes' => [
                     'GET /v1/health',
                     'GET /v1/realtime/config',
+                    'POST /v1/public/screen/connect',
                     'GET /v1/public/screen',
                     'POST /v1/auth/login',
                     'GET /v1/auth/me',
@@ -111,7 +113,9 @@ final class Application
                     'GET /v1/clubs/{id}/match-calls',
                     'GET /v1/clubs/{id}/live',
                     'GET /v1/clubs/{id}/kiosk-pairing-requests',
+                    'GET /v1/clubs/{id}/screen-devices',
                     'POST /v1/clubs/{id}/kiosks',
+                    'POST /v1/clubs/{id}/screen-devices',
                     'PATCH /v1/clubs/{id}/kiosks/{kioskId}',
                     'POST /v1/clubs/{id}/kiosks/{kioskId}/reset-pairing',
                     'POST /v1/clubs/{id}/kiosk-pairing-requests/{requestCode}/approve',
@@ -161,13 +165,47 @@ final class Application
         }
 
         if ($method === 'GET' && $path === 'v1/public/screen') {
-            $screen = $this->buildScreenPayload($database, $config, $this->queryParam('club_slug'));
+            $screenToken = $request->header('x-screen-token') ?? $this->queryParam('screen_token');
+            $screen = $this->buildScreenPayload($database, $config, $this->queryParam('club_slug'), null, $screenToken);
 
             if ($screen === null) {
                 return JsonResponse::error(404, 'screen_club_not_found', 'No club could be resolved for the screen.');
             }
 
             return JsonResponse::ok($screen);
+        }
+
+        if ($method === 'POST' && $path === 'v1/public/screen/connect') {
+            $payload = $request->jsonBody();
+            $code = strtoupper(trim((string) ($payload['code'] ?? '')));
+
+            if ($code === '') {
+                return JsonResponse::error(422, 'screen_code_required', 'A screen code is required.');
+            }
+
+            $screenRepository = new ScreenRepository($database);
+            $connection = $screenRepository->connectByCode($code);
+
+            if ($connection === null) {
+                return JsonResponse::error(404, 'screen_code_invalid', 'Screen code was not found or is inactive.');
+            }
+
+            $club = is_array($connection['club'] ?? null) ? $connection['club'] : null;
+            $device = is_array($connection['device'] ?? null) ? $connection['device'] : null;
+            $screen = $this->buildScreenPayload(
+                $database,
+                $config,
+                null,
+                $club !== null ? (int) $club['id'] : null,
+                $device['access_token'] ?? null
+            );
+
+            return JsonResponse::ok([
+                'club' => $club,
+                'device' => $device,
+                'access_token' => $device['access_token'] ?? null,
+                'screen' => $screen,
+            ]);
         }
 
         if ($method === 'POST' && $path === 'v1/auth/login') {
@@ -361,6 +399,27 @@ final class Application
             ]);
         }
 
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/screen-devices$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $screenRepository = new ScreenRepository($database);
+
+            return JsonResponse::ok([
+                'club_id' => (int) $matches[1],
+                'items' => $screenRepository->listByClubId((int) $matches[1]),
+            ]);
+        }
+
         if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
             $admin = $this->requireAdminUser($request, $userRepository);
 
@@ -380,6 +439,28 @@ final class Application
 
             return JsonResponse::ok([
                 'kiosk' => $kiosk,
+            ], 201);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/screen-devices$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $screenRepository = new ScreenRepository($database);
+            $payload = $request->jsonBody();
+            $device = $screenRepository->createForClub((int) $matches[1], isset($payload['label']) ? (string) $payload['label'] : null);
+
+            return JsonResponse::ok([
+                'device' => $device,
             ], 201);
         }
 
@@ -1099,13 +1180,25 @@ final class Application
         Database $database,
         Config $config,
         ?string $clubSlug = null,
-        ?int $clubId = null
+        ?int $clubId = null,
+        ?string $screenToken = null
     ): ?array {
         $clubRepository = new ClubRepository($database);
         $tournamentRepository = new TournamentRepository($database);
         $kioskRepository = new KioskRepository($database);
+        $screenRepository = new ScreenRepository($database);
 
         $club = null;
+        $screenDevice = null;
+
+        if ($screenToken !== null && trim($screenToken) !== '') {
+            $resolved = $screenRepository->resolveByAccessToken(trim($screenToken));
+
+            if ($resolved !== null) {
+                $club = is_array($resolved['club'] ?? null) ? $resolved['club'] : null;
+                $screenDevice = is_array($resolved['device'] ?? null) ? $resolved['device'] : null;
+            }
+        }
 
         if ($clubId !== null && $clubId > 0) {
             $club = $clubRepository->findById($clubId);
@@ -1133,23 +1226,40 @@ final class Application
         if ($tournament === null) {
             return [
                 'club' => $club,
+                'screen_device' => $screenDevice,
                 'tournament' => null,
                 'live_boards' => [],
                 'next_matches' => [],
+                'standings' => [],
+                'stats' => [
+                    'elo' => [],
+                    'order_of_merit' => [],
+                    'top_visits' => [],
+                    'best_match_averages' => [],
+                ],
                 'fallback' => [
                     'title' => 'Velkommen til ' . ($club['name'] ?? 'dartklubben'),
-                    'message' => 'Ingen aktiv turnering akkurat nå.',
+                    'message' => 'Ingen aktiv turnering akkurat na.',
                 ],
             ];
         }
 
         $tournamentId = (int) $tournament['id'];
+        $seasonId = isset($tournament['season_id']) ? (int) $tournament['season_id'] : null;
 
         return [
             'club' => $club,
+            'screen_device' => $screenDevice,
             'tournament' => $tournament,
             'live_boards' => $kioskRepository->listScreenBoardsByTournament($resolvedClubId, $tournamentId),
             'next_matches' => $tournamentRepository->listUpcomingMatchesByTournamentId($tournamentId, 10),
+            'standings' => $tournamentRepository->listStandingsByTournamentId($tournamentId, 8),
+            'stats' => [
+                'elo' => $tournamentRepository->listScreenRankings($tournamentId, $seasonId, 'elo', 5),
+                'order_of_merit' => $tournamentRepository->listScreenRankings($tournamentId, $seasonId, 'order_of_merit', 5),
+                'top_visits' => $tournamentRepository->listTopVisitsByTournamentId($tournamentId, 5),
+                'best_match_averages' => $tournamentRepository->listBestMatchAveragesByTournamentId($tournamentId, 5),
+            ],
             'fallback' => null,
         ];
     }
