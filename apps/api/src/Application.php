@@ -42,6 +42,10 @@ final class Application
             $config = Config::load($this->rootPath);
             $database = new Database($config);
 
+            if ($this->handleStreamRequest($request, $database, $config)) {
+                return;
+            }
+
             $response = $this->dispatch($request, $config, $database);
         } catch (KioskAccessException $exception) {
             $response = JsonResponse::error(
@@ -103,6 +107,7 @@ final class Application
                     'POST /v1/clubs/{id}/tournaments',
                     'GET /v1/clubs/{id}/kiosks',
                     'GET /v1/clubs/{id}/match-calls',
+                    'GET /v1/clubs/{id}/live',
                     'GET /v1/clubs/{id}/kiosk-pairing-requests',
                     'POST /v1/clubs/{id}/kiosks',
                     'PATCH /v1/clubs/{id}/kiosks/{kioskId}',
@@ -114,6 +119,7 @@ final class Application
                     'POST /v1/tournaments/{id}/matches',
                     'POST /v1/matches/{id}/assign-kiosk',
                     'GET /v1/kiosks/{code}/state',
+                    'GET /v1/kiosks/{code}/live',
                     'POST /v1/kiosk-pairing-requests',
                     'GET /v1/kiosk-pairing-requests/{requestCode}',
                     'POST /v1/kiosks/pair',
@@ -840,6 +846,103 @@ final class Application
         }
 
         return JsonResponse::error(404, 'not_found', 'The requested endpoint was not found.');
+    }
+
+    private function handleStreamRequest(Request $request, Database $database, Config $config): bool
+    {
+        $method = $request->method();
+        $path = trim($request->path(), '/');
+
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/live$#', $path, $matches) === 1) {
+            $clubRepository = new ClubRepository($database);
+            $tournamentRepository = new TournamentRepository($database);
+            $clubId = (int) $matches[1];
+            $this->streamJsonEvents(function () use ($clubRepository, $tournamentRepository, $clubId): array {
+                $dashboard = $clubRepository->getDashboard($clubId);
+
+                return [
+                    'club_id' => $clubId,
+                    'dashboard' => $dashboard,
+                    'match_calls' => $tournamentRepository->listMatchCallsByClubId($clubId),
+                    'server_time' => gmdate(DATE_ATOM),
+                ];
+            });
+
+            return true;
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/kiosks/([^/]+)/live$#', $path, $matches) === 1) {
+            $kioskRepository = new KioskRepository($database);
+            $kioskCode = urldecode($matches[1]);
+            $pairingToken = $request->header('x-kiosk-pairing-token') ?? $this->queryParam('pairing_token');
+
+            $this->streamJsonEvents(function () use ($kioskRepository, $kioskCode, $pairingToken): array {
+                return $kioskRepository->findKioskStateByCode($kioskCode, $pairingToken) ?? [
+                    'kiosk' => null,
+                    'state' => 'missing',
+                    'message' => 'No kiosk exists for the supplied kiosk code.',
+                ];
+            });
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param callable(): array<string, mixed> $producer
+     */
+    private function streamJsonEvents(callable $producer): never
+    {
+        @set_time_limit(0);
+        ignore_user_abort(true);
+
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+
+        header('Content-Type: text/event-stream; charset=utf-8');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+
+        $lastPayload = null;
+
+        for ($tick = 0; $tick < 30; $tick++) {
+            if (connection_aborted()) {
+                break;
+            }
+
+            $payload = $producer();
+            $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if ($encoded !== false && $encoded !== $lastPayload) {
+                echo "event: snapshot\n";
+                echo 'data: ' . $encoded . "\n\n";
+                $lastPayload = $encoded;
+            } else {
+                echo ": heartbeat\n\n";
+            }
+
+            @ob_flush();
+            flush();
+            usleep(1000000);
+        }
+
+        exit;
+    }
+
+    private function queryParam(string $name): ?string
+    {
+        $value = $_GET[$name] ?? null;
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+        return $trimmed !== '' ? $trimmed : null;
     }
 
     private function isDebug(): bool

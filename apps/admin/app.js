@@ -11,6 +11,7 @@ const state = {
   token: localStorage.getItem("bd:token") || "",
   activeView: localStorage.getItem("bd:adminView") || "overview",
   highlightedPairingCode: "",
+  liveSource: null,
 };
 
 const elements = {
@@ -141,6 +142,36 @@ async function loadClubContext() {
   await loadMatchCalls();
   await loadPairingRequests();
   renderClub();
+  startLiveUpdates();
+}
+
+function closeLiveUpdates() {
+  if (state.liveSource) {
+    state.liveSource.close();
+    state.liveSource = null;
+  }
+}
+
+function startLiveUpdates() {
+  closeLiveUpdates();
+
+  if (!state.selectedClubId || typeof window.EventSource !== "function") {
+    return;
+  }
+
+  const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
+  state.liveSource = source;
+
+  source.addEventListener("snapshot", (event) => {
+    const payload = JSON.parse(event.data);
+    state.clubDashboard = payload.dashboard || null;
+    state.matchCalls = payload.match_calls || [];
+    renderClub();
+  });
+
+  source.onerror = () => {
+    closeLiveUpdates();
+  };
 }
 
 async function loadCurrentUser() {

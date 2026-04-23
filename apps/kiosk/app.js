@@ -6,6 +6,7 @@ const state = {
   pairingRequestCode: localStorage.getItem("bd:kioskPairingRequestCode") || "",
   snapshot: null,
   pollHandle: null,
+  liveSource: null,
   inputMode: localStorage.getItem("bd:kioskInputMode") || "sum",
   sumValue: "",
   darts: [],
@@ -709,6 +710,45 @@ async function loadState() {
   renderState();
 }
 
+function closeLiveUpdates() {
+  if (state.liveSource) {
+    state.liveSource.close();
+    state.liveSource = null;
+  }
+
+  window.clearInterval(state.pollHandle);
+  state.pollHandle = null;
+}
+
+function startLiveUpdates() {
+  closeLiveUpdates();
+
+  if (state.kioskCode && typeof window.EventSource === "function") {
+    const streamUrl = `${API_ROOT}/kiosks/${encodeURIComponent(state.kioskCode)}/live?pairing_token=${encodeURIComponent(state.pairingToken || "")}`;
+    const source = new EventSource(streamUrl);
+    state.liveSource = source;
+
+    source.addEventListener("snapshot", (event) => {
+      if (state.isMutating) {
+        return;
+      }
+
+      const payload = JSON.parse(event.data);
+      state.snapshot = payload;
+      renderState();
+    });
+
+    source.onerror = () => {
+      closeLiveUpdates();
+      startPolling();
+    };
+
+    return;
+  }
+
+  startPolling();
+}
+
 async function createPairingRequest() {
   ensurePairingToken();
 
@@ -736,6 +776,7 @@ async function loadPairingRequestStatus() {
     persistPairing(data.kiosk.code, state.pairingToken);
     state.snapshot = data.snapshot ?? null;
     renderState();
+    startLiveUpdates();
     closeSettings();
     showToast("Nettbrettet er paret og klart.");
     return;
@@ -750,7 +791,7 @@ async function unpairKiosk() {
     await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/unpair`, { method: "POST" });
   }
 
-  window.clearInterval(state.pollHandle);
+  closeLiveUpdates();
   clearPairing();
   state.snapshot = null;
   closeSettings();
@@ -1107,11 +1148,12 @@ async function bootstrap() {
   try {
     if (state.kioskCode) {
       await loadState();
+      startLiveUpdates();
     } else {
       renderDisconnected();
       await loadPairingRequestStatus();
+      startPolling();
     }
-    startPolling();
   } catch (error) {
     renderDisconnected();
     showToast(error.message);

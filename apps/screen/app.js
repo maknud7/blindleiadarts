@@ -4,6 +4,9 @@ const state = {
   clubs: [],
   selectedClubId: Number(localStorage.getItem("bd:screenClubId") || 0),
   dashboard: null,
+  matchCalls: [],
+  liveSource: null,
+  pollHandle: null,
 };
 
 const elements = {
@@ -46,8 +49,50 @@ async function loadDashboard() {
     return;
   }
 
-  state.dashboard = await api(`/clubs/${state.selectedClubId}/dashboard`);
+  const [dashboardData, matchCallData] = await Promise.all([
+    api(`/clubs/${state.selectedClubId}/dashboard`),
+    api(`/clubs/${state.selectedClubId}/match-calls`),
+  ]);
+
+  state.dashboard = dashboardData;
+  state.matchCalls = matchCallData.items;
   render();
+}
+
+function closeLiveUpdates() {
+  if (state.liveSource) {
+    state.liveSource.close();
+    state.liveSource = null;
+  }
+
+  if (state.pollHandle) {
+    window.clearInterval(state.pollHandle);
+    state.pollHandle = null;
+  }
+}
+
+function startLiveUpdates() {
+  closeLiveUpdates();
+
+  if (!state.selectedClubId || typeof window.EventSource !== "function") {
+    state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 5000);
+    return;
+  }
+
+  const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
+  state.liveSource = source;
+
+  source.addEventListener("snapshot", (event) => {
+    const payload = JSON.parse(event.data);
+    state.dashboard = payload.dashboard || null;
+    state.matchCalls = payload.match_calls || [];
+    render();
+  });
+
+  source.onerror = () => {
+    closeLiveUpdates();
+    state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 5000);
+  };
 }
 
 function render() {
@@ -64,7 +109,7 @@ function render() {
         <div class="tile">
           <strong>${kiosk.name}</strong>
           <p class="muted">Board ${kiosk.board_number}</p>
-          <p class="muted">${kiosk.code}</p>
+          <p class="muted">${kiosk.sponsor_label || kiosk.code}</p>
         </div>
       `).join("")
     : `<div class="tile"><p class="muted">Ingen kiosker ennå.</p></div>`;
@@ -78,11 +123,13 @@ function render() {
       `).join("")
     : `<div class="list-item"><p class="muted">Ingen turneringer ennå.</p></div>`;
 
-  elements.recentMatches.innerHTML = dashboard.recent_matches.length
-    ? dashboard.recent_matches.map((match) => `
+  const liveMatches = state.matchCalls.length ? state.matchCalls : dashboard.recent_matches;
+
+  elements.recentMatches.innerHTML = liveMatches.length
+    ? liveMatches.map((match) => `
         <div class="list-item">
           <strong>${match.player_a_name} vs ${match.player_b_name}</strong>
-          <p class="muted">${match.tournament_name} · ${match.status}</p>
+          <p class="muted">${match.tournament_name} · ${match.status}${match.board_number ? ` · Board ${match.board_number}` : ""}</p>
         </div>
       `).join("")
     : `<div class="list-item"><p class="muted">Ingen kamper ennå.</p></div>`;
@@ -119,6 +166,7 @@ function bindEvents() {
     state.selectedClubId = Number(event.target.value);
     localStorage.setItem("bd:screenClubId", String(state.selectedClubId));
     await loadDashboard();
+    startLiveUpdates();
   });
 
   elements.refreshButton.addEventListener("click", () => loadDashboard());
@@ -128,7 +176,7 @@ async function bootstrap() {
   bindEvents();
   await loadClubs();
   await loadDashboard();
-  window.setInterval(() => loadDashboard().catch(() => undefined), 10000);
+  startLiveUpdates();
 }
 
 bootstrap();
