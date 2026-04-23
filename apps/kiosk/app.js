@@ -12,6 +12,7 @@ const state = {
   multiplier: "S",
   toastHandle: null,
   isMutating: false,
+  interactionVersion: 0,
 };
 
 const elements = {
@@ -192,6 +193,7 @@ function isPossibleVisitScore(score) {
 
 async function withMutation(task) {
   state.isMutating = true;
+  state.interactionVersion += 1;
 
   try {
     return await task();
@@ -261,18 +263,14 @@ function resolveAssetUrl(url) {
     return url;
   }
 
-  if (url.startsWith("/static/")) {
-    return `../static/${url.slice("/static/".length)}`;
+  try {
+    return new URL(url, `${window.location.origin}/`).toString();
+  } catch {
+    return url;
   }
-
-  if (url.startsWith("static/")) {
-    return `../${url}`;
-  }
-
-  return url;
 }
 
-function applyImageSource(image, url, altText) {
+function applyImageSource(image, url, altText, onError) {
   if (!image) {
     return;
   }
@@ -286,12 +284,18 @@ function applyImageSource(image, url, altText) {
   }
 
   image.alt = altText;
+  image.hidden = true;
+  image.onload = () => {
+    image.hidden = false;
+  };
   image.onerror = () => {
     image.hidden = true;
     image.removeAttribute("src");
+    if (typeof onError === "function") {
+      onError();
+    }
   };
   image.src = resolvedUrl;
-  image.hidden = false;
 }
 
 function updatePairingSummary(snapshot = state.snapshot) {
@@ -405,7 +409,10 @@ function applyClubBranding(club) {
   elements.brandFallback.textContent = initials || "KL";
 
   if (club?.logo_url) {
-    applyImageSource(elements.brandLogo, club.logo_url, `${club.name} logo`);
+    applyImageSource(elements.brandLogo, club.logo_url, `${club.name} logo`, () => {
+      elements.brandLogo.classList.add("hidden");
+      elements.brandFallback.classList.remove("hidden");
+    });
     elements.brandLogo.classList.remove("hidden");
     elements.brandFallback.classList.add("hidden");
   } else {
@@ -631,7 +638,14 @@ async function loadState() {
     return;
   }
 
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`);
+  const versionAtStart = state.interactionVersion;
+  const snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`);
+
+  if (versionAtStart !== state.interactionVersion) {
+    return;
+  }
+
+  state.snapshot = snapshot;
   renderState();
 }
 
