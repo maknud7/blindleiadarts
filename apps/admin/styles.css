@@ -274,6 +274,11 @@ button.ghost {
   gap: 0.5rem;
 }
 
+.list-item.is-highlighted {
+  border-color: rgba(17, 67, 93, 0.34);
+  box-shadow: 0 0 0 3px rgba(58, 120, 152, 0.14);
+}
+
 .row {
   display: flex;
   justify-content: space-between;

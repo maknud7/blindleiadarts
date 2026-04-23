@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="240" viewBox="0 0 720 240" role="img" aria-labelledby="title desc">
+  <title id="title">Demo sponsor logo</title>
+  <desc id="desc">Neutral demo logo for Sparebanken Norge test label.</desc>
+  <rect width="720" height="240" rx="32" fill="#102632"/>
+  <rect x="24" y="24" width="672" height="192" rx="24" fill="#163848" stroke="#3b768f" stroke-width="2"/>
+  <circle cx="112" cy="120" r="56" fill="#d7c092"/>
+  <text x="112" y="132" text-anchor="middle" font-family="Trebuchet MS, Arial, sans-serif" font-size="42" font-weight="700" fill="#102632">SN</text>
+  <text x="200" y="102" font-family="Trebuchet MS, Arial, sans-serif" font-size="22" fill="#d7c092" letter-spacing="3">DEMO SPONSOR</text>
+  <text x="200" y="144" font-family="Trebuchet MS, Arial, sans-serif" font-size="36" font-weight="700" fill="#f3fbff">Sparebanken Norge</text>
+</svg>

@@ -57,7 +57,7 @@
 
     <main class="content">
       <section id="overviewView" class="view-section active" data-view-panel="overview">
-        <section id="overviewSection" class="hero">
+        <section class="hero">
           <div>
             <p class="eyebrow">Admin Runtime</p>
             <h2>Styr klubb, kioskdrift og turneringsflyt uten å drukne i detaljer.</h2>
@@ -91,7 +91,29 @@
 
       <section id="adminSection" class="stack hidden">
         <section id="boardsView" class="view-section hidden" data-view-panel="boards">
-          <section id="kiosksSection" class="card">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Tablet Pairing</p>
+                <h3>Ventende nettbrett</h3>
+              </div>
+            </div>
+            <div class="grid two">
+              <div>
+                <p class="help">Nettbrett ber om pairing fra kioskflaten. Godkjenn her og bind forespørselen til riktig board.</p>
+                <div id="pairingRequestList" class="stack"></div>
+              </div>
+              <div class="card inset stack">
+                <h4>Flyt</h4>
+                <p class="muted">1. Åpne kiosk på nettbrettet.</p>
+                <p class="muted">2. Trykk start pairing i tannhjulet.</p>
+                <p class="muted">3. Nettbrettet viser pairingkode og adminlenke.</p>
+                <p class="muted">4. Godkjenn forespørselen her og velg board.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
             <div class="card-head">
               <div>
                 <p class="eyebrow">Board Admin</p>
@@ -119,7 +141,7 @@
             </div>
           </section>
 
-          <section id="boardCallsSection" class="card">
+          <section class="card">
             <div class="card-head">
               <div>
                 <p class="eyebrow">Board Calls</p>
@@ -143,7 +165,7 @@
         </section>
 
         <section id="tournamentsView" class="view-section hidden" data-view-panel="tournaments">
-          <section id="tournamentsSection" class="card">
+          <section class="card">
             <div class="card-head">
               <div>
                 <p class="eyebrow">Tournament Admin</p>
@@ -180,7 +202,7 @@
         </section>
 
         <section id="playersView" class="view-section hidden" data-view-panel="players">
-          <section id="playersSection" class="card">
+          <section class="card">
             <div class="card-head">
               <div>
                 <p class="eyebrow">Player Admin</p>
@@ -205,7 +227,7 @@
         </section>
 
         <section id="matchesView" class="view-section hidden" data-view-panel="matches">
-          <section id="matchesSection" class="card">
+          <section class="card">
             <div class="card-head">
               <div>
                 <p class="eyebrow">Match Admin</p>

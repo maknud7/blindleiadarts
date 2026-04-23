@@ -5,10 +5,12 @@ const state = {
   selectedClubId: Number(localStorage.getItem("bd:selectedClubId") || 0),
   clubDashboard: null,
   matchCalls: [],
+  pairingRequests: [],
   tournaments: [],
   me: null,
   token: localStorage.getItem("bd:token") || "",
   activeView: localStorage.getItem("bd:adminView") || "overview",
+  highlightedPairingCode: "",
 };
 
 const elements = {
@@ -29,6 +31,7 @@ const elements = {
   heroMetrics: document.getElementById("heroMetrics"),
   tournamentList: document.getElementById("tournamentList"),
   kioskList: document.getElementById("kioskList"),
+  pairingRequestList: document.getElementById("pairingRequestList"),
   boardCallList: document.getElementById("boardCallList"),
   playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
@@ -64,8 +67,7 @@ async function api(path, { method = "GET", body, auth = false } = {}) {
   const payload = await response.json();
 
   if (!response.ok || !payload.ok) {
-    const message = payload?.error?.message || `Request failed with ${response.status}`;
-    throw new Error(message);
+    throw new Error(payload?.error?.message || `Request failed with ${response.status}`);
   }
 
   return payload.data;
@@ -114,6 +116,16 @@ async function loadMatchCalls() {
   state.matchCalls = data.items;
 }
 
+async function loadPairingRequests() {
+  if (!state.selectedClubId || !state.token) {
+    state.pairingRequests = [];
+    return;
+  }
+
+  const data = await api(`/clubs/${state.selectedClubId}/kiosk-pairing-requests`, { auth: true });
+  state.pairingRequests = data.items;
+}
+
 async function loadClubContext() {
   if (!state.selectedClubId) {
     return;
@@ -127,6 +139,7 @@ async function loadClubContext() {
   state.clubDashboard = dashboardData;
   state.tournaments = tournamentsData.items;
   await loadMatchCalls();
+  await loadPairingRequests();
   renderClub();
 }
 
@@ -207,6 +220,32 @@ function renderClub() {
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kiosker opprettet ennå.</p></div>`;
+
+  elements.pairingRequestList.innerHTML = state.pairingRequests.length
+    ? state.pairingRequests.map((request) => `
+        <div class="list-item ${request.request_code === state.highlightedPairingCode ? "is-highlighted" : ""}">
+          <div class="row">
+            <strong>${request.device_name || "Nettbrett"}</strong>
+            <span class="pill">${request.request_code}</span>
+          </div>
+          <div class="pill-row">
+            ${request.requested_at ? `<span class="pill">Opprettet ${new Date(request.requested_at).toLocaleTimeString("no-NO", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}
+            ${request.expires_at ? `<span class="pill">Utløper ${new Date(request.expires_at).toLocaleTimeString("no-NO", { hour: "2-digit", minute: "2-digit" })}</span>` : ""}
+          </div>
+          <form class="stack" data-approve-pairing="${request.request_code}">
+            <select name="kiosk_id">
+              <option value="">Velg board</option>
+              ${(dashboard.kiosks || []).map((kiosk) => `
+                <option value="${kiosk.id}">
+                  Board ${kiosk.board_number} · ${kiosk.name}
+                </option>
+              `).join("")}
+            </select>
+            <button type="submit" class="ghost">Godkjenn pairing</button>
+          </form>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen ventende nettbrett akkurat nå.</p></div>`;
 
   elements.tournamentList.innerHTML = state.tournaments.length
     ? state.tournaments.map((tournament) => `
@@ -382,6 +421,7 @@ async function handleLogin(event) {
 
     persistToken(data.access_token);
     await loadCurrentUser();
+    await loadClubContext();
     setStatus("Innlogging lykkes.", "success");
     elements.loginForm.reset();
   } catch (error) {
@@ -440,6 +480,7 @@ function bindEvents() {
     persistToken("");
     state.me = null;
     renderAuth();
+    loadClubContext().catch(() => undefined);
     setStatus("Logget ut lokalt i admin.", "success");
   });
 
@@ -493,6 +534,35 @@ function bindEvents() {
       });
 
       setStatus("Kioskparing nullstilt.", "success");
+      await loadClubContext();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.pairingRequestList.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-approve-pairing]");
+
+    if (!form) {
+      return;
+    }
+
+    event.preventDefault();
+    const kioskId = Number(new FormData(form).get("kiosk_id") || 0);
+
+    if (kioskId <= 0) {
+      setStatus("Velg et board for å godkjenne pairing.", "error");
+      return;
+    }
+
+    try {
+      await api(`/clubs/${state.selectedClubId}/kiosk-pairing-requests/${form.dataset.approvePairing}/approve`, {
+        method: "POST",
+        body: { kiosk_id: kioskId },
+        auth: true,
+      });
+
+      setStatus("Nettbrett paret til valgt board.", "success");
       await loadClubContext();
     } catch (error) {
       setStatus(error.message, "error");
@@ -570,6 +640,13 @@ function bindEvents() {
 
 async function bootstrap() {
   bindEvents();
+  const params = new URLSearchParams(window.location.search);
+  state.highlightedPairingCode = (params.get("pairing") || "").trim().toUpperCase();
+
+  if (state.highlightedPairingCode) {
+    setActiveView("boards");
+  }
+
   renderActiveView();
 
   try {

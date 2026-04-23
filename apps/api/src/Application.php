@@ -103,15 +103,19 @@ final class Application
                     'POST /v1/clubs/{id}/tournaments',
                     'GET /v1/clubs/{id}/kiosks',
                     'GET /v1/clubs/{id}/match-calls',
+                    'GET /v1/clubs/{id}/kiosk-pairing-requests',
                     'POST /v1/clubs/{id}/kiosks',
                     'PATCH /v1/clubs/{id}/kiosks/{kioskId}',
                     'POST /v1/clubs/{id}/kiosks/{kioskId}/reset-pairing',
+                    'POST /v1/clubs/{id}/kiosk-pairing-requests/{requestCode}/approve',
                     'GET /v1/tournaments/{id}',
                     'GET /v1/tournaments/{id}/matches',
                     'POST /v1/tournaments/{id}/register',
                     'POST /v1/tournaments/{id}/matches',
                     'POST /v1/matches/{id}/assign-kiosk',
                     'GET /v1/kiosks/{code}/state',
+                    'POST /v1/kiosk-pairing-requests',
+                    'GET /v1/kiosk-pairing-requests/{requestCode}',
                     'POST /v1/kiosks/pair',
                     'POST /v1/kiosks/{code}/unpair',
                     'POST /v1/kiosks/{code}/start-match',
@@ -311,6 +315,25 @@ final class Application
             ]);
         }
 
+        if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/kiosk-pairing-requests$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            return JsonResponse::ok([
+                'club_id' => (int) $matches[1],
+                'items' => $kioskRepository->listPendingPairingRequests(),
+            ]);
+        }
+
         if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
             $admin = $this->requireAdminUser($request, $userRepository);
 
@@ -377,6 +400,35 @@ final class Application
             return JsonResponse::ok([
                 'kiosk' => $kiosk,
             ]);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/kiosk-pairing-requests/([^/]+)/approve$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $matches[1]);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $payload = $request->jsonBody();
+            $kioskId = (int) ($payload['kiosk_id'] ?? 0);
+
+            if ($kioskId <= 0) {
+                return JsonResponse::error(422, 'kiosk_required', 'kiosk_id is required to approve the pairing request.');
+            }
+
+            $approval = $kioskRepository->approvePairingRequest((int) $matches[1], (string) $matches[2], $kioskId, (int) $admin['id']);
+
+            if ($approval === null) {
+                return JsonResponse::error(404, 'pairing_request_not_found', 'Pairing request or kiosk was not found.');
+            }
+
+            return JsonResponse::ok($approval);
         }
 
         if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)$#', $path, $matches) === 1) {
@@ -482,6 +534,36 @@ final class Application
             }
 
             return JsonResponse::ok($state);
+        }
+
+        if ($method === 'POST' && $path === 'v1/kiosk-pairing-requests') {
+            $pairingToken = trim((string) $request->header('x-kiosk-pairing-token'));
+            $payload = $request->jsonBody();
+            $deviceName = trim((string) ($payload['device_name'] ?? ''));
+
+            if ($pairingToken === '') {
+                return JsonResponse::error(422, 'pairing_token_required', 'X-Kiosk-Pairing-Token header is required.');
+            }
+
+            return JsonResponse::ok([
+                'request' => $kioskRepository->createPairingRequest($pairingToken, $deviceName),
+            ], 201);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/kiosk-pairing-requests/([^/]+)$#', $path, $matches) === 1) {
+            $pairingToken = trim((string) $request->header('x-kiosk-pairing-token'));
+
+            if ($pairingToken === '') {
+                return JsonResponse::error(422, 'pairing_token_required', 'X-Kiosk-Pairing-Token header is required.');
+            }
+
+            $pairingStatus = $kioskRepository->getPairingRequestStatus((string) $matches[1], $pairingToken);
+
+            if ($pairingStatus === null) {
+                return JsonResponse::error(404, 'pairing_request_not_found', 'Pairing request was not found.');
+            }
+
+            return JsonResponse::ok($pairingStatus);
         }
 
         if ($method === 'GET' && preg_match('#^v1/kiosks/([^/]+)/state$#', $path, $matches) === 1) {

@@ -583,6 +583,30 @@ button.ghost,
   gap: 0.8rem;
 }
 
+.pairing-card {
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pairing-code {
+  margin: 0.35rem 0 0.9rem;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.pairing-qr {
+  display: block;
+  width: min(100%, 240px);
+  margin: 0 auto 1rem;
+  padding: 0.5rem;
+  border-radius: 18px;
+  background: white;
+}
+
 .dialog-actions.vertical {
   flex-direction: column;
   align-items: stretch;

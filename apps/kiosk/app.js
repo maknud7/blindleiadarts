@@ -3,6 +3,7 @@ const API_ROOT = "../api/v1";
 const state = {
   kioskCode: localStorage.getItem("bd:kioskCode") || "",
   pairingToken: localStorage.getItem("bd:kioskPairingToken") || "",
+  pairingRequestCode: localStorage.getItem("bd:kioskPairingRequestCode") || "",
   snapshot: null,
   pollHandle: null,
   inputMode: localStorage.getItem("bd:kioskInputMode") || "sum",
@@ -13,8 +14,6 @@ const state = {
 };
 
 const elements = {
-  kioskSetupForm: document.getElementById("kioskSetupForm"),
-  kioskCodeInput: document.getElementById("kioskCodeInput"),
   brandLogo: document.getElementById("brandLogo"),
   brandFallback: document.getElementById("brandFallback"),
   brandTitle: document.getElementById("brandTitle"),
@@ -24,6 +23,14 @@ const elements = {
   settingsCloseButton: document.getElementById("settingsCloseButton"),
   pairingSummary: document.getElementById("pairingSummary"),
   settingsMeta: document.getElementById("settingsMeta"),
+  pairingRequestPanel: document.getElementById("pairingRequestPanel"),
+  startPairingRequestButton: document.getElementById("startPairingRequestButton"),
+  pairingRequestCard: document.getElementById("pairingRequestCard"),
+  pairingRequestCode: document.getElementById("pairingRequestCode"),
+  pairingQrImage: document.getElementById("pairingQrImage"),
+  pairingAdminUrl: document.getElementById("pairingAdminUrl"),
+  copyPairingLinkButton: document.getElementById("copyPairingLinkButton"),
+  checkPairingStatusButton: document.getElementById("checkPairingStatusButton"),
   idleState: document.getElementById("idleState"),
   idleLane: document.getElementById("idleLane"),
   idleSponsor: document.getElementById("idleSponsor"),
@@ -123,6 +130,17 @@ function persistPairing(code, token) {
   state.pairingToken = token;
   localStorage.setItem("bd:kioskCode", code);
   localStorage.setItem("bd:kioskPairingToken", token);
+  persistPairingRequest("");
+}
+
+function persistPairingRequest(code) {
+  state.pairingRequestCode = code;
+
+  if (code) {
+    localStorage.setItem("bd:kioskPairingRequestCode", code);
+  } else {
+    localStorage.removeItem("bd:kioskPairingRequestCode");
+  }
 }
 
 function clearPairing() {
@@ -130,6 +148,7 @@ function clearPairing() {
   state.pairingToken = "";
   localStorage.removeItem("bd:kioskCode");
   localStorage.removeItem("bd:kioskPairingToken");
+  persistPairingRequest("");
 }
 
 function ensurePairingToken() {
@@ -148,9 +167,21 @@ function deviceName() {
   return `Nettbrett ${host}`;
 }
 
+function buildAdminPairingUrl(requestCode) {
+  const adminUrl = new URL("../admin/", window.location.href);
+  adminUrl.searchParams.set("pairing", requestCode);
+  return adminUrl.toString();
+}
+
+function buildPairingQrUrl(requestCode) {
+  return `https://quickchart.io/qr?size=240&text=${encodeURIComponent(buildAdminPairingUrl(requestCode))}`;
+}
+
 function updatePairingSummary(snapshot = state.snapshot) {
   if (!state.kioskCode) {
-    elements.pairingSummary.textContent = "Nettbrettet er ikke paret ennå.";
+    elements.pairingSummary.textContent = state.pairingRequestCode
+      ? `Venter på godkjenning for ${state.pairingRequestCode}.`
+      : "Nettbrettet er ikke paret ennå.";
     return;
   }
 
@@ -163,6 +194,24 @@ function updatePairingSummary(snapshot = state.snapshot) {
   elements.pairingSummary.textContent = kiosk.paired_device_name
     ? `Paret mot ${kiosk.code} på ${kiosk.paired_device_name}.`
     : `Paret mot ${kiosk.code}.`;
+}
+
+function renderPairingRequestCard() {
+  elements.pairingRequestPanel.classList.toggle("hidden", Boolean(state.kioskCode));
+
+  if (!state.pairingRequestCode || state.kioskCode) {
+    elements.pairingRequestCard.classList.add("hidden");
+    elements.pairingQrImage.hidden = true;
+    elements.pairingAdminUrl.value = "";
+    return;
+  }
+
+  const adminUrl = buildAdminPairingUrl(state.pairingRequestCode);
+  elements.pairingRequestCard.classList.remove("hidden");
+  elements.pairingRequestCode.textContent = state.pairingRequestCode;
+  elements.pairingAdminUrl.value = adminUrl;
+  elements.pairingQrImage.src = buildPairingQrUrl(state.pairingRequestCode);
+  elements.pairingQrImage.hidden = false;
 }
 
 function renderSettingsMeta(snapshot = state.snapshot) {
@@ -185,7 +234,7 @@ function renderSettingsMeta(snapshot = state.snapshot) {
 function openSettings() {
   updatePairingSummary();
   renderSettingsMeta();
-  elements.kioskCodeInput.value = state.kioskCode;
+  renderPairingRequestCard();
   elements.settingsDialog.showModal();
 }
 
@@ -286,17 +335,19 @@ function renderDisconnected() {
   elements.idleLane.textContent = state.kioskCode ? "Kiosk frakoblet" : "Par nettbrett";
   elements.idleSponsor.textContent = state.kioskCode
     ? "Denne enheten trenger ny paring eller har mistet tilgang."
-    : "Åpne tannhjulet og legg inn kiosk-koden for å pare dette nettbrettet.";
+    : "Åpne tannhjulet og start pairing for å pare dette nettbrettet.";
   elements.idleClubLogo.hidden = true;
   elements.idleSponsorLogo.hidden = true;
   elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
   updatePairingSummary(null);
   renderSettingsMeta(null);
+  renderPairingRequestCard();
 }
 
 function renderAssigned(snapshot) {
   const kiosk = snapshot.kiosk;
   const match = snapshot.match;
+
   elements.idleState.classList.add("hidden");
   elements.assignedState.classList.remove("hidden");
   elements.matchState.classList.add("hidden");
@@ -400,8 +451,6 @@ function renderMatch(snapshot) {
   const kiosk = snapshot.kiosk;
   const match = snapshot.match;
   const currentPlayerId = match.current_player_id;
-  const currentIsA = currentPlayerId === match.player_a.id;
-  const currentIsB = currentPlayerId === match.player_b.id;
 
   applyClubBranding(kiosk.club);
   updatePairingSummary(snapshot);
@@ -410,12 +459,11 @@ function renderMatch(snapshot) {
   elements.idleState.classList.add("hidden");
   elements.assignedState.classList.add("hidden");
   elements.matchState.classList.remove("hidden");
-  elements.kioskCodeInput.value = kiosk.code;
   elements.unpairButton.classList.remove("hidden");
   elements.startMatchButton.classList.toggle("hidden", snapshot.state !== "assigned");
   elements.undoButton.classList.toggle("hidden", snapshot.state === "assigned");
-  elements.playerABox.classList.toggle("active", currentIsA);
-  elements.playerBBox.classList.toggle("active", currentIsB);
+  elements.playerABox.classList.toggle("active", currentPlayerId === match.player_a.id);
+  elements.playerBBox.classList.toggle("active", currentPlayerId === match.player_b.id);
   elements.playerAName.textContent = match.player_a.display_name;
   elements.playerBName.textContent = match.player_b.display_name;
   elements.playerARemaining.textContent = match.player_a.remaining;
@@ -443,6 +491,7 @@ function renderState() {
 
   updatePairingSummary(snapshot);
   renderSettingsMeta(snapshot);
+  renderPairingRequestCard();
 
   if (snapshot.state === "idle" || !snapshot.match) {
     renderIdle(snapshot);
@@ -460,7 +509,6 @@ function renderState() {
 async function loadState() {
   if (!state.kioskCode) {
     state.snapshot = null;
-    renderDisconnected();
     return;
   }
 
@@ -468,27 +516,40 @@ async function loadState() {
   renderState();
 }
 
-async function pairKiosk() {
-  const kioskCode = elements.kioskCodeInput.value.trim().toUpperCase();
+async function createPairingRequest() {
+  ensurePairingToken();
 
-  if (!kioskCode) {
-    showToast("Legg inn kiosk-koden først.");
-    return;
-  }
-
-  const pairingToken = ensurePairingToken();
-  state.snapshot = await api("/kiosks/pair", {
+  const data = await api("/kiosk-pairing-requests", {
     method: "POST",
     body: {
-      code: kioskCode,
-      pairing_token: pairingToken,
       device_name: deviceName(),
     },
   });
 
-  persistPairing(kioskCode, pairingToken);
-  renderState();
-  closeSettings();
+  persistPairingRequest(data.request.request_code);
+  updatePairingSummary();
+  renderPairingRequestCard();
+}
+
+async function loadPairingRequestStatus() {
+  if (!state.pairingRequestCode) {
+    return;
+  }
+
+  ensurePairingToken();
+  const data = await api(`/kiosk-pairing-requests/${encodeURIComponent(state.pairingRequestCode)}`);
+
+  if (data.status === "approved" && data.kiosk?.code) {
+    persistPairing(data.kiosk.code, state.pairingToken);
+    state.snapshot = data.snapshot ?? null;
+    renderState();
+    closeSettings();
+    showToast("Nettbrettet er paret og klart.");
+    return;
+  }
+
+  updatePairingSummary();
+  renderPairingRequestCard();
 }
 
 async function unpairKiosk() {
@@ -695,7 +756,14 @@ function renderNumberGrid() {
 function startPolling() {
   window.clearInterval(state.pollHandle);
   state.pollHandle = window.setInterval(() => {
-    loadState().catch(() => undefined);
+    if (state.kioskCode) {
+      loadState().catch(() => undefined);
+      return;
+    }
+
+    if (state.pairingRequestCode) {
+      loadPairingRequestStatus().catch(() => undefined);
+    }
   }, 5000);
 }
 
@@ -708,16 +776,29 @@ function bindEvents() {
     }
   });
 
-  elements.kioskSetupForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
+  elements.startPairingRequestButton.addEventListener("click", async () => {
     try {
-      await pairKiosk();
+      await createPairingRequest();
       startPolling();
-      showToast("Nettbrettet er paret med kiosken.");
+      showToast("Pairingforespørsel opprettet.");
     } catch (error) {
       showToast(error.message);
     }
+  });
+
+  elements.copyPairingLinkButton.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(elements.pairingAdminUrl.value);
+      showToast("Adminlenke kopiert.");
+    } catch {
+      showToast("Kunne ikke kopiere lenken.");
+    }
+  });
+
+  elements.checkPairingStatusButton.addEventListener("click", () => {
+    loadPairingRequestStatus()
+      .then(() => showToast("Pairingstatus oppdatert."))
+      .catch((error) => showToast(error.message));
   });
 
   elements.unpairButton.addEventListener("click", () => {
@@ -727,7 +808,7 @@ function bindEvents() {
   });
 
   elements.refreshButton.addEventListener("click", () => {
-    loadState()
+    (state.kioskCode ? loadState() : loadPairingRequestStatus())
       .then(() => {
         closeSettings();
         showToast("Kiosk oppdatert.");
@@ -810,15 +891,20 @@ async function bootstrap() {
   enablePreviewModeIfNeeded();
   renderNumberGrid();
   bindEvents();
-  elements.kioskCodeInput.value = state.kioskCode;
+  renderPairingRequestCard();
 
-  if (!state.kioskCode) {
+  if (!state.kioskCode && !state.pairingRequestCode) {
     renderDisconnected();
     return;
   }
 
   try {
-    await loadState();
+    if (state.kioskCode) {
+      await loadState();
+    } else {
+      renderDisconnected();
+      await loadPairingRequestStatus();
+    }
     startPolling();
   } catch (error) {
     renderDisconnected();

@@ -10,10 +10,10 @@ return static function (mysqli $mysqli, string $prefix): void {
     $tournamentName = 'Blindleia Test Cup';
     $tournamentSlug = 'blindleia-test-cup';
     $kiosks = [
-        ['code' => 'BOARD-1', 'name' => 'Board 1', 'board_number' => 1, 'sponsor_label' => 'Sparebanken Norge', 'scoring_mode' => 'manual'],
-        ['code' => 'BOARD-2', 'name' => 'Board 2', 'board_number' => 2, 'sponsor_label' => 'MENY Lillesand', 'scoring_mode' => 'manual'],
-        ['code' => 'BOARD-3', 'name' => 'Board 3', 'board_number' => 3, 'sponsor_label' => 'Montér Lillesand', 'scoring_mode' => 'manual'],
-        ['code' => 'BOARD-4', 'name' => 'Board 4', 'board_number' => 4, 'sponsor_label' => 'Circle K E18 Lillesand', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-1', 'name' => 'Board 1', 'board_number' => 1, 'sponsor_label' => 'Sparebanken Norge', 'sponsor_logo_url' => '/static/sponsors/demo-sparebanken-norge.svg', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-2', 'name' => 'Board 2', 'board_number' => 2, 'sponsor_label' => 'MENY Lillesand', 'sponsor_logo_url' => '/static/sponsors/demo-meny-lillesand.svg', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-3', 'name' => 'Board 3', 'board_number' => 3, 'sponsor_label' => 'Monter Lillesand', 'sponsor_logo_url' => '/static/sponsors/demo-monter-lillesand.svg', 'scoring_mode' => 'manual'],
+        ['code' => 'BOARD-4', 'name' => 'Board 4', 'board_number' => 4, 'sponsor_label' => 'Circle K E18 Lillesand', 'sponsor_logo_url' => '/static/sponsors/demo-circlek-lillesand.svg', 'scoring_mode' => 'manual'],
     ];
     $samplePlayers = [
         'Andre Kendrick',
@@ -88,7 +88,7 @@ return static function (mysqli $mysqli, string $prefix): void {
 
         if ($kioskId === null) {
             $isActive = 1;
-            $sponsorLogoUrl = null;
+            $sponsorLogoUrl = $kiosk['sponsor_logo_url'] ?? null;
             $insertKiosk = $mysqli->prepare(
                 "INSERT INTO `{$prefix}kiosks`
                  (club_id, code, name, board_number, sponsor_label, sponsor_logo_url, scoring_mode, is_active)
@@ -109,7 +109,7 @@ return static function (mysqli $mysqli, string $prefix): void {
             $kioskId = (int) $insertKiosk->insert_id;
             $insertKiosk->close();
         } else {
-            $sponsorLogoUrl = null;
+            $sponsorLogoUrl = $kiosk['sponsor_logo_url'] ?? null;
             $updateKiosk = $mysqli->prepare(
                 "UPDATE `{$prefix}kiosks`
                  SET `name` = ?, `board_number` = ?, `sponsor_label` = ?, `sponsor_logo_url` = ?, `scoring_mode` = ?

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="240" viewBox="0 0 720 240" role="img" aria-labelledby="title desc">
+  <title id="title">Demo sponsor logo</title>
+  <desc id="desc">Neutral demo logo for MENY Lillesand test label.</desc>
+  <rect width="720" height="240" rx="32" fill="#0c1d12"/>
+  <rect x="24" y="24" width="672" height="192" rx="24" fill="#113121" stroke="#5ea26c" stroke-width="2"/>
+  <rect x="56" y="64" width="112" height="112" rx="28" fill="#d7c092"/>
+  <text x="112" y="132" text-anchor="middle" font-family="Trebuchet MS, Arial, sans-serif" font-size="42" font-weight="700" fill="#113121">ML</text>
+  <text x="208" y="102" font-family="Trebuchet MS, Arial, sans-serif" font-size="22" fill="#d7c092" letter-spacing="3">DEMO SPONSOR</text>
+  <text x="208" y="144" font-family="Trebuchet MS, Arial, sans-serif" font-size="36" font-weight="700" fill="#f3fbff">MENY Lillesand</text>
+</svg>

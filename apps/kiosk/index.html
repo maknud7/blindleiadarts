@@ -23,7 +23,7 @@
         </div>
 
         <div class="top-actions">
-          <button id="settingsButton" class="icon-button" type="button" aria-label="Åpne innstillinger">⚙</button>
+          <button id="settingsButton" class="icon-button" type="button" aria-label="Åpne innstillinger">&#9881;</button>
         </div>
       </header>
 
@@ -135,7 +135,7 @@
                   <button type="button" class="key" data-key="7">7</button>
                   <button type="button" class="key" data-key="8">8</button>
                   <button type="button" class="key" data-key="9">9</button>
-                  <button type="button" class="key ghost" data-key="del">⌫</button>
+                  <button type="button" class="key ghost" data-key="del">&#9003;</button>
                   <button type="button" class="key" data-key="0">0</button>
                   <button type="button" class="key ok" data-key="ok">OK</button>
                 </div>
@@ -169,7 +169,7 @@
               </div>
 
               <div class="keypad two">
-                <button type="button" id="dartUndoButton" class="key ghost">⌫</button>
+                <button type="button" id="dartUndoButton" class="key ghost">&#9003;</button>
                 <button type="button" id="dartSubmitButton" class="key ok">OK</button>
               </div>
             </section>
@@ -197,12 +197,21 @@
       <p id="pairingSummary" class="muted">Nettbrettet er ikke paret ennå.</p>
       <div id="settingsMeta" class="meta"></div>
 
-      <div class="stack">
-        <label for="kioskCodeInput">Kiosk-kode</label>
-        <form id="kioskSetupForm" class="stack">
-          <input id="kioskCodeInput" placeholder="Kiosk-kode, f.eks. BOARD-1">
-          <button type="submit">Par nettbrett</button>
-        </form>
+      <div id="pairingRequestPanel" class="stack">
+        <p class="muted">Start pairing på nettbrettet og godkjenn deretter forespørselen fra admin under Boards og kiosker.</p>
+        <button id="startPairingRequestButton" type="button">Start pairing</button>
+
+        <div id="pairingRequestCard" class="pairing-card hidden">
+          <p class="eyebrow">Pairingkode</p>
+          <div id="pairingRequestCode" class="pairing-code">PAIR-000000</div>
+          <img id="pairingQrImage" class="pairing-qr" alt="QR for pairing" hidden>
+          <label for="pairingAdminUrl">Adminlenke</label>
+          <input id="pairingAdminUrl" readonly>
+          <div class="dialog-actions">
+            <button id="copyPairingLinkButton" class="ghost" type="button">Kopier lenke</button>
+            <button id="checkPairingStatusButton" class="ghost" type="button">Sjekk status</button>
+          </div>
+        </div>
       </div>
 
       <div class="dialog-actions vertical">

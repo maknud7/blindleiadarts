@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="240" viewBox="0 0 720 240" role="img" aria-labelledby="title desc">
+  <title id="title">Demo sponsor logo</title>
+  <desc id="desc">Neutral demo logo for Circle K E18 Lillesand test label.</desc>
+  <rect width="720" height="240" rx="32" fill="#2b0d0f"/>
+  <rect x="24" y="24" width="672" height="192" rx="24" fill="#481519" stroke="#d96672" stroke-width="2"/>
+  <circle cx="112" cy="120" r="58" fill="#ffd1d8"/>
+  <text x="112" y="132" text-anchor="middle" font-family="Trebuchet MS, Arial, sans-serif" font-size="38" font-weight="700" fill="#481519">CK</text>
+  <text x="208" y="102" font-family="Trebuchet MS, Arial, sans-serif" font-size="22" fill="#ffd1d8" letter-spacing="3">DEMO SPONSOR</text>
+  <text x="208" y="144" font-family="Trebuchet MS, Arial, sans-serif" font-size="36" font-weight="700" fill="#fff2f4">Circle K E18 Lillesand</text>
+</svg>

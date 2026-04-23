@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `{{TABLE_PREFIX}}kiosk_pairing_requests` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `request_code` VARCHAR(24) NOT NULL,
+    `pairing_token_hash` VARCHAR(255) NOT NULL,
+    `pairing_token_fingerprint` CHAR(64) NOT NULL,
+    `device_name` VARCHAR(150) NOT NULL,
+    `status` ENUM('pending', 'approved', 'cancelled', 'expired') NOT NULL DEFAULT 'pending',
+    `approved_kiosk_id` BIGINT UNSIGNED DEFAULT NULL,
+    `approved_by_user_account_id` BIGINT UNSIGNED DEFAULT NULL,
+    `requested_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` DATETIME NOT NULL,
+    `approved_at` DATETIME DEFAULT NULL,
+    `consumed_at` DATETIME DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_kiosk_pairing_request_code` (`request_code`),
+    UNIQUE KEY `uniq_kiosk_pairing_request_fingerprint_status` (`pairing_token_fingerprint`, `status`),
+    KEY `idx_kiosk_pairing_requests_status` (`status`),
+    KEY `idx_kiosk_pairing_requests_approved_kiosk_id` (`approved_kiosk_id`),
+    KEY `idx_kiosk_pairing_requests_approved_by` (`approved_by_user_account_id`),
+    CONSTRAINT `{{TABLE_PREFIX}}fk_kiosk_pairing_requests_approved_kiosk_id` FOREIGN KEY (`approved_kiosk_id`) REFERENCES `{{TABLE_PREFIX}}kiosks` (`id`),
+    CONSTRAINT `{{TABLE_PREFIX}}fk_kiosk_pairing_requests_approved_by_user_account_id` FOREIGN KEY (`approved_by_user_account_id`) REFERENCES `{{TABLE_PREFIX}}user_accounts` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
