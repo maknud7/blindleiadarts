@@ -96,6 +96,7 @@ final class Application
                 'routes' => [
                     'GET /v1/health',
                     'GET /v1/realtime/config',
+                    'GET /v1/public/screen',
                     'POST /v1/auth/login',
                     'GET /v1/auth/me',
                     'GET /v1/me/dashboard',
@@ -157,6 +158,16 @@ final class Application
                 'transport' => $config->realtimeEnabled() ? 'websocket' : 'sse',
                 'websocket_url' => $config->realtimeWebsocketUrl(),
             ]);
+        }
+
+        if ($method === 'GET' && $path === 'v1/public/screen') {
+            $screen = $this->buildScreenPayload($database, $config, $this->queryParam('club_slug'));
+
+            if ($screen === null) {
+                return JsonResponse::error(404, 'screen_club_not_found', 'No club could be resolved for the screen.');
+            }
+
+            return JsonResponse::ok($screen);
         }
 
         if ($method === 'POST' && $path === 'v1/auth/login') {
@@ -896,13 +907,14 @@ final class Application
             $clubRepository = new ClubRepository($database);
             $tournamentRepository = new TournamentRepository($database);
             $clubId = (int) $matches[1];
-            $this->streamJsonEvents(function () use ($clubRepository, $tournamentRepository, $clubId): array {
+            $this->streamJsonEvents(function () use ($clubRepository, $tournamentRepository, $database, $config, $clubId): array {
                 $dashboard = $clubRepository->getDashboard($clubId);
 
                 return [
                     'club_id' => $clubId,
                     'dashboard' => $dashboard,
                     'match_calls' => $tournamentRepository->listMatchCallsByClubId($clubId),
+                    'screen' => $this->buildScreenPayload($database, $config, null, $clubId),
                     'server_time' => gmdate(DATE_ATOM),
                 ];
             });
@@ -994,6 +1006,7 @@ final class Application
                 'club_id' => $clubId,
                 'dashboard' => $dashboard,
                 'match_calls' => $tournamentRepository->listMatchCallsByClubId($clubId),
+                'screen' => $this->buildScreenPayload($database, $config, null, $clubId),
                 'server_time' => gmdate(DATE_ATOM),
             ]
         );
@@ -1077,6 +1090,68 @@ final class Application
 
         $trimmed = trim($value);
         return $trimmed !== '' ? $trimmed : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildScreenPayload(
+        Database $database,
+        Config $config,
+        ?string $clubSlug = null,
+        ?int $clubId = null
+    ): ?array {
+        $clubRepository = new ClubRepository($database);
+        $tournamentRepository = new TournamentRepository($database);
+        $kioskRepository = new KioskRepository($database);
+
+        $club = null;
+
+        if ($clubId !== null && $clubId > 0) {
+            $club = $clubRepository->findById($clubId);
+        }
+
+        if ($club === null) {
+            $resolvedSlug = $clubSlug ?? $config->screenDefaultClubSlug();
+
+            if ($resolvedSlug !== '') {
+                $club = $clubRepository->findBySlug($resolvedSlug);
+            }
+        }
+
+        if ($club === null && $config->appEnv() !== 'prod') {
+            $club = $clubRepository->findFirstClub();
+        }
+
+        if ($club === null) {
+            return null;
+        }
+
+        $resolvedClubId = (int) $club['id'];
+        $tournament = $tournamentRepository->findScreenTournamentByClubId($resolvedClubId);
+
+        if ($tournament === null) {
+            return [
+                'club' => $club,
+                'tournament' => null,
+                'live_boards' => [],
+                'next_matches' => [],
+                'fallback' => [
+                    'title' => 'Velkommen til ' . ($club['name'] ?? 'dartklubben'),
+                    'message' => 'Ingen aktiv turnering akkurat nå.',
+                ],
+            ];
+        }
+
+        $tournamentId = (int) $tournament['id'];
+
+        return [
+            'club' => $club,
+            'tournament' => $tournament,
+            'live_boards' => $kioskRepository->listScreenBoardsByTournament($resolvedClubId, $tournamentId),
+            'next_matches' => $tournamentRepository->listUpcomingMatchesByTournamentId($tournamentId, 10),
+            'fallback' => null,
+        ];
     }
 
     private function isDebug(): bool

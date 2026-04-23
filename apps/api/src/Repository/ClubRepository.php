@@ -73,6 +73,54 @@ final class ClubRepository
     /**
      * @return array<string, mixed>|null
      */
+    public function findBySlug(string $slug): ?array
+    {
+        $slug = trim($slug);
+
+        if ($slug === '') {
+            return null;
+        }
+
+        $sql = sprintf(
+            'SELECT id, name, slug, logo_url, created_at, updated_at
+             FROM `%1$sclubs`
+             WHERE slug = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('s', $slug);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: null;
+        $statement->close();
+
+        return $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findFirstClub(): ?array
+    {
+        $sql = sprintf(
+            'SELECT id, name, slug, logo_url, created_at, updated_at
+             FROM `%1$sclubs`
+             ORDER BY name ASC, id ASC
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $result = $this->connection->query($sql);
+        $row = $result !== false ? ($result->fetch_assoc() ?: null) : null;
+
+        return $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
     public function getDashboard(int $clubId): ?array
     {
         $club = $this->findById($clubId);

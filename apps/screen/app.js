@@ -1,10 +1,9 @@
 const API_ROOT = "../api/v1";
 
 const state = {
-  clubs: [],
-  selectedClubId: Number(localStorage.getItem("bd:screenClubId") || 0),
-  dashboard: null,
-  matchCalls: [],
+  screen: null,
+  clubId: 0,
+  clubSlug: new URLSearchParams(window.location.search).get("club")?.trim() || "",
   liveSource: null,
   pollHandle: null,
   reconnectHandle: null,
@@ -12,14 +11,19 @@ const state = {
 };
 
 const elements = {
-  clubSelect: document.getElementById("clubSelect"),
   brandLogo: document.getElementById("brandLogo"),
   brandFallback: document.getElementById("brandFallback"),
   brandTitle: document.getElementById("brandTitle"),
+  tournamentLabel: document.getElementById("tournamentLabel"),
+  headerMeta: document.getElementById("headerMeta"),
   refreshButton: document.getElementById("refreshButton"),
-  kioskGrid: document.getElementById("kioskGrid"),
-  tournamentList: document.getElementById("tournamentList"),
-  recentMatches: document.getElementById("recentMatches"),
+  boardsGrid: document.getElementById("boardsGrid"),
+  nextMatches: document.getElementById("nextMatches"),
+  fallbackPanel: document.getElementById("fallbackPanel"),
+  fallbackLogo: document.getElementById("fallbackLogo"),
+  fallbackLogoMark: document.getElementById("fallbackLogoMark"),
+  fallbackTitle: document.getElementById("fallbackTitle"),
+  fallbackMessage: document.getElementById("fallbackMessage"),
 };
 
 async function api(path) {
@@ -51,32 +55,62 @@ async function loadRealtimeConfig() {
   return state.realtimeConfig;
 }
 
-async function loadClubs() {
-  const data = await api("/clubs");
-  state.clubs = data.items;
-
-  if (!state.selectedClubId && state.clubs[0]) {
-    state.selectedClubId = Number(state.clubs[0].id);
+function resolveImageUrl(url) {
+  if (!url) {
+    return "";
   }
 
-  elements.clubSelect.innerHTML = state.clubs
-    .map((club) => `<option value="${club.id}" ${Number(club.id) === state.selectedClubId ? "selected" : ""}>${club.name}</option>`)
-    .join("");
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  try {
+    return new URL(url, `${window.location.origin}/`).toString();
+  } catch {
+    return url;
+  }
 }
 
-async function loadDashboard() {
-  if (!state.selectedClubId) {
+function applyImage(image, fallback, url, alt, fallbackText) {
+  if (!image || !fallback) {
     return;
   }
 
-  const [dashboardData, matchCallData] = await Promise.all([
-    api(`/clubs/${state.selectedClubId}/dashboard`),
-    api(`/clubs/${state.selectedClubId}/match-calls`),
-  ]);
+  fallback.textContent = fallbackText;
 
-  state.dashboard = dashboardData;
-  state.matchCalls = matchCallData.items;
-  render();
+  if (!url) {
+    image.removeAttribute("src");
+    image.classList.add("hidden");
+    fallback.classList.remove("hidden");
+    return;
+  }
+
+  image.onload = () => {
+    image.classList.remove("hidden");
+    fallback.classList.add("hidden");
+  };
+  image.onerror = () => {
+    image.classList.add("hidden");
+    fallback.classList.remove("hidden");
+  };
+  image.alt = alt;
+  image.src = resolveImageUrl(url);
+}
+
+function initials(name) {
+  return (name || "Klubb")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+async function loadScreen() {
+  const query = state.clubSlug ? `?club_slug=${encodeURIComponent(state.clubSlug)}` : "";
+  const payload = await api(`/public/screen${query}`);
+  applyLivePayload(payload);
 }
 
 function closeLiveUpdates() {
@@ -96,14 +130,8 @@ function closeLiveUpdates() {
   }
 }
 
-function applyLivePayload(payload) {
-  state.dashboard = payload.dashboard || null;
-  state.matchCalls = payload.match_calls || [];
-  render();
-}
-
 function scheduleReconnect() {
-  if (state.reconnectHandle || !state.selectedClubId) {
+  if (state.reconnectHandle || !state.clubId) {
     return;
   }
 
@@ -113,11 +141,24 @@ function scheduleReconnect() {
   }, 1000);
 }
 
+function applyLivePayload(payload) {
+  if (!payload) {
+    return;
+  }
+
+  state.screen = payload;
+  state.clubId = Number(payload.club?.id || 0);
+  if (!state.clubSlug && payload.club?.slug) {
+    state.clubSlug = payload.club.slug;
+  }
+  render();
+}
+
 async function startLiveUpdates() {
   closeLiveUpdates();
 
-  if (!state.selectedClubId) {
-    state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+  if (!state.clubId) {
+    state.pollHandle = window.setInterval(() => loadScreen().catch(() => undefined), 1500);
     return;
   }
 
@@ -130,7 +171,7 @@ async function startLiveUpdates() {
     socket.addEventListener("open", () => {
       socket.send(JSON.stringify({
         type: "subscribe",
-        channels: [`club:${state.selectedClubId}`],
+        channels: [`club:${state.clubId}`],
       }));
     });
 
@@ -147,7 +188,12 @@ async function startLiveUpdates() {
         return;
       }
 
-      applyLivePayload(message.payload);
+      if (message.payload?.screen) {
+        applyLivePayload(message.payload.screen);
+        return;
+      }
+
+      loadScreen().catch(() => undefined);
     });
 
     socket.addEventListener("close", () => {
@@ -155,7 +201,7 @@ async function startLiveUpdates() {
         state.liveSource = null;
       }
 
-      state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+      state.pollHandle = window.setInterval(() => loadScreen().catch(() => undefined), 1500);
       scheduleReconnect();
     });
 
@@ -167,110 +213,195 @@ async function startLiveUpdates() {
   }
 
   if (typeof window.EventSource === "function") {
-    const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
+    const source = new EventSource(`${API_ROOT}/clubs/${state.clubId}/live`);
     state.liveSource = source;
 
     source.addEventListener("snapshot", (event) => {
       try {
-        applyLivePayload(JSON.parse(event.data));
+        const payload = JSON.parse(event.data);
+
+        if (payload?.screen) {
+          applyLivePayload(payload.screen);
+          return;
+        }
       } catch {
         // ignore malformed SSE payloads
       }
+
+      loadScreen().catch(() => undefined);
     });
 
     source.onerror = () => {
       closeLiveUpdates();
-      state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+      state.pollHandle = window.setInterval(() => loadScreen().catch(() => undefined), 1500);
       scheduleReconnect();
     };
 
     return;
   }
 
-  state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+  state.pollHandle = window.setInterval(() => loadScreen().catch(() => undefined), 1500);
+}
+
+function formatStatus(status) {
+  if (status === "in_progress") {
+    return "Live";
+  }
+
+  if (status === "assigned") {
+    return "Klar";
+  }
+
+  return "Venter";
+}
+
+function visitText(visit) {
+  if (!visit) {
+    return "Ingen registrerte visits ennå";
+  }
+
+  const bust = Number(visit.is_bust || 0) === 1 ? " • bust" : "";
+  return `${visit.player_name}: ${visit.score}${bust}`;
+}
+
+function renderBoard(board) {
+  const kiosk = board.kiosk || {};
+  const match = board.match;
+  const sponsor = kiosk.sponsor_label || kiosk.name || `Board ${kiosk.board_number}`;
+  const statusClass = board.state === "in_progress" ? "status-live" : board.state === "assigned" ? "status-assigned" : "status-idle";
+
+  if (!match) {
+    return `
+      <article class="board-card">
+        <div class="board-top">
+          <div class="board-title">
+            <strong>${kiosk.name || `Board ${kiosk.board_number}`}</strong>
+            <span class="board-sponsor">${sponsor}</span>
+          </div>
+          <span class="status-chip ${statusClass}">Ledig</span>
+        </div>
+        <div class="board-empty">
+          Venter på neste kamp på denne skiva.
+        </div>
+      </article>
+    `;
+  }
+
+  const playerAActive = Number(match.current_player_id || 0) === Number(match.player_a.id);
+  const playerBActive = Number(match.current_player_id || 0) === Number(match.player_b.id);
+  const recentVisits = Array.isArray(match.recent_visits) ? match.recent_visits : [];
+
+  return `
+    <article class="board-card ${board.state === "in_progress" ? "is-live" : "is-assigned"}">
+      <div class="board-top">
+        <div class="board-title">
+          <strong>${kiosk.name || `Board ${kiosk.board_number}`}</strong>
+          <span class="board-sponsor">${sponsor}</span>
+        </div>
+        <span class="status-chip ${statusClass}">${formatStatus(board.state)}</span>
+      </div>
+
+      <div class="matchup">
+        <div class="player-panel ${playerAActive ? "is-active" : ""}">
+          <span class="player-label">Spiller A</span>
+          <div class="player-name">${match.player_a.display_name}</div>
+          <div class="player-scoreline">
+            <span class="remaining">${match.player_a.remaining}</span>
+            <span class="legs">${match.player_a.legs_won} legs</span>
+          </div>
+        </div>
+
+        <div class="versus">vs</div>
+
+        <div class="player-panel ${playerBActive ? "is-active" : ""}">
+          <span class="player-label">Spiller B</span>
+          <div class="player-name">${match.player_b.display_name}</div>
+          <div class="player-scoreline">
+            <span class="remaining">${match.player_b.remaining}</span>
+            <span class="legs">${match.player_b.legs_won} legs</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="visit-strip">
+        <div class="visit-card">
+          <strong>${visitText(recentVisits[0] || null)}</strong>
+          <small>Siste visit</small>
+        </div>
+        <div class="visit-card">
+          <strong>${visitText(recentVisits[1] || null)}</strong>
+          <small>Forrige visit</small>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderNextMatch(match) {
+  const boardText = match.board_number ? `Board ${match.board_number}` : "Ikke tildelt";
+  return `
+    <article class="list-item">
+      <strong>${match.player_a_name} vs ${match.player_b_name}</strong>
+      <p class="muted">${match.round_label || match.bracket_label || "Neste kamp"}</p>
+      <div class="header-meta">
+        <span class="pill">${boardText}</span>
+        <span class="pill">${match.status === "assigned" ? "Tildelt" : "Venter"}</span>
+      </div>
+    </article>
+  `;
 }
 
 function render() {
-  const dashboard = state.dashboard;
+  const screen = state.screen;
 
-  if (!dashboard) {
+  if (!screen) {
     return;
   }
 
-  applyClubBranding(dashboard.club);
+  const club = screen.club || {};
+  const tournament = screen.tournament || null;
+  const boards = Array.isArray(screen.live_boards) ? screen.live_boards : [];
+  const nextMatches = Array.isArray(screen.next_matches) ? screen.next_matches : [];
+  const fallback = screen.fallback || null;
 
-  elements.kioskGrid.innerHTML = dashboard.kiosks.length
-    ? dashboard.kiosks.map((kiosk) => `
-        <div class="tile">
-          <strong>${kiosk.name}</strong>
-          <p class="muted">Board ${kiosk.board_number}</p>
-          <p class="muted">${kiosk.sponsor_label || kiosk.code}</p>
-        </div>
-      `).join("")
-    : `<div class="tile"><p class="muted">Ingen kiosker ennå.</p></div>`;
+  const clubInitials = initials(club.name);
+  applyImage(elements.brandLogo, elements.brandFallback, club.logo_url, `${club.name || "Klubb"} logo`, clubInitials);
+  applyImage(elements.fallbackLogo, elements.fallbackLogoMark, club.logo_url, `${club.name || "Klubb"} logo`, clubInitials);
 
-  elements.tournamentList.innerHTML = dashboard.tournaments.length
-    ? dashboard.tournaments.map((tournament) => `
-        <div class="list-item">
-          <strong>${tournament.name}</strong>
-          <p class="muted">${tournament.registration_count} påmeldte · ${tournament.match_count} kamper</p>
-        </div>
-      `).join("")
-    : `<div class="list-item"><p class="muted">Ingen turneringer ennå.</p></div>`;
+  elements.brandTitle.textContent = club.name || "Dartklubb";
+  elements.tournamentLabel.textContent = tournament
+    ? tournament.name
+    : fallback?.title || "Ingen aktiv turnering";
 
-  const liveMatches = state.matchCalls.length ? state.matchCalls : dashboard.recent_matches;
+  elements.headerMeta.innerHTML = tournament
+    ? `
+        <span class="pill">${tournament.status}</span>
+        <span class="pill">${tournament.registration_count || 0} påmeldte</span>
+        <span class="pill">${tournament.match_count || 0} kamper</span>
+      `
+    : `<span class="pill">Venter</span>`;
 
-  elements.recentMatches.innerHTML = liveMatches.length
-    ? liveMatches.map((match) => `
-        <div class="list-item">
-          <strong>${match.player_a_name} vs ${match.player_b_name}</strong>
-          <p class="muted">${match.tournament_name} · ${match.status}${match.board_number ? ` · Board ${match.board_number}` : ""}</p>
-        </div>
-      `).join("")
-    : `<div class="list-item"><p class="muted">Ingen kamper ennå.</p></div>`;
-}
+  elements.boardsGrid.innerHTML = boards.length
+    ? boards.map(renderBoard).join("")
+    : `<article class="board-card"><div class="board-empty">Ingen boards med aktiv eller tildelt kamp akkurat nå.</div></article>`;
 
-function applyClubBranding(club) {
-  const initials = (club?.name || "Klubb")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
+  elements.nextMatches.innerHTML = nextMatches.length
+    ? nextMatches.map(renderNextMatch).join("")
+    : `<article class="list-item"><p class="muted">Ingen neste kamper akkurat nå.</p></article>`;
 
-  elements.brandTitle.textContent = club?.name
-    ? `Live oversikt for ${club.name}`
-    : "Live oversikt for klubb og boards";
-  elements.brandFallback.textContent = initials || "KL";
-
-  if (club?.logo_url) {
-    elements.brandLogo.src = club.logo_url;
-    elements.brandLogo.alt = `${club.name} logo`;
-    elements.brandLogo.classList.remove("hidden");
-    elements.brandFallback.classList.add("hidden");
-  } else {
-    elements.brandLogo.removeAttribute("src");
-    elements.brandLogo.classList.add("hidden");
-    elements.brandFallback.classList.remove("hidden");
-  }
+  const shouldShowFallback = !tournament || (boards.every((board) => board.state === "idle") && nextMatches.length === 0);
+  elements.fallbackPanel.classList.toggle("hidden", !shouldShowFallback);
+  elements.fallbackTitle.textContent = fallback?.title || `Velkommen til ${club.name || "dartklubben"}`;
+  elements.fallbackMessage.textContent = fallback?.message || "Ingen kamper er i gang akkurat nå.";
 }
 
 function bindEvents() {
-  elements.clubSelect.addEventListener("change", async (event) => {
-    state.selectedClubId = Number(event.target.value);
-    localStorage.setItem("bd:screenClubId", String(state.selectedClubId));
-    await loadDashboard();
-    await startLiveUpdates();
-  });
-
-  elements.refreshButton.addEventListener("click", () => loadDashboard());
+  elements.refreshButton.addEventListener("click", () => loadScreen());
 }
 
 async function bootstrap() {
   bindEvents();
-  await loadClubs();
-  await loadDashboard();
+  await loadScreen();
   await startLiveUpdates();
 }
 

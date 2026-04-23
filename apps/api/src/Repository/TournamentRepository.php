@@ -106,6 +106,51 @@ final class TournamentRepository
     /**
      * @return array<string, mixed>|null
      */
+    public function findScreenTournamentByClubId(int $clubId): ?array
+    {
+        $sql = sprintf(
+            'SELECT
+                t.id,
+                t.club_id,
+                t.season_id,
+                t.name,
+                t.slug,
+                t.provider_system,
+                t.status,
+                t.max_visits_per_leg,
+                t.start_at,
+                t.end_at,
+                COUNT(DISTINCT tp.id) AS registration_count,
+                COUNT(DISTINCT m.id) AS match_count,
+                COUNT(DISTINCT CASE WHEN m.status = "completed" THEN m.id END) AS completed_match_count
+             FROM `%1$stournaments` t
+             LEFT JOIN `%1$stournament_players` tp ON tp.tournament_id = t.id AND tp.status <> "withdrawn"
+             LEFT JOIN `%1$smatches` m ON m.tournament_id = t.id
+             WHERE t.club_id = ?
+               AND t.status IN ("in_progress", "ready", "draft")
+             GROUP BY t.id, t.club_id, t.season_id, t.name, t.slug, t.provider_system, t.status, t.max_visits_per_leg, t.start_at, t.end_at
+             ORDER BY
+                FIELD(t.status, "in_progress", "ready", "draft"),
+                CASE WHEN t.start_at IS NULL THEN 1 ELSE 0 END ASC,
+                t.start_at DESC,
+                t.id DESC
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: null;
+        $statement->close();
+
+        return $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
     public function findById(int $tournamentId): ?array
     {
         $sql = sprintf(
@@ -291,6 +336,51 @@ final class TournamentRepository
              WHERE m.tournament_id = ?
              ORDER BY FIELD(m.status, "in_progress", "assigned", "pending", "completed", "cancelled"), m.id ASC',
             $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $tournamentId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listUpcomingMatchesByTournamentId(int $tournamentId, int $limit = 10): array
+    {
+        $sql = sprintf(
+            'SELECT
+                m.id,
+                m.tournament_id,
+                m.kiosk_id,
+                m.round_label,
+                m.bracket_label,
+                m.status,
+                m.best_of_legs,
+                m.legs_to_win,
+                m.player_a_id,
+                pa.display_name AS player_a_name,
+                m.player_b_id,
+                pb.display_name AS player_b_name,
+                k.code AS kiosk_code,
+                k.name AS kiosk_name,
+                k.board_number
+             FROM `%1$smatches` m
+             INNER JOIN `%1$splayers` pa ON pa.id = m.player_a_id
+             INNER JOIN `%1$splayers` pb ON pb.id = m.player_b_id
+             LEFT JOIN `%1$skiosks` k ON k.id = m.kiosk_id
+             WHERE m.tournament_id = ?
+               AND m.status IN ("assigned", "pending")
+             ORDER BY FIELD(m.status, "assigned", "pending"), m.id ASC
+             LIMIT %2$d',
+            $this->tablePrefix,
+            $limit
         );
 
         $statement = $this->connection->prepare($sql);

@@ -77,6 +77,11 @@ final class Config
         return (string) (($this->config['db']['table_prefix'] ?? '') ?: '');
     }
 
+    public function screenDefaultClubSlug(): string
+    {
+        return (string) (($this->config['screen']['default_club_slug'] ?? '') ?: '');
+    }
+
     public function realtimeWebsocketUrl(): string
     {
         return (string) (($this->config['realtime']['websocket_url'] ?? '') ?: '');

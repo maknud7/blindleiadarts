@@ -31,6 +31,9 @@ $config = [
     'app_env' => env_required('APP_ENV'),
     'base_url' => getenv('BASE_URL') ?: '',
     'static_base_url' => getenv('STATIC_BASE_URL') ?: '',
+    'screen' => [
+        'default_club_slug' => getenv('SCREEN_DEFAULT_CLUB_SLUG') ?: '',
+    ],
     'realtime' => [
         'websocket_url' => getenv('REALTIME_WEBSOCKET_URL') ?: '',
         'publish_url' => getenv('REALTIME_PUBLISH_URL') ?: '',

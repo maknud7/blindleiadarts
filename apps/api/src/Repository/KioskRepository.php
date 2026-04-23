@@ -416,6 +416,77 @@ final class KioskRepository
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listScreenBoardsByTournament(int $clubId, int $tournamentId): array
+    {
+        $kiosks = $this->listKiosksForClub($clubId);
+        $boards = [];
+
+        foreach ($kiosks as $kiosk) {
+            $match = $this->findPriorityMatchForKiosk((int) $kiosk['id'], false, $tournamentId);
+
+            if ($match === null) {
+                $boards[] = [
+                    'kiosk' => $this->formatKiosk($kiosk),
+                    'state' => 'idle',
+                    'match' => null,
+                ];
+                continue;
+            }
+
+            if ((string) $match['status'] === 'assigned') {
+                $leg = $this->findOpenLeg((int) $match['id']) ?? $this->findLatestLeg((int) $match['id']) ?? [
+                    'id' => null,
+                    'leg_number' => 1,
+                    'starting_player_id' => (int) $match['player_a_id'],
+                    'status' => 'pending',
+                ];
+                $remaining = [
+                    (int) $match['player_a_id'] => 501,
+                    (int) $match['player_b_id'] => 501,
+                ];
+                $currentPlayerId = (int) $match['player_a_id'];
+            } else {
+                $leg = $this->ensureCurrentLeg((int) $match['id']);
+                $remaining = $this->calculateRemainingScores((int) $match['id'], (int) $leg['id']);
+                $currentPlayerId = (string) $match['status'] === 'completed' ? null : $this->determineCurrentPlayerId($match, $leg);
+            }
+
+            $legWins = $this->countLegWins((int) $match['id']);
+
+            $boards[] = [
+                'kiosk' => $this->formatKiosk($kiosk),
+                'state' => $match['status'],
+                'match' => [
+                    'id' => (int) $match['id'],
+                    'status' => $match['status'],
+                    'round_label' => $match['round_label'],
+                    'bracket_label' => $match['bracket_label'],
+                    'best_of_legs' => (int) $match['best_of_legs'],
+                    'legs_to_win' => (int) $match['legs_to_win'],
+                    'player_a' => [
+                        'id' => (int) $match['player_a_id'],
+                        'display_name' => $match['player_a_name'],
+                        'remaining' => $remaining[(int) $match['player_a_id']] ?? 501,
+                        'legs_won' => $legWins[(int) $match['player_a_id']] ?? 0,
+                    ],
+                    'player_b' => [
+                        'id' => (int) $match['player_b_id'],
+                        'display_name' => $match['player_b_name'],
+                        'remaining' => $remaining[(int) $match['player_b_id']] ?? 501,
+                        'legs_won' => $legWins[(int) $match['player_b_id']] ?? 0,
+                    ],
+                    'current_player_id' => $currentPlayerId,
+                    'recent_visits' => $this->listRecentVisits((int) $match['id'], 2),
+                ],
+            ];
+        }
+
+        return $boards;
+    }
+
+    /**
      * @param array<string, mixed> $kiosk
      * @return array<string, mixed>
      */
@@ -526,6 +597,44 @@ final class KioskRepository
             'requested_at' => $request['requested_at'] ?? null,
             'expires_at' => $request['expires_at'] ?? null,
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listKiosksForClub(int $clubId): array
+    {
+        $sql = sprintf(
+            'SELECT
+                k.id,
+                k.club_id,
+                c.name AS club_name,
+                c.logo_url AS club_logo_url,
+                k.code,
+                k.name,
+                k.board_number,
+                k.sponsor_label,
+                k.sponsor_logo_url,
+                k.scoring_mode,
+                k.pairing_token_hash,
+                k.paired_device_name,
+                k.paired_at
+             FROM `%1$skiosks` k
+             INNER JOIN `%1$sclubs` c ON c.id = k.club_id
+             WHERE k.club_id = ? AND k.is_active = 1
+             ORDER BY k.board_number ASC, k.name ASC',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return $rows;
     }
 
     /**
@@ -736,11 +845,13 @@ final class KioskRepository
     /**
      * @return array<string, mixed>|null
      */
-    private function findPriorityMatchForKiosk(int $kioskId, bool $includeCompleted = false): ?array
+    private function findPriorityMatchForKiosk(int $kioskId, bool $includeCompleted = false, ?int $tournamentId = null): ?array
     {
         $statuses = $includeCompleted
             ? '("in_progress", "assigned", "completed")'
             : '("in_progress", "assigned")';
+
+        $tournamentFilter = $tournamentId !== null ? ' AND m.tournament_id = ?' : '';
 
         $sql = sprintf(
             'SELECT
@@ -761,14 +872,20 @@ final class KioskRepository
              INNER JOIN `%1$splayers` pa ON pa.id = m.player_a_id
              INNER JOIN `%1$splayers` pb ON pb.id = m.player_b_id
              WHERE m.kiosk_id = ?
-               AND m.status IN ' . $statuses . '
+               AND m.status IN ' . $statuses . $tournamentFilter . '
              ORDER BY FIELD(m.status, "in_progress", "assigned", "completed"), m.id ASC
              LIMIT 1',
             $this->tablePrefix
         );
 
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('i', $kioskId);
+
+        if ($tournamentId !== null) {
+            $statement->bind_param('ii', $kioskId, $tournamentId);
+        } else {
+            $statement->bind_param('i', $kioskId);
+        }
+
         $statement->execute();
         $result = $statement->get_result();
         $row = $result->fetch_assoc() ?: null;

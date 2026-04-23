@@ -44,6 +44,8 @@ Add these repository variables:
 - `CHALLONGE_DEFAULT_SCOPES`
 - `TEST_CHALLONGE_REDIRECT_URI`
 - `PROD_CHALLONGE_REDIRECT_URI`
+- `TEST_SCREEN_CLUB_SLUG`
+- `PROD_SCREEN_CLUB_SLUG`
 - `TEST_REALTIME_WEBSOCKET_URL`
 - `PROD_REALTIME_WEBSOCKET_URL`
 - `TEST_REALTIME_PUBLISH_URL`
@@ -58,6 +60,8 @@ Examples:
 - `CHALLONGE_DEFAULT_SCOPES` -> optional comma-separated scopes such as `me,tournaments:read,participants:read,matches:read`
 - `TEST_CHALLONGE_REDIRECT_URI` -> for example `https://test.blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback`
 - `PROD_CHALLONGE_REDIRECT_URI` -> for example `https://blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback`
+- `TEST_SCREEN_CLUB_SLUG` -> for example `blindleia-dartklubb`
+- `PROD_SCREEN_CLUB_SLUG` -> for example `blindleia-dartklubb`
 - `TEST_REALTIME_WEBSOCKET_URL` -> for example `wss://realtime-test.blindleiadarts.ingenting.org/ws`
 - `PROD_REALTIME_WEBSOCKET_URL` -> for example `wss://realtime.blindleiadarts.ingenting.org/ws`
 - `TEST_REALTIME_PUBLISH_URL` -> for example `https://realtime-test.blindleiadarts.ingenting.org/publish`

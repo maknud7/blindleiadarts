@@ -4,6 +4,9 @@ return [
     'app_env' => 'test',
     'base_url' => 'https://example.test/blindleiadarts/test',
     'static_base_url' => 'https://example.test/blindleiadarts/test/static',
+    'screen' => [
+        'default_club_slug' => 'blindleia-dartklubb',
+    ],
     'realtime' => [
         'websocket_url' => 'wss://realtime.example.test/ws',
         'publish_url' => 'https://realtime.example.test/publish',
