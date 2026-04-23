@@ -272,12 +272,12 @@ function openSettings() {
   updatePairingSummary();
   renderSettingsMeta();
   renderPairingRequestCard();
-  elements.settingsOverlay.classList.remove("hidden");
+  elements.settingsOverlay?.classList.remove("hidden");
   showDialog(elements.settingsDialog);
 }
 
 function closeSettings() {
-  elements.settingsOverlay.classList.add("hidden");
+  elements.settingsOverlay?.classList.add("hidden");
   hideDialog(elements.settingsDialog);
 }
 
@@ -809,7 +809,7 @@ function startPolling() {
 function bindEvents() {
   elements.settingsButton.addEventListener("click", openSettings);
   elements.settingsCloseButton.addEventListener("click", closeSettings);
-  elements.settingsOverlay.addEventListener("click", closeSettings);
+  elements.settingsOverlay?.addEventListener("click", closeSettings);
   elements.settingsDialog.addEventListener("click", (event) => {
     if (event.target === elements.settingsDialog) {
       closeSettings();
@@ -956,5 +956,8 @@ async function bootstrap() {
     showToast(error.message);
   }
 }
+
+window.bdOpenSettings = openSettings;
+window.bdCloseSettings = closeSettings;
 
 bootstrap();

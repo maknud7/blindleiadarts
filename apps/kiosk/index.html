@@ -23,7 +23,7 @@
         </div>
 
         <div class="top-actions">
-          <button id="settingsButton" class="icon-button" type="button" aria-label="Åpne innstillinger">&#9881;</button>
+          <button id="settingsButton" class="icon-button" type="button" aria-label="Åpne innstillinger" onclick="window.bdOpenSettings && window.bdOpenSettings()">&#9881;</button>
         </div>
       </header>
 
@@ -193,7 +193,7 @@
           <p class="eyebrow">Innstillinger</p>
           <h3 id="settingsTitle">Kioskoppsett</h3>
         </div>
-        <button id="settingsCloseButton" class="ghost slim" type="button">Lukk</button>
+        <button id="settingsCloseButton" class="ghost slim" type="button" onclick="window.bdCloseSettings && window.bdCloseSettings()">Lukk</button>
       </div>
 
       <p id="pairingSummary" class="muted">Nettbrettet er ikke paret ennå.</p>
