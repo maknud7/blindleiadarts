@@ -184,12 +184,14 @@
     </div>
   </div>
 
-  <dialog id="settingsDialog" class="dialog">
+  <div id="settingsOverlay" class="dialog-overlay hidden"></div>
+
+  <section id="settingsDialog" class="dialog hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <div class="stack">
       <div class="dialog-head">
         <div>
           <p class="eyebrow">Innstillinger</p>
-          <h3>Kioskoppsett</h3>
+          <h3 id="settingsTitle">Kioskoppsett</h3>
         </div>
         <button id="settingsCloseButton" class="ghost slim" type="button">Lukk</button>
       </div>
@@ -219,7 +221,7 @@
         <button id="unpairButton" class="ghost hidden" type="button">Fjern paring</button>
       </div>
     </div>
-  </dialog>
+  </section>
 
   <dialog id="checkoutDialog" class="dialog">
     <form method="dialog" class="stack">
@@ -234,6 +236,6 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="./app.js" type="module"></script>
+  <script src="./app.js"></script>
 </body>
 </html>

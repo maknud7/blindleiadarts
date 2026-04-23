@@ -19,6 +19,7 @@ const elements = {
   brandTitle: document.getElementById("brandTitle"),
   previewBadge: document.getElementById("previewBadge"),
   settingsButton: document.getElementById("settingsButton"),
+  settingsOverlay: document.getElementById("settingsOverlay"),
   settingsDialog: document.getElementById("settingsDialog"),
   settingsCloseButton: document.getElementById("settingsCloseButton"),
   pairingSummary: document.getElementById("pairingSummary"),
@@ -87,6 +88,8 @@ function showDialog(dialog) {
     return;
   }
 
+  dialog.classList.remove("hidden");
+
   if (supportsModalDialog(dialog)) {
     dialog.showModal();
   } else {
@@ -108,6 +111,8 @@ function hideDialog(dialog) {
     dialog.classList.remove("is-open");
     document.body.classList.remove("dialog-lock");
   }
+
+  dialog.classList.add("hidden");
 }
 
 async function api(path, { method = "GET", body } = {}) {
@@ -267,10 +272,12 @@ function openSettings() {
   updatePairingSummary();
   renderSettingsMeta();
   renderPairingRequestCard();
+  elements.settingsOverlay.classList.remove("hidden");
   showDialog(elements.settingsDialog);
 }
 
 function closeSettings() {
+  elements.settingsOverlay.classList.add("hidden");
   hideDialog(elements.settingsDialog);
 }
 
@@ -802,6 +809,7 @@ function startPolling() {
 function bindEvents() {
   elements.settingsButton.addEventListener("click", openSettings);
   elements.settingsCloseButton.addEventListener("click", closeSettings);
+  elements.settingsOverlay.addEventListener("click", closeSettings);
   elements.settingsDialog.addEventListener("click", (event) => {
     if (event.target === elements.settingsDialog) {
       closeSettings();

@@ -575,6 +575,13 @@ button.ghost,
   padding: 1.2rem;
 }
 
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.56);
+  z-index: 110;
+}
+
 .dialog[open],
 .dialog.is-open {
   position: fixed;
@@ -587,14 +594,6 @@ button.ghost,
 
 .dialog::backdrop {
   background: rgba(0, 0, 0, 0.56);
-}
-
-.dialog.is-open::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.56);
-  z-index: -1;
 }
 
 .dialog-head,
