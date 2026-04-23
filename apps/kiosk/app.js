@@ -252,6 +252,48 @@ function buildPairingQrUrl(requestCode) {
   return `https://quickchart.io/qr?size=240&text=${encodeURIComponent(buildAdminPairingUrl(requestCode))}`;
 }
 
+function resolveAssetUrl(url) {
+  if (!url) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  if (url.startsWith("/static/")) {
+    return `../static/${url.slice("/static/".length)}`;
+  }
+
+  if (url.startsWith("static/")) {
+    return `../${url}`;
+  }
+
+  return url;
+}
+
+function applyImageSource(image, url, altText) {
+  if (!image) {
+    return;
+  }
+
+  const resolvedUrl = resolveAssetUrl(url);
+
+  if (!resolvedUrl) {
+    image.removeAttribute("src");
+    image.hidden = true;
+    return;
+  }
+
+  image.alt = altText;
+  image.onerror = () => {
+    image.hidden = true;
+    image.removeAttribute("src");
+  };
+  image.src = resolvedUrl;
+  image.hidden = false;
+}
+
 function updatePairingSummary(snapshot = state.snapshot) {
   if (!state.kioskCode) {
     elements.pairingSummary.textContent = state.pairingRequestCode
@@ -363,8 +405,7 @@ function applyClubBranding(club) {
   elements.brandFallback.textContent = initials || "KL";
 
   if (club?.logo_url) {
-    elements.brandLogo.src = club.logo_url;
-    elements.brandLogo.alt = `${club.name} logo`;
+    applyImageSource(elements.brandLogo, club.logo_url, `${club.name} logo`);
     elements.brandLogo.classList.remove("hidden");
     elements.brandFallback.classList.add("hidden");
   } else {
@@ -388,16 +429,14 @@ function renderIdle(snapshot) {
   renderSettingsMeta(snapshot);
 
   if (kiosk?.club?.logo_url) {
-    elements.idleClubLogo.src = kiosk.club.logo_url;
-    elements.idleClubLogo.hidden = false;
+    applyImageSource(elements.idleClubLogo, kiosk.club.logo_url, "Klubblogo");
   } else {
     elements.idleClubLogo.removeAttribute("src");
     elements.idleClubLogo.hidden = true;
   }
 
   if (kiosk?.sponsor_logo_url) {
-    elements.idleSponsorLogo.src = kiosk.sponsor_logo_url;
-    elements.idleSponsorLogo.hidden = false;
+    applyImageSource(elements.idleSponsorLogo, kiosk.sponsor_logo_url, "Sponsorlogo");
   } else {
     elements.idleSponsorLogo.removeAttribute("src");
     elements.idleSponsorLogo.hidden = true;
@@ -438,8 +477,7 @@ function renderAssigned(snapshot) {
   renderSettingsMeta(snapshot);
 
   if (kiosk.sponsor_logo_url) {
-    elements.assignedSponsorLogo.src = kiosk.sponsor_logo_url;
-    elements.assignedSponsorLogo.hidden = false;
+    applyImageSource(elements.assignedSponsorLogo, kiosk.sponsor_logo_url, "Sponsorlogo");
   } else {
     elements.assignedSponsorLogo.removeAttribute("src");
     elements.assignedSponsorLogo.hidden = true;
