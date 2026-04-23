@@ -102,6 +102,14 @@ final class KioskRepository
         $score = $this->resolveVisitScore($inputMode, $payload, $darts);
         $dartsUsed = min(3, max(1, (int) ($payload['darts_used'] ?? 3)));
 
+        if ($inputMode === 'sum' && !$this->isPossibleVisitScore($score)) {
+            throw new KioskAccessException(
+                'invalid_visit_score',
+                'Denne summen kan ikke oppnas med tre piler.',
+                422
+            );
+        }
+
         $remaining = $this->calculateRemainingScores((int) $match['id'], (int) $leg['id']);
         $currentPlayerId = $this->determineCurrentPlayerId($match, $leg);
         $remainingBefore = $remaining[$currentPlayerId] ?? 501;
@@ -1247,7 +1255,35 @@ final class KioskRepository
             return false;
         }
 
-        return !in_array($remainingBefore, [159, 162, 163, 165, 166, 168, 169], true);
+        return !in_array($remainingBefore, [159, 161, 162, 163, 165, 166, 168, 169], true);
+    }
+
+    private function isPossibleVisitScore(int $score): bool
+    {
+        static $possibleScores = null;
+
+        if (!is_array($possibleScores)) {
+            $singleDartScores = [0, 25, 50];
+
+            for ($value = 1; $value <= 20; $value++) {
+                $singleDartScores[] = $value;
+                $singleDartScores[] = $value * 2;
+                $singleDartScores[] = $value * 3;
+            }
+
+            $singleDartScores = array_values(array_unique($singleDartScores));
+            $possibleScores = [];
+
+            foreach ($singleDartScores as $first) {
+                foreach ($singleDartScores as $second) {
+                    foreach ($singleDartScores as $third) {
+                        $possibleScores[$first + $second + $third] = true;
+                    }
+                }
+            }
+        }
+
+        return isset($possibleScores[$score]);
     }
 
     /**

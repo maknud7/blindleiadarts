@@ -11,6 +11,7 @@ const state = {
   darts: [],
   multiplier: "S",
   toastHandle: null,
+  isMutating: false,
 };
 
 const elements = {
@@ -160,6 +161,45 @@ function showToast(message) {
   state.toastHandle = window.setTimeout(() => {
     elements.toast.classList.add("hidden");
   }, 2400);
+}
+
+function createPossibleVisitScoreSet() {
+  const singleDartScores = new Set([0, 25, 50]);
+
+  for (let value = 1; value <= 20; value += 1) {
+    singleDartScores.add(value);
+    singleDartScores.add(value * 2);
+    singleDartScores.add(value * 3);
+  }
+
+  const values = Array.from(singleDartScores);
+  const totals = new Set();
+
+  values.forEach((first) => {
+    values.forEach((second) => {
+      values.forEach((third) => {
+        totals.add(first + second + third);
+      });
+    });
+  });
+
+  return totals;
+}
+
+const POSSIBLE_VISIT_SCORES = createPossibleVisitScoreSet();
+
+function isPossibleVisitScore(score) {
+  return POSSIBLE_VISIT_SCORES.has(score);
+}
+
+async function withMutation(task) {
+  state.isMutating = true;
+
+  try {
+    return await task();
+  } finally {
+    state.isMutating = false;
+  }
 }
 
 function persistPairing(code, token) {
@@ -413,15 +453,22 @@ function renderSumPanel() {
   const score = Number(rawValue || 0);
   const remainingBefore = currentRemaining();
   const remainingAfter = remainingBefore - score;
+  const impossibleVisitScore = rawValue !== "" && !isPossibleVisitScore(score);
   const isCheckout = remainingAfter === 0 && isCheckoutNumber(remainingBefore);
   const isBust = score > 180 || remainingAfter < 0 || remainingAfter === 1 || (remainingAfter === 0 && !isCheckout);
 
   elements.sumDisplay.textContent = rawValue || "-";
-  elements.sumDisplay.classList.toggle("error", score > 180);
+  elements.sumDisplay.classList.toggle("error", score > 180 || impossibleVisitScore);
 
   if (!rawValue) {
     elements.sumAfter.textContent = "Gjenstår: -";
     elements.sumAfter.className = "after-pill";
+    return;
+  }
+
+  if (impossibleVisitScore) {
+    elements.sumAfter.textContent = "Ugyldig sum med 3 piler";
+    elements.sumAfter.className = "after-pill bad";
     return;
   }
 
@@ -604,15 +651,19 @@ async function unpairKiosk() {
 }
 
 async function startMatch() {
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/start-match`, { method: "POST" });
-  resetInputBuffers();
-  renderState();
+  await withMutation(async () => {
+    state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/start-match`, { method: "POST" });
+    resetInputBuffers();
+    renderState();
+  });
 }
 
 async function undoVisit() {
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/undo`, { method: "POST" });
-  resetInputBuffers();
-  renderState();
+  await withMutation(async () => {
+    state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/undo`, { method: "POST" });
+    resetInputBuffers();
+    renderState();
+  });
 }
 
 async function requestCheckoutDartsUsed() {
@@ -648,21 +699,28 @@ async function submitSumVisit(forcedScore = null) {
     return;
   }
 
+  if (!isPossibleVisitScore(score)) {
+    showToast("Den summen kan ikke oppnås med tre piler.");
+    return;
+  }
+
   const remainingBefore = currentRemaining();
   const isCheckout = remainingBefore - score === 0 && isCheckoutNumber(remainingBefore);
   const dartsUsed = isCheckout ? await requestCheckoutDartsUsed() : 3;
 
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
-    method: "POST",
-    body: {
-      score,
-      darts_used: dartsUsed,
-      input_mode: "sum",
-    },
-  });
+  await withMutation(async () => {
+    state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
+      method: "POST",
+      body: {
+        score,
+        darts_used: dartsUsed,
+        input_mode: "sum",
+      },
+    });
 
-  resetInputBuffers();
-  renderState();
+    resetInputBuffers();
+    renderState();
+  });
 }
 
 async function submitDartVisit() {
@@ -680,20 +738,22 @@ async function submitDartVisit() {
   const isCheckout = remainingBefore - score === 0 && isDoubleOutSequence(state.darts);
   const darts = isCheckout ? state.darts.slice() : padDartsToThree(state.darts);
 
-  state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
-    method: "POST",
-    body: {
-      input_mode: "per_dart",
-      darts_used: isCheckout ? state.darts.length : 3,
-      darts: darts.map((dart) => ({
-        multiplier: dart.multiplier,
-        value: dart.value,
-      })),
-    },
-  });
+  await withMutation(async () => {
+    state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, {
+      method: "POST",
+      body: {
+        input_mode: "per_dart",
+        darts_used: isCheckout ? state.darts.length : 3,
+        darts: darts.map((dart) => ({
+          multiplier: dart.multiplier,
+          value: dart.value,
+        })),
+      },
+    });
 
-  resetInputBuffers();
-  renderState();
+    resetInputBuffers();
+    renderState();
+  });
 }
 
 function setInputMode(mode) {
@@ -795,6 +855,10 @@ function renderNumberGrid() {
 function startPolling() {
   window.clearInterval(state.pollHandle);
   state.pollHandle = window.setInterval(() => {
+    if (state.isMutating) {
+      return;
+    }
+
     if (state.kioskCode) {
       loadState().catch(() => undefined);
       return;
