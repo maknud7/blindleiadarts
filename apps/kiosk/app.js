@@ -13,11 +13,13 @@ const state = {
   toastHandle: null,
   isMutating: false,
   interactionVersion: 0,
+  pendingAction: "",
 };
 
 const elements = {
   brandLogo: document.getElementById("brandLogo"),
   brandFallback: document.getElementById("brandFallback"),
+  brandEyebrow: document.getElementById("brandEyebrow"),
   brandTitle: document.getElementById("brandTitle"),
   previewBadge: document.getElementById("previewBadge"),
   settingsButton: document.getElementById("settingsButton"),
@@ -191,14 +193,16 @@ function isPossibleVisitScore(score) {
   return POSSIBLE_VISIT_SCORES.has(score);
 }
 
-async function withMutation(task) {
+async function withMutation(task, pendingAction = "") {
   state.isMutating = true;
   state.interactionVersion += 1;
+  state.pendingAction = pendingAction;
 
   try {
     return await task();
   } finally {
     state.isMutating = false;
+    state.pendingAction = "";
   }
 }
 
@@ -396,7 +400,31 @@ function currentRemaining() {
     : Number(match.player_b.remaining || 0);
 }
 
-function applyClubBranding(club) {
+function buildKioskHeading(kiosk, club) {
+  if (kiosk?.sponsor_label) {
+    return `${kiosk.sponsor_label}-skiva`;
+  }
+
+  if (kiosk?.name) {
+    return kiosk.name;
+  }
+
+  if (kiosk?.board_number) {
+    return `Board ${kiosk.board_number}`;
+  }
+
+  return club?.name ? `${club.name} kiosk` : "Board kiosk";
+}
+
+function buildKioskEyebrow(kiosk, club) {
+  if (club?.name) {
+    return club.name;
+  }
+
+  return kiosk?.board_number ? `Board ${kiosk.board_number}` : "Board Kiosk";
+}
+
+function applyClubBranding(club, kiosk = null) {
   const initials = (club?.name || "Klubb")
     .split(/\s+/)
     .filter(Boolean)
@@ -405,7 +433,8 @@ function applyClubBranding(club) {
     .join("")
     .toUpperCase();
 
-  elements.brandTitle.textContent = club?.name ? `${club.name} kiosk` : "Board kiosk";
+  elements.brandEyebrow.textContent = buildKioskEyebrow(kiosk, club);
+  elements.brandTitle.textContent = buildKioskHeading(kiosk, club);
   elements.brandFallback.textContent = initials || "KL";
 
   if (club?.logo_url) {
@@ -434,6 +463,8 @@ function renderIdle(snapshot) {
   elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
   updatePairingSummary(snapshot);
   renderSettingsMeta(snapshot);
+
+  applyClubBranding(kiosk?.club ?? null, kiosk ?? null);
 
   if (kiosk?.club?.logo_url) {
     applyImageSource(elements.idleClubLogo, kiosk.club.logo_url, "Klubblogo");
@@ -471,6 +502,7 @@ function renderAssigned(snapshot) {
   const kiosk = snapshot.kiosk;
   const match = snapshot.match;
 
+  applyClubBranding(kiosk.club, kiosk);
   elements.idleState.classList.add("hidden");
   elements.assignedState.classList.remove("hidden");
   elements.matchState.classList.add("hidden");
@@ -479,6 +511,8 @@ function renderAssigned(snapshot) {
   elements.assignedPlayerAName.textContent = match.player_a.display_name;
   elements.assignedPlayerBName.textContent = match.player_b.display_name;
   elements.assignedLegInfo.textContent = `Best of ${match.best_of_legs}`;
+  elements.assignedStartButton.textContent = snapshot.state === "in_progress" ? "Åpne scoring" : "Start kamp";
+  elements.assignedStartButton.disabled = state.isMutating && state.pendingAction === "start_match";
   elements.unpairButton.classList.remove("hidden");
   updatePairingSummary(snapshot);
   renderSettingsMeta(snapshot);
@@ -504,7 +538,19 @@ function renderSumPanel() {
   elements.sumDisplay.classList.toggle("error", score > 180 || impossibleVisitScore);
 
   if (!rawValue) {
+    if (state.isMutating && state.pendingAction === "submit_sum") {
+      elements.sumAfter.textContent = "Sender...";
+      elements.sumAfter.className = "after-pill";
+      return;
+    }
+
     elements.sumAfter.textContent = "Gjenstår: -";
+    elements.sumAfter.className = "after-pill";
+    return;
+  }
+
+  if (state.isMutating && state.pendingAction === "submit_sum") {
+    elements.sumAfter.textContent = "Sender...";
     elements.sumAfter.className = "after-pill";
     return;
   }
@@ -545,6 +591,12 @@ function renderDartPanel() {
   elements.dartSumChip.textContent = `Sum: ${score}`;
 
   if (!state.darts.length) {
+    if (state.isMutating && state.pendingAction === "submit_dart") {
+      elements.dartAfterChip.textContent = "Sender...";
+      elements.dartAfterChip.className = "chip";
+      return;
+    }
+
     elements.dartAfterChip.textContent = "Gjenstår: -";
     elements.dartAfterChip.className = "chip";
   } else if (checkout) {
@@ -555,6 +607,11 @@ function renderDartPanel() {
     elements.dartAfterChip.className = "chip bad";
   } else {
     elements.dartAfterChip.textContent = `Gjenstår: ${remainingAfter}`;
+    elements.dartAfterChip.className = "chip";
+  }
+
+  if (state.isMutating && state.pendingAction === "submit_dart") {
+    elements.dartAfterChip.textContent = "Sender...";
     elements.dartAfterChip.className = "chip";
   }
 
@@ -581,7 +638,7 @@ function renderMatch(snapshot) {
   const match = snapshot.match;
   const currentPlayerId = match.current_player_id;
 
-  applyClubBranding(kiosk.club);
+  applyClubBranding(kiosk.club, kiosk);
   updatePairingSummary(snapshot);
   renderSettingsMeta(snapshot);
 
@@ -590,6 +647,9 @@ function renderMatch(snapshot) {
   elements.matchState.classList.remove("hidden");
   elements.unpairButton.classList.remove("hidden");
   elements.undoButton.classList.toggle("hidden", snapshot.state === "assigned");
+  elements.undoButton.disabled = state.isMutating;
+  elements.modeSumButton.disabled = !isManualMode() || state.isMutating;
+  elements.modeDartButton.disabled = !isManualMode() || state.isMutating;
   elements.playerABox.classList.toggle("active", currentPlayerId === match.player_a.id);
   elements.playerBBox.classList.toggle("active", currentPlayerId === match.player_b.id);
   elements.playerAName.textContent = match.player_a.display_name;
@@ -702,7 +762,7 @@ async function startMatch() {
     state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/start-match`, { method: "POST" });
     resetInputBuffers();
     renderState();
-  });
+  }, "start_match");
 }
 
 async function undoVisit() {
@@ -710,7 +770,7 @@ async function undoVisit() {
     state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/undo`, { method: "POST" });
     resetInputBuffers();
     renderState();
-  });
+  }, "undo_visit");
 }
 
 async function requestCheckoutDartsUsed() {
@@ -767,7 +827,7 @@ async function submitSumVisit(forcedScore = null) {
 
     resetInputBuffers();
     renderState();
-  });
+  }, "submit_sum");
 }
 
 async function submitDartVisit() {
@@ -800,7 +860,7 @@ async function submitDartVisit() {
 
     resetInputBuffers();
     renderState();
-  });
+  }, "submit_dart");
 }
 
 function setInputMode(mode) {
