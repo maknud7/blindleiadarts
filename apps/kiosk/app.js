@@ -78,6 +78,38 @@ const elements = {
   toast: document.getElementById("toast"),
 };
 
+function supportsModalDialog(dialog) {
+  return dialog && typeof dialog.showModal === "function" && typeof dialog.close === "function";
+}
+
+function showDialog(dialog) {
+  if (!dialog) {
+    return;
+  }
+
+  if (supportsModalDialog(dialog)) {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "open");
+    dialog.classList.add("is-open");
+    document.body.classList.add("dialog-lock");
+  }
+}
+
+function hideDialog(dialog) {
+  if (!dialog) {
+    return;
+  }
+
+  if (supportsModalDialog(dialog)) {
+    dialog.close();
+  } else {
+    dialog.removeAttribute("open");
+    dialog.classList.remove("is-open");
+    document.body.classList.remove("dialog-lock");
+  }
+}
+
 async function api(path, { method = "GET", body } = {}) {
   const headers = {};
 
@@ -235,11 +267,11 @@ function openSettings() {
   updatePairingSummary();
   renderSettingsMeta();
   renderPairingRequestCard();
-  elements.settingsDialog.showModal();
+  showDialog(elements.settingsDialog);
 }
 
 function closeSettings() {
-  elements.settingsDialog.close();
+  hideDialog(elements.settingsDialog);
 }
 
 function resetInputBuffers() {
@@ -578,7 +610,7 @@ async function undoVisit() {
 
 async function requestCheckoutDartsUsed() {
   return new Promise((resolve) => {
-    elements.checkoutDialog.showModal();
+    showDialog(elements.checkoutDialog);
 
     const onClick = (event) => {
       const button = event.target.closest("[data-darts-used]");
@@ -587,7 +619,7 @@ async function requestCheckoutDartsUsed() {
         return;
       }
 
-      elements.checkoutDialog.close();
+      hideDialog(elements.checkoutDialog);
       elements.checkoutDialog.removeEventListener("click", onClick);
       resolve(Number(button.dataset.dartsUsed));
     };
@@ -773,6 +805,11 @@ function bindEvents() {
   elements.settingsDialog.addEventListener("click", (event) => {
     if (event.target === elements.settingsDialog) {
       closeSettings();
+    }
+  });
+  elements.checkoutDialog.addEventListener("click", (event) => {
+    if (event.target === elements.checkoutDialog) {
+      hideDialog(elements.checkoutDialog);
     }
   });
 

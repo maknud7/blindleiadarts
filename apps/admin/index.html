@@ -46,6 +46,7 @@
           <button type="button" class="nav-button" data-view-button="tournaments">Turneringer</button>
           <button type="button" class="nav-button" data-view-button="players">Spillere</button>
           <button type="button" class="nav-button" data-view-button="matches">Kamper</button>
+          <button type="button" class="nav-button" data-view-button="help">Hjelp og flyt</button>
         </div>
       </div>
 
@@ -86,6 +87,29 @@
             </div>
             <div id="recentMatches" class="stack"></div>
           </article>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Kom i gang</p>
+              <h3>Bruk admin i denne rekkefølgen</h3>
+            </div>
+          </div>
+          <div class="grid three">
+            <div class="inset stack">
+              <strong>1. Klargjør boards</strong>
+              <p class="muted">Gå til Boards og kiosker og opprett eller juster kioskene som skal brukes i lokalet.</p>
+            </div>
+            <div class="inset stack">
+              <strong>2. Pair nettbrett</strong>
+              <p class="muted">Åpne kiosk på nettbrettet, start pairing fra tannhjulet og godkjenn forespørselen i admin.</p>
+            </div>
+            <div class="inset stack">
+              <strong>3. Tildel kamp</strong>
+              <p class="muted">Bruk Board Calls for å sende riktig kamp til riktig board under turneringskvelden.</p>
+            </div>
+          </div>
         </section>
       </section>
 
@@ -254,6 +278,59 @@
                 <a class="ghost-link" href="../kiosk/">Åpne kiosk</a>
                 <a class="ghost-link" href="../screen/">Åpne venue screen</a>
               </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="helpView" class="view-section hidden" data-view-panel="help">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Brukerveiledning</p>
+                <h3>Slik bruker du løsningen i praksis</h3>
+              </div>
+            </div>
+            <div class="grid two">
+              <div class="inset stack">
+                <h4>Før turnering</h4>
+                <p class="muted">1. Velg klubb.</p>
+                <p class="muted">2. Opprett eller kontroller spillere.</p>
+                <p class="muted">3. Opprett eller kontroller turnering.</p>
+                <p class="muted">4. Opprett boards og legg inn sponsorlabel eller sponsorlogo.</p>
+              </div>
+              <div class="inset stack">
+                <h4>Pairing av nettbrett</h4>
+                <p class="muted">1. Åpne kioskflaten på nettbrettet.</p>
+                <p class="muted">2. Trykk tannhjulet og velg start pairing.</p>
+                <p class="muted">3. Gå til Boards og kiosker i admin.</p>
+                <p class="muted">4. Godkjenn pairing og velg hvilket board nettbrettet skal låses til.</p>
+              </div>
+              <div class="inset stack">
+                <h4>Under turnering</h4>
+                <p class="muted">1. Gå til Board Calls.</p>
+                <p class="muted">2. Tildel ventende kamper til ledige boards.</p>
+                <p class="muted">3. Spillerne går til riktig kiosk og starter kampen.</p>
+                <p class="muted">4. Screen kan brukes som publikumsvisning.</p>
+              </div>
+              <div class="inset stack">
+                <h4>Hvis noe går galt</h4>
+                <p class="muted">Bytt scoring-modus, nullstill pairing på kiosken, eller tildel kampen til et annet board.</p>
+                <p class="muted">Hvis et nettbrett byttes ut, pair det på nytt i stedet for å opprette nytt board.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Raske lenker</p>
+                <h3>Åpne de viktigste flatene</h3>
+              </div>
+            </div>
+            <div class="grid three">
+              <a class="ghost-link" href="../kiosk/">Åpne kiosk</a>
+              <a class="ghost-link" href="../player/">Åpne spillerportal</a>
+              <a class="ghost-link" href="../screen/">Åpne venue screen</a>
             </div>
           </section>
         </section>

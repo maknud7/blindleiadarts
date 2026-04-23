@@ -36,6 +36,10 @@ body {
     linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 100%);
 }
 
+body.dialog-lock {
+  overflow: hidden;
+}
+
 .device-preview {
   min-height: 100vh;
 }
@@ -571,8 +575,26 @@ button.ghost,
   padding: 1.2rem;
 }
 
+.dialog[open],
+.dialog.is-open {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  z-index: 120;
+}
+
 .dialog::backdrop {
   background: rgba(0, 0, 0, 0.56);
+}
+
+.dialog.is-open::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.56);
+  z-index: -1;
 }
 
 .dialog-head,
