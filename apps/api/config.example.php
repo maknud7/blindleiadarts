@@ -4,6 +4,11 @@ return [
     'app_env' => 'test',
     'base_url' => 'https://example.test/blindleiadarts/test',
     'static_base_url' => 'https://example.test/blindleiadarts/test/static',
+    'realtime' => [
+        'websocket_url' => 'wss://realtime.example.test/ws',
+        'publish_url' => 'https://realtime.example.test/publish',
+        'publish_secret' => 'replace-me',
+    ],
     'db' => [
         'host' => '127.0.0.1',
         'port' => 3306,

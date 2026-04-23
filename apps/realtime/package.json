@@ -1,0 +1,16 @@
+{
+  "name": "blindleia-darts-realtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Realtime websocket relay for Blindleia Darts",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

@@ -95,6 +95,7 @@ final class Application
                 'version' => 'v1',
                 'routes' => [
                     'GET /v1/health',
+                    'GET /v1/realtime/config',
                     'POST /v1/auth/login',
                     'GET /v1/auth/me',
                     'GET /v1/me/dashboard',
@@ -147,6 +148,14 @@ final class Application
                     'name' => $config->dbName(),
                     'table_prefix' => $config->dbTablePrefix(),
                 ],
+            ]);
+        }
+
+        if ($method === 'GET' && $path === 'v1/realtime/config') {
+            return JsonResponse::ok([
+                'enabled' => $config->realtimeEnabled(),
+                'transport' => $config->realtimeEnabled() ? 'websocket' : 'sse',
+                'websocket_url' => $config->realtimeWebsocketUrl(),
             ]);
         }
 
@@ -301,6 +310,7 @@ final class Application
             }
 
             $tournament = $tournamentRepository->createTournament((int) $matches[1], $payload);
+            $this->publishClubSnapshot($config, $database, (int) $matches[1]);
 
             return JsonResponse::ok([
                 'tournament' => $tournament,
@@ -354,9 +364,11 @@ final class Application
             }
 
             $payload = $request->jsonBody();
+            $kiosk = $clubRepository->createKiosk((int) $matches[1], $payload);
+            $this->publishClubSnapshot($config, $database, (int) $matches[1]);
 
             return JsonResponse::ok([
-                'kiosk' => $clubRepository->createKiosk((int) $matches[1], $payload),
+                'kiosk' => $kiosk,
             ], 201);
         }
 
@@ -378,6 +390,8 @@ final class Application
             if ($kiosk === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'Kiosk was not found for the selected club.');
             }
+
+            $this->publishClubSnapshot($config, $database, (int) $matches[1]);
 
             return JsonResponse::ok([
                 'kiosk' => $kiosk,
@@ -402,6 +416,8 @@ final class Application
             if ($kiosk === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'Kiosk was not found for the selected club.');
             }
+
+            $this->publishClubSnapshot($config, $database, (int) $matches[1]);
 
             return JsonResponse::ok([
                 'kiosk' => $kiosk,
@@ -433,6 +449,8 @@ final class Application
             if ($approval === null) {
                 return JsonResponse::error(404, 'pairing_request_not_found', 'Pairing request or kiosk was not found.');
             }
+
+            $this->publishClubSnapshot($config, $database, (int) $matches[1]);
 
             return JsonResponse::ok($approval);
         }
@@ -489,8 +507,15 @@ final class Application
                 return JsonResponse::error(422, 'invalid_match_players', 'Two distinct players are required to create a match.');
             }
 
+            $match = $tournamentRepository->createMatch((int) $matches[1], $payload);
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament !== null && isset($tournament['club_id'])) {
+                $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+            }
+
             return JsonResponse::ok([
-                'match' => $tournamentRepository->createMatch((int) $matches[1], $payload),
+                'match' => $match,
             ], 201);
         }
 
@@ -512,6 +537,14 @@ final class Application
 
             if ($match === null) {
                 return JsonResponse::error(404, 'match_not_found', 'Match was not found.');
+            }
+
+            if (isset($match['tournament_id'])) {
+                $tournament = $tournamentRepository->findById((int) $match['tournament_id']);
+
+                if ($tournament !== null && isset($tournament['club_id'])) {
+                    $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+                }
             }
 
             return JsonResponse::ok([
@@ -611,6 +644,8 @@ final class Application
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
 
+            $this->publishKioskAndClubSnapshots($config, $database, $state);
+
             return JsonResponse::ok($state);
         }
 
@@ -626,6 +661,8 @@ final class Application
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
 
+            $this->publishKioskAndClubSnapshots($config, $database, $state);
+
             return JsonResponse::ok($state);
         }
 
@@ -638,6 +675,8 @@ final class Application
             if ($state === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
+
+            $this->publishKioskAndClubSnapshots($config, $database, $state);
 
             return JsonResponse::ok($state);
         }
@@ -931,6 +970,101 @@ final class Application
         }
 
         exit;
+    }
+
+    private function publishClubSnapshot(Config $config, Database $database, int $clubId): void
+    {
+        if (!$config->realtimePublishEnabled()) {
+            return;
+        }
+
+        $clubRepository = new ClubRepository($database);
+        $tournamentRepository = new TournamentRepository($database);
+        $dashboard = $clubRepository->getDashboard($clubId);
+
+        if ($dashboard === null) {
+            return;
+        }
+
+        $this->publishRealtimeEvent(
+            $config,
+            ['club:' . $clubId],
+            'snapshot',
+            [
+                'club_id' => $clubId,
+                'dashboard' => $dashboard,
+                'match_calls' => $tournamentRepository->listMatchCallsByClubId($clubId),
+                'server_time' => gmdate(DATE_ATOM),
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function publishKioskAndClubSnapshots(Config $config, Database $database, array $state): void
+    {
+        if (!$config->realtimePublishEnabled()) {
+            return;
+        }
+
+        $kiosk = is_array($state['kiosk'] ?? null) ? $state['kiosk'] : [];
+        $kioskCode = isset($kiosk['code']) ? trim((string) $kiosk['code']) : '';
+        $club = is_array($kiosk['club'] ?? null) ? $kiosk['club'] : [];
+        $clubId = isset($club['id']) ? (int) $club['id'] : 0;
+
+        if ($kioskCode !== '') {
+            $this->publishRealtimeEvent($config, ['kiosk:' . $kioskCode], 'snapshot', $state);
+        }
+
+        if ($clubId > 0) {
+            $this->publishClubSnapshot($config, $database, $clubId);
+        }
+    }
+
+    /**
+     * @param array<int, string> $channels
+     * @param array<string, mixed> $payload
+     */
+    private function publishRealtimeEvent(Config $config, array $channels, string $event, array $payload): void
+    {
+        if (!$config->realtimePublishEnabled() || $channels === []) {
+            return;
+        }
+
+        $requestBody = json_encode([
+            'secret' => $config->realtimePublishSecret(),
+            'channels' => array_values(array_filter(array_map(
+                static fn (string $channel): string => trim($channel),
+                $channels
+            ))),
+            'event' => $event,
+            'payload' => $payload,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($requestBody === false) {
+            return;
+        }
+
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => implode("\r\n", [
+                    'Content-Type: application/json',
+                    'Content-Length: ' . strlen($requestBody),
+                    'Connection: close',
+                ]),
+                'content' => $requestBody,
+                'timeout' => 1.5,
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        try {
+            @file_get_contents($config->realtimePublishUrl(), false, $context);
+        } catch (Throwable) {
+            // Realtime must never break the primary match flow.
+        }
     }
 
     private function queryParam(string $name): ?string

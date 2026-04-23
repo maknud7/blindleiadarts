@@ -77,6 +77,31 @@ final class Config
         return (string) (($this->config['db']['table_prefix'] ?? '') ?: '');
     }
 
+    public function realtimeWebsocketUrl(): string
+    {
+        return (string) (($this->config['realtime']['websocket_url'] ?? '') ?: '');
+    }
+
+    public function realtimePublishUrl(): string
+    {
+        return (string) (($this->config['realtime']['publish_url'] ?? '') ?: '');
+    }
+
+    public function realtimePublishSecret(): string
+    {
+        return (string) (($this->config['realtime']['publish_secret'] ?? '') ?: '');
+    }
+
+    public function realtimeEnabled(): bool
+    {
+        return $this->realtimeWebsocketUrl() !== '';
+    }
+
+    public function realtimePublishEnabled(): bool
+    {
+        return $this->realtimePublishUrl() !== '' && $this->realtimePublishSecret() !== '';
+    }
+
     public function challonge(): ChallongeConfig
     {
         /** @var array<string, mixed> $challonge */

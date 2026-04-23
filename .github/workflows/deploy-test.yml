@@ -36,6 +36,9 @@ jobs:
           APP_ENV: test
           BASE_URL: ${{ vars.TEST_BASE_URL }}
           STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}

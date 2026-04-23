@@ -7,6 +7,8 @@ const state = {
   matchCalls: [],
   liveSource: null,
   pollHandle: null,
+  reconnectHandle: null,
+  realtimeConfig: null,
 };
 
 const elements = {
@@ -29,6 +31,24 @@ async function api(path) {
   }
 
   return payload.data;
+}
+
+async function loadRealtimeConfig() {
+  if (state.realtimeConfig !== null) {
+    return state.realtimeConfig;
+  }
+
+  try {
+    state.realtimeConfig = await api("/realtime/config");
+  } catch {
+    state.realtimeConfig = {
+      enabled: false,
+      transport: "sse",
+      websocket_url: "",
+    };
+  }
+
+  return state.realtimeConfig;
 }
 
 async function loadClubs() {
@@ -65,34 +85,109 @@ function closeLiveUpdates() {
     state.liveSource = null;
   }
 
+  if (state.reconnectHandle) {
+    window.clearTimeout(state.reconnectHandle);
+    state.reconnectHandle = null;
+  }
+
   if (state.pollHandle) {
     window.clearInterval(state.pollHandle);
     state.pollHandle = null;
   }
 }
 
-function startLiveUpdates() {
-  closeLiveUpdates();
+function applyLivePayload(payload) {
+  state.dashboard = payload.dashboard || null;
+  state.matchCalls = payload.match_calls || [];
+  render();
+}
 
-  if (!state.selectedClubId || typeof window.EventSource !== "function") {
-    state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 5000);
+function scheduleReconnect() {
+  if (state.reconnectHandle || !state.selectedClubId) {
     return;
   }
 
-  const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
-  state.liveSource = source;
+  state.reconnectHandle = window.setTimeout(() => {
+    state.reconnectHandle = null;
+    startLiveUpdates().catch(() => undefined);
+  }, 1000);
+}
 
-  source.addEventListener("snapshot", (event) => {
-    const payload = JSON.parse(event.data);
-    state.dashboard = payload.dashboard || null;
-    state.matchCalls = payload.match_calls || [];
-    render();
-  });
+async function startLiveUpdates() {
+  closeLiveUpdates();
 
-  source.onerror = () => {
-    closeLiveUpdates();
-    state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 5000);
-  };
+  if (!state.selectedClubId) {
+    state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+    return;
+  }
+
+  const realtime = await loadRealtimeConfig();
+
+  if (realtime?.enabled && realtime.websocket_url) {
+    const socket = new WebSocket(realtime.websocket_url);
+    state.liveSource = socket;
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({
+        type: "subscribe",
+        channels: [`club:${state.selectedClubId}`],
+      }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      let message;
+
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (message?.type !== "event" || message?.event !== "snapshot") {
+        return;
+      }
+
+      applyLivePayload(message.payload);
+    });
+
+    socket.addEventListener("close", () => {
+      if (state.liveSource === socket) {
+        state.liveSource = null;
+      }
+
+      state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+      scheduleReconnect();
+    });
+
+    socket.addEventListener("error", () => {
+      socket.close();
+    });
+
+    return;
+  }
+
+  if (typeof window.EventSource === "function") {
+    const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
+    state.liveSource = source;
+
+    source.addEventListener("snapshot", (event) => {
+      try {
+        applyLivePayload(JSON.parse(event.data));
+      } catch {
+        // ignore malformed SSE payloads
+      }
+    });
+
+    source.onerror = () => {
+      closeLiveUpdates();
+      state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
+      scheduleReconnect();
+    };
+
+    return;
+  }
+
+  state.pollHandle = window.setInterval(() => loadDashboard().catch(() => undefined), 1500);
 }
 
 function render() {
@@ -166,7 +261,7 @@ function bindEvents() {
     state.selectedClubId = Number(event.target.value);
     localStorage.setItem("bd:screenClubId", String(state.selectedClubId));
     await loadDashboard();
-    startLiveUpdates();
+    await startLiveUpdates();
   });
 
   elements.refreshButton.addEventListener("click", () => loadDashboard());
@@ -176,7 +271,7 @@ async function bootstrap() {
   bindEvents();
   await loadClubs();
   await loadDashboard();
-  startLiveUpdates();
+  await startLiveUpdates();
 }
 
 bootstrap();

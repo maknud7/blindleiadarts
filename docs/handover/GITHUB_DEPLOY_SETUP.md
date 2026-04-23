@@ -31,6 +31,7 @@ Add these repository secrets under `Settings -> Secrets and variables -> Actions
 - `DB_PASSWORD` = database password
 - `CHALLONGE_CLIENT_ID` = Challonge OAuth client id
 - `CHALLONGE_CLIENT_SECRET` = Challonge OAuth client secret
+- `REALTIME_PUBLISH_SECRET` = shared secret between PHP API and realtime relay
 
 ## GitHub Variables To Add
 
@@ -43,6 +44,10 @@ Add these repository variables:
 - `CHALLONGE_DEFAULT_SCOPES`
 - `TEST_CHALLONGE_REDIRECT_URI`
 - `PROD_CHALLONGE_REDIRECT_URI`
+- `TEST_REALTIME_WEBSOCKET_URL`
+- `PROD_REALTIME_WEBSOCKET_URL`
+- `TEST_REALTIME_PUBLISH_URL`
+- `PROD_REALTIME_PUBLISH_URL`
 
 Examples:
 
@@ -53,6 +58,10 @@ Examples:
 - `CHALLONGE_DEFAULT_SCOPES` -> optional comma-separated scopes such as `me,tournaments:read,participants:read,matches:read`
 - `TEST_CHALLONGE_REDIRECT_URI` -> for example `https://test.blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback`
 - `PROD_CHALLONGE_REDIRECT_URI` -> for example `https://blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback`
+- `TEST_REALTIME_WEBSOCKET_URL` -> for example `wss://realtime-test.blindleiadarts.ingenting.org/ws`
+- `PROD_REALTIME_WEBSOCKET_URL` -> for example `wss://realtime.blindleiadarts.ingenting.org/ws`
+- `TEST_REALTIME_PUBLISH_URL` -> for example `https://realtime-test.blindleiadarts.ingenting.org/publish`
+- `PROD_REALTIME_PUBLISH_URL` -> for example `https://realtime.blindleiadarts.ingenting.org/publish`
 
 ## One-Time Remote Folder Setup
 
@@ -99,3 +108,4 @@ If you want, I can create them later as soon as the SFTP password starts being a
 - test uses prefix `bd_test_`
 - production uses prefix `bd_prod_`
 - production deployment is intentionally manual for safety
+- websocket/realtime should run as a separate long-running service, not inside shared PHP hosting alone

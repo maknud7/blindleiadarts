@@ -7,6 +7,8 @@ const state = {
   snapshot: null,
   pollHandle: null,
   liveSource: null,
+  reconnectHandle: null,
+  realtimeConfig: null,
   inputMode: localStorage.getItem("bd:kioskInputMode") || "sum",
   sumValue: "",
   darts: [],
@@ -14,6 +16,7 @@ const state = {
   toastHandle: null,
   isMutating: false,
   interactionVersion: 0,
+  suspendLiveUntil: 0,
   pendingAction: "",
 };
 
@@ -144,6 +147,24 @@ async function api(path, { method = "GET", body } = {}) {
   return payload.data;
 }
 
+async function loadRealtimeConfig() {
+  if (state.realtimeConfig !== null) {
+    return state.realtimeConfig;
+  }
+
+  try {
+    state.realtimeConfig = await api("/realtime/config");
+  } catch {
+    state.realtimeConfig = {
+      enabled: false,
+      transport: "sse",
+      websocket_url: "",
+    };
+  }
+
+  return state.realtimeConfig;
+}
+
 function enablePreviewModeIfNeeded() {
   const params = new URLSearchParams(window.location.search);
   const explicitPreview = params.get("preview");
@@ -197,6 +218,7 @@ function isPossibleVisitScore(score) {
 async function withMutation(task, pendingAction = "") {
   state.isMutating = true;
   state.interactionVersion += 1;
+  state.suspendLiveUntil = Date.now() + 1500;
   state.pendingAction = pendingAction;
 
   try {
@@ -716,31 +738,102 @@ function closeLiveUpdates() {
     state.liveSource = null;
   }
 
+  window.clearTimeout(state.reconnectHandle);
+  state.reconnectHandle = null;
   window.clearInterval(state.pollHandle);
   state.pollHandle = null;
 }
 
-function startLiveUpdates() {
+function applyIncomingSnapshot(payload) {
+  if (state.isMutating || Date.now() < state.suspendLiveUntil) {
+    return;
+  }
+
+  state.snapshot = payload;
+  renderState();
+}
+
+function scheduleReconnect() {
+  if (state.reconnectHandle || !state.kioskCode) {
+    return;
+  }
+
+  state.reconnectHandle = window.setTimeout(() => {
+    state.reconnectHandle = null;
+    startLiveUpdates().catch(() => undefined);
+  }, 1000);
+}
+
+async function startLiveUpdates() {
   closeLiveUpdates();
 
-  if (state.kioskCode && typeof window.EventSource === "function") {
+  if (!state.kioskCode) {
+    startPolling();
+    return;
+  }
+
+  const realtime = await loadRealtimeConfig();
+
+  if (realtime?.enabled && realtime.websocket_url) {
+    const socket = new WebSocket(realtime.websocket_url);
+    state.liveSource = socket;
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({
+        type: "subscribe",
+        channels: [`kiosk:${state.kioskCode}`],
+      }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      let message;
+
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (message?.type !== "event" || message?.event !== "snapshot") {
+        return;
+      }
+
+      applyIncomingSnapshot(message.payload);
+    });
+
+    socket.addEventListener("close", () => {
+      if (state.liveSource === socket) {
+        state.liveSource = null;
+      }
+
+      startPolling();
+      scheduleReconnect();
+    });
+
+    socket.addEventListener("error", () => {
+      socket.close();
+    });
+
+    return;
+  }
+
+  if (typeof window.EventSource === "function") {
     const streamUrl = `${API_ROOT}/kiosks/${encodeURIComponent(state.kioskCode)}/live?pairing_token=${encodeURIComponent(state.pairingToken || "")}`;
     const source = new EventSource(streamUrl);
     state.liveSource = source;
 
     source.addEventListener("snapshot", (event) => {
-      if (state.isMutating) {
-        return;
+      try {
+        applyIncomingSnapshot(JSON.parse(event.data));
+      } catch {
+        // ignore malformed SSE payloads
       }
-
-      const payload = JSON.parse(event.data);
-      state.snapshot = payload;
-      renderState();
     });
 
     source.onerror = () => {
       closeLiveUpdates();
       startPolling();
+      scheduleReconnect();
     };
 
     return;
@@ -776,7 +869,7 @@ async function loadPairingRequestStatus() {
     persistPairing(data.kiosk.code, state.pairingToken);
     state.snapshot = data.snapshot ?? null;
     renderState();
-    startLiveUpdates();
+    startLiveUpdates().catch(() => undefined);
     closeSettings();
     showToast("Nettbrettet er paret og klart.");
     return;
@@ -1015,7 +1108,7 @@ function startPolling() {
     if (state.pairingRequestCode) {
       loadPairingRequestStatus().catch(() => undefined);
     }
-  }, 5000);
+  }, 1500);
 }
 
 function bindEvents() {
@@ -1148,7 +1241,7 @@ async function bootstrap() {
   try {
     if (state.kioskCode) {
       await loadState();
-      startLiveUpdates();
+      await startLiveUpdates();
     } else {
       renderDisconnected();
       await loadPairingRequestStatus();

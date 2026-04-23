@@ -12,6 +12,8 @@ const state = {
   activeView: localStorage.getItem("bd:adminView") || "overview",
   highlightedPairingCode: "",
   liveSource: null,
+  reconnectHandle: null,
+  realtimeConfig: null,
 };
 
 const elements = {
@@ -72,6 +74,24 @@ async function api(path, { method = "GET", body, auth = false } = {}) {
   }
 
   return payload.data;
+}
+
+async function loadRealtimeConfig() {
+  if (state.realtimeConfig !== null) {
+    return state.realtimeConfig;
+  }
+
+  try {
+    state.realtimeConfig = await api("/realtime/config");
+  } catch {
+    state.realtimeConfig = {
+      enabled: false,
+      transport: "sse",
+      websocket_url: "",
+    };
+  }
+
+  return state.realtimeConfig;
 }
 
 function setStatus(message, tone = "info") {
@@ -142,7 +162,7 @@ async function loadClubContext() {
   await loadMatchCalls();
   await loadPairingRequests();
   renderClub();
-  startLiveUpdates();
+  await startLiveUpdates();
 }
 
 function closeLiveUpdates() {
@@ -150,28 +170,98 @@ function closeLiveUpdates() {
     state.liveSource.close();
     state.liveSource = null;
   }
+
+  if (state.reconnectHandle) {
+    window.clearTimeout(state.reconnectHandle);
+    state.reconnectHandle = null;
+  }
 }
 
-function startLiveUpdates() {
-  closeLiveUpdates();
+function applyLivePayload(payload) {
+  state.clubDashboard = payload.dashboard || null;
+  state.matchCalls = payload.match_calls || [];
+  renderClub();
+}
 
-  if (!state.selectedClubId || typeof window.EventSource !== "function") {
+function scheduleReconnect() {
+  if (state.reconnectHandle || !state.selectedClubId) {
     return;
   }
 
-  const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
-  state.liveSource = source;
+  state.reconnectHandle = window.setTimeout(() => {
+    state.reconnectHandle = null;
+    startLiveUpdates().catch(() => undefined);
+  }, 1000);
+}
 
-  source.addEventListener("snapshot", (event) => {
-    const payload = JSON.parse(event.data);
-    state.clubDashboard = payload.dashboard || null;
-    state.matchCalls = payload.match_calls || [];
-    renderClub();
-  });
+async function startLiveUpdates() {
+  closeLiveUpdates();
 
-  source.onerror = () => {
-    closeLiveUpdates();
-  };
+  if (!state.selectedClubId) {
+    return;
+  }
+
+  const realtime = await loadRealtimeConfig();
+
+  if (realtime?.enabled && realtime.websocket_url) {
+    const socket = new WebSocket(realtime.websocket_url);
+    state.liveSource = socket;
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({
+        type: "subscribe",
+        channels: [`club:${state.selectedClubId}`],
+      }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      let message;
+
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (message?.type !== "event" || message?.event !== "snapshot") {
+        return;
+      }
+
+      applyLivePayload(message.payload);
+    });
+
+    socket.addEventListener("close", () => {
+      if (state.liveSource === socket) {
+        state.liveSource = null;
+      }
+
+      scheduleReconnect();
+    });
+
+    socket.addEventListener("error", () => {
+      socket.close();
+    });
+
+    return;
+  }
+
+  if (typeof window.EventSource === "function") {
+    const source = new EventSource(`${API_ROOT}/clubs/${state.selectedClubId}/live`);
+    state.liveSource = source;
+
+    source.addEventListener("snapshot", (event) => {
+      try {
+        applyLivePayload(JSON.parse(event.data));
+      } catch {
+        // ignore malformed SSE payloads
+      }
+    });
+
+    source.onerror = () => {
+      closeLiveUpdates();
+      scheduleReconnect();
+    };
+  }
 }
 
 async function loadCurrentUser() {
