@@ -70,16 +70,6 @@
 
         <section id="matchState" class="stack hidden">
           <section class="scorecard">
-            <div class="score-header">
-              <div class="stack compact">
-                <div id="legInfo" class="pill">Leg 1 · Best of 3</div>
-              </div>
-              <div class="match-actions">
-                <button id="startMatchButton" class="hidden" type="button">Start kamp</button>
-                <button id="undoButton" class="ghost slim" type="button">Angre siste</button>
-              </div>
-            </div>
-
             <div class="score-grid">
               <article id="playerABox" class="player-box">
                 <p class="player-label">Spiller A</p>
@@ -93,6 +83,7 @@
                   <button id="modeSumButton" type="button" class="mode active">Sum</button>
                   <button id="modeDartButton" type="button" class="mode">Per pil</button>
                 </div>
+                <button id="undoButton" class="ghost slim" type="button">Angre siste</button>
               </div>
 
               <article id="playerBBox" class="player-box">
@@ -108,38 +99,23 @@
             <section id="sumPanel" class="stack">
               <div class="sum-display-row">
                 <div id="sumDisplay" class="sum-display">-</div>
-                <div class="stack compact">
-                  <div id="sumAfter" class="after-pill">Gjenstår: -</div>
-                  <p class="muted small">Velg vanlig totalsum eller åpne tastatur ved behov.</p>
-                </div>
+                <div id="sumAfter" class="after-pill">Gjenstår: -</div>
               </div>
 
-              <div class="quick-grid reduced">
-                <button type="button" class="quick" data-score="26">26</button>
-                <button type="button" class="quick" data-score="45">45</button>
-                <button type="button" class="quick" data-score="60">60</button>
-                <button type="button" class="quick" data-score="100">100</button>
-                <button type="button" class="quick" data-score="140">140</button>
-                <button type="button" class="quick" data-score="180">180</button>
+              <div class="keypad">
+                <button type="button" class="key" data-key="1">1</button>
+                <button type="button" class="key" data-key="2">2</button>
+                <button type="button" class="key" data-key="3">3</button>
+                <button type="button" class="key" data-key="4">4</button>
+                <button type="button" class="key" data-key="5">5</button>
+                <button type="button" class="key" data-key="6">6</button>
+                <button type="button" class="key" data-key="7">7</button>
+                <button type="button" class="key" data-key="8">8</button>
+                <button type="button" class="key" data-key="9">9</button>
+                <button type="button" class="key ghost" data-key="del">&#9003;</button>
+                <button type="button" class="key" data-key="0">0</button>
+                <button type="button" class="key ok" data-key="ok">OK</button>
               </div>
-
-              <details class="details-card">
-                <summary>Tast inn annen score</summary>
-                <div class="keypad">
-                  <button type="button" class="key" data-key="1">1</button>
-                  <button type="button" class="key" data-key="2">2</button>
-                  <button type="button" class="key" data-key="3">3</button>
-                  <button type="button" class="key" data-key="4">4</button>
-                  <button type="button" class="key" data-key="5">5</button>
-                  <button type="button" class="key" data-key="6">6</button>
-                  <button type="button" class="key" data-key="7">7</button>
-                  <button type="button" class="key" data-key="8">8</button>
-                  <button type="button" class="key" data-key="9">9</button>
-                  <button type="button" class="key ghost" data-key="del">&#9003;</button>
-                  <button type="button" class="key" data-key="0">0</button>
-                  <button type="button" class="key ok" data-key="ok">OK</button>
-                </div>
-              </details>
             </section>
 
             <section id="dartPanel" class="stack hidden">

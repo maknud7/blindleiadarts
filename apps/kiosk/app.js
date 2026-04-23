@@ -49,7 +49,6 @@ const elements = {
   matchState: document.getElementById("matchState"),
   refreshButton: document.getElementById("refreshButton"),
   unpairButton: document.getElementById("unpairButton"),
-  startMatchButton: document.getElementById("startMatchButton"),
   undoButton: document.getElementById("undoButton"),
   playerABox: document.getElementById("playerABox"),
   playerBBox: document.getElementById("playerBBox"),
@@ -59,7 +58,6 @@ const elements = {
   playerBRemaining: document.getElementById("playerBRemaining"),
   playerALegs: document.getElementById("playerALegs"),
   playerBLegs: document.getElementById("playerBLegs"),
-  legInfo: document.getElementById("legInfo"),
   modeSumButton: document.getElementById("modeSumButton"),
   modeDartButton: document.getElementById("modeDartButton"),
   manualPanel: document.getElementById("manualPanel"),
@@ -546,7 +544,6 @@ function renderMatch(snapshot) {
   elements.assignedState.classList.add("hidden");
   elements.matchState.classList.remove("hidden");
   elements.unpairButton.classList.remove("hidden");
-  elements.startMatchButton.classList.toggle("hidden", snapshot.state !== "assigned");
   elements.undoButton.classList.toggle("hidden", snapshot.state === "assigned");
   elements.playerABox.classList.toggle("active", currentPlayerId === match.player_a.id);
   elements.playerBBox.classList.toggle("active", currentPlayerId === match.player_b.id);
@@ -556,8 +553,6 @@ function renderMatch(snapshot) {
   elements.playerBRemaining.textContent = match.player_b.remaining;
   elements.playerALegs.textContent = `${match.player_a.legs_won} legs`;
   elements.playerBLegs.textContent = `${match.player_b.legs_won} legs`;
-  elements.legInfo.textContent = `Leg ${match.current_leg.leg_number} · Best of ${match.best_of_legs}`;
-
   renderInputMode();
   renderSumPanel();
   renderDartPanel();
@@ -925,10 +920,6 @@ function bindEvents() {
       .catch((error) => showToast(error.message));
   });
 
-  elements.startMatchButton.addEventListener("click", () => {
-    startMatch().catch((error) => showToast(error.message));
-  });
-
   elements.assignedStartButton.addEventListener("click", () => {
     startMatch().catch((error) => showToast(error.message));
   });
@@ -942,12 +933,6 @@ function bindEvents() {
 
   document.querySelectorAll("[data-key]").forEach((button) => {
     button.addEventListener("click", () => handleSumKey(button.dataset.key));
-  });
-
-  document.querySelectorAll("[data-score]").forEach((button) => {
-    button.addEventListener("click", () => {
-      submitSumVisit(Number(button.dataset.score)).catch((error) => showToast(error.message));
-    });
   });
 
   document.querySelectorAll("[data-multiplier]").forEach((button) => {

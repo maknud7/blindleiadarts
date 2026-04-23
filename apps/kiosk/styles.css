@@ -72,8 +72,7 @@ body.preview-ipad .shell {
 .topbar,
 .scorecard,
 .panel,
-.dialog,
-.details-card {
+.dialog {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 24px;
@@ -351,13 +350,6 @@ button.ghost,
   font-size: 1.35rem;
 }
 
-.score-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.8rem;
-  align-items: flex-start;
-}
-
 .compact {
   gap: 0.45rem;
 }
@@ -379,7 +371,6 @@ button.ghost,
   grid-template-columns: 1fr auto 1fr;
   gap: 0.9rem;
   align-items: stretch;
-  margin-top: 1rem;
 }
 
 .player-box {
@@ -414,7 +405,7 @@ button.ghost,
   min-width: 190px;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 1rem;
   align-items: center;
   justify-content: center;
 }
@@ -434,7 +425,7 @@ button.ghost,
 .sum-display-row {
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
+  align-items: center;
   gap: 1rem;
 }
 
@@ -468,17 +459,12 @@ button.ghost,
   color: #ffd8de;
 }
 
-.quick-grid,
 .number-grid,
 .quick-row,
 .chips,
 .keypad {
   display: grid;
   gap: 0.8rem;
-}
-
-.quick-grid.reduced {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .keypad {
@@ -499,24 +485,6 @@ button.ghost,
 
 .key.ok {
   background: linear-gradient(135deg, var(--success), #187855);
-}
-
-.details-card {
-  padding: 0.9rem 1rem;
-}
-
-.details-card summary {
-  cursor: pointer;
-  font-weight: 800;
-  list-style: none;
-}
-
-.details-card summary::-webkit-details-marker {
-  display: none;
-}
-
-.details-card[open] summary {
-  margin-bottom: 0.9rem;
 }
 
 .chips {
@@ -657,7 +625,6 @@ button.ghost,
   .topbar,
   .brandline,
   .top-actions,
-  .score-header,
   .sum-display-row,
   .dialog-head,
   .dialog-actions {
@@ -678,7 +645,6 @@ button.ghost,
   }
 
   .chips,
-  .quick-grid.reduced,
   .quick-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
