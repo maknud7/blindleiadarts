@@ -15,11 +15,16 @@ const state = {
   liveSource: null,
   reconnectHandle: null,
   realtimeConfig: null,
+  isEditing: false,
 };
 
 const elements = {
+  authGate: document.getElementById("authGate"),
+  adminApp: document.getElementById("adminApp"),
   clubSelect: document.getElementById("clubSelect"),
   refreshClubButton: document.getElementById("refreshClubButton"),
+  loginBrandLogo: document.getElementById("loginBrandLogo"),
+  loginBrandFallback: document.getElementById("loginBrandFallback"),
   brandLogo: document.getElementById("brandLogo"),
   brandFallback: document.getElementById("brandFallback"),
   brandTitle: document.getElementById("brandTitle"),
@@ -31,7 +36,10 @@ const elements = {
   navPanel: document.getElementById("navPanel"),
   adminNav: document.getElementById("adminNav"),
   statusArea: document.getElementById("statusArea"),
+  authStatusArea: document.getElementById("authStatusArea"),
   clubIntro: document.getElementById("clubIntro"),
+  pageTitle: document.getElementById("pageTitle"),
+  pageDescription: document.getElementById("pageDescription"),
   heroMetrics: document.getElementById("heroMetrics"),
   tournamentList: document.getElementById("tournamentList"),
   kioskList: document.getElementById("kioskList"),
@@ -40,7 +48,6 @@ const elements = {
   playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
   screenDeviceList: document.getElementById("screenDeviceList"),
-  adminSection: document.getElementById("adminSection"),
   clubForm: document.getElementById("clubForm"),
   playerForm: document.getElementById("playerForm"),
   kioskForm: document.getElementById("kioskForm"),
@@ -51,6 +58,33 @@ const elements = {
   matchPlayerA: document.getElementById("matchPlayerA"),
   matchPlayerB: document.getElementById("matchPlayerB"),
   matchKioskId: document.getElementById("matchKioskId"),
+};
+
+const viewMeta = {
+  overview: {
+    title: "Oversikt",
+    description: "Se driftsstatus, siste aktivitet og nøkkeltall for valgt klubb.",
+  },
+  boards: {
+    title: "Boards og kiosker",
+    description: "Administrer pairing, boards, screen-koder og board calls uten at siden hopper rundt.",
+  },
+  tournaments: {
+    title: "Turneringer",
+    description: "Opprett og juster klubber og turneringer i et eget arbeidsområde.",
+  },
+  players: {
+    title: "Spillere",
+    description: "Hold spillerregister og brukerkontoer adskilt fra resten av driftsbildet.",
+  },
+  matches: {
+    title: "Kamper",
+    description: "Opprett kamper manuelt og knytt dem til riktig turnering og board.",
+  },
+  help: {
+    title: "Hjelp og flyt",
+    description: "Steg-for-steg for pairing, board calls og turneringskveld.",
+  },
 };
 
 async function api(path, { method = "GET", body, auth = false } = {}) {
@@ -98,13 +132,25 @@ async function loadRealtimeConfig() {
 }
 
 function setStatus(message, tone = "info") {
-  const item = document.createElement("div");
-  item.className = "mini-card";
-  item.innerHTML = `<strong>${tone === "error" ? "Feil" : tone === "success" ? "OK" : "Info"}</strong><p class="muted">${message}</p>`;
-  elements.statusArea.prepend(item);
+  const createItem = () => {
+    const item = document.createElement("div");
+    item.className = "mini-card";
+    item.innerHTML = `<strong>${tone === "error" ? "Feil" : tone === "success" ? "OK" : "Info"}</strong><p class="muted">${message}</p>`;
+    return item;
+  };
+
+  elements.statusArea.prepend(createItem());
 
   while (elements.statusArea.children.length > 5) {
     elements.statusArea.removeChild(elements.statusArea.lastChild);
+  }
+
+  if (!hasAdminAccess()) {
+    elements.authStatusArea.prepend(createItem());
+
+    while (elements.authStatusArea.children.length > 3) {
+      elements.authStatusArea.removeChild(elements.authStatusArea.lastChild);
+    }
   }
 }
 
@@ -128,6 +174,10 @@ async function loadClubs() {
 
   localStorage.setItem("bd:selectedClubId", String(state.selectedClubId || ""));
   renderClubSelect();
+}
+
+function hasAdminAccess() {
+  return ["super_admin", "club_admin"].includes(state.me?.role || "");
 }
 
 async function loadMatchCalls() {
@@ -161,7 +211,7 @@ async function loadScreenDevices() {
 }
 
 async function loadClubContext() {
-  if (!state.selectedClubId) {
+  if (!state.selectedClubId || !hasAdminAccess()) {
     return;
   }
 
@@ -176,7 +226,6 @@ async function loadClubContext() {
   await loadPairingRequests();
   await loadScreenDevices();
   renderClub();
-  await startLiveUpdates();
 }
 
 function closeLiveUpdates() {
@@ -194,7 +243,10 @@ function closeLiveUpdates() {
 function applyLivePayload(payload) {
   state.clubDashboard = payload.dashboard || null;
   state.matchCalls = payload.match_calls || [];
-  renderClub();
+
+  if (state.activeView === "overview" && !state.isEditing) {
+    renderClub();
+  }
 }
 
 function scheduleReconnect() {
@@ -211,7 +263,7 @@ function scheduleReconnect() {
 async function startLiveUpdates() {
   closeLiveUpdates();
 
-  if (!state.selectedClubId) {
+  if (!state.selectedClubId || !hasAdminAccess() || state.activeView !== "overview") {
     return;
   }
 
@@ -468,16 +520,24 @@ function applyClubBranding(club) {
 
   elements.brandTitle.textContent = club?.name || "Klubbadministrasjon";
   elements.brandFallback.textContent = initials || "KL";
+  elements.loginBrandFallback.textContent = initials || "BD";
 
   if (club?.logo_url) {
     elements.brandLogo.src = club.logo_url;
     elements.brandLogo.alt = `${club.name} logo`;
     elements.brandLogo.classList.remove("hidden");
     elements.brandFallback.classList.add("hidden");
+    elements.loginBrandLogo.src = club.logo_url;
+    elements.loginBrandLogo.alt = `${club.name} logo`;
+    elements.loginBrandLogo.classList.remove("hidden");
+    elements.loginBrandFallback.classList.add("hidden");
   } else {
     elements.brandLogo.removeAttribute("src");
     elements.brandLogo.classList.add("hidden");
     elements.brandFallback.classList.remove("hidden");
+    elements.loginBrandLogo.removeAttribute("src");
+    elements.loginBrandLogo.classList.add("hidden");
+    elements.loginBrandFallback.classList.remove("hidden");
   }
 }
 
@@ -496,9 +556,10 @@ function renderAuth() {
     elements.authSummary.innerHTML = "";
   }
 
-  const isAdmin = ["super_admin", "club_admin"].includes(state.me?.role || "");
-  elements.adminSection.classList.toggle("hidden", !isAdmin);
+  const isAdmin = hasAdminAccess();
   elements.navPanel.classList.toggle("hidden", !isAdmin);
+  elements.authGate.classList.toggle("hidden", isAdmin);
+  elements.adminApp.classList.toggle("hidden", !isAdmin);
 
   const canCreateClubs = state.me?.role === "super_admin";
   elements.clubForm.querySelectorAll("input, button").forEach((element) => {
@@ -519,7 +580,7 @@ function setActiveView(view) {
 }
 
 function renderActiveView() {
-  const isAdmin = ["super_admin", "club_admin"].includes(state.me?.role || "");
+  const isAdmin = hasAdminAccess();
   const activeView = isAdmin ? state.activeView : "overview";
 
   document.querySelectorAll("[data-view-button]").forEach((button) => {
@@ -533,6 +594,18 @@ function renderActiveView() {
     panel.classList.toggle("hidden", panel.dataset.viewPanel !== activeView);
     panel.classList.toggle("active", panel.dataset.viewPanel === activeView);
   });
+
+  const meta = viewMeta[activeView] || viewMeta.overview;
+  elements.pageTitle.textContent = meta.title;
+  elements.pageDescription.textContent = meta.description;
+
+  if (isAdmin) {
+    if (activeView === "overview") {
+      startLiveUpdates().catch(() => undefined);
+    } else {
+      closeLiveUpdates();
+    }
+  }
 }
 
 function populateAdminSelects() {
@@ -572,6 +645,7 @@ async function handleLogin(event) {
 
     persistToken(data.access_token);
     await loadCurrentUser();
+    await loadClubs();
     await loadClubContext();
     setStatus("Innlogging lykkes.", "success");
     elements.loginForm.reset();
@@ -621,18 +695,34 @@ function bindEvents() {
   });
 
   elements.refreshClubButton.addEventListener("click", async () => {
-    await Promise.all([loadClubs(), loadClubContext(), loadCurrentUser()]);
+    await Promise.all([loadClubs(), loadCurrentUser()]);
+    await loadClubContext();
     setStatus("Klubbdata oppdatert.", "success");
   });
 
   elements.loginForm.addEventListener("submit", handleLogin);
 
   elements.logoutButton.addEventListener("click", () => {
+    closeLiveUpdates();
     persistToken("");
     state.me = null;
+    state.clubDashboard = null;
+    state.matchCalls = [];
     renderAuth();
-    loadClubContext().catch(() => undefined);
     setStatus("Logget ut lokalt i admin.", "success");
+  });
+
+  elements.adminApp.addEventListener("focusin", (event) => {
+    if (event.target.matches("input, select, textarea")) {
+      state.isEditing = true;
+    }
+  });
+
+  elements.adminApp.addEventListener("focusout", () => {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      state.isEditing = Boolean(active && elements.adminApp.contains(active) && active.matches("input, select, textarea"));
+    }, 0);
   });
 
   elements.adminNav.addEventListener("click", (event) => {
@@ -806,8 +896,13 @@ async function bootstrap() {
   renderActiveView();
 
   try {
-    await loadClubs();
-    await Promise.all([loadClubContext(), loadCurrentUser()]);
+    await loadCurrentUser();
+
+    if (hasAdminAccess()) {
+      await loadClubs();
+      await loadClubContext();
+    }
+
     setStatus("Admin Studio er klar.", "success");
   } catch (error) {
     setStatus(error.message, "error");
