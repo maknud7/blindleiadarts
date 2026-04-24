@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use mysqli;
-
 return static function (mysqli $mysqli, string $prefix): void {
     $clubSlug = 'blindleia-dartklubb';
     $tournamentSlug = 'blindleia-test-cup';
@@ -211,6 +209,13 @@ return static function (mysqli $mysqli, string $prefix): void {
         );
 
         $winnerId = isset($match['winner']) ? ($players[$match['winner']] ?? null) : null;
+        $roundLabel = $match['round_label'];
+        $bracketLabel = $match['bracket_label'];
+        $status = $match['status'];
+        $bestOfLegs = (int) $match['best_of_legs'];
+        $legsToWin = (int) $match['legs_to_win'];
+        $startsAt = $match['starts_at'];
+        $finishedAt = $match['finished_at'] ?? null;
 
         if ($matchId === null) {
             $insertMatch = $mysqli->prepare(
@@ -222,16 +227,16 @@ return static function (mysqli $mysqli, string $prefix): void {
                 'iisssiiiiiss',
                 $tournamentId,
                 $kioskId,
-                $match['round_label'],
-                $match['bracket_label'],
-                $match['status'],
-                $match['best_of_legs'],
-                $match['legs_to_win'],
+                $roundLabel,
+                $bracketLabel,
+                $status,
+                $bestOfLegs,
+                $legsToWin,
                 $playerAId,
                 $playerBId,
                 $winnerId,
-                $match['starts_at'],
-                $match['finished_at'] ?? null
+                $startsAt,
+                $finishedAt
             );
             $insertMatch->execute();
             $matchId = (int) $insertMatch->insert_id;
@@ -246,15 +251,15 @@ return static function (mysqli $mysqli, string $prefix): void {
             $updateMatch->bind_param(
                 'issiiiiissi',
                 $kioskId,
-                $match['bracket_label'],
-                $match['status'],
-                $match['best_of_legs'],
-                $match['legs_to_win'],
+                $bracketLabel,
+                $status,
+                $bestOfLegs,
+                $legsToWin,
                 $playerAId,
                 $playerBId,
                 $winnerId,
-                $match['starts_at'],
-                $match['finished_at'] ?? null,
+                $startsAt,
+                $finishedAt,
                 $matchId
             );
             $updateMatch->execute();
@@ -422,6 +427,10 @@ return static function (mysqli $mysqli, string $prefix): void {
                 continue;
             }
 
+            $legNumber = (int) $legSeed['leg_number'];
+            $legStatus = $legSeed['status'];
+            $legFinishedAt = $legSeed['finished_at'] ?? null;
+
             $insertLeg = $mysqli->prepare(
                 "INSERT INTO `{$prefix}legs`
                  (match_id, leg_number, starting_player_id, winner_player_id, status, start_score, finished_at)
@@ -430,11 +439,11 @@ return static function (mysqli $mysqli, string $prefix): void {
             $insertLeg->bind_param(
                 'iiiiss',
                 $matchId,
-                $legSeed['leg_number'],
+                $legNumber,
                 $startingPlayerId,
                 $winnerId,
-                $legSeed['status'],
-                $legSeed['finished_at'] ?? null
+                $legStatus,
+                $legFinishedAt
             );
             $insertLeg->execute();
             $legId = (int) $insertLeg->insert_id;
@@ -451,6 +460,9 @@ return static function (mysqli $mysqli, string $prefix): void {
                 $dartsJson = null;
                 $isBust = 0;
                 $dartsUsed = 3;
+                $visitNumber = (int) $visitSeed['visit_number'];
+                $visitScore = (int) $visitSeed['score'];
+                $remainingAfter = (int) $visitSeed['remaining_after'];
                 $insertVisit = $mysqli->prepare(
                     "INSERT INTO `{$prefix}visits`
                      (match_id, leg_id, player_id, visit_number, score, darts_used, input_mode, darts_json, is_bust, remaining_after)
@@ -461,13 +473,13 @@ return static function (mysqli $mysqli, string $prefix): void {
                     $matchId,
                     $legId,
                     $playerId,
-                    $visitSeed['visit_number'],
-                    $visitSeed['score'],
+                    $visitNumber,
+                    $visitScore,
                     $dartsUsed,
                     $inputMode,
                     $dartsJson,
                     $isBust,
-                    $visitSeed['remaining_after']
+                    $remainingAfter
                 );
                 $insertVisit->execute();
                 $insertVisit->close();
@@ -509,6 +521,9 @@ return static function (mysqli $mysqli, string $prefix): void {
 
         if ($existingId === null) {
             $scopeType = 'season';
+            $rankingType = $ranking['type'];
+            $rankingPoints = (float) $ranking['points'];
+            $rankingPosition = (int) $ranking['position'];
             $insertRanking = $mysqli->prepare(
                 "INSERT INTO `{$prefix}ranking_snapshots`
                  (season_id, tournament_id, player_id, ranking_type, scope_type, points, position, context_json)
@@ -518,10 +533,10 @@ return static function (mysqli $mysqli, string $prefix): void {
                 'iissdis',
                 $seasonId,
                 $playerId,
-                $ranking['type'],
+                $rankingType,
                 $scopeType,
-                $ranking['points'],
-                $ranking['position'],
+                $rankingPoints,
+                $rankingPosition,
                 $contextJson
             );
             $insertRanking->execute();
@@ -534,7 +549,9 @@ return static function (mysqli $mysqli, string $prefix): void {
              SET points = ?, position = ?, context_json = ?, calculated_at = NOW()
              WHERE id = ?"
         );
-        $updateRanking->bind_param('disi', $ranking['points'], $ranking['position'], $contextJson, $existingId);
+        $rankingPoints = (float) $ranking['points'];
+        $rankingPosition = (int) $ranking['position'];
+        $updateRanking->bind_param('disi', $rankingPoints, $rankingPosition, $contextJson, $existingId);
         $updateRanking->execute();
         $updateRanking->close();
     }
