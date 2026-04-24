@@ -16,6 +16,9 @@ const state = {
   reconnectHandle: null,
   realtimeConfig: null,
   isEditing: false,
+  systemStatus: null,
+  tournamentOps: null,
+  selectedTournamentOpsId: Number(localStorage.getItem("bd:opsTournamentId") || 0),
 };
 
 const elements = {
@@ -40,6 +43,7 @@ const elements = {
   clubIntro: document.getElementById("clubIntro"),
   pageTitle: document.getElementById("pageTitle"),
   pageDescription: document.getElementById("pageDescription"),
+  refreshStatusButton: document.getElementById("refreshStatusButton"),
   heroMetrics: document.getElementById("heroMetrics"),
   tournamentList: document.getElementById("tournamentList"),
   kioskList: document.getElementById("kioskList"),
@@ -48,11 +52,19 @@ const elements = {
   playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
   screenDeviceList: document.getElementById("screenDeviceList"),
+  serviceStatusGrid: document.getElementById("serviceStatusGrid"),
+  clubRuntimeStatus: document.getElementById("clubRuntimeStatus"),
   clubForm: document.getElementById("clubForm"),
   playerForm: document.getElementById("playerForm"),
   kioskForm: document.getElementById("kioskForm"),
   screenDeviceForm: document.getElementById("screenDeviceForm"),
   tournamentForm: document.getElementById("tournamentForm"),
+  opsTournamentSelect: document.getElementById("opsTournamentSelect"),
+  tournamentOpsSummary: document.getElementById("tournamentOpsSummary"),
+  tournamentBoardGrid: document.getElementById("tournamentBoardGrid"),
+  saveTournamentBoardsButton: document.getElementById("saveTournamentBoardsButton"),
+  autoAssignMatchesButton: document.getElementById("autoAssignMatchesButton"),
+  tournamentQueueList: document.getElementById("tournamentQueueList"),
   matchForm: document.getElementById("matchForm"),
   matchTournamentId: document.getElementById("matchTournamentId"),
   matchPlayerA: document.getElementById("matchPlayerA"),
@@ -64,6 +76,10 @@ const viewMeta = {
   overview: {
     title: "Oversikt",
     description: "Se driftsstatus, siste aktivitet og nøkkeltall for valgt klubb.",
+  },
+  status: {
+    title: "Status og helse",
+    description: "Sjekk API, database, realtime-lag og valgt klubbs operative status før turneringskveld.",
   },
   boards: {
     title: "Boards og kiosker",
@@ -210,6 +226,36 @@ async function loadScreenDevices() {
   state.screenDevices = data.items;
 }
 
+async function loadSystemStatus() {
+  if (!state.token || !hasAdminAccess()) {
+    state.systemStatus = null;
+    return;
+  }
+
+  const query = state.selectedClubId ? `?club_id=${state.selectedClubId}` : "";
+  state.systemStatus = await api(`/system/status${query}`, { auth: true });
+}
+
+async function loadTournamentOps() {
+  if (!state.token || !hasAdminAccess()) {
+    state.tournamentOps = null;
+    return;
+  }
+
+  if (!state.selectedTournamentOpsId && state.tournaments[0]) {
+    state.selectedTournamentOpsId = Number(state.tournaments[0].id);
+  }
+
+  if (!state.selectedTournamentOpsId) {
+    state.tournamentOps = null;
+    renderTournamentOps();
+    return;
+  }
+
+  localStorage.setItem("bd:opsTournamentId", String(state.selectedTournamentOpsId));
+  state.tournamentOps = await api(`/tournaments/${state.selectedTournamentOpsId}/board-assignments`, { auth: true });
+}
+
 async function loadClubContext() {
   if (!state.selectedClubId || !hasAdminAccess()) {
     return;
@@ -222,9 +268,14 @@ async function loadClubContext() {
 
   state.clubDashboard = dashboardData;
   state.tournaments = tournamentsData.items;
+  if (!state.tournaments.some((tournament) => Number(tournament.id) === state.selectedTournamentOpsId)) {
+    state.selectedTournamentOpsId = state.tournaments[0] ? Number(state.tournaments[0].id) : 0;
+  }
   await loadMatchCalls();
   await loadPairingRequests();
   await loadScreenDevices();
+  await loadSystemStatus();
+  await loadTournamentOps();
   renderClub();
 }
 
@@ -507,6 +558,8 @@ function renderClub() {
     : `<div class="mini-card"><p class="muted">Ingen ventende eller aktive kamper å tildele akkurat nå.</p></div>`;
 
   populateAdminSelects();
+  renderSystemStatus();
+  renderTournamentOps();
 }
 
 function applyClubBranding(club) {
@@ -625,6 +678,122 @@ function populateAdminSelects() {
   elements.matchKioskId.innerHTML = [`<option value="">Ingen kiosk</option>`]
     .concat(kiosks.map((kiosk) => `<option value="${kiosk.id}">${kiosk.name} (${kiosk.code})</option>`))
     .join("");
+
+  elements.opsTournamentSelect.innerHTML = state.tournaments.length
+    ? state.tournaments.map((tournament) => `
+        <option value="${tournament.id}" ${Number(tournament.id) === state.selectedTournamentOpsId ? "selected" : ""}>
+          ${tournament.name}
+        </option>
+      `).join("")
+    : `<option value="">Ingen turneringer</option>`;
+}
+
+function renderSystemStatus() {
+  const status = state.systemStatus;
+
+  if (!status) {
+    elements.serviceStatusGrid.innerHTML = `<div class="mini-card"><p class="muted">Status lastes inn når du er logget inn som admin.</p></div>`;
+    elements.clubRuntimeStatus.innerHTML = `<div class="mini-card"><p class="muted">Velg klubb for å se operativ status.</p></div>`;
+    return;
+  }
+
+  elements.serviceStatusGrid.innerHTML = (status.services || []).map((service) => `
+    <div class="service-card ${service.status || "info"}">
+      <div class="row">
+        <strong>${service.label}</strong>
+        <span class="pill">${service.status}</span>
+      </div>
+      <p class="muted">${service.detail || ""}</p>
+    </div>
+  `).join("");
+
+  const clubStatus = status.club;
+
+  if (!clubStatus || !clubStatus.club) {
+    elements.clubRuntimeStatus.innerHTML = `<div class="mini-card"><p class="muted">Ingen klubbstatus tilgjengelig ennå.</p></div>`;
+    return;
+  }
+
+  const dashboard = clubStatus.dashboard || {};
+  const activeTournament = clubStatus.active_screen_tournament;
+  const screenDevices = clubStatus.screen_devices || [];
+  elements.clubRuntimeStatus.innerHTML = `
+    <div class="list-item">
+      <div class="row">
+        <strong>${clubStatus.club.name}</strong>
+        <span class="pill">${status.environment}</span>
+      </div>
+      <div class="pill-row">
+        <span class="pill">${(dashboard.players || []).length} spillere</span>
+        <span class="pill">${(dashboard.kiosks || []).length} boards</span>
+        <span class="pill">${(dashboard.tournaments || []).length} turneringer</span>
+        <span class="pill">${(dashboard.recent_matches || []).length} siste kamper</span>
+      </div>
+    </div>
+    <div class="list-item">
+      <strong>Aktiv screen-turnering</strong>
+      <p class="muted">${activeTournament ? `${activeTournament.name} (${activeTournament.status})` : "Ingen aktiv/ready turnering akkurat nå."}</p>
+    </div>
+    <div class="list-item">
+      <strong>Pairing og screen</strong>
+      <div class="pill-row">
+        <span class="pill">${clubStatus.pending_pairing_requests || 0} ventende pairing requests</span>
+        <span class="pill">${screenDevices.length} skjermenheter</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderTournamentOps() {
+  const ops = state.tournamentOps;
+
+  if (!ops || !ops.tournament) {
+    elements.tournamentOpsSummary.innerHTML = `<p class="muted">Velg en turnering for å styre boards og auto-tildeling.</p>`;
+    elements.tournamentBoardGrid.innerHTML = "";
+    elements.tournamentQueueList.innerHTML = `<div class="mini-card"><p class="muted">Ingen turneringskø lastet ennå.</p></div>`;
+    return;
+  }
+
+  elements.tournamentOpsSummary.innerHTML = `
+    <strong>${ops.tournament.name}</strong>
+    <div class="pill-row">
+      <span class="pill">${ops.tournament.status}</span>
+      <span class="pill">${ops.queue?.pending_count ?? 0} pending</span>
+      <span class="pill">${ops.queue?.assigned_count ?? 0} assigned</span>
+      <span class="pill">${ops.queue?.in_progress_count ?? 0} i gang</span>
+    </div>
+  `;
+
+  elements.tournamentBoardGrid.innerHTML = (ops.boards || []).map((board) => `
+    <label class="board-checkbox ${Number(board.is_available) === 1 ? "" : "is-busy"}">
+      <input type="checkbox" value="${board.id}" ${Number(board.is_assigned_to_tournament) === 1 ? "checked" : ""}>
+      <div class="stack">
+        <strong>${board.name}</strong>
+        <span class="muted">Board ${board.board_number}${board.sponsor_label ? ` · ${board.sponsor_label}` : ""}</span>
+        <div class="pill-row">
+          <span class="pill">${board.code}</span>
+          <span class="pill">${Number(board.is_available) === 1 ? "Ledig" : "Opptatt"}</span>
+        </div>
+      </div>
+    </label>
+  `).join("");
+
+  const queueItems = ops.queue?.items || [];
+  elements.tournamentQueueList.innerHTML = queueItems.length
+    ? queueItems.map((match) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${match.player_a_name} vs ${match.player_b_name}</strong>
+            <span class="pill">${match.status}</span>
+          </div>
+          <p class="muted">${match.round_label || "Kamp"}${match.bracket_label ? ` · ${match.bracket_label}` : ""}</p>
+          <div class="pill-row">
+            <span class="pill">${match.players_available ? "Spillere ledige" : "Spillere opptatt"}</span>
+            ${match.board_number ? `<span class="pill">Board ${match.board_number}</span>` : `<span class="pill">Ikke tildelt</span>`}
+          </div>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen kamper i denne turneringen ennå.</p></div>`;
 }
 
 function formatScoringMode(mode) {
@@ -700,6 +869,16 @@ function bindEvents() {
     setStatus("Klubbdata oppdatert.", "success");
   });
 
+  elements.refreshStatusButton.addEventListener("click", async () => {
+    try {
+      await loadSystemStatus();
+      renderSystemStatus();
+      setStatus("Systemstatus oppdatert.", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
   elements.loginForm.addEventListener("submit", handleLogin);
 
   elements.logoutButton.addEventListener("click", () => {
@@ -708,6 +887,8 @@ function bindEvents() {
     state.me = null;
     state.clubDashboard = null;
     state.matchCalls = [];
+    state.systemStatus = null;
+    state.tournamentOps = null;
     renderAuth();
     setStatus("Logget ut lokalt i admin.", "success");
   });
@@ -733,6 +914,63 @@ function bindEvents() {
     }
 
     setActiveView(button.dataset.viewButton);
+  });
+
+  elements.opsTournamentSelect.addEventListener("change", async (event) => {
+    state.selectedTournamentOpsId = Number(event.target.value || 0);
+    localStorage.setItem("bd:opsTournamentId", String(state.selectedTournamentOpsId || ""));
+
+    try {
+      await loadTournamentOps();
+      renderTournamentOps();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.saveTournamentBoardsButton.addEventListener("click", async () => {
+    if (!state.selectedTournamentOpsId) {
+      setStatus("Velg en turnering først.", "error");
+      return;
+    }
+
+    const kioskIds = Array.from(elements.tournamentBoardGrid.querySelectorAll("input[type=\"checkbox\"]:checked"))
+      .map((checkbox) => Number(checkbox.value))
+      .filter((value) => value > 0);
+
+    try {
+      state.tournamentOps = await api(`/tournaments/${state.selectedTournamentOpsId}/board-assignments`, {
+        method: "PUT",
+        body: { kiosk_ids: kioskIds },
+        auth: true,
+      });
+      renderTournamentOps();
+      await loadSystemStatus();
+      renderSystemStatus();
+      setStatus("Boards lagret for turneringen.", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.autoAssignMatchesButton.addEventListener("click", async () => {
+    if (!state.selectedTournamentOpsId) {
+      setStatus("Velg en turnering først.", "error");
+      return;
+    }
+
+    try {
+      const result = await api(`/tournaments/${state.selectedTournamentOpsId}/auto-assign`, {
+        method: "POST",
+        auth: true,
+      });
+      state.tournamentOps = result.overview || state.tournamentOps;
+      renderTournamentOps();
+      await Promise.all([loadClubContext(), loadSystemStatus()]);
+      setStatus(`Auto-tildeling ferdig. ${result.assigned_count || 0} kamper ble tildelt.`, "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
   });
 
   elements.kioskList.addEventListener("submit", async (event) => {

@@ -11,6 +11,7 @@ use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScreenRepository;
+use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
 use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
@@ -49,6 +50,12 @@ final class Application
 
             $response = $this->dispatch($request, $config, $database);
         } catch (KioskAccessException $exception) {
+            $response = JsonResponse::error(
+                $exception->statusCode(),
+                $exception->errorCode(),
+                $exception->getMessage()
+            );
+        } catch (ValidationException $exception) {
             $response = JsonResponse::error(
                 $exception->statusCode(),
                 $exception->errorCode(),
@@ -96,6 +103,7 @@ final class Application
                 'version' => 'v1',
                 'routes' => [
                     'GET /v1/health',
+                    'GET /v1/system/status',
                     'GET /v1/realtime/config',
                     'POST /v1/public/screen/connect',
                     'GET /v1/public/screen',
@@ -121,8 +129,11 @@ final class Application
                     'POST /v1/clubs/{id}/kiosk-pairing-requests/{requestCode}/approve',
                     'GET /v1/tournaments/{id}',
                     'GET /v1/tournaments/{id}/matches',
+                    'GET /v1/tournaments/{id}/board-assignments',
                     'POST /v1/tournaments/{id}/register',
                     'POST /v1/tournaments/{id}/matches',
+                    'PUT /v1/tournaments/{id}/board-assignments',
+                    'POST /v1/tournaments/{id}/auto-assign',
                     'POST /v1/matches/{id}/assign-kiosk',
                     'GET /v1/kiosks/{code}/state',
                     'GET /v1/kiosks/{code}/live',
@@ -162,6 +173,28 @@ final class Application
                 'transport' => $config->realtimeEnabled() ? 'websocket' : 'sse',
                 'websocket_url' => $config->realtimeWebsocketUrl(),
             ]);
+        }
+
+        if ($method === 'GET' && $path === 'v1/system/status') {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $clubId = (int) ($this->queryParam('club_id') ?? 0);
+
+            if ($clubId > 0) {
+                $clubAccess = $this->assertCanManageClub($admin, $clubId);
+
+                if ($clubAccess instanceof JsonResponse) {
+                    return $clubAccess;
+                }
+            }
+
+            return JsonResponse::ok(
+                $this->buildSystemStatus($database, $config, $clubId > 0 ? $clubId : null)
+            );
         }
 
         if ($method === 'GET' && $path === 'v1/public/screen') {
@@ -566,6 +599,30 @@ final class Application
             ]);
         }
 
+        if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)/board-assignments$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $tournament['club_id']);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            return JsonResponse::ok(
+                $tournamentRepository->getBoardAssignmentOverview((int) $matches[1])
+            );
+        }
+
         if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/register$#', $path, $matches) === 1) {
             $user = $this->requireAuthenticatedUser($request, $userRepository);
 
@@ -609,6 +666,58 @@ final class Application
             return JsonResponse::ok([
                 'match' => $match,
             ], 201);
+        }
+
+        if ($method === 'PUT' && preg_match('#^v1/tournaments/(\d+)/board-assignments$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $tournament['club_id']);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $payload = $request->jsonBody();
+            $kioskIds = is_array($payload['kiosk_ids'] ?? null) ? $payload['kiosk_ids'] : [];
+            $overview = $tournamentRepository->replaceBoardAssignments((int) $matches[1], $kioskIds);
+            $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+
+            return JsonResponse::ok($overview);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/auto-assign$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $tournament['club_id']);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $result = $tournamentRepository->autoAssignPendingMatches((int) $matches[1]);
+            $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+
+            return JsonResponse::ok($result);
         }
 
         if ($method === 'POST' && preg_match('#^v1/matches/(\d+)/assign-kiosk$#', $path, $matches) === 1) {
@@ -1159,6 +1268,89 @@ final class Application
         } catch (Throwable) {
             // Realtime must never break the primary match flow.
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildSystemStatus(Database $database, Config $config, ?int $clubId = null): array
+    {
+        $clubRepository = new ClubRepository($database);
+        $tournamentRepository = new TournamentRepository($database);
+        $kioskRepository = new KioskRepository($database);
+        $screenRepository = new ScreenRepository($database);
+        $challonge = $config->challonge();
+
+        $services = [
+            [
+                'key' => 'api',
+                'label' => 'PHP API',
+                'status' => 'ok',
+                'detail' => 'API responderer og kjører i ' . $config->appEnv() . '.',
+            ],
+            [
+                'key' => 'database',
+                'label' => 'Database',
+                'status' => $database->ping() ? 'ok' : 'error',
+                'detail' => $database->ping()
+                    ? 'Databaseforbindelse er oppe.'
+                    : 'Databaseforbindelsen svarer ikke.',
+            ],
+            [
+                'key' => 'realtime',
+                'label' => 'Realtime relay',
+                'status' => $config->realtimeEnabled() ? 'ok' : 'warning',
+                'detail' => $config->realtimeEnabled()
+                    ? 'Websocket/SSE er konfigurert.'
+                    : 'Fallback til SSE/polling. Ingen websocket-URL konfigurert.',
+            ],
+            [
+                'key' => 'challonge',
+                'label' => 'Challonge connector',
+                'status' => $challonge->clientId() !== '' && $challonge->clientSecret() !== '' ? 'ok' : 'warning',
+                'detail' => $challonge->clientId() !== '' && $challonge->clientSecret() !== ''
+                    ? 'OAuth-klient er konfigurert.'
+                    : 'Connectoren er tilgjengelig, men mangler client credentials.',
+            ],
+            [
+                'key' => 'screen',
+                'label' => 'Venue screen',
+                'status' => 'ok',
+                'detail' => 'Screen bruker felles URL med klubbspesifikke koder.',
+            ],
+        ];
+
+        $summary = [
+            'clubs' => count($clubRepository->listClubs()),
+            'pending_pairing_requests' => count($kioskRepository->listPendingPairingRequests()),
+        ];
+
+        $clubStatus = null;
+
+        if ($clubId !== null && $clubId > 0) {
+            $club = $clubRepository->findById($clubId);
+
+            if ($club !== null) {
+                $dashboard = $clubRepository->getDashboard($clubId);
+                $screenTournament = $tournamentRepository->findScreenTournamentByClubId($clubId);
+
+                $clubStatus = [
+                    'club' => $club,
+                    'dashboard' => $dashboard,
+                    'active_screen_tournament' => $screenTournament,
+                    'pending_pairing_requests' => count($kioskRepository->listPendingPairingRequests()),
+                    'screen_devices' => $screenRepository->listByClubId($clubId),
+                ];
+            }
+        }
+
+        return [
+            'environment' => $config->appEnv(),
+            'server_time' => gmdate(DATE_ATOM),
+            'services' => $services,
+            'summary' => $summary,
+            'club' => $clubStatus,
+        ];
     }
 
     private function queryParam(string $name): ?string

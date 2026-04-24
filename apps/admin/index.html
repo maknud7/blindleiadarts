@@ -81,6 +81,10 @@
             <strong>Oversikt</strong>
             <span>Driftsstatus og siste aktivitet</span>
           </button>
+          <button type="button" class="nav-button" data-view-button="status">
+            <strong>Status og helse</strong>
+            <span>API, realtime, screen og driftssjekker</span>
+          </button>
           <button type="button" class="nav-button" data-view-button="boards">
             <strong>Boards og kiosker</strong>
             <span>Pairing, screen og board calls</span>
@@ -179,6 +183,45 @@
               <p class="muted">Bruk Board Calls for å sende riktig kamp til riktig board under turneringskvelden.</p>
             </div>
           </div>
+        </section>
+      </section>
+
+      <section id="statusView" class="view-section hidden" data-view-panel="status">
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Systemstatus</p>
+              <h3>API, realtime og driftskomponenter</h3>
+            </div>
+            <button id="refreshStatusButton" type="button" class="ghost compact-link">Oppdater status</button>
+          </div>
+          <div id="serviceStatusGrid" class="grid three"></div>
+        </section>
+
+        <section class="grid two">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Klubbruntime</p>
+                <h3>Valgt klubb akkurat nå</h3>
+              </div>
+            </div>
+            <div id="clubRuntimeStatus" class="stack"></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Arkitekturretning</p>
+                <h3>Hvordan dette skal fungere</h3>
+              </div>
+            </div>
+            <div class="inset stack">
+              <p class="muted"><strong>Challonge</strong> skal ikke eie board calls eller lokal runtime. Det skal være connector for bracket/import/publish.</p>
+              <p class="muted"><strong>Board-tildeling</strong> skjer lokalt i Blindleia Darts, basert på hvilke boards som er godkjent for turneringen.</p>
+              <p class="muted"><strong>Kiosk</strong> er alltid knyttet til klubb via boardet den tilhører, og pairing godkjennes av klubbadmin.</p>
+            </div>
+          </article>
         </section>
       </section>
 
@@ -310,6 +353,42 @@
               <input name="logo_url" placeholder="Logo-URL (valgfritt)">
               <button type="submit">Opprett klubb</button>
             </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Tournament Runtime</p>
+              <h3>Boards og auto-tildeling</h3>
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="stack">
+              <label class="stack">
+                <span>Arbeid med turnering</span>
+                <select id="opsTournamentSelect"></select>
+              </label>
+              <div id="tournamentOpsSummary" class="mini-card"></div>
+              <div id="tournamentBoardGrid" class="board-selection-grid"></div>
+              <div class="row button-row">
+                <button id="saveTournamentBoardsButton" type="button">Lagre boards for turneringen</button>
+                <button id="autoAssignMatchesButton" type="button" class="ghost">Auto-tildel ledige kamper</button>
+              </div>
+            </div>
+            <div class="stack">
+              <div class="inset stack">
+                <h4>Flyt vi sikter mot</h4>
+                <p class="muted">1. Spillere registreres på turneringen.</p>
+                <p class="muted">2. Klubbadmin velger hvilke boards turneringen får bruke.</p>
+                <p class="muted">3. Systemet kan auto-tildeler pending kamper til ledige boards.</p>
+                <p class="muted">4. Bare spillere som faktisk er ledige blir tildelt nye kamper.</p>
+              </div>
+              <div class="card inset stack">
+                <h4>Køkontroll</h4>
+                <div id="tournamentQueueList" class="stack"></div>
+              </div>
+            </div>
           </div>
         </section>
       </section>

@@ -575,6 +575,182 @@ final class TournamentRepository
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function getBoardAssignmentOverview(int $tournamentId): array
+    {
+        $tournament = $this->findById($tournamentId);
+
+        if ($tournament === null) {
+            throw new ValidationException('tournament_not_found', 'Tournament was not found.', 404);
+        }
+
+        $clubId = (int) $tournament['club_id'];
+        $boards = $this->listBoardAvailabilityForTournament($tournamentId, $clubId);
+        $queue = $this->listAssignmentQueueForTournament($tournamentId, $clubId);
+
+        return [
+            'tournament' => $tournament,
+            'boards' => $boards,
+            'queue' => [
+                'pending_count' => count(array_filter($queue, static fn (array $match): bool => (string) ($match['status'] ?? '') === 'pending')),
+                'assigned_count' => count(array_filter($queue, static fn (array $match): bool => (string) ($match['status'] ?? '') === 'assigned')),
+                'in_progress_count' => count(array_filter($queue, static fn (array $match): bool => (string) ($match['status'] ?? '') === 'in_progress')),
+                'items' => $queue,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<int, mixed> $kioskIds
+     * @return array<string, mixed>
+     */
+    public function replaceBoardAssignments(int $tournamentId, array $kioskIds): array
+    {
+        $tournament = $this->findById($tournamentId);
+
+        if ($tournament === null) {
+            throw new ValidationException('tournament_not_found', 'Tournament was not found.', 404);
+        }
+
+        $clubId = (int) $tournament['club_id'];
+        $normalizedIds = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $value): int => (int) $value,
+            $kioskIds
+        ), static fn (int $value): bool => $value > 0)));
+
+        if ($normalizedIds !== []) {
+            $allowedIds = $this->listClubKioskIds($clubId);
+
+            foreach ($normalizedIds as $kioskId) {
+                if (!in_array($kioskId, $allowedIds, true)) {
+                    throw new ValidationException(
+                        'kiosk_not_in_club',
+                        'One or more selected boards do not belong to this club.'
+                    );
+                }
+            }
+        }
+
+        $deleteSql = sprintf('DELETE FROM `%1$stournament_kiosks` WHERE tournament_id = ?', $this->tablePrefix);
+        $delete = $this->connection->prepare($deleteSql);
+        $delete->bind_param('i', $tournamentId);
+        $delete->execute();
+        $delete->close();
+
+        if ($normalizedIds !== []) {
+            $insertSql = sprintf(
+                'INSERT INTO `%1$stournament_kiosks` (tournament_id, kiosk_id, sort_order)
+                 VALUES (?, ?, ?)',
+                $this->tablePrefix
+            );
+            $insert = $this->connection->prepare($insertSql);
+            $sortOrder = 1;
+
+            foreach ($normalizedIds as $kioskId) {
+                $insert->bind_param('iii', $tournamentId, $kioskId, $sortOrder);
+                $insert->execute();
+                $sortOrder++;
+            }
+
+            $insert->close();
+        }
+
+        return $this->getBoardAssignmentOverview($tournamentId);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function autoAssignPendingMatches(int $tournamentId): array
+    {
+        $tournament = $this->findById($tournamentId);
+
+        if ($tournament === null) {
+            throw new ValidationException('tournament_not_found', 'Tournament was not found.', 404);
+        }
+
+        $clubId = (int) $tournament['club_id'];
+        $boards = $this->listBoardAvailabilityForTournament($tournamentId, $clubId);
+        $availableBoards = array_values(array_filter(
+            $boards,
+            static fn (array $board): bool => (int) ($board['is_assigned_to_tournament'] ?? 0) === 1
+                && (int) ($board['is_active'] ?? 0) === 1
+                && (int) ($board['is_available'] ?? 0) === 1
+        ));
+
+        if ($availableBoards === []) {
+            throw new ValidationException(
+                'no_tournament_boards_available',
+                'No available boards are assigned to this tournament.'
+            );
+        }
+
+        $busyPlayers = $this->listBusyPlayerIdsByClub($clubId);
+        $pendingMatches = array_values(array_filter(
+            $this->listAssignmentQueueForTournament($tournamentId, $clubId),
+            static fn (array $match): bool => (string) ($match['status'] ?? '') === 'pending'
+        ));
+
+        $assigned = [];
+        $skipped = [];
+
+        foreach ($pendingMatches as $match) {
+            $playerAId = (int) ($match['player_a_id'] ?? 0);
+            $playerBId = (int) ($match['player_b_id'] ?? 0);
+
+            if (in_array($playerAId, $busyPlayers, true) || in_array($playerBId, $busyPlayers, true)) {
+                $match['skip_reason'] = 'En eller begge spillere er opptatt i en annen aktiv kamp.';
+                $skipped[] = $match;
+                continue;
+            }
+
+            $board = array_shift($availableBoards);
+
+            if ($board === null) {
+                $match['skip_reason'] = 'Ingen ledige boards igjen i denne turneringen.';
+                $skipped[] = $match;
+                continue;
+            }
+
+            $kioskId = (int) ($board['id'] ?? 0);
+            $status = 'assigned';
+            $sql = sprintf(
+                'UPDATE `%1$smatches`
+                 SET kiosk_id = ?, status = ?, starts_at = NULL, finished_at = NULL
+                 WHERE id = ?',
+                $this->tablePrefix
+            );
+            $statement = $this->connection->prepare($sql);
+            $matchId = (int) $match['id'];
+            $statement->bind_param('isi', $kioskId, $status, $matchId);
+            $statement->execute();
+            $statement->close();
+
+            $busyPlayers[] = $playerAId;
+            $busyPlayers[] = $playerBId;
+
+            $assigned[] = [
+                'match_id' => $matchId,
+                'players' => trim((string) $match['player_a_name']) . ' vs ' . trim((string) $match['player_b_name']),
+                'kiosk_id' => $kioskId,
+                'kiosk_name' => $board['name'] ?? null,
+                'board_number' => $board['board_number'] ?? null,
+                'kiosk_code' => $board['code'] ?? null,
+            ];
+        }
+
+        return [
+            'tournament' => $tournament,
+            'assigned_count' => count($assigned),
+            'skipped_count' => count($skipped),
+            'assigned' => $assigned,
+            'skipped' => $skipped,
+            'overview' => $this->getBoardAssignmentOverview($tournamentId),
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
@@ -588,6 +764,18 @@ final class TournamentRepository
         $status = $kioskId !== null ? 'assigned' : 'pending';
         $bestOfLegs = max(1, (int) ($payload['best_of_legs'] ?? 3));
         $legsToWin = max(1, (int) ($payload['legs_to_win'] ?? intdiv($bestOfLegs, 2) + 1));
+        $tournament = $this->findById($tournamentId);
+
+        if ($tournament === null) {
+            throw new ValidationException('tournament_not_found', 'Tournament was not found.', 404);
+        }
+
+        $clubId = (int) $tournament['club_id'];
+        $this->assertPlayersAreRegisteredForTournament($tournamentId, [$playerAId, $playerBId]);
+
+        if ($kioskId !== null) {
+            $this->assertKioskCanBeUsedForTournament($tournamentId, $clubId, $kioskId, null, $playerAId, $playerBId);
+        }
 
         $sql = sprintf(
             'INSERT INTO `%1$smatches`
@@ -610,6 +798,28 @@ final class TournamentRepository
      */
     public function assignMatchToKiosk(int $matchId, int $kioskId): ?array
     {
+        $match = $this->findMatchById($matchId);
+
+        if ($match === null) {
+            return null;
+        }
+
+        $tournament = $this->findById((int) $match['tournament_id']);
+
+        if ($tournament === null) {
+            throw new ValidationException('tournament_not_found', 'Tournament was not found.', 404);
+        }
+
+        $clubId = (int) $tournament['club_id'];
+        $this->assertKioskCanBeUsedForTournament(
+            (int) $match['tournament_id'],
+            $clubId,
+            $kioskId,
+            $matchId,
+            (int) $match['player_a_id'],
+            (int) $match['player_b_id']
+        );
+
         $status = 'assigned';
         $sql = sprintf(
             'UPDATE `%1$smatches`
@@ -727,6 +937,260 @@ final class TournamentRepository
         $statement->close();
 
         return $row;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function listClubKioskIds(int $clubId): array
+    {
+        $sql = sprintf('SELECT id FROM `%1$skiosks` WHERE club_id = ?', $this->tablePrefix);
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('i', $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array{id:mixed}> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return array_map(static fn (array $row): int => (int) $row['id'], $rows);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listBoardAvailabilityForTournament(int $tournamentId, int $clubId): array
+    {
+        $sql = sprintf(
+            'SELECT
+                k.id,
+                k.code,
+                k.name,
+                k.board_number,
+                k.sponsor_label,
+                k.scoring_mode,
+                k.is_active,
+                CASE WHEN tk.id IS NULL THEN 0 ELSE 1 END AS is_assigned_to_tournament,
+                (
+                    SELECT m2.id
+                    FROM `%1$smatches` m2
+                    INNER JOIN `%1$stournaments` t2 ON t2.id = m2.tournament_id
+                    WHERE m2.kiosk_id = k.id
+                      AND m2.status IN ("assigned", "in_progress")
+                      AND t2.club_id = ?
+                    ORDER BY FIELD(m2.status, "in_progress", "assigned"), m2.id ASC
+                    LIMIT 1
+                ) AS busy_match_id,
+                (
+                    SELECT m3.status
+                    FROM `%1$smatches` m3
+                    INNER JOIN `%1$stournaments` t3 ON t3.id = m3.tournament_id
+                    WHERE m3.kiosk_id = k.id
+                      AND m3.status IN ("assigned", "in_progress")
+                      AND t3.club_id = ?
+                    ORDER BY FIELD(m3.status, "in_progress", "assigned"), m3.id ASC
+                    LIMIT 1
+                ) AS busy_match_status
+             FROM `%1$skiosks` k
+             LEFT JOIN `%1$stournament_kiosks` tk ON tk.kiosk_id = k.id AND tk.tournament_id = ?
+             WHERE k.club_id = ?
+             ORDER BY k.board_number ASC, k.id ASC',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('iiii', $clubId, $clubId, $tournamentId, $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        foreach ($rows as &$row) {
+            $row['is_available'] = ($row['busy_match_id'] ?? null) === null ? 1 : 0;
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listAssignmentQueueForTournament(int $tournamentId, int $clubId): array
+    {
+        $rows = $this->listMatches($tournamentId);
+        $busyPlayers = $this->listBusyPlayerIdsByClub($clubId);
+
+        foreach ($rows as &$row) {
+            $playerAId = (int) ($row['player_a_id'] ?? 0);
+            $playerBId = (int) ($row['player_b_id'] ?? 0);
+            $row['players_available'] = !in_array($playerAId, $busyPlayers, true) && !in_array($playerBId, $busyPlayers, true);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function listBusyPlayerIdsByClub(int $clubId): array
+    {
+        $sql = sprintf(
+            'SELECT DISTINCT player_id
+             FROM (
+                SELECT m.player_a_id AS player_id
+                FROM `%1$smatches` m
+                INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
+                WHERE t.club_id = ?
+                  AND m.status IN ("assigned", "in_progress")
+                UNION ALL
+                SELECT m.player_b_id AS player_id
+                FROM `%1$smatches` m
+                INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
+                WHERE t.club_id = ?
+                  AND m.status IN ("assigned", "in_progress")
+             ) busy',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('ii', $clubId, $clubId);
+        $statement->execute();
+        $result = $statement->get_result();
+        /** @var array<int, array{player_id:mixed}> $rows */
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $statement->close();
+
+        return array_values(array_unique(array_map(
+            static fn (array $row): int => (int) $row['player_id'],
+            $rows
+        )));
+    }
+
+    /**
+     * @param array<int, int> $playerIds
+     */
+    private function assertPlayersAreRegisteredForTournament(int $tournamentId, array $playerIds): void
+    {
+        $normalized = array_values(array_unique(array_filter($playerIds, static fn (int $value): bool => $value > 0)));
+
+        if (count($normalized) !== 2) {
+            throw new ValidationException('invalid_match_players', 'Two valid players are required to create a match.');
+        }
+
+        $sql = sprintf(
+            'SELECT COUNT(*) AS total
+             FROM `%1$stournament_players`
+             WHERE tournament_id = ?
+               AND status <> "withdrawn"
+               AND player_id IN (?, ?)',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('iii', $tournamentId, $normalized[0], $normalized[1]);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: ['total' => 0];
+        $statement->close();
+
+        if ((int) ($row['total'] ?? 0) !== count($normalized)) {
+            throw new ValidationException(
+                'players_not_registered_for_tournament',
+                'Both players must be registered in the selected tournament before you can create a match.'
+            );
+        }
+    }
+
+    private function assertKioskCanBeUsedForTournament(
+        int $tournamentId,
+        int $clubId,
+        int $kioskId,
+        ?int $excludeMatchId,
+        int $playerAId,
+        int $playerBId
+    ): void {
+        $allowed = $this->listClubKioskIds($clubId);
+
+        if (!in_array($kioskId, $allowed, true)) {
+            throw new ValidationException('kiosk_not_in_club', 'The selected board does not belong to this club.');
+        }
+
+        $assignmentSql = sprintf(
+            'SELECT id
+             FROM `%1$stournament_kiosks`
+             WHERE tournament_id = ? AND kiosk_id = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+        $assignment = $this->connection->prepare($assignmentSql);
+        $assignment->bind_param('ii', $tournamentId, $kioskId);
+        $assignment->execute();
+        $assignmentResult = $assignment->get_result();
+        $assignedRow = $assignmentResult->fetch_assoc() ?: null;
+        $assignment->close();
+
+        if ($assignedRow === null) {
+            throw new ValidationException(
+                'kiosk_not_assigned_to_tournament',
+                'The selected board is not assigned to this tournament.'
+            );
+        }
+
+        $busySql = sprintf(
+            'SELECT m.id
+             FROM `%1$smatches` m
+             INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
+             WHERE m.kiosk_id = ?
+               AND m.status IN ("assigned", "in_progress")
+               AND t.club_id = ?
+               AND (? IS NULL OR m.id <> ?)
+             LIMIT 1',
+            $this->tablePrefix
+        );
+        $busy = $this->connection->prepare($busySql);
+        $busy->bind_param('iiii', $kioskId, $clubId, $excludeMatchId, $excludeMatchId);
+        $busy->execute();
+        $busyResult = $busy->get_result();
+        $busyRow = $busyResult->fetch_assoc() ?: null;
+        $busy->close();
+
+        if ($busyRow !== null) {
+            throw new ValidationException(
+                'kiosk_busy',
+                'The selected board is already running or holding another active match.'
+            );
+        }
+
+        $playersBusySql = sprintf(
+            'SELECT id
+             FROM `%1$smatches` m
+             INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
+             WHERE t.club_id = ?
+               AND m.status IN ("assigned", "in_progress")
+               AND (? IS NULL OR m.id <> ?)
+               AND (
+                    m.player_a_id IN (?, ?)
+                    OR m.player_b_id IN (?, ?)
+               )
+             LIMIT 1',
+            $this->tablePrefix
+        );
+        $playersBusy = $this->connection->prepare($playersBusySql);
+        $playersBusy->bind_param('iiiiiii', $clubId, $excludeMatchId, $excludeMatchId, $playerAId, $playerBId, $playerAId, $playerBId);
+        $playersBusy->execute();
+        $playersBusyResult = $playersBusy->get_result();
+        $playersBusyRow = $playersBusyResult->fetch_assoc() ?: null;
+        $playersBusy->close();
+
+        if ($playersBusyRow !== null) {
+            throw new ValidationException(
+                'players_not_available',
+                'One or both players are already in another assigned or active match.'
+            );
+        }
     }
 
     /**
