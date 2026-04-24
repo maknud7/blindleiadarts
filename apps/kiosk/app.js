@@ -4,6 +4,13 @@ const state = {
   kioskCode: localStorage.getItem("bd:kioskCode") || "",
   pairingToken: localStorage.getItem("bd:kioskPairingToken") || "",
   pairingRequestCode: localStorage.getItem("bd:kioskPairingRequestCode") || "",
+  connectedClub: (() => {
+    try {
+      return JSON.parse(localStorage.getItem("bd:kioskClub") || "null");
+    } catch {
+      return null;
+    }
+  })(),
   snapshot: null,
   pollHandle: null,
   liveSource: null,
@@ -32,6 +39,10 @@ const elements = {
   settingsCloseButton: document.getElementById("settingsCloseButton"),
   pairingSummary: document.getElementById("pairingSummary"),
   settingsMeta: document.getElementById("settingsMeta"),
+  clubConnectSummary: document.getElementById("clubConnectSummary"),
+  clubConnectCode: document.getElementById("clubConnectCode"),
+  connectClubButton: document.getElementById("connectClubButton"),
+  clearClubButton: document.getElementById("clearClubButton"),
   pairingRequestPanel: document.getElementById("pairingRequestPanel"),
   startPairingRequestButton: document.getElementById("startPairingRequestButton"),
   pairingRequestCard: document.getElementById("pairingRequestCard"),
@@ -237,6 +248,18 @@ function persistPairing(code, token) {
   persistPairingRequest("");
 }
 
+function persistConnectedClub(club) {
+  state.connectedClub = club;
+
+  if (club) {
+    localStorage.setItem("bd:kioskClub", JSON.stringify(club));
+    elements.clubConnectCode.value = club.kiosk_pairing_code || "";
+  } else {
+    localStorage.removeItem("bd:kioskClub");
+    elements.clubConnectCode.value = "";
+  }
+}
+
 function persistPairingRequest(code) {
   state.pairingRequestCode = code;
 
@@ -252,6 +275,12 @@ function clearPairing() {
   state.pairingToken = "";
   localStorage.removeItem("bd:kioskCode");
   localStorage.removeItem("bd:kioskPairingToken");
+  persistPairingRequest("");
+}
+
+function clearConnectedClub() {
+  persistConnectedClub(null);
+  clearPairing();
   persistPairingRequest("");
 }
 
@@ -379,9 +408,33 @@ function renderSettingsMeta(snapshot = state.snapshot) {
   `;
 }
 
+function renderClubConnectPanel() {
+  const club = state.connectedClub;
+  const hasClub = Boolean(club?.id);
+
+  elements.clubConnectSummary.classList.toggle("hidden", !hasClub);
+  elements.clearClubButton.classList.toggle("hidden", !hasClub);
+  elements.pairingRequestPanel.classList.toggle("hidden", !hasClub);
+  elements.startPairingRequestButton.disabled = !hasClub;
+
+  if (!hasClub) {
+    elements.clubConnectSummary.innerHTML = "";
+    return;
+  }
+
+  elements.clubConnectSummary.innerHTML = `
+    <div class="row">
+      <strong>${club.name}</strong>
+      <span class="pill">${club.kiosk_pairing_code || ""}</span>
+    </div>
+    <p class="muted">Nettbrettet er nå låst til ${club.name} frem til du bytter klubb her.</p>
+  `;
+}
+
 function openSettings() {
   updatePairingSummary();
   renderSettingsMeta();
+  renderClubConnectPanel();
   renderPairingRequestCard();
   elements.settingsOverlay?.classList.remove("hidden");
   showDialog(elements.settingsDialog);
@@ -505,11 +558,15 @@ function renderIdle(snapshot) {
 }
 
 function renderDisconnected() {
-  applyClubBranding(null);
+  applyClubBranding(state.connectedClub, null);
   elements.idleState.classList.remove("hidden");
   elements.assignedState.classList.add("hidden");
   elements.matchState.classList.add("hidden");
-  elements.idleLane.textContent = state.kioskCode ? "Kiosk frakoblet" : "Par nettbrett";
+  elements.idleLane.textContent = state.kioskCode
+    ? "Kiosk frakoblet"
+    : state.connectedClub
+      ? state.connectedClub.name
+      : "Koble til klubb";
   elements.idleSponsor.textContent = state.kioskCode
     ? "Denne enheten trenger ny paring eller har mistet tilgang."
     : "Åpne tannhjulet og start pairing for å pare dette nettbrettet.";
@@ -518,6 +575,7 @@ function renderDisconnected() {
   elements.unpairButton.classList.toggle("hidden", !state.kioskCode);
   updatePairingSummary(null);
   renderSettingsMeta(null);
+  renderClubConnectPanel();
   renderPairingRequestCard();
 }
 
@@ -845,9 +903,14 @@ async function startLiveUpdates() {
 async function createPairingRequest() {
   ensurePairingToken();
 
+  if (!state.connectedClub?.id) {
+    throw new Error("Koble nettbrettet til riktig klubb før pairing starter.");
+  }
+
   const data = await api("/kiosk-pairing-requests", {
     method: "POST",
     body: {
+      club_id: state.connectedClub.id,
       device_name: deviceName(),
     },
   });
@@ -855,6 +918,24 @@ async function createPairingRequest() {
   persistPairingRequest(data.request.request_code);
   updatePairingSummary();
   renderPairingRequestCard();
+}
+
+async function connectToClubByCode() {
+  const code = elements.clubConnectCode.value.trim().toUpperCase();
+
+  if (!code) {
+    throw new Error("Tast inn klubbkoden først.");
+  }
+
+  const data = await api("/public/kiosk/connect", {
+    method: "POST",
+    body: { code },
+  });
+
+  persistConnectedClub(data.club || null);
+  clearPairing();
+  renderClubConnectPanel();
+  renderDisconnected();
 }
 
 async function loadPairingRequestStatus() {
@@ -1136,6 +1217,24 @@ function bindEvents() {
     }
   });
 
+  elements.connectClubButton.addEventListener("click", async () => {
+    try {
+      await connectToClubByCode();
+      closeSettings();
+      showToast("Nettbrettet er koblet til valgt klubb.");
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+
+  elements.clearClubButton.addEventListener("click", () => {
+    closeLiveUpdates();
+    clearConnectedClub();
+    closeSettings();
+    renderDisconnected();
+    showToast("Klubbtilkoblingen er fjernet.");
+  });
+
   elements.copyPairingLinkButton.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(elements.pairingAdminUrl.value);
@@ -1231,6 +1330,10 @@ async function bootstrap() {
   enablePreviewModeIfNeeded();
   renderNumberGrid();
   bindEvents();
+  if (state.connectedClub?.kiosk_pairing_code) {
+    elements.clubConnectCode.value = state.connectedClub.kiosk_pairing_code;
+  }
+  renderClubConnectPanel();
   renderPairingRequestCard();
 
   if (!state.kioskCode && !state.pairingRequestCode) {

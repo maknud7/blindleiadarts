@@ -105,6 +105,7 @@ final class Application
                     'GET /v1/health',
                     'GET /v1/system/status',
                     'GET /v1/realtime/config',
+                    'POST /v1/public/kiosk/connect',
                     'POST /v1/public/screen/connect',
                     'GET /v1/public/screen',
                     'POST /v1/auth/login',
@@ -238,6 +239,25 @@ final class Application
                 'device' => $device,
                 'access_token' => $device['access_token'] ?? null,
                 'screen' => $screen,
+            ]);
+        }
+
+        if ($method === 'POST' && $path === 'v1/public/kiosk/connect') {
+            $payload = $request->jsonBody();
+            $code = strtoupper(trim((string) ($payload['code'] ?? '')));
+
+            if ($code === '') {
+                return JsonResponse::error(422, 'kiosk_club_code_required', 'A kiosk club code is required.');
+            }
+
+            $club = $clubRepository->findByKioskPairingCode($code);
+
+            if ($club === null) {
+                return JsonResponse::error(404, 'kiosk_club_code_invalid', 'Club code was not found.');
+            }
+
+            return JsonResponse::ok([
+                'club' => $club,
             ]);
         }
 
@@ -428,7 +448,7 @@ final class Application
 
             return JsonResponse::ok([
                 'club_id' => (int) $matches[1],
-                'items' => $kioskRepository->listPendingPairingRequests(),
+                'items' => $kioskRepository->listPendingPairingRequests((int) $matches[1]),
             ]);
         }
 
@@ -780,13 +800,18 @@ final class Application
             $pairingToken = trim((string) $request->header('x-kiosk-pairing-token'));
             $payload = $request->jsonBody();
             $deviceName = trim((string) ($payload['device_name'] ?? ''));
+            $clubId = (int) ($payload['club_id'] ?? 0);
 
             if ($pairingToken === '') {
                 return JsonResponse::error(422, 'pairing_token_required', 'X-Kiosk-Pairing-Token header is required.');
             }
 
+            if ($clubId <= 0 || $clubRepository->findById($clubId) === null) {
+                return JsonResponse::error(422, 'club_required', 'A valid club_id is required before pairing can start.');
+            }
+
             return JsonResponse::ok([
-                'request' => $kioskRepository->createPairingRequest($pairingToken, $deviceName),
+                'request' => $kioskRepository->createPairingRequest($clubId, $pairingToken, $deviceName),
             ], 201);
         }
 
@@ -1338,7 +1363,7 @@ final class Application
                     'club' => $club,
                     'dashboard' => $dashboard,
                     'active_screen_tournament' => $screenTournament,
-                    'pending_pairing_requests' => count($kioskRepository->listPendingPairingRequests()),
+                    'pending_pairing_requests' => count($kioskRepository->listPendingPairingRequests($clubId)),
                     'screen_devices' => $screenRepository->listByClubId($clubId),
                 ];
             }

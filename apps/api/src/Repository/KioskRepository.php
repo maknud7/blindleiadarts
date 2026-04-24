@@ -273,14 +273,16 @@ final class KioskRepository
     /**
      * @return array<string, mixed>
      */
-    public function createPairingRequest(string $pairingToken, ?string $deviceName = null): array
+    public function createPairingRequest(int $clubId, string $pairingToken, ?string $deviceName = null): array
     {
         $fingerprint = hash('sha256', $pairingToken);
-        $existing = $this->findPendingPairingRequestByFingerprint($fingerprint);
+        $existing = $this->findPendingPairingRequestByFingerprint($fingerprint, $clubId);
 
         if ($existing !== null) {
             return $this->formatPairingRequest($existing);
         }
+
+        $this->cancelPendingPairingRequestsByFingerprint($fingerprint);
 
         $requestCode = $this->generatePairingRequestCode();
         $deviceName = $this->normalizeDeviceName($deviceName);
@@ -289,12 +291,12 @@ final class KioskRepository
 
         $sql = sprintf(
             'INSERT INTO `%1$skiosk_pairing_requests`
-             (request_code, pairing_token_hash, pairing_token_fingerprint, device_name, status, expires_at)
-             VALUES (?, ?, ?, ?, "pending", ?)',
+             (club_id, request_code, pairing_token_hash, pairing_token_fingerprint, device_name, status, expires_at)
+             VALUES (?, ?, ?, ?, ?, "pending", ?)',
             $this->tablePrefix
         );
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('sssss', $requestCode, $tokenHash, $fingerprint, $deviceName, $expiresAt);
+        $statement->bind_param('isssss', $clubId, $requestCode, $tokenHash, $fingerprint, $deviceName, $expiresAt);
         $statement->execute();
         $statement->close();
 
@@ -343,19 +345,35 @@ final class KioskRepository
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function listPendingPairingRequests(): array
+    public function listPendingPairingRequests(?int $clubId = null): array
     {
-        $sql = sprintf(
-            'SELECT id, request_code, device_name, status, requested_at, expires_at
-             FROM `%1$skiosk_pairing_requests`
-             WHERE status = "pending" AND expires_at >= NOW()
-             ORDER BY requested_at DESC',
-            $this->tablePrefix
-        );
-
-        $result = $this->connection->query($sql);
-        /** @var array<int, array<string, mixed>> $rows */
-        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        if ($clubId !== null) {
+            $sql = sprintf(
+                'SELECT id, club_id, request_code, device_name, status, requested_at, expires_at
+                 FROM `%1$skiosk_pairing_requests`
+                 WHERE club_id = ? AND status = "pending" AND expires_at >= NOW()
+                 ORDER BY requested_at DESC',
+                $this->tablePrefix
+            );
+            $statement = $this->connection->prepare($sql);
+            $statement->bind_param('i', $clubId);
+            $statement->execute();
+            $result = $statement->get_result();
+            /** @var array<int, array<string, mixed>> $rows */
+            $rows = $result->fetch_all(MYSQLI_ASSOC);
+            $statement->close();
+        } else {
+            $sql = sprintf(
+                'SELECT id, club_id, request_code, device_name, status, requested_at, expires_at
+                 FROM `%1$skiosk_pairing_requests`
+                 WHERE status = "pending" AND expires_at >= NOW()
+                 ORDER BY requested_at DESC',
+                $this->tablePrefix
+            );
+            $result = $this->connection->query($sql);
+            /** @var array<int, array<string, mixed>> $rows */
+            $rows = $result->fetch_all(MYSQLI_ASSOC);
+        }
 
         return array_map(fn (array $row): array => $this->formatPairingRequest($row), $rows);
     }
@@ -373,6 +391,10 @@ final class KioskRepository
 
         if ((string) $request['status'] !== 'pending') {
             return $this->formatPairingRequest($request);
+        }
+
+        if ((int) ($request['club_id'] ?? 0) !== $clubId) {
+            return null;
         }
 
         $kiosk = $this->findKioskById($kioskId);
@@ -591,6 +613,7 @@ final class KioskRepository
     {
         return [
             'id' => isset($request['id']) ? (int) $request['id'] : null,
+            'club_id' => isset($request['club_id']) ? (int) $request['club_id'] : null,
             'request_code' => $request['request_code'] ?? null,
             'device_name' => $request['device_name'] ?? null,
             'status' => $request['status'] ?? 'pending',
@@ -714,18 +737,25 @@ final class KioskRepository
     /**
      * @return array<string, mixed>|null
      */
-    private function findPendingPairingRequestByFingerprint(string $fingerprint): ?array
+    private function findPendingPairingRequestByFingerprint(string $fingerprint, ?int $clubId = null): ?array
     {
+        $clubFilter = $clubId !== null ? ' AND club_id = ?' : '';
         $sql = sprintf(
-            'SELECT id, request_code, pairing_token_hash, pairing_token_fingerprint, device_name, status, requested_at, expires_at, approved_kiosk_id
+            'SELECT id, club_id, request_code, pairing_token_hash, pairing_token_fingerprint, device_name, status, requested_at, expires_at, approved_kiosk_id
              FROM `%1$skiosk_pairing_requests`
-             WHERE pairing_token_fingerprint = ? AND status = "pending" AND expires_at >= NOW()
+             WHERE pairing_token_fingerprint = ? AND status = "pending" AND expires_at >= NOW()' . $clubFilter . '
              LIMIT 1',
             $this->tablePrefix
         );
 
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('s', $fingerprint);
+
+        if ($clubId !== null) {
+            $statement->bind_param('si', $fingerprint, $clubId);
+        } else {
+            $statement->bind_param('s', $fingerprint);
+        }
+
         $statement->execute();
         $result = $statement->get_result();
         $row = $result->fetch_assoc() ?: null;
@@ -740,7 +770,7 @@ final class KioskRepository
     private function findPairingRequestByCode(string $requestCode): ?array
     {
         $sql = sprintf(
-            'SELECT id, request_code, pairing_token_hash, pairing_token_fingerprint, device_name, status, requested_at, expires_at, approved_kiosk_id
+            'SELECT id, club_id, request_code, pairing_token_hash, pairing_token_fingerprint, device_name, status, requested_at, expires_at, approved_kiosk_id
              FROM `%1$skiosk_pairing_requests`
              WHERE request_code = ?
              LIMIT 1',
@@ -755,6 +785,21 @@ final class KioskRepository
         $statement->close();
 
         return $row;
+    }
+
+    private function cancelPendingPairingRequestsByFingerprint(string $fingerprint): void
+    {
+        $sql = sprintf(
+            'UPDATE `%1$skiosk_pairing_requests`
+             SET status = "cancelled", consumed_at = NOW()
+             WHERE pairing_token_fingerprint = ? AND status = "pending"',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('s', $fingerprint);
+        $statement->execute();
+        $statement->close();
     }
 
     private function generatePairingRequestCode(): string

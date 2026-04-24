@@ -29,6 +29,7 @@ final class ClubRepository
                 c.name,
                 c.slug,
                 c.logo_url,
+                c.kiosk_pairing_code,
                 COUNT(DISTINCT p.id) AS player_count,
                 COUNT(DISTINCT k.id) AS kiosk_count,
                 COUNT(DISTINCT CASE WHEN t.status IN ("draft", "ready", "in_progress") THEN t.id END) AS active_tournament_count
@@ -36,7 +37,7 @@ final class ClubRepository
              LEFT JOIN `%1$splayers` p ON p.club_id = c.id AND p.is_active = 1
              LEFT JOIN `%1$skiosks` k ON k.club_id = c.id AND k.is_active = 1
              LEFT JOIN `%1$stournaments` t ON t.club_id = c.id
-             GROUP BY c.id, c.name, c.slug, c.logo_url
+             GROUP BY c.id, c.name, c.slug, c.logo_url, c.kiosk_pairing_code
              ORDER BY c.name ASC',
             $this->tablePrefix
         );
@@ -53,7 +54,7 @@ final class ClubRepository
     public function findById(int $clubId): ?array
     {
         $sql = sprintf(
-            'SELECT id, name, slug, logo_url, created_at, updated_at
+            'SELECT id, name, slug, logo_url, kiosk_pairing_code, created_at, updated_at
              FROM `%1$sclubs`
              WHERE id = ?
              LIMIT 1',
@@ -82,7 +83,7 @@ final class ClubRepository
         }
 
         $sql = sprintf(
-            'SELECT id, name, slug, logo_url, created_at, updated_at
+            'SELECT id, name, slug, logo_url, kiosk_pairing_code, created_at, updated_at
              FROM `%1$sclubs`
              WHERE slug = ?
              LIMIT 1',
@@ -105,7 +106,7 @@ final class ClubRepository
     public function findFirstClub(): ?array
     {
         $sql = sprintf(
-            'SELECT id, name, slug, logo_url, created_at, updated_at
+            'SELECT id, name, slug, logo_url, kiosk_pairing_code, created_at, updated_at
              FROM `%1$sclubs`
              ORDER BY name ASC, id ASC
              LIMIT 1',
@@ -114,6 +115,35 @@ final class ClubRepository
 
         $result = $this->connection->query($sql);
         $row = $result !== false ? ($result->fetch_assoc() ?: null) : null;
+
+        return $row;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findByKioskPairingCode(string $pairingCode): ?array
+    {
+        $pairingCode = strtoupper(trim($pairingCode));
+
+        if ($pairingCode === '') {
+            return null;
+        }
+
+        $sql = sprintf(
+            'SELECT id, name, slug, logo_url, kiosk_pairing_code, created_at, updated_at
+             FROM `%1$sclubs`
+             WHERE kiosk_pairing_code = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('s', $pairingCode);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: null;
+        $statement->close();
 
         return $row;
     }
@@ -147,14 +177,15 @@ final class ClubRepository
         $name = trim((string) ($payload['name'] ?? ''));
         $slug = $this->slugify((string) ($payload['slug'] ?? $name));
         $logoUrl = $this->nullableString($payload['logo_url'] ?? null);
+        $kioskPairingCode = $this->generateKioskPairingCode($slug !== '' ? $slug : $name);
 
         $sql = sprintf(
-            'INSERT INTO `%1$sclubs` (name, slug, logo_url) VALUES (?, ?, ?)',
+            'INSERT INTO `%1$sclubs` (name, slug, logo_url, kiosk_pairing_code) VALUES (?, ?, ?, ?)',
             $this->tablePrefix
         );
 
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('sss', $name, $slug, $logoUrl);
+        $statement->bind_param('ssss', $name, $slug, $logoUrl, $kioskPairingCode);
         $statement->execute();
         $id = (int) $statement->insert_id;
         $statement->close();
@@ -544,6 +575,37 @@ final class ClubRepository
     {
         $sql = sprintf(
             'SELECT id FROM `%1$skiosks` WHERE code = ? LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('s', $code);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc();
+        $statement->close();
+
+        return $row !== null;
+    }
+
+    private function generateKioskPairingCode(string $clubReference): string
+    {
+        $base = strtoupper($this->slugify($clubReference));
+        $base = str_replace('-', '', $base);
+        $base = substr($base !== '' ? $base : 'CLUB', 0, 3);
+
+        do {
+            $suffix = strtoupper(substr(bin2hex(random_bytes(2)), 0, 4));
+            $code = sprintf('%s-K%s', str_pad($base, 3, 'X'), $suffix);
+        } while ($this->kioskPairingCodeExists($code));
+
+        return $code;
+    }
+
+    private function kioskPairingCodeExists(string $code): bool
+    {
+        $sql = sprintf(
+            'SELECT id FROM `%1$sclubs` WHERE kiosk_pairing_code = ? LIMIT 1',
             $this->tablePrefix
         );
 

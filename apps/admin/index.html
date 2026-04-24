@@ -176,7 +176,7 @@
             </div>
             <div class="inset stack">
               <strong>2. Pair nettbrett</strong>
-              <p class="muted">Åpne kiosk på nettbrettet, start pairing fra tannhjulet og godkjenn forespørselen i admin.</p>
+              <p class="muted">Åpne kiosk på nettbrettet, tast inn klubbkoden, start pairing fra tannhjulet og godkjenn forespørselen i admin.</p>
             </div>
             <div class="inset stack">
               <strong>3. Tildel kamp</strong>
@@ -226,6 +226,32 @@
       </section>
 
       <section id="boardsView" class="view-section hidden" data-view-panel="boards">
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Klubbkode</p>
+              <h3>Koble nettbrett til riktig klubb</h3>
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="card inset stack">
+              <p class="help">Alle klubber bruker samme kiosk-URL. Nettbrettet taster derfor først inn en klubbkode, og først deretter kan det sende pairing request til boards i akkurat denne klubben.</p>
+              <div id="kioskPairingCodeCard" class="pairing-code-card">
+                <div class="muted">Klubbkode for kiosk</div>
+                <div id="kioskPairingCode" class="pairing-display">---</div>
+                <div id="kioskPairingCodeHint" class="muted">Bruk denne koden på /kiosk/ før pairing startes.</div>
+              </div>
+            </div>
+            <div class="card inset stack">
+              <h4>Ny flyt</h4>
+              <p class="muted">1. Åpne `/kiosk/` på nettbrettet.</p>
+              <p class="muted">2. Tast inn klubbkoden over.</p>
+              <p class="muted">3. Start pairing fra tannhjulet.</p>
+              <p class="muted">4. Godkjenn requesten under og velg board.</p>
+            </div>
+          </div>
+        </section>
+
         <section class="card">
           <div class="card-head">
             <div>
@@ -469,9 +495,9 @@
             <div class="inset stack">
               <h4>Pairing av nettbrett</h4>
               <p class="muted">1. Åpne kioskflaten på nettbrettet.</p>
-              <p class="muted">2. Trykk tannhjulet og velg start pairing.</p>
-              <p class="muted">3. Gå til Boards og kiosker i admin.</p>
-              <p class="muted">4. Godkjenn pairing og velg hvilket board nettbrettet skal låses til.</p>
+              <p class="muted">2. Tast inn klubbkoden som vises i admin.</p>
+              <p class="muted">3. Trykk tannhjulet og velg start pairing.</p>
+              <p class="muted">4. Gå til Boards og kiosker i admin og godkjenn pairing mot riktig board.</p>
             </div>
             <div class="inset stack">
               <h4>Under turnering</h4>

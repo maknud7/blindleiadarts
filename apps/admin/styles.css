@@ -406,6 +406,22 @@ button.ghost {
   gap: 0.6rem;
 }
 
+.pairing-code-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.75);
+}
+
+.pairing-display {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: var(--ink-strong);
+}
+
 .ghost-link {
   display: inline-flex;
   align-items: center;

@@ -175,6 +175,17 @@
       <p id="pairingSummary" class="muted">Nettbrettet er ikke paret ennå.</p>
       <div id="settingsMeta" class="meta"></div>
 
+      <div id="clubConnectPanel" class="stack">
+        <p class="muted">Samme kiosk-URL brukes av alle klubber. Tast inn klubbkoden fÃ¸rst, sÃ¥ vet systemet hvilken klubb dette nettbrettet skal pares mot.</p>
+        <div id="clubConnectSummary" class="pairing-card hidden"></div>
+        <label for="clubConnectCode">Klubbkode</label>
+        <input id="clubConnectCode" placeholder="F.eks. BLI-KA1F">
+        <div class="dialog-actions">
+          <button id="connectClubButton" type="button">Koble til klubb</button>
+          <button id="clearClubButton" class="ghost hidden" type="button">Bytt klubb</button>
+        </div>
+      </div>
+
       <div id="pairingRequestPanel" class="stack">
         <p class="muted">Start pairing på nettbrettet og godkjenn deretter forespørselen fra admin under Boards og kiosker.</p>
         <button id="startPairingRequestButton" type="button">Start pairing</button>

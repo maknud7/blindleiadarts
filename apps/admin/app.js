@@ -48,6 +48,8 @@ const elements = {
   tournamentList: document.getElementById("tournamentList"),
   kioskList: document.getElementById("kioskList"),
   pairingRequestList: document.getElementById("pairingRequestList"),
+  kioskPairingCode: document.getElementById("kioskPairingCode"),
+  kioskPairingCodeHint: document.getElementById("kioskPairingCodeHint"),
   boardCallList: document.getElementById("boardCallList"),
   playerList: document.getElementById("playerList"),
   recentMatches: document.getElementById("recentMatches"),
@@ -415,6 +417,10 @@ function renderClub() {
 
   applyClubBranding(dashboard.club);
   elements.clubIntro.textContent = `${dashboard.club.name} er lastet inn. Denne flaten er rendyrket for administrasjon av klubb, kiosk og turnering.`;
+  elements.kioskPairingCode.textContent = dashboard.club.kiosk_pairing_code || "---";
+  elements.kioskPairingCodeHint.textContent = dashboard.club.kiosk_pairing_code
+    ? `Bruk ${dashboard.club.kiosk_pairing_code} på /kiosk/ før nettbrettet kan pares mot et board i ${dashboard.club.name}.`
+    : "Denne klubben mangler kioskkode ennå.";
   elements.heroMetrics.innerHTML = `
     <div class="metric"><small>Spillere</small><strong>${dashboard.players.length}</strong></div>
     <div class="metric"><small>Kiosker</small><strong>${dashboard.kiosks.length}</strong></div>
