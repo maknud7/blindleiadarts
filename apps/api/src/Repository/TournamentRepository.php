@@ -304,6 +304,49 @@ final class TournamentRepository
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function withdrawPlayer(int $tournamentId, int $playerId): array
+    {
+        $selectSql = sprintf(
+            'SELECT id
+             FROM `%1$stournament_players`
+             WHERE tournament_id = ? AND player_id = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $select = $this->connection->prepare($selectSql);
+        $select->bind_param('ii', $tournamentId, $playerId);
+        $select->execute();
+        $result = $select->get_result();
+        $existing = $result->fetch_assoc() ?: null;
+        $select->close();
+
+        if ($existing === null) {
+            throw new ValidationException('registration_not_found', 'This player is not registered in the selected tournament.', 404);
+        }
+
+        $status = 'withdrawn';
+        $updateSql = sprintf(
+            'UPDATE `%1$stournament_players`
+             SET status = ?
+             WHERE tournament_id = ? AND player_id = ?',
+            $this->tablePrefix
+        );
+        $update = $this->connection->prepare($updateSql);
+        $update->bind_param('sii', $status, $tournamentId, $playerId);
+        $update->execute();
+        $update->close();
+
+        return [
+            'tournament_id' => $tournamentId,
+            'player_id' => $playerId,
+            'status' => 'withdrawn',
+        ];
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function listMatches(int $tournamentId): array

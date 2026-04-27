@@ -417,6 +417,39 @@
             </div>
           </div>
         </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Turneringspåmelding</p>
+              <h3>Registrer spillere på valgt turnering</h3>
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="stack">
+              <div id="tournamentRegistrationSummary" class="mini-card">
+                <p class="muted">Velg en turnering for å se påmeldinger og tilgjengelige spillere.</p>
+              </div>
+              <div class="card inset stack">
+                <h4>Påmeldte spillere</h4>
+                <div id="registeredPlayerList" class="stack"></div>
+              </div>
+            </div>
+            <div class="stack">
+              <div class="inset stack">
+                <h4>Flyt vi ønsker</h4>
+                <p class="muted">1. Velg turnering over.</p>
+                <p class="muted">2. Meld på spillere fra klubbens spillerliste.</p>
+                <p class="muted">3. Opprett først kamper når påmeldingene er på plass.</p>
+                <p class="muted">4. Auto-tildel eller board-call kampene når spillerne er ledige.</p>
+              </div>
+              <div class="card inset stack">
+                <h4>Tilgjengelige klubbspillere</h4>
+                <div id="registrationRosterList" class="stack"></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section id="playersView" class="view-section hidden" data-view-panel="players">
@@ -456,6 +489,7 @@
             <form id="matchForm" class="card inset stack">
               <h4>Ny kamp</h4>
               <select id="matchTournamentId" name="tournament_id"></select>
+              <p id="matchTournamentHint" class="help">Velg turnering først. Kun påmeldte spillere blir tilgjengelige.</p>
               <select id="matchPlayerA" name="player_a_id"></select>
               <select id="matchPlayerB" name="player_b_id"></select>
               <select id="matchKioskId" name="kiosk_id"></select>

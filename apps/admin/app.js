@@ -64,11 +64,15 @@ const elements = {
   opsTournamentSelect: document.getElementById("opsTournamentSelect"),
   tournamentOpsSummary: document.getElementById("tournamentOpsSummary"),
   tournamentBoardGrid: document.getElementById("tournamentBoardGrid"),
+  tournamentRegistrationSummary: document.getElementById("tournamentRegistrationSummary"),
+  registeredPlayerList: document.getElementById("registeredPlayerList"),
+  registrationRosterList: document.getElementById("registrationRosterList"),
   saveTournamentBoardsButton: document.getElementById("saveTournamentBoardsButton"),
   autoAssignMatchesButton: document.getElementById("autoAssignMatchesButton"),
   tournamentQueueList: document.getElementById("tournamentQueueList"),
   matchForm: document.getElementById("matchForm"),
   matchTournamentId: document.getElementById("matchTournamentId"),
+  matchTournamentHint: document.getElementById("matchTournamentHint"),
   matchPlayerA: document.getElementById("matchPlayerA"),
   matchPlayerB: document.getElementById("matchPlayerB"),
   matchKioskId: document.getElementById("matchKioskId"),
@@ -672,12 +676,31 @@ function populateAdminSelects() {
   const kiosks = state.clubDashboard?.kiosks || [];
 
   elements.matchTournamentId.innerHTML = state.tournaments
-    .map((tournament) => `<option value="${tournament.id}">${tournament.name}</option>`)
+    .map((tournament) => `
+      <option
+        value="${tournament.id}"
+        ${Number(tournament.id) === state.selectedTournamentOpsId ? "selected" : ""}
+      >
+        ${tournament.name}
+      </option>
+    `)
     .join("");
 
-  const playerOptions = [`<option value="">Velg spiller</option>`]
-    .concat(players.map((player) => `<option value="${player.id}">${player.display_name}</option>`))
-    .join("");
+  const selectedTournamentId = Number(elements.matchTournamentId.value || state.selectedTournamentOpsId || 0);
+  const tournamentDetail = Number(state.tournamentOps?.tournament?.id) === selectedTournamentId
+    ? state.tournamentOps?.tournament
+    : state.tournaments.find((tournament) => Number(tournament.id) === selectedTournamentId) || null;
+  const registrations = Array.isArray(tournamentDetail?.registrations)
+    ? tournamentDetail.registrations.filter((registration) => registration.status !== "withdrawn")
+    : [];
+  const registeredPlayerIds = registrations.map((registration) => Number(registration.player_id));
+  const registeredPlayers = players.filter((player) => registeredPlayerIds.includes(Number(player.id)));
+
+  const playerOptions = registeredPlayers.length
+    ? [`<option value="">Velg spiller</option>`]
+      .concat(registeredPlayers.map((player) => `<option value="${player.id}">${player.display_name}</option>`))
+      .join("")
+    : `<option value="">Ingen påmeldte spillere</option>`;
 
   elements.matchPlayerA.innerHTML = playerOptions;
   elements.matchPlayerB.innerHTML = playerOptions;
@@ -692,6 +715,17 @@ function populateAdminSelects() {
         </option>
       `).join("")
     : `<option value="">Ingen turneringer</option>`;
+
+  elements.matchTournamentHint.textContent = selectedTournamentId > 0
+    ? registrations.length > 0
+      ? `${registrations.length} spillere er påmeldt denne turneringen og kan brukes i kampopprettelse.`
+      : "Ingen spillere er påmeldt denne turneringen ennå. Gå til Turneringer og meld på spillere først."
+    : "Velg turnering først. Kun påmeldte spillere blir tilgjengelige.";
+
+  const canCreateMatch = selectedTournamentId > 0 && registeredPlayers.length >= 2;
+  elements.matchPlayerA.disabled = !canCreateMatch;
+  elements.matchPlayerB.disabled = !canCreateMatch;
+  elements.matchForm.querySelector('button[type="submit"]').disabled = !canCreateMatch;
 }
 
 function renderSystemStatus() {
@@ -757,16 +791,36 @@ function renderTournamentOps() {
     elements.tournamentOpsSummary.innerHTML = `<p class="muted">Velg en turnering for å styre boards og auto-tildeling.</p>`;
     elements.tournamentBoardGrid.innerHTML = "";
     elements.tournamentQueueList.innerHTML = `<div class="mini-card"><p class="muted">Ingen turneringskø lastet ennå.</p></div>`;
+    elements.tournamentRegistrationSummary.innerHTML = `<p class="muted">Velg en turnering for å se påmeldinger og tilgjengelige spillere.</p>`;
+    elements.registeredPlayerList.innerHTML = `<div class="mini-card"><p class="muted">Ingen turnering valgt ennå.</p></div>`;
+    elements.registrationRosterList.innerHTML = `<div class="mini-card"><p class="muted">Klubbens spillere vises her når en turnering er valgt.</p></div>`;
     return;
   }
+
+  const registrations = Array.isArray(ops.tournament.registrations) ? ops.tournament.registrations : [];
+  const activeRegistrations = registrations.filter((registration) => registration.status !== "withdrawn");
+  const registeredIds = activeRegistrations.map((registration) => Number(registration.player_id));
+  const availablePlayers = (state.clubDashboard?.players || [])
+    .filter((player) => !registeredIds.includes(Number(player.id)))
+    .sort((left, right) => left.display_name.localeCompare(right.display_name, "no-NO"));
 
   elements.tournamentOpsSummary.innerHTML = `
     <strong>${ops.tournament.name}</strong>
     <div class="pill-row">
       <span class="pill">${ops.tournament.status}</span>
+      <span class="pill">${activeRegistrations.length} påmeldte</span>
       <span class="pill">${ops.queue?.pending_count ?? 0} pending</span>
       <span class="pill">${ops.queue?.assigned_count ?? 0} assigned</span>
       <span class="pill">${ops.queue?.in_progress_count ?? 0} i gang</span>
+    </div>
+  `;
+
+  elements.tournamentRegistrationSummary.innerHTML = `
+    <strong>${ops.tournament.name}</strong>
+    <div class="pill-row">
+      <span class="pill">${activeRegistrations.length} aktive påmeldinger</span>
+      <span class="pill">${availablePlayers.length} tilgjengelige klubbspillere</span>
+      <span class="pill">${registrations.filter((registration) => registration.status === "withdrawn").length} trukket</span>
     </div>
   `;
 
@@ -800,6 +854,44 @@ function renderTournamentOps() {
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen kamper i denne turneringen ennå.</p></div>`;
+
+  elements.registeredPlayerList.innerHTML = activeRegistrations.length
+    ? activeRegistrations.map((registration) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${registration.display_name}</strong>
+            <span class="pill">${registration.status}</span>
+          </div>
+          <div class="pill-row">
+            ${registration.seed ? `<span class="pill">Seed ${registration.seed}</span>` : ""}
+            ${registration.contact_email ? `<span class="pill">${registration.contact_email}</span>` : ""}
+            ${registration.contact_phone ? `<span class="pill">${registration.contact_phone}</span>` : ""}
+          </div>
+          <div class="row actions-row">
+            <span class="muted">Påmeldt i turneringen og klar for kampopprettelse.</span>
+            <button type="button" class="ghost compact-link" data-remove-registration="${registration.player_id}">Fjern</button>
+          </div>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Ingen spillere er påmeldt denne turneringen ennå.</p></div>`;
+
+  elements.registrationRosterList.innerHTML = availablePlayers.length
+    ? availablePlayers.map((player) => `
+        <div class="list-item">
+          <div class="row">
+            <strong>${player.display_name}</strong>
+            <span class="pill">${player.username || "Ingen konto"}</span>
+          </div>
+          <div class="pill-row">
+            ${player.contact_email ? `<span class="pill">${player.contact_email}</span>` : ""}
+            ${player.contact_phone ? `<span class="pill">${player.contact_phone}</span>` : ""}
+          </div>
+          <button type="button" class="ghost compact-link" data-add-registration="${player.id}">Meld på turneringen</button>
+        </div>
+      `).join("")
+    : `<div class="mini-card"><p class="muted">Alle klubbens spillere er allerede påmeldt denne turneringen.</p></div>`;
+
+  populateAdminSelects();
 }
 
 function formatScoringMode(mode) {
@@ -929,6 +1021,20 @@ function bindEvents() {
     try {
       await loadTournamentOps();
       renderTournamentOps();
+      populateAdminSelects();
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.matchTournamentId.addEventListener("change", async (event) => {
+    state.selectedTournamentOpsId = Number(event.target.value || 0);
+    localStorage.setItem("bd:opsTournamentId", String(state.selectedTournamentOpsId || ""));
+
+    try {
+      await loadTournamentOps();
+      renderTournamentOps();
+      populateAdminSelects();
     } catch (error) {
       setStatus(error.message, "error");
     }
@@ -974,6 +1080,45 @@ function bindEvents() {
       renderTournamentOps();
       await Promise.all([loadClubContext(), loadSystemStatus()]);
       setStatus(`Auto-tildeling ferdig. ${result.assigned_count || 0} kamper ble tildelt.`, "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.registeredPlayerList.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-remove-registration]");
+
+    if (!button || !state.selectedTournamentOpsId) {
+      return;
+    }
+
+    try {
+      await api(`/tournaments/${state.selectedTournamentOpsId}/registrations/${Number(button.dataset.removeRegistration)}`, {
+        method: "DELETE",
+        auth: true,
+      });
+      await loadClubContext();
+      setStatus("Spiller fjernet fra turneringen.", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.registrationRosterList.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-add-registration]");
+
+    if (!button || !state.selectedTournamentOpsId) {
+      return;
+    }
+
+    try {
+      await api(`/tournaments/${state.selectedTournamentOpsId}/registrations`, {
+        method: "POST",
+        body: { player_id: Number(button.dataset.addRegistration) },
+        auth: true,
+      });
+      await loadClubContext();
+      setStatus("Spiller meldt på turneringen.", "success");
     } catch (error) {
       setStatus(error.message, "error");
     }
@@ -1112,6 +1257,11 @@ function bindEvents() {
     event.preventDefault();
     const body = collectFormValues(elements.matchForm);
 
+    if (!body.tournament_id) {
+      setStatus("Velg turnering før du oppretter kamp.", "error");
+      return;
+    }
+
     try {
       await api(`/tournaments/${body.tournament_id}/matches`, {
         method: "POST",
@@ -1120,6 +1270,10 @@ function bindEvents() {
       });
 
       elements.matchForm.reset();
+      if (state.selectedTournamentOpsId) {
+        elements.matchTournamentId.value = String(state.selectedTournamentOpsId);
+      }
+      populateAdminSelects();
       setStatus("Kamp opprettet.", "success");
       await loadClubContext();
     } catch (error) {

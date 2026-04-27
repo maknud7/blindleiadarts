@@ -130,6 +130,8 @@ final class Application
                     'POST /v1/clubs/{id}/kiosk-pairing-requests/{requestCode}/approve',
                     'GET /v1/tournaments/{id}',
                     'GET /v1/tournaments/{id}/matches',
+                    'POST /v1/tournaments/{id}/registrations',
+                    'DELETE /v1/tournaments/{id}/registrations/{playerId}',
                     'GET /v1/tournaments/{id}/board-assignments',
                     'POST /v1/tournaments/{id}/register',
                     'POST /v1/tournaments/{id}/matches',
@@ -659,6 +661,67 @@ final class Application
             return JsonResponse::ok([
                 'registration' => $tournamentRepository->registerPlayer((int) $matches[1], $playerId),
             ], 201);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/registrations$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $tournament['club_id']);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $payload = $request->jsonBody();
+            $playerId = (int) ($payload['player_id'] ?? 0);
+
+            if ($playerId <= 0) {
+                return JsonResponse::error(422, 'player_required', 'player_id is required.');
+            }
+
+            $registration = $tournamentRepository->registerPlayer((int) $matches[1], $playerId);
+            $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+
+            return JsonResponse::ok([
+                'registration' => $registration,
+            ], 201);
+        }
+
+        if ($method === 'DELETE' && preg_match('#^v1/tournaments/(\d+)/registrations/(\d+)$#', $path, $matches) === 1) {
+            $admin = $this->requireAdminUser($request, $userRepository);
+
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $clubAccess = $this->assertCanManageClub($admin, (int) $tournament['club_id']);
+
+            if ($clubAccess instanceof JsonResponse) {
+                return $clubAccess;
+            }
+
+            $registration = $tournamentRepository->withdrawPlayer((int) $matches[1], (int) $matches[2]);
+            $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+
+            return JsonResponse::ok([
+                'registration' => $registration,
+            ]);
         }
 
         if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/matches$#', $path, $matches) === 1) {

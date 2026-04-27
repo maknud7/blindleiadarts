@@ -207,6 +207,8 @@ final class ClubRepository
                 p.nickname,
                 p.avatar_url,
                 p.is_active,
+                mp.contact_email,
+                mp.contact_phone,
                 ua.id AS user_account_id,
                 ua.username,
                 ua.role
