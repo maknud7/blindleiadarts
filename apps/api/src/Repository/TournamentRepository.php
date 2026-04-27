@@ -347,6 +347,49 @@ final class TournamentRepository
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function checkInPlayer(int $tournamentId, int $playerId): array
+    {
+        $selectSql = sprintf(
+            'SELECT id, status
+             FROM `%1$stournament_players`
+             WHERE tournament_id = ? AND player_id = ?
+             LIMIT 1',
+            $this->tablePrefix
+        );
+
+        $select = $this->connection->prepare($selectSql);
+        $select->bind_param('ii', $tournamentId, $playerId);
+        $select->execute();
+        $result = $select->get_result();
+        $existing = $result->fetch_assoc() ?: null;
+        $select->close();
+
+        if ($existing === null) {
+            throw new ValidationException('registration_required_before_check_in', 'You must register for the tournament before checking in.', 422);
+        }
+
+        if ((string) ($existing['status'] ?? '') === 'withdrawn') {
+            throw new ValidationException('registration_withdrawn', 'This registration has been withdrawn and cannot be checked in.', 422);
+        }
+
+        $status = 'checked_in';
+        $updateSql = sprintf('UPDATE `%1$stournament_players` SET status = ? WHERE id = ?', $this->tablePrefix);
+        $update = $this->connection->prepare($updateSql);
+        $existingId = (int) $existing['id'];
+        $update->bind_param('si', $status, $existingId);
+        $update->execute();
+        $update->close();
+
+        return [
+            'tournament_id' => $tournamentId,
+            'player_id' => $playerId,
+            'status' => 'checked_in',
+        ];
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function listMatches(int $tournamentId): array
@@ -742,6 +785,12 @@ final class TournamentRepository
             $playerAId = (int) ($match['player_a_id'] ?? 0);
             $playerBId = (int) ($match['player_b_id'] ?? 0);
 
+            if (!$this->arePlayersCheckedInForTournament($tournamentId, [$playerAId, $playerBId])) {
+                $match['skip_reason'] = 'En eller begge spillere er ikke checket inn på arenaen ennå.';
+                $skipped[] = $match;
+                continue;
+            }
+
             if (in_array($playerAId, $busyPlayers, true) || in_array($playerBId, $busyPlayers, true)) {
                 $match['skip_reason'] = 'En eller begge spillere er opptatt i en annen aktiv kamp.';
                 $skipped[] = $match;
@@ -817,6 +866,7 @@ final class TournamentRepository
         $this->assertPlayersAreRegisteredForTournament($tournamentId, [$playerAId, $playerBId]);
 
         if ($kioskId !== null) {
+            $this->assertPlayersAreCheckedInForTournament($tournamentId, $playerAId, $playerBId);
             $this->assertKioskCanBeUsedForTournament($tournamentId, $clubId, $kioskId, null, $playerAId, $playerBId);
         }
 
@@ -859,6 +909,11 @@ final class TournamentRepository
             $clubId,
             $kioskId,
             $matchId,
+            (int) $match['player_a_id'],
+            (int) $match['player_b_id']
+        );
+        $this->assertPlayersAreCheckedInForTournament(
+            (int) $match['tournament_id'],
             (int) $match['player_a_id'],
             (int) $match['player_b_id']
         );
@@ -1069,6 +1124,7 @@ final class TournamentRepository
             $playerAId = (int) ($row['player_a_id'] ?? 0);
             $playerBId = (int) ($row['player_b_id'] ?? 0);
             $row['players_available'] = !in_array($playerAId, $busyPlayers, true) && !in_array($playerBId, $busyPlayers, true);
+            $row['players_checked_in'] = $this->arePlayersCheckedInForTournament($tournamentId, [$playerAId, $playerBId]);
         }
         unset($row);
 
@@ -1143,6 +1199,46 @@ final class TournamentRepository
             throw new ValidationException(
                 'players_not_registered_for_tournament',
                 'Both players must be registered in the selected tournament before you can create a match.'
+            );
+        }
+    }
+
+    /**
+     * @param array<int, int> $playerIds
+     */
+    private function arePlayersCheckedInForTournament(int $tournamentId, array $playerIds): bool
+    {
+        $normalized = array_values(array_unique(array_filter($playerIds, static fn (int $value): bool => $value > 0)));
+
+        if (count($normalized) !== 2) {
+            return false;
+        }
+
+        $sql = sprintf(
+            'SELECT COUNT(*) AS total
+             FROM `%1$stournament_players`
+             WHERE tournament_id = ?
+               AND status = "checked_in"
+               AND player_id IN (?, ?)',
+            $this->tablePrefix
+        );
+
+        $statement = $this->connection->prepare($sql);
+        $statement->bind_param('iii', $tournamentId, $normalized[0], $normalized[1]);
+        $statement->execute();
+        $result = $statement->get_result();
+        $row = $result->fetch_assoc() ?: ['total' => 0];
+        $statement->close();
+
+        return (int) ($row['total'] ?? 0) === count($normalized);
+    }
+
+    private function assertPlayersAreCheckedInForTournament(int $tournamentId, int $playerAId, int $playerBId): void
+    {
+        if (!$this->arePlayersCheckedInForTournament($tournamentId, [$playerAId, $playerBId])) {
+            throw new ValidationException(
+                'players_not_checked_in_for_tournament',
+                'Both players must be checked in on the arena before the match can be assigned to a board.'
             );
         }
     }

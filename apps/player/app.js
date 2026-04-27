@@ -208,8 +208,17 @@ function renderDashboard() {
   elements.registrationList.innerHTML = registrations.length
     ? registrations.map((registration) => `
         <div class="list-item">
-          <strong>${registration.tournament_name}</strong>
-          <p class="muted">${registration.club_name} · ${registration.status}</p>
+          <div class="section-head">
+            <div>
+              <strong>${registration.tournament_name}</strong>
+              <p class="muted">${registration.club_name} · ${registration.tournament_status}</p>
+            </div>
+            <span class="pill">${registration.status === "checked_in" ? "Checket inn" : registration.status}</span>
+          </div>
+          ${registration.status === "registered"
+            ? `<button data-checkin="${registration.tournament_id}">Check inn på arena</button>`
+            : `<p class="muted">Klar for board-tildeling når arrangøren kaller opp kampen.</p>`
+          }
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen påmeldinger ennå.</p></div>`;
@@ -218,8 +227,19 @@ function renderDashboard() {
 function renderTournaments() {
   applyBranding();
 
+  const registrations = Array.isArray(state.dashboard?.registrations) ? state.dashboard.registrations : [];
+  const registrationsByTournament = new Map(
+    registrations.map((registration) => [Number(registration.tournament_id), registration])
+  );
+
   elements.tournamentList.innerHTML = state.tournaments.length
     ? state.tournaments.map((tournament) => `
+        ${(() => {
+          const registration = registrationsByTournament.get(Number(tournament.id)) || null;
+          const isRegistered = registration !== null && registration.status !== "withdrawn";
+          const isCheckedIn = registration?.status === "checked_in";
+
+          return `
         <div class="list-item">
           <div class="section-head">
             <div>
@@ -228,8 +248,18 @@ function renderTournaments() {
             </div>
             <span class="pill">${tournament.registration_count} påmeldte</span>
           </div>
-          <button data-register="${tournament.id}" ${state.me ? "" : "disabled"}>Meld meg på</button>
+          ${isCheckedIn
+            ? `<p class="muted">Du er påmeldt og checket inn på arena.</p>`
+            : isRegistered
+              ? `<div class="stack">
+                  <p class="muted">Du er påmeldt. Når du er i lokalet, trykker du arena-checkin.</p>
+                  <button data-checkin="${tournament.id}" ${state.me ? "" : "disabled"}>Check inn på arena</button>
+                </div>`
+              : `<button data-register="${tournament.id}" ${state.me ? "" : "disabled"}>Meld meg på</button>`
+          }
         </div>
+          `;
+        })()}
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen turneringer tilgjengelig akkurat nå.</p></div>`;
 }
@@ -269,6 +299,20 @@ async function registerForTournament(tournamentId) {
   }
 }
 
+async function checkInForTournament(tournamentId) {
+  try {
+    await api(`/tournaments/${tournamentId}/check-in`, {
+      method: "POST",
+      auth: true,
+    });
+
+    setStatus("Du er nå checket inn på arenaen.", "success");
+    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
 function bindEvents() {
   elements.clubSelect.addEventListener("change", async (event) => {
     state.selectedClubId = Number(event.target.value);
@@ -296,11 +340,26 @@ function bindEvents() {
   elements.tournamentList.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-register]");
 
+    if (button) {
+      await registerForTournament(Number(button.dataset.register));
+      return;
+    }
+
+    const checkInButton = event.target.closest("[data-checkin]");
+
+    if (checkInButton) {
+      await checkInForTournament(Number(checkInButton.dataset.checkin));
+    }
+  });
+
+  elements.registrationList.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-checkin]");
+
     if (!button) {
       return;
     }
 
-    await registerForTournament(Number(button.dataset.register));
+    await checkInForTournament(Number(button.dataset.checkin));
   });
 }
 

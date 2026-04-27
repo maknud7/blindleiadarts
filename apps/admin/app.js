@@ -849,6 +849,7 @@ function renderTournamentOps() {
           <p class="muted">${match.round_label || "Kamp"}${match.bracket_label ? ` · ${match.bracket_label}` : ""}</p>
           <div class="pill-row">
             <span class="pill">${match.players_available ? "Spillere ledige" : "Spillere opptatt"}</span>
+            <span class="pill">${match.players_checked_in ? "Checket inn" : "Mangler check-in"}</span>
             ${match.board_number ? `<span class="pill">Board ${match.board_number}</span>` : `<span class="pill">Ikke tildelt</span>`}
           </div>
         </div>

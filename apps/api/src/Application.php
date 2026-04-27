@@ -132,6 +132,7 @@ final class Application
                     'GET /v1/tournaments/{id}/matches',
                     'POST /v1/tournaments/{id}/registrations',
                     'DELETE /v1/tournaments/{id}/registrations/{playerId}',
+                    'POST /v1/tournaments/{id}/check-in',
                     'GET /v1/tournaments/{id}/board-assignments',
                     'POST /v1/tournaments/{id}/register',
                     'POST /v1/tournaments/{id}/matches',
@@ -661,6 +662,40 @@ final class Application
             return JsonResponse::ok([
                 'registration' => $tournamentRepository->registerPlayer((int) $matches[1], $playerId),
             ], 201);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/check-in$#', $path, $matches) === 1) {
+            $user = $this->requireAuthenticatedUser($request, $userRepository);
+
+            if ($user instanceof JsonResponse) {
+                return $user;
+            }
+
+            $playerId = isset($user['player_id']) && $user['player_id'] !== null ? (int) $user['player_id'] : 0;
+
+            if ($playerId <= 0) {
+                return JsonResponse::error(422, 'player_profile_missing', 'This account is not linked to a player profile.');
+            }
+
+            $tournament = $tournamentRepository->findById((int) $matches[1]);
+
+            if ($tournament !== null && isset($tournament['club_id'])) {
+                $clubAccess = $this->assertCanAccessClub($user, (int) $tournament['club_id']);
+
+                if ($clubAccess instanceof JsonResponse) {
+                    return $clubAccess;
+                }
+            }
+
+            $registration = $tournamentRepository->checkInPlayer((int) $matches[1], $playerId);
+
+            if ($tournament !== null && isset($tournament['club_id'])) {
+                $this->publishClubSnapshot($config, $database, (int) $tournament['club_id']);
+            }
+
+            return JsonResponse::ok([
+                'registration' => $registration,
+            ]);
         }
 
         if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/registrations$#', $path, $matches) === 1) {
