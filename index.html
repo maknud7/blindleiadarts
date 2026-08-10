@@ -3,175 +3,723 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Blindleia Darts</title>
+  <meta name="description" content="Blindleia Dartklubb i Lillesand. Mandagsserie, turneringer, medlemskap og dart for alle nivåer.">
+  <meta name="theme-color" content="#0b3145">
+  <title>Blindleia Dartklubb | Lillesand</title>
   <style>
     @import url("./packages/ui-assets/brand-tokens.css");
 
     :root {
-      --ink: var(--bd-ink);
-      --mist: #eef4f4;
-      --card: #ffffff;
-      --accent: var(--bd-brand-800);
-      --accent-soft: var(--bd-brand-100);
-      --forest: var(--bd-brand-700);
-      --line: var(--bd-line);
+      --navy: var(--bd-brand-900, #0b3145);
+      --blue: var(--bd-brand-800, #11435d);
+      --blue-mid: var(--bd-brand-700, #1a5a78);
+      --blue-soft: var(--bd-brand-100, #dcebf2);
+      --sand: var(--bd-sand-50, #fbf8f2);
+      --sand-2: var(--bd-sand-100, #f1ece3);
+      --ink: var(--bd-ink, #10232f);
+      --line: var(--bd-line, rgba(11, 49, 69, 0.12));
+      --white: #fff;
+      --red: #b83e39;
+      --green: #2b7658;
+      --shadow: 0 24px 64px rgba(11, 49, 69, 0.13);
+      --radius: 28px;
     }
 
     * { box-sizing: border-box; }
 
+    html { scroll-behavior: smooth; }
+
     body {
       margin: 0;
-      min-height: 100vh;
-      font-family: "Trebuchet MS", "Gill Sans", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(17, 67, 93, 0.18), transparent 26rem),
-        radial-gradient(circle at bottom right, rgba(58, 120, 152, 0.18), transparent 30rem),
-        linear-gradient(180deg, #fbf8f2 0%, #eef4f4 100%);
       color: var(--ink);
-      display: grid;
-      place-items: center;
-      padding: 2rem;
+      background: var(--sand);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
 
-    main {
-      width: min(1080px, 100%);
-      background: rgba(255,255,255,0.9);
-      border: 1px solid var(--line);
-      border-radius: 28px;
-      backdrop-filter: blur(12px);
-      padding: 2rem;
-      box-shadow: var(--bd-shadow);
+    a { color: inherit; }
+
+    .site-shell {
+      min-height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 92% 4%, rgba(58, 120, 152, 0.13), transparent 24rem),
+        radial-gradient(circle at 0% 42%, rgba(184, 62, 57, 0.06), transparent 22rem),
+        var(--sand);
     }
 
-    h1 {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: clamp(2.4rem, 6vw, 4.8rem);
-      line-height: 0.95;
+    .wrap {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
     }
 
-    p {
-      margin: 0;
-      font-size: 1.08rem;
-      max-width: 44rem;
-      color: rgba(16, 35, 47, 0.8);
+    header {
+      position: relative;
+      z-index: 20;
+      padding: 22px 0;
     }
 
-    .brandlockup {
+    .nav {
       display: flex;
       align-items: center;
-      gap: 1.4rem;
-      margin: 1rem 0 1.25rem;
+      justify-content: space-between;
+      gap: 24px;
     }
 
-    .brandlockup img {
-      width: min(210px, 30vw);
-      height: auto;
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      min-width: 0;
+    }
+
+    .brand img {
+      width: 58px;
+      height: 58px;
       object-fit: contain;
     }
 
-    .brandcopy {
+    .brand-copy {
       display: flex;
       flex-direction: column;
-      gap: 0.6rem;
+      line-height: 1.1;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
-      margin-top: 2rem;
+    .brand-copy strong {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.22rem;
+      color: var(--navy);
     }
 
-    a.card {
+    .brand-copy span {
+      margin-top: 5px;
+      color: rgba(16, 35, 47, 0.62);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 700;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-links a {
       text-decoration: none;
-      color: inherit;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      padding: 1.2rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.6rem;
-      min-height: 180px;
-      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+      padding: 10px 13px;
+      border-radius: 999px;
+      font-size: 0.94rem;
+      font-weight: 650;
+      color: rgba(16, 35, 47, 0.76);
+      transition: background 150ms ease, color 150ms ease;
     }
 
-    a.card:hover {
-      transform: translateY(-3px);
-      border-color: rgba(17, 67, 93, 0.35);
-      box-shadow: 0 14px 30px rgba(15, 27, 31, 0.08);
+    .nav-links a:hover {
+      background: rgba(17, 67, 93, 0.07);
+      color: var(--navy);
+    }
+
+    .nav-links .admin-link {
+      border: 1px solid rgba(11, 49, 69, 0.17);
+      background: rgba(255,255,255,0.58);
+    }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
+      gap: 64px;
+      align-items: center;
+      min-height: 650px;
+      padding: 62px 0 94px;
     }
 
     .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 0.45rem;
-      padding: 0.4rem 0.7rem;
-      width: fit-content;
-      background: var(--accent-soft);
-      color: var(--accent);
+      gap: 9px;
+      padding: 8px 12px;
+      border: 1px solid rgba(17, 67, 93, 0.12);
       border-radius: 999px;
+      background: rgba(255,255,255,0.64);
+      color: var(--blue);
+      font-weight: 800;
       font-size: 0.78rem;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
     }
 
-    strong {
-      font-size: 1.35rem;
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 0 4px rgba(184,62,57,0.09);
     }
 
-    small {
-      font-size: 0.94rem;
-      color: rgba(15, 27, 31, 0.65);
-      line-height: 1.45;
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin: 22px 0 22px;
+      max-width: 760px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(3.3rem, 7vw, 6.4rem);
+      line-height: 0.93;
+      letter-spacing: -0.045em;
+      color: var(--navy);
     }
 
-    @media (max-width: 760px) {
-      .brandlockup {
-        flex-direction: column;
-        align-items: flex-start;
+    .hero-copy > p {
+      max-width: 660px;
+      margin-bottom: 30px;
+      color: rgba(16,35,47,0.72);
+      font-size: clamp(1.06rem, 2vw, 1.25rem);
+      line-height: 1.65;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 50px;
+      padding: 0 20px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 800;
+      transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+    }
+
+    .button:hover { transform: translateY(-2px); }
+
+    .button.primary {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 12px 28px rgba(11,49,69,0.2);
+    }
+
+    .button.secondary {
+      border: 1px solid rgba(11,49,69,0.17);
+      background: rgba(255,255,255,0.78);
+      color: var(--navy);
+    }
+
+    .hero-card {
+      position: relative;
+      border-radius: 38px;
+      background: var(--navy);
+      color: white;
+      min-height: 500px;
+      overflow: hidden;
+      box-shadow: 0 34px 80px rgba(11,49,69,0.23);
+      isolation: isolate;
+    }
+
+    .dartboard {
+      position: absolute;
+      top: -78px;
+      right: -90px;
+      width: 430px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      opacity: 0.95;
+      background:
+        radial-gradient(circle,
+          #b93f39 0 3.2%,
+          #f2e9dc 3.3% 6.2%,
+          #2b7658 6.3% 9.1%,
+          #0d1b21 9.2% 34%,
+          #f2e9dc 34.1% 39%,
+          #b93f39 39.1% 44%,
+          #10232f 44.1% 66%,
+          #f2e9dc 66.1% 71%,
+          #2b7658 71.1% 76%,
+          #0c2634 76.1% 100%);
+      box-shadow: 0 0 0 18px rgba(255,255,255,0.04), 0 0 0 42px rgba(255,255,255,0.025);
+    }
+
+    .dartboard::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: repeating-conic-gradient(from -9deg, rgba(255,255,255,0.14) 0deg 1deg, transparent 1deg 18deg);
+      mix-blend-mode: overlay;
+    }
+
+    .hero-card-content {
+      position: absolute;
+      inset: auto 32px 34px;
+      z-index: 2;
+    }
+
+    .hero-card .mini-label {
+      color: rgba(255,255,255,0.64);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.76rem;
+      font-weight: 800;
+    }
+
+    .hero-card h2 {
+      margin: 9px 0 12px;
+      max-width: 340px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 2rem;
+      line-height: 1.05;
+    }
+
+    .hero-card p {
+      margin: 0;
+      max-width: 340px;
+      color: rgba(255,255,255,0.72);
+      line-height: 1.55;
+    }
+
+    .stats {
+      position: relative;
+      z-index: 3;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-bottom: 94px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--line);
+      box-shadow: 0 12px 36px rgba(11,49,69,0.06);
+    }
+
+    .stat {
+      padding: 22px 24px;
+      background: rgba(255,255,255,0.84);
+    }
+
+    .stat span {
+      display: block;
+      margin-bottom: 7px;
+      color: rgba(16,35,47,0.58);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat strong {
+      color: var(--navy);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.45rem;
+    }
+
+    section.content-section {
+      padding: 88px 0;
+    }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: 0.75fr 1.25fr;
+      gap: 42px;
+      align-items: end;
+      margin-bottom: 40px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      color: var(--navy);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.3rem, 4.5vw, 4rem);
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .section-heading p {
+      margin: 0;
+      max-width: 600px;
+      color: rgba(16,35,47,0.68);
+      line-height: 1.65;
+      font-size: 1.05rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .info-card {
+      min-height: 250px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.72);
+    }
+
+    .info-card .number {
+      display: inline-grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      margin-bottom: 36px;
+      border-radius: 50%;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-weight: 900;
+    }
+
+    .info-card h3 {
+      margin-bottom: 10px;
+      color: var(--navy);
+      font-size: 1.28rem;
+    }
+
+    .info-card p {
+      margin: 0;
+      color: rgba(16,35,47,0.65);
+      line-height: 1.6;
+    }
+
+    .membership-section {
+      background: var(--navy);
+      color: white;
+    }
+
+    .membership-grid {
+      display: grid;
+      grid-template-columns: 1fr 0.78fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .membership-section .eyebrow {
+      color: rgba(255,255,255,0.88);
+      border-color: rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+    }
+
+    .membership-section h2 {
+      margin: 20px 0 18px;
+      max-width: 670px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.7rem, 5vw, 4.7rem);
+      line-height: 0.98;
+      letter-spacing: -0.035em;
+    }
+
+    .membership-section p {
+      max-width: 660px;
+      color: rgba(255,255,255,0.72);
+      line-height: 1.65;
+      font-size: 1.07rem;
+    }
+
+    .membership-box {
+      padding: 30px;
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 28px;
+      background: rgba(255,255,255,0.07);
+    }
+
+    .price {
+      margin-bottom: 20px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 3.4rem;
+      line-height: 1;
+    }
+
+    .price small {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.58);
+    }
+
+    .membership-list {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 24px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .membership-list li {
+      display: flex;
+      gap: 10px;
+      color: rgba(255,255,255,0.78);
+    }
+
+    .membership-list li::before {
+      content: "✓";
+      color: #9ad3b6;
+      font-weight: 900;
+    }
+
+    .membership-box .button {
+      width: 100%;
+      background: white;
+      color: var(--navy);
+    }
+
+    .membership-note {
+      margin: 14px 0 0 !important;
+      font-size: 0.82rem !important;
+      color: rgba(255,255,255,0.5) !important;
+      text-align: center;
+    }
+
+    .club-section {
+      background: var(--sand-2);
+    }
+
+    .club-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 56px;
+      align-items: center;
+    }
+
+    .club-section h2 {
+      margin: 18px 0;
+      color: var(--navy);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.7rem, 5vw, 4.6rem);
+      line-height: 0.98;
+      letter-spacing: -0.035em;
+    }
+
+    .club-section p {
+      color: rgba(16,35,47,0.68);
+      line-height: 1.7;
+      font-size: 1.05rem;
+    }
+
+    .club-mark {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1.12;
+      border-radius: 36px;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.96), rgba(220,235,242,0.72));
+      border: 1px solid var(--line);
+    }
+
+    .club-mark img {
+      width: min(300px, 66%);
+      max-height: 270px;
+      object-fit: contain;
+      filter: drop-shadow(0 16px 20px rgba(11,49,69,0.1));
+    }
+
+    footer {
+      padding: 42px 0;
+      border-top: 1px solid var(--line);
+      background: var(--sand);
+    }
+
+    .footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      color: rgba(16,35,47,0.6);
+      font-size: 0.9rem;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .footer-links a {
+      text-decoration: none;
+      font-weight: 700;
+      color: var(--blue);
+    }
+
+    @media (max-width: 900px) {
+      .nav-links a:not(.admin-link) { display: none; }
+
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 36px;
+        padding-top: 40px;
       }
 
-      .brandlockup img {
-        width: min(240px, 60vw);
+      .hero-card {
+        min-height: 420px;
       }
+
+      .stats { grid-template-columns: 1fr; }
+      .section-heading,
+      .membership-grid,
+      .club-grid { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 28px, 1180px); }
+      header { padding: 14px 0; }
+      .brand img { width: 48px; height: 48px; }
+      .brand-copy strong { font-size: 1rem; }
+      .brand-copy span { font-size: 0.66rem; }
+      .nav-links .admin-link { padding: 9px 11px; font-size: 0.82rem; }
+      .hero { min-height: auto; padding: 38px 0 68px; }
+      h1 { font-size: clamp(3rem, 17vw, 4.7rem); }
+      .hero-card { min-height: 360px; border-radius: 28px; }
+      .dartboard { width: 330px; right: -88px; top: -70px; }
+      .hero-card-content { inset: auto 24px 26px; }
+      .stats { margin-bottom: 50px; }
+      section.content-section { padding: 64px 0; }
+      .membership-box { padding: 24px; }
+      .footer-row { align-items: flex-start; flex-direction: column; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <span class="eyebrow">Blindleia Dartklubb Platform</span>
-    <div class="brandlockup">
-      <img src="./static/club-logos/blindleia-dartklubb-logo.png" alt="Blindleia Dartklubb logo">
-      <div class="brandcopy">
-        <h1>Klubbdrift, spillerportal og kiosk i samme løsning.</h1>
-        <p>Samlet lokal runtime for admin, spillerpåmelding, kiosk og venueskjerm med tydelig klubbskille i bunnen.</p>
+  <div class="site-shell">
+    <header>
+      <div class="wrap nav">
+        <a class="brand" href="#topp" aria-label="Blindleia Dartklubb hjem">
+          <img src="./static/club-logos/blindleia-dartklubb-logo.png" alt="Blindleia Dartklubb">
+          <span class="brand-copy">
+            <strong>Blindleia Dartklubb</strong>
+            <span>Lillesand</span>
+          </span>
+        </a>
+
+        <nav class="nav-links" aria-label="Hovedmeny">
+          <a href="#mandagsserien">Mandagsserien</a>
+          <a href="#medlemskap">Medlemskap</a>
+          <a href="#klubben">Klubben</a>
+          <a href="./player/">Spillerportal</a>
+          <a class="admin-link" href="./admin/">Admin</a>
+        </nav>
       </div>
-    </div>
-    <p>Testmiljøet er organisert som en lokal turneringsplattform med tydelig skille mellom admin/backoffice, spillerportal, kiosk og skjerm.</p>
-    <div class="grid">
-      <a class="card" href="./player/">
-        <strong>Spillerportal</strong>
-        <small>Mobilvennlig påmelding, egne tall, ranking og turneringsoversikt for spillere og medlemmer.</small>
-      </a>
-      <a class="card" href="./admin/">
-        <strong>Admin Studio</strong>
-        <small>Klubbvalg, administratorinnlogging, spilleroversikt, turneringsstyring, kamper og kioskoppsett.</small>
-      </a>
-      <a class="card" href="./kiosk/">
-        <strong>Kiosk</strong>
-        <small>Board-side flyt for assigned matches, start av kamp, sum/per pil, undo og manuell eller Scolia-klargjort scoring.</small>
-      </a>
-      <a class="card" href="./screen/">
-        <strong>Venue Screen</strong>
-        <small>Live oversikt over kiosker, aktive turneringer og siste kamper for valgt klubb.</small>
-      </a>
-      <a class="card" href="./api/">
-        <strong>API</strong>
-        <small>Intern API-first runtime for admin, spillerportal, kiosk, screen og senere connector-publishing.</small>
-      </a>
-    </div>
-  </main>
+    </header>
+
+    <main id="topp">
+      <section class="wrap hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Dart i Lillesand</span>
+          <h1>Tre piler.<br>Masse moro.</h1>
+          <p>Blindleia Dartklubb er møteplassen for deg som liker dart – enten du jakter 180, fortsatt leter etter trippel 20, eller bare vil ha en god mandagskveld.</p>
+          <div class="actions">
+            <a class="button primary" href="#medlemskap">Bli medlem</a>
+            <a class="button secondary" href="./player/">Åpne spillerportalen</a>
+          </div>
+        </div>
+
+        <aside class="hero-card" aria-label="Mandagsserien">
+          <div class="dartboard" aria-hidden="true"></div>
+          <div class="hero-card-content">
+            <span class="mini-label">Mandagsserien · Høst 2026</span>
+            <h2>Fast mandagsdart gjennom høsten.</h2>
+            <p>Sesongen går fra 10. august til 7. desember. Avkast er normalt kl. 18:30.</p>
+          </div>
+        </aside>
+      </section>
+
+      <div class="wrap stats" aria-label="Kort om klubben">
+        <div class="stat">
+          <span>Fast spilledag</span>
+          <strong>Mandag</strong>
+        </div>
+        <div class="stat">
+          <span>Avkast</span>
+          <strong>18:30</strong>
+        </div>
+        <div class="stat">
+          <span>Nivå</span>
+          <strong>Alle er velkommen</strong>
+        </div>
+      </div>
+
+      <section id="mandagsserien" class="content-section">
+        <div class="wrap">
+          <div class="section-heading">
+            <h2>Mandagsserien</h2>
+            <p>Klubbens faste ukentlige serie. Du møter forskjellige spillere gjennom sesongen, bygger ranking og får akkurat passe mye prestisje å spille om.</p>
+          </div>
+
+          <div class="cards">
+            <article class="info-card">
+              <span class="number">1</span>
+              <h3>Møt opp</h3>
+              <p>Kom i god tid før avkast. Påmelding og kampoppsett håndteres digitalt gjennom klubbens system.</p>
+            </article>
+            <article class="info-card">
+              <span class="number">2</span>
+              <h3>Spill dart</h3>
+              <p>Kamper, statistikk og ranking følger sesongen. Det er konkurranse, men terskelen for å bli med skal være lav.</p>
+            </article>
+            <article class="info-card">
+              <span class="number">3</span>
+              <h3>Følg utviklingen</h3>
+              <p>Bruk spillerportalen for egne tall, påmeldinger og turneringsoversikt gjennom sesongen.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="medlemskap" class="content-section membership-section">
+        <div class="wrap membership-grid">
+          <div>
+            <span class="eyebrow">Medlemskap</span>
+            <h2>En enkel avtale. Mer tid til dart.</h2>
+            <p>Vi går over til månedlig medlemskap med automatisk kortbetaling via Stripe. Du registrerer deg én gang, og kan selv administrere eller avslutte avtalen senere.</p>
+          </div>
+
+          <div class="membership-box">
+            <div class="price">200 kr <small>/ måned</small></div>
+            <ul class="membership-list">
+              <li>Månedlig medlemskontingent</li>
+              <li>Automatisk betaling via Stripe</li>
+              <li>Administrer eller avslutt avtalen selv</li>
+              <li>Kobles til klubbens medlemsregister</li>
+            </ul>
+            <a class="button" href="./player/">Registrer deg / spillerportal</a>
+            <p class="membership-note">Stripe-betalingen kobles på denne siden når klubbens betalingsoppsett er aktivert.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="klubben" class="content-section club-section">
+        <div class="wrap club-grid">
+          <div>
+            <span class="eyebrow">Blindleia Dartklubb</span>
+            <h2>Lav terskel. Høy takhøyde.</h2>
+            <p>Vi vil ha et klubbmiljø der både nye og erfarne spillere kan trives. Det skal være lov å være konkurransemenneske – og like lov å bare synes mandagsdart er ukas beste avbrekk.</p>
+            <div class="actions">
+              <a class="button primary" href="./player/">Spillerportal</a>
+              <a class="button secondary" href="https://www.dartsatlas.com/seasons/rFByCgOqI1rq">Serie og resultater</a>
+            </div>
+          </div>
+          <div class="club-mark">
+            <img src="./static/club-logos/blindleia-dartklubb-logo.png" alt="Logo for Blindleia Dartklubb">
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap footer-row">
+        <span>© 2026 Blindleia Dartklubb · Lillesand</span>
+        <div class="footer-links">
+          <a href="./player/">Spillerportal</a>
+          <a href="./admin/">Admin-innlogging</a>
+        </div>
+      </div>
+    </footer>
+  </div>
 </body>
 </html>
