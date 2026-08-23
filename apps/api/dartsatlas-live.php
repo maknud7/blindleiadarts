@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
 use Blindleia\Dartkiosk\Api\Service\DartsAtlasSyncService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasHttpClient;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasParser;
 
@@ -114,6 +115,7 @@ try {
         && ($feedAge === null || $feedAge >= $dartsAtlas->pollIntervalSeconds());
     $refreshAttempted = false;
     $refreshSkipped = null;
+    $memberRegistrySource = 'not_checked';
 
     if ($refreshDue) {
         $references = $prefix . 'external_references';
@@ -151,6 +153,8 @@ try {
         } else {
             $refreshAttempted = true;
             try {
+                $membership = new MembershipDatabase($config, $database, $dartsAtlas->membersTable());
+                $memberRegistrySource = $membership->prepareRepositoryBridge();
                 $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
                 $service = new DartsAtlasSyncService(
                     new DartsAtlasHttpClient($dartsAtlas->userAgent()),
@@ -163,7 +167,6 @@ try {
                     $refreshSkipped = (string) ($summary['reason'] ?? 'sync_skipped');
                 }
             } catch (Throwable $syncError) {
-                // A transient upstream/parser problem must never blank the venue display.
                 $refreshSkipped = 'refresh_failed';
             }
 
@@ -176,6 +179,7 @@ try {
         $feed['refresh_skipped'] = $refreshSkipped;
     }
     $feed['poll_interval_seconds'] = $dartsAtlas->pollIntervalSeconds();
+    $feed['member_registry_source'] = $memberRegistrySource;
 
     $respond([
         'ok' => true,
