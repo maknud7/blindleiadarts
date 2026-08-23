@@ -26,45 +26,12 @@ final class MembershipDatabase
         }
 
         $this->resolved = true;
-
         $sqlconnect = $this->loadSqlconnectConnection();
+
         if ($sqlconnect instanceof mysqli) {
             $this->connection = $sqlconnect;
-            $this->source = 'sqlconnect_php';
+            $this->source = 'shared_admin_sqlconnect';
             return $this->connection;
-        }
-
-        if ($this->config->membersDbConfigured()) {
-            try {
-                $settings = $this->config->membersDb();
-                $connection = new mysqli(
-                    $settings['host'],
-                    $settings['username'],
-                    $settings['password'],
-                    $settings['database'],
-                    $settings['port'],
-                );
-                $connection->set_charset('utf8mb4');
-                if ($this->tableExists($connection, $this->membersTable)) {
-                    $this->source = 'separate_database';
-                    $this->connection = $connection;
-                    return $this->connection;
-                }
-                $connection->close();
-            } catch (Throwable) {
-                // Member matching is optional for the core DartsAtlas import.
-            }
-        }
-
-        try {
-            $primary = $this->primaryDatabase->connection();
-            if ($this->tableExists($primary, $this->membersTable)) {
-                $this->source = 'primary_database';
-                $this->connection = $primary;
-                return $this->connection;
-            }
-        } catch (Throwable) {
-            // Primary DB failures are handled through the normal database path.
         }
 
         $this->source = 'unavailable';
@@ -72,17 +39,13 @@ final class MembershipDatabase
     }
 
     /**
-     * DartsAtlasRepository historically reads the members table through the primary mysqli session.
-     * When the real registry lives elsewhere, expose only id+navn as a TEMPORARY session table.
-     * Nothing is persisted or copied into the dart schema.
+     * DartsAtlasRepository reads member names through the primary mysqli session.
+     * The authoritative registry remains the existing admin database opened by the
+     * shared sqlconnect.php. Only id+navn are mirrored into a TEMPORARY session table.
      */
     public function prepareRepositoryBridge(): string
     {
         $primary = $this->primaryDatabase->connection();
-        if ($this->tableExists($primary, $this->membersTable)) {
-            $this->source = 'primary_database';
-            return $this->source;
-        }
 
         if (!preg_match('/^[A-Za-z0-9_]+$/', $this->membersTable)) {
             return 'unavailable';
@@ -117,6 +80,7 @@ final class MembershipDatabase
             }
             $insert->close();
             $result->free();
+            $this->source = 'shared_admin_sqlconnect';
         } catch (Throwable) {
             $this->source = 'unavailable';
         }
@@ -132,8 +96,7 @@ final class MembershipDatabase
 
     public function configured(): bool
     {
-        $path = $this->config->membersSqlconnectPath();
-        return ($path !== '' && is_file($path)) || $this->config->membersDbConfigured();
+        return is_file($this->config->membersSqlconnectPath());
     }
 
     private function loadSqlconnectConnection(): ?mysqli
