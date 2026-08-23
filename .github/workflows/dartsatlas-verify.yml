@@ -1,0 +1,82 @@
+name: Verify DartsAtlas Test DB
+
+on:
+  pull_request:
+    paths:
+      - 'ops/dartsatlas-verify.txt'
+      - '.github/workflows/dartsatlas-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DARTSATLAS_VERIFY_SEASON_ID: rFByCgOqI1rq
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          find apps packages infra -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: Run test migrations
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Generate test API config
+        run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL }}
+          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.TEST_SCREEN_CLUB_SLUG }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
+          DARTSATLAS_TOURNAMENT_ID: ${{ vars.DARTSATLAS_TOURNAMENT_ID }}
+          DARTSATLAS_CLUB_ID: ${{ vars.DARTSATLAS_CLUB_ID }}
+          DARTSATLAS_LOCAL_SEASON_ID: ${{ vars.DARTSATLAS_LOCAL_SEASON_ID }}
+          DARTSATLAS_MEMBERS_TABLE: medlemmer
+          DARTSATLAS_POLL_INTERVAL_SECONDS: ${{ vars.DARTSATLAS_POLL_INTERVAL_SECONDS }}
+          CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
+          CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
+          CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
+          CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
+
+      - name: DartsAtlas schema doctor
+        run: php apps/api/bin/dartsatlas_doctor.php
+
+      - name: DartsAtlas season sync
+        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID:-${DARTSATLAS_VERIFY_SEASON_ID}}"
+        env:
+          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
+
+      - name: DartsAtlas live read model
+        run: php apps/api/dartsatlas-live.php
