@@ -39,6 +39,18 @@ $config = [
         'password' => env_required('DB_PASSWORD'),
         'table_prefix' => env_required('DB_TABLE_PREFIX'),
     ],
+    'member_table' => getenv('MEMBER_TABLE') ?: 'medlemmer',
+    'dartsatlas' => [
+        'base_url' => getenv('DARTSATLAS_BASE_URL') ?: 'https://www.dartsatlas.com',
+        'tournament_id' => getenv('DARTSATLAS_TOURNAMENT_ID') ?: '',
+        'source_url' => getenv('DARTSATLAS_SOURCE_URL')
+            ?: 'https://www.dartsatlas.com/venues/blindleia-dartklubb/tournaments/calendar',
+        'season_id' => getenv('DARTSATLAS_SEASON_ID') ?: '',
+        'max_tournaments_per_run' => max(
+            1,
+            (int) (getenv('DARTSATLAS_MAX_TOURNAMENTS_PER_RUN') ?: 3)
+        ),
+    ],
 ];
 
 $directory = dirname($output);
@@ -56,4 +68,3 @@ if (file_put_contents($output, $contents) === false) {
 }
 
 fwrite(STDOUT, "Wrote API config to {$output}" . PHP_EOL);
-
