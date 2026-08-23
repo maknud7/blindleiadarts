@@ -14,6 +14,7 @@ $database = new Database($config);
 $db = $database->connection();
 $prefix = $database->tablePrefix();
 $membersTable = $config->dartsAtlas()->membersTable();
+$sqlconnectPath = $config->membersSqlconnectPath();
 
 if (!preg_match('/^[A-Za-z0-9_]+$/', $membersTable)) {
     fwrite(STDERR, "Unsafe members table configured.\n");
@@ -35,7 +36,9 @@ $report = [
     'tables' => [],
     'member_registry' => [
         'table' => $membersTable,
-        'configured_separately' => $config->membersDbConfigured(),
+        'sqlconnect_path' => $sqlconnectPath,
+        'sqlconnect_exists' => $sqlconnectPath !== '' && is_file($sqlconnectPath),
+        'credentials_configured' => $config->membersDbConfigured(),
         'source' => 'unavailable',
         'exists' => false,
         'columns' => [],
@@ -110,7 +113,7 @@ if ($memberDb instanceof mysqli) {
 
 $report['ready'] = $report['core_ready'];
 if (!$report['member_linking_ready']) {
-    $report['warning'] = 'DartsAtlas core/live is ready, but automatic member linking is disabled until the member database is configured.';
+    $report['warning'] = 'DartsAtlas core/live is ready, but automatic member linking is disabled until local sqlconnect.php or fallback member DB access is available.';
 }
 
 fwrite(STDOUT, json_encode(
