@@ -12,7 +12,7 @@
       <div class="connect-card">
         <p class="eyebrow">Venue Screen</p>
         <h1>Koble skjermen til en klubb</h1>
-        <p class="connect-copy">Alle klubber bruker samme adresse. Tast inn skjermkoden fra admin for a lase denne skjermen til riktig klubb.</p>
+        <p class="connect-copy">Alle klubber bruker samme adresse. Tast inn skjermkoden fra admin for å låse denne skjermen til riktig klubb.</p>
         <form id="connectForm" class="connect-form">
           <input id="connectCode" name="code" type="text" inputmode="text" autocomplete="one-time-code" placeholder="F.eks. BLI-SCREEN" maxlength="32">
           <button type="submit">Koble til skjerm</button>
@@ -52,11 +52,11 @@
           <div class="panel-head">
             <div>
               <h2>Live kamper</h2>
-              <p class="panel-subtitle">Aktive og tildelte boards akkurat na</p>
+              <p class="panel-subtitle">Aktive og tildelte skiver akkurat nå</p>
             </div>
             <div class="panel-meta">
               <span class="pill">Skive = kiosk</span>
-              <span class="pill">Viser nyeste startet turnering</span>
+              <span class="pill">Automatisk datakilde</span>
             </div>
           </div>
           <div id="boardsGrid" class="boards-grid"></div>
@@ -66,7 +66,7 @@
           <section class="screen-panel side-module">
             <div class="panel-head compact">
               <h2>Neste kamper</h2>
-              <p class="panel-subtitle">Det som star for tur</p>
+              <p class="panel-subtitle">Det som står for tur</p>
             </div>
             <div id="nextMatches" class="stack"></div>
           </section>
@@ -74,7 +74,7 @@
           <section class="screen-panel side-module standings-module">
             <div class="panel-head compact">
               <h2>Tabell</h2>
-              <p class="panel-subtitle">Rangert pa seiere og leg-diff</p>
+              <p class="panel-subtitle">Rangert på seiere og leg-diff</p>
             </div>
             <div id="standingsList" class="stack compact-stack"></div>
           </section>
@@ -100,8 +100,8 @@
 
             <section class="stat-module">
               <div class="panel-head compact">
-                <h3>Storste visits</h3>
-                <p class="panel-subtitle">Dagens hoyeste scoringer</p>
+                <h3>Høydepunkter</h3>
+                <p class="panel-subtitle">180, checkout og toppscoringer</p>
               </div>
               <div id="topVisitsList" class="stack compact-stack"></div>
             </section>
@@ -109,7 +109,7 @@
             <section class="stat-module">
               <div class="panel-head compact">
                 <h3>Beste matchsnitt</h3>
-                <p class="panel-subtitle">Hoyeste 3-darts average</p>
+                <p class="panel-subtitle">Høyeste 3-darts average</p>
               </div>
               <div id="bestAverageList" class="stack compact-stack"></div>
             </section>
@@ -122,7 +122,7 @@
           <img id="fallbackLogo" class="fallback-logo hidden" alt="Klubblogo">
           <div id="fallbackLogoMark" class="fallback-mark">KL</div>
           <h2 id="fallbackTitle">Velkommen</h2>
-          <p id="fallbackMessage">Ingen aktiv turnering akkurat na.</p>
+          <p id="fallbackMessage">Ingen aktiv turnering akkurat nå.</p>
         </div>
       </section>
     </div>
