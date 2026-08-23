@@ -42,7 +42,9 @@ jobs:
         run: bash infra/deploy/build-release.sh test
 
       - name: Generate API config
-        run: php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
+        run: |
+          php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
+          cp dist/test/api/config.php apps/api/config.php
         env:
           APP_ENV: test
           BASE_URL: ${{ vars.TEST_BASE_URL }}
@@ -67,6 +69,14 @@ jobs:
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
+
+      - name: Verify DartsAtlas database readiness
+        run: php apps/api/bin/dartsatlas_doctor.php
+
+      - name: Seed DartsAtlas season into test database
+        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID:-rFByCgOqI1rq}"
+        env:
+          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
 
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
