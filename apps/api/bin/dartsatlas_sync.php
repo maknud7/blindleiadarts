@@ -57,7 +57,7 @@ $localSeasonRaw = $options['local-season-id'] ?? $da['local_season_id'] ?? null;
 $localSeasonId = ($localSeasonRaw === null || $localSeasonRaw === '') ? null : (int) $localSeasonRaw;
 $membersTable = trim((string) ($options['members-table'] ?? $da['members_table'] ?? 'medlemmer'));
 $watch = array_key_exists('watch', $options);
-$interval = max(15, (int) ($options['interval'] ?? $da['poll_interval_seconds'] ?? 30));
+$interval = max(5, (int) ($options['interval'] ?? $da['poll_interval_seconds'] ?? 8));
 $userAgent = trim((string) ($da['user_agent'] ?? 'BlindleiaDarts/1.0'));
 
 if ($seasonId === '' || $clubId <= 0) {
