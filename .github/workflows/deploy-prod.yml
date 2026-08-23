@@ -50,11 +50,7 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_prod_
-          MEMBERS_DB_HOST: ${{ secrets.MEMBERS_DB_HOST }}
-          MEMBERS_DB_PORT: ${{ secrets.MEMBERS_DB_PORT }}
-          MEMBERS_DB_NAME: ${{ secrets.MEMBERS_DB_NAME }}
-          MEMBERS_DB_USERNAME: ${{ secrets.MEMBERS_DB_USERNAME }}
-          MEMBERS_DB_PASSWORD: ${{ secrets.MEMBERS_DB_PASSWORD }}
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
           DARTSATLAS_TOURNAMENT_ID: ${{ vars.DARTSATLAS_TOURNAMENT_ID }}
           DARTSATLAS_CLUB_ID: ${{ vars.DARTSATLAS_CLUB_ID }}
