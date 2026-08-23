@@ -95,32 +95,62 @@ final class DartsAtlasHtmlParser
     {
         $state = [
             'players' => [],
-            'scores' => [],
-            'legs' => [],
-            'stats' => [],
             'diagnostics' => [],
+        ];
+
+        $attributes = [
+            'player-id', 'player-name', 'score', 'legs', 'average', 'first-nine-average',
+            'darts-thrown', 'checkout-hits', 'checkout-attempts', 'highest-checkout',
+            'score-100-plus', 'score-140-plus', 'score-180',
         ];
 
         $dataSignals = [];
         if (preg_match_all('/<[^>]+(?:data-player-id|data-player-name|data-score|data-legs|data-average)[^>]*>/iu', $html, $tags)) {
             foreach ($tags[0] as $tag) {
                 $signal = [];
-                foreach (['player-id', 'player-name', 'score', 'legs', 'average'] as $attribute) {
+                foreach ($attributes as $attribute) {
                     $value = $this->attribute($tag, 'data-' . $attribute);
                     if ($value !== null && $value !== '') {
                         $signal[$attribute] = $value;
                     }
                 }
-                if ($signal !== []) {
-                    $dataSignals[] = $signal;
-                    if (isset($signal['player-id']) || isset($signal['player-name'])) {
-                        $key = $signal['player-id'] ?? $this->normaliseName((string) $signal['player-name']);
-                        $state['players'][$key] = [
-                            'external_id' => $signal['player-id'] ?? null,
-                            'name' => $signal['player-name'] ?? null,
-                        ];
+                if ($signal === []) {
+                    continue;
+                }
+
+                $dataSignals[] = $signal;
+                if (!isset($signal['player-id']) && !isset($signal['player-name'])) {
+                    continue;
+                }
+
+                $key = $signal['player-id'] ?? $this->normaliseName((string) $signal['player-name']);
+                $entry = $state['players'][$key] ?? [
+                    'external_id' => $signal['player-id'] ?? null,
+                    'name' => $signal['player-name'] ?? null,
+                ];
+
+                if (isset($signal['player-id'])) {
+                    $entry['external_id'] = $signal['player-id'];
+                }
+                if (isset($signal['player-name'])) {
+                    $entry['name'] = $signal['player-name'];
+                }
+
+                foreach ([
+                    'score', 'legs', 'darts-thrown', 'checkout-hits', 'checkout-attempts',
+                    'highest-checkout', 'score-100-plus', 'score-140-plus', 'score-180',
+                ] as $field) {
+                    if (isset($signal[$field]) && ($value = $this->asInt($signal[$field])) !== null) {
+                        $entry[str_replace('-', '_', $field)] = $value;
                     }
                 }
+                foreach (['average', 'first-nine-average'] as $field) {
+                    if (isset($signal[$field]) && ($value = $this->asFloat($signal[$field])) !== null) {
+                        $entry[str_replace('-', '_', $field)] = $value;
+                    }
+                }
+
+                $state['players'][$key] = $entry;
             }
         }
         $state['diagnostics']['data_signals'] = array_slice($dataSignals, 0, 80);
@@ -237,5 +267,17 @@ final class DartsAtlasHtmlParser
         $value = mb_strtolower($this->cleanText($value), 'UTF-8');
         $value = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value) ?? $value;
         return trim((string) preg_replace('/\s+/u', ' ', $value));
+    }
+
+    private function asInt(string $value): ?int
+    {
+        $value = trim($value);
+        return preg_match('/^-?\d+$/', $value) ? (int) $value : null;
+    }
+
+    private function asFloat(string $value): ?float
+    {
+        $value = str_replace(',', '.', trim($value));
+        return is_numeric($value) ? (float) $value : null;
     }
 }
