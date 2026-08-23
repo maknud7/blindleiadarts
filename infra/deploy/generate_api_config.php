@@ -56,7 +56,7 @@ $config = [
         'club_id' => (int) (env_optional('DARTSATLAS_CLUB_ID', '0') ?? '0'),
         'local_season_id' => ($localSeason === null || $localSeason === '') ? null : (int) $localSeason,
         'members_table' => env_optional('DARTSATLAS_MEMBERS_TABLE', 'medlemmer'),
-        'poll_interval_seconds' => max(15, (int) (env_optional('DARTSATLAS_POLL_INTERVAL_SECONDS', '30') ?? '30')),
+        'poll_interval_seconds' => max(5, (int) (env_optional('DARTSATLAS_POLL_INTERVAL_SECONDS', '8') ?? '8')),
         'user_agent' => env_optional('DARTSATLAS_USER_AGENT', 'BlindleiaDarts/1.0'),
     ],
 ];
