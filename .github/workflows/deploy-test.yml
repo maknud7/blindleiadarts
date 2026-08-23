@@ -71,10 +71,10 @@ jobs:
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
 
       - name: Verify DartsAtlas database readiness
-        run: php apps/api/bin/dartsatlas_doctor.php
+        run: php apps/api/bin/dartsatlas_doctor.php | tee dist/test/dartsatlas-health.json
 
       - name: Seed DartsAtlas season into test database
-        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID:-rFByCgOqI1rq}"
+        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID:-rFByCgOqI1rq}" | tee dist/test/dartsatlas-sync.json
         env:
           DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
 
