@@ -31,6 +31,19 @@ final class DartsAtlasConfig
         return $this->clubId;
     }
 
+    public function withClubId(int $clubId): self
+    {
+        return new self(
+            $this->seasonId,
+            $this->tournamentId,
+            $clubId,
+            $this->localSeasonId,
+            $this->membersTable,
+            $this->pollIntervalSeconds,
+            $this->userAgent,
+        );
+    }
+
     public function localSeasonId(): ?int
     {
         return $this->localSeasonId;
