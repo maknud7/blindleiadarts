@@ -21,13 +21,55 @@ $options = getopt('', [
 
 $config = Config::load($apiRoot);
 $dartsAtlas = $config->dartsAtlas();
+$database = new Database($config);
+$db = $database->connection();
+$prefix = $database->tablePrefix();
+
+if ($dartsAtlas->clubId() <= 0) {
+    $slug = trim($config->screenDefaultClubSlug());
+    if ($slug === '') {
+        fwrite(STDERR, "DartsAtlas club_id is not configured and screen.default_club_slug is empty.\n");
+        exit(2);
+    }
+
+    $clubsTable = $prefix . 'clubs';
+    $statement = $db->prepare("SELECT id FROM `{$clubsTable}` WHERE slug = ? LIMIT 1");
+    $statement->bind_param('s', $slug);
+    $statement->execute();
+    $row = $statement->get_result()->fetch_assoc();
+    $statement->close();
+
+    if (!$row) {
+        fwrite(STDERR, "Could not resolve DartsAtlas club from screen.default_club_slug.\n");
+        exit(2);
+    }
+
+    $dartsAtlas = $dartsAtlas->withClubId((int) $row['id']);
+}
+
+if ($dartsAtlas->localSeasonId() === null) {
+    $seasonsTable = $prefix . 'seasons';
+    $statement = $db->prepare(
+        "SELECT id FROM `{$seasonsTable}` WHERE club_id = ? ORDER BY is_active DESC, id DESC LIMIT 1"
+    );
+    $clubId = $dartsAtlas->clubId();
+    $statement->bind_param('i', $clubId);
+    $statement->execute();
+    $row = $statement->get_result()->fetch_assoc();
+    $statement->close();
+
+    if ($row) {
+        $dartsAtlas = $dartsAtlas->withLocalSeasonId((int) $row['id']);
+    }
+}
+
 $seasonId = trim((string) ($options['season-id'] ?? $dartsAtlas->seasonId()));
 $tournamentId = trim((string) ($options['tournament-id'] ?? $dartsAtlas->tournamentId()));
 $watch = array_key_exists('watch', $options);
 $interval = max(5, (int) ($options['interval'] ?? $dartsAtlas->pollIntervalSeconds()));
 
-if ($seasonId === '' || $dartsAtlas->clubId() <= 0) {
-    fwrite(STDERR, "DartsAtlas season_id and club_id must be configured.\n");
+if ($seasonId === '') {
+    fwrite(STDERR, "DartsAtlas season_id must be configured or passed with --season-id.\n");
     exit(2);
 }
 
@@ -36,7 +78,6 @@ if ($watch && $tournamentId === '') {
     exit(2);
 }
 
-$database = new Database($config);
 $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
 $service = new DartsAtlasSyncService(
     new DartsAtlasHttpClient($dartsAtlas->userAgent()),
