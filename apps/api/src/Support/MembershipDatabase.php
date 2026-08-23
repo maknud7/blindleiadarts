@@ -27,6 +27,13 @@ final class MembershipDatabase
 
         $this->resolved = true;
 
+        $sqlconnect = $this->loadSqlconnectConnection();
+        if ($sqlconnect instanceof mysqli) {
+            $this->connection = $sqlconnect;
+            $this->source = 'sqlconnect_php';
+            return $this->connection;
+        }
+
         if ($this->config->membersDbConfigured()) {
             try {
                 $settings = $this->config->membersDb();
@@ -66,8 +73,8 @@ final class MembershipDatabase
 
     /**
      * DartsAtlasRepository historically reads the members table through the primary mysqli session.
-     * When the real registry lives in a separate database, expose only id+navn as a TEMPORARY
-     * session table. Nothing is persisted or copied into the dart schema.
+     * When the real registry lives elsewhere, expose only id+navn as a TEMPORARY session table.
+     * Nothing is persisted or copied into the dart schema.
      */
     public function prepareRepositoryBridge(): string
     {
@@ -110,7 +117,6 @@ final class MembershipDatabase
             }
             $insert->close();
             $result->free();
-            $this->source = 'separate_database';
         } catch (Throwable) {
             $this->source = 'unavailable';
         }
@@ -126,7 +132,58 @@ final class MembershipDatabase
 
     public function configured(): bool
     {
-        return $this->config->membersDbConfigured();
+        $path = $this->config->membersSqlconnectPath();
+        return ($path !== '' && is_file($path)) || $this->config->membersDbConfigured();
+    }
+
+    private function loadSqlconnectConnection(): ?mysqli
+    {
+        $path = $this->config->membersSqlconnectPath();
+        if ($path === '' || !is_file($path)) {
+            return null;
+        }
+
+        try {
+            if (!defined('NO_LAYOUT')) {
+                define('NO_LAYOUT', true);
+            }
+
+            $loader = static function (string $file): ?mysqli {
+                $conn = null;
+                $mysqli = null;
+                $bufferLevel = ob_get_level();
+                ob_start();
+                try {
+                    $returned = require $file;
+                } finally {
+                    while (ob_get_level() > $bufferLevel) {
+                        ob_end_clean();
+                    }
+                }
+
+                if ($conn instanceof mysqli) {
+                    return $conn;
+                }
+                if ($mysqli instanceof mysqli) {
+                    return $mysqli;
+                }
+                return $returned instanceof mysqli ? $returned : null;
+            };
+
+            $connection = $loader($path);
+            if (!$connection instanceof mysqli) {
+                return null;
+            }
+
+            $connection->set_charset('utf8mb4');
+            if (!$this->tableExists($connection, $this->membersTable)) {
+                return null;
+            }
+
+            return $connection;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function tableExists(mysqli $connection, string $table): bool
