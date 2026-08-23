@@ -1,0 +1,4 @@
+DartsAtlas test verification request
+Requested: 2026-08-23
+Season: rFByCgOqI1rq
+Checks: migrations, member schema, season sync, live read model
