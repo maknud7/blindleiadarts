@@ -2,11 +2,27 @@
 
 declare(strict_types=1);
 
-$root = dirname(__DIR__, 3);
-require_once $root . '/packages/connectors/DartsAtlas/DartsAtlasHttpClient.php';
-require_once $root . '/packages/connectors/DartsAtlas/DartsAtlasHtmlParser.php';
-require_once $root . '/packages/connectors/DartsAtlas/DartsAtlasRepository.php';
-require_once $root . '/packages/connectors/DartsAtlas/DartsAtlasSyncService.php';
+$apiDir = dirname(__DIR__);
+$packageRoots = [
+    dirname(__DIR__, 3) . '/packages', // repository: /repo/apps/api/bin -> /repo/packages
+    dirname(__DIR__, 2) . '/packages', // release: /release/api/bin -> /release/packages
+];
+$packageRoot = null;
+foreach ($packageRoots as $candidate) {
+    if (is_file($candidate . '/connectors/DartsAtlas/DartsAtlasSyncService.php')) {
+        $packageRoot = $candidate;
+        break;
+    }
+}
+if ($packageRoot === null) {
+    fwrite(STDERR, "Unable to locate packages/connectors/DartsAtlas.\n");
+    exit(2);
+}
+
+require_once $packageRoot . '/connectors/DartsAtlas/DartsAtlasHttpClient.php';
+require_once $packageRoot . '/connectors/DartsAtlas/DartsAtlasHtmlParser.php';
+require_once $packageRoot . '/connectors/DartsAtlas/DartsAtlasRepository.php';
+require_once $packageRoot . '/connectors/DartsAtlas/DartsAtlasSyncService.php';
 
 $options = getopt('', [
     'config::',
@@ -19,7 +35,7 @@ $options = getopt('', [
     'interval::',
 ]);
 
-$configPath = (string) ($options['config'] ?? getenv('BLINDLEIA_API_CONFIG') ?: ($root . '/apps/api/config.php'));
+$configPath = (string) ($options['config'] ?? getenv('BLINDLEIA_API_CONFIG') ?: ($apiDir . '/config.php'));
 if (!is_file($configPath)) {
     fwrite(STDERR, "Missing API config: {$configPath}\n");
     exit(2);
