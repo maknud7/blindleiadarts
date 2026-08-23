@@ -18,7 +18,7 @@ return [
         'club_id' => 1,
         'local_season_id' => null,
         'members_table' => 'medlemmer',
-        'poll_interval_seconds' => 30,
+        'poll_interval_seconds' => 8,
         'user_agent' => 'BlindleiaDarts/1.0',
     ],
 ];
