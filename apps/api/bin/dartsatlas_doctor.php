@@ -38,7 +38,6 @@ $report = [
         'table' => $membersTable,
         'sqlconnect_path' => $sqlconnectPath,
         'sqlconnect_exists' => $sqlconnectPath !== '' && is_file($sqlconnectPath),
-        'credentials_configured' => $config->membersDbConfigured(),
         'source' => 'unavailable',
         'exists' => false,
         'columns' => [],
@@ -113,7 +112,7 @@ if ($memberDb instanceof mysqli) {
 
 $report['ready'] = $report['core_ready'];
 if (!$report['member_linking_ready']) {
-    $report['warning'] = 'DartsAtlas core/live is ready, but automatic member linking is disabled until local sqlconnect.php or fallback member DB access is available.';
+    $report['warning'] = 'DartsAtlas core/live is ready, but member linking is disabled because the shared admin sqlconnect.php is unavailable or invalid.';
 }
 
 fwrite(STDOUT, json_encode(
