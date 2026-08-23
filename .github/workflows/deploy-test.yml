@@ -25,13 +25,26 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
           coverage: none
+
+      - name: Run test database migrations
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
 
       - name: Build test release package
         run: bash infra/deploy/build-release.sh test
 
       - name: Generate API config
-        run: php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
+        run: |
+          php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
+          cp dist/test/api/config.php apps/api/config.php
         env:
           APP_ENV: test
           BASE_URL: ${{ vars.TEST_BASE_URL }}
@@ -46,10 +59,22 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+          DARTSATLAS_SEASON_ID: ${{ vars.TEST_DARTSATLAS_SEASON_ID || 'rFByCgOqI1rq' }}
+          DARTSATLAS_TOURNAMENT_ID: ${{ vars.TEST_DARTSATLAS_TOURNAMENT_ID }}
+          DARTSATLAS_CLUB_ID: ${{ vars.TEST_DARTSATLAS_CLUB_ID }}
+          DARTSATLAS_POLL_INTERVAL_SECONDS: ${{ vars.TEST_DARTSATLAS_POLL_INTERVAL_SECONDS }}
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
+
+      - name: Verify DartsAtlas database readiness
+        run: php apps/api/bin/dartsatlas_doctor.php
+
+      - name: Seed DartsAtlas season into test database
+        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID}"
+        env:
+          DARTSATLAS_SEASON_ID: ${{ vars.TEST_DARTSATLAS_SEASON_ID || 'rFByCgOqI1rq' }}
 
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
