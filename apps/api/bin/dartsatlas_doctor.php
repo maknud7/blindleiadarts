@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-$root = dirname(__DIR__, 3);
+$apiDir = dirname(__DIR__);
 $options = getopt('', ['config::', 'members-table::']);
-$configPath = (string) ($options['config'] ?? getenv('BLINDLEIA_API_CONFIG') ?: ($root . '/apps/api/config.php'));
+$configPath = (string) ($options['config'] ?? getenv('BLINDLEIA_API_CONFIG') ?: ($apiDir . '/config.php'));
 
 if (!is_file($configPath)) {
     fwrite(STDERR, "Missing API config: {$configPath}\n");
