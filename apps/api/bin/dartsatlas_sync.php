@@ -27,21 +27,24 @@ $db = $database->connection();
 $prefix = $database->tablePrefix();
 
 if ($dartsAtlas->clubId() <= 0) {
+    $clubsTable = $prefix . 'clubs';
     $slug = trim($config->screenDefaultClubSlug());
-    if ($slug === '') {
-        fwrite(STDERR, "DartsAtlas club_id is not configured and screen.default_club_slug is empty.\n");
-        exit(2);
+    $row = null;
+
+    if ($slug !== '') {
+        $statement = $db->prepare("SELECT id FROM `{$clubsTable}` WHERE slug = ? LIMIT 1");
+        $statement->bind_param('s', $slug);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+    } elseif ($config->appEnv() !== 'prod') {
+        $result = $db->query("SELECT id FROM `{$clubsTable}` ORDER BY id ASC LIMIT 1");
+        $row = $result->fetch_assoc() ?: null;
+        $result->free();
     }
 
-    $clubsTable = $prefix . 'clubs';
-    $statement = $db->prepare("SELECT id FROM `{$clubsTable}` WHERE slug = ? LIMIT 1");
-    $statement->bind_param('s', $slug);
-    $statement->execute();
-    $row = $statement->get_result()->fetch_assoc();
-    $statement->close();
-
     if (!$row) {
-        fwrite(STDERR, "Could not resolve DartsAtlas club from screen.default_club_slug.\n");
+        fwrite(STDERR, "Could not resolve DartsAtlas club. Configure club_id or screen.default_club_slug.\n");
         exit(2);
     }
 
