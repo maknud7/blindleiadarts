@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
 
 $apiRoot = dirname(__DIR__);
 require $apiRoot . '/bootstrap.php';
@@ -29,9 +30,13 @@ $report = [
     'database' => $config->dbName(),
     'table_prefix' => $prefix,
     'ready' => true,
+    'core_ready' => true,
+    'member_linking_ready' => false,
     'tables' => [],
     'member_registry' => [
         'table' => $membersTable,
+        'configured_separately' => $config->membersDbConfigured(),
+        'source' => 'unavailable',
         'exists' => false,
         'columns' => [],
     ],
@@ -54,24 +59,7 @@ foreach ($requiredTables as $shortName) {
     $exists = (int) ($tableStmt->get_result()->fetch_assoc()['cnt'] ?? 0) === 1;
     $report['tables'][$shortName] = $exists;
     if (!$exists) {
-        $report['ready'] = false;
-    }
-}
-
-$tableStmt->bind_param('s', $membersTable);
-$tableStmt->execute();
-$report['member_registry']['exists'] = (int) ($tableStmt->get_result()->fetch_assoc()['cnt'] ?? 0) === 1;
-if (!$report['member_registry']['exists']) {
-    $report['ready'] = false;
-}
-
-foreach (['id', 'navn'] as $column) {
-    $columnStmt->bind_param('ss', $membersTable, $column);
-    $columnStmt->execute();
-    $row = $columnStmt->get_result()->fetch_assoc() ?: null;
-    $report['member_registry']['columns'][$column] = $row;
-    if ($row === null) {
-        $report['ready'] = false;
+        $report['core_ready'] = false;
     }
 }
 
@@ -82,12 +70,48 @@ foreach (['member_id', 'member_link_source', 'member_linked_at'] as $column) {
     $row = $columnStmt->get_result()->fetch_assoc() ?: null;
     $report['tables']['players_' . $column] = $row !== null;
     if ($row === null) {
-        $report['ready'] = false;
+        $report['core_ready'] = false;
     }
 }
 
 $tableStmt->close();
 $columnStmt->close();
+
+$membership = new MembershipDatabase($config, $database, $membersTable);
+$memberDb = $membership->connection();
+$report['member_registry']['source'] = $membership->source();
+
+if ($memberDb instanceof mysqli) {
+    $memberTableStmt = $memberDb->prepare(
+        'SELECT COUNT(*) AS cnt FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?'
+    );
+    $memberTableStmt->bind_param('s', $membersTable);
+    $memberTableStmt->execute();
+    $report['member_registry']['exists'] = (int) ($memberTableStmt->get_result()->fetch_assoc()['cnt'] ?? 0) === 1;
+    $memberTableStmt->close();
+
+    $memberColumnStmt = $memberDb->prepare(
+        'SELECT DATA_TYPE, COLUMN_TYPE, IS_NULLABLE
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+    );
+    foreach (['id', 'navn'] as $column) {
+        $memberColumnStmt->bind_param('ss', $membersTable, $column);
+        $memberColumnStmt->execute();
+        $report['member_registry']['columns'][$column] = $memberColumnStmt->get_result()->fetch_assoc() ?: null;
+    }
+    $memberColumnStmt->close();
+
+    $report['member_linking_ready'] = $report['member_registry']['exists']
+        && $report['member_registry']['columns']['id'] !== null
+        && $report['member_registry']['columns']['navn'] !== null;
+}
+
+$report['ready'] = $report['core_ready'];
+if (!$report['member_linking_ready']) {
+    $report['warning'] = 'DartsAtlas core/live is ready, but automatic member linking is disabled until the member database is configured.';
+}
 
 fwrite(STDOUT, json_encode(
     $report,
