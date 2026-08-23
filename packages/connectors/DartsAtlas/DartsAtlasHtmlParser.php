@@ -21,11 +21,14 @@ final class DartsAtlasHtmlParser
             }
 
             if (preg_match('~/tournaments/([^/?#]+)~', $href, $match)) {
-                $tournaments[$match[1]] = [
-                    'external_id' => $match[1],
-                    'name' => $label,
-                    'url' => $this->absoluteUrl($href),
-                ];
+                $path = parse_url($href, PHP_URL_PATH) ?: $href;
+                if (count(explode('/', trim((string) $path, '/'))) === 2) {
+                    $tournaments[$match[1]] = [
+                        'external_id' => $match[1],
+                        'name' => $label,
+                        'url' => $this->absoluteUrl($href),
+                    ];
+                }
             }
         }
 
@@ -39,6 +42,7 @@ final class DartsAtlasHtmlParser
 
     public function parseTournament(string $html, string $url): array
     {
+        $tournamentId = $this->idFromUrl($url, 'tournaments');
         $matches = [];
         $players = [];
 
@@ -58,11 +62,22 @@ final class DartsAtlasHtmlParser
             }
         }
 
+        foreach ($this->matchRows($html, $tournamentId, array_values($players)) as $row) {
+            $externalId = (string) $row['external_id'];
+            $matches[$externalId] = array_merge($matches[$externalId] ?? [], $row);
+            foreach (['player_a', 'player_b'] as $key) {
+                if (isset($row[$key]['external_id'], $row[$key]['name'])) {
+                    $players[(string) $row[$key]['external_id']] = $row[$key];
+                }
+            }
+        }
+
         return [
-            'external_id' => $this->idFromUrl($url, 'tournaments'),
+            'external_id' => $tournamentId,
             'name' => $this->pageTitle($html),
             'players' => array_values($players),
             'matches' => array_values($matches),
+            'subpages' => $this->tournamentSubpages($html, $tournamentId),
         ];
     }
 
@@ -89,6 +104,96 @@ final class DartsAtlasHtmlParser
         $state = $this->extractBroadcastState($html);
         $state['external_id'] = $matchId;
         return $state;
+    }
+
+    private function matchRows(string $html, string $tournamentId, array $knownPlayers): array
+    {
+        if (!class_exists(DOMDocument::class)) {
+            return [];
+        }
+
+        $dom = new DOMDocument();
+        $old = libxml_use_internal_errors(true);
+        $loaded = $dom->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NOWARNING | LIBXML_NOERROR);
+        libxml_clear_errors();
+        libxml_use_internal_errors($old);
+        if (!$loaded) {
+            return [];
+        }
+
+        $xpath = new DOMXPath($dom);
+        $nodes = $xpath->query('//*[self::li or self::tr or self::article or self::section or self::div][contains(normalize-space(.), "Best of")]');
+        if ($nodes === false) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($nodes as $node) {
+            $text = $this->cleanText($node->textContent ?? '');
+            if ($text === '' || mb_strlen($text) > 900 || !preg_match('/\bBest\s+of\s+(\d+)\b/i', $text, $bestMatch)) {
+                continue;
+            }
+
+            $nested = 0;
+            foreach ($node->childNodes as $child) {
+                if ($child instanceof DOMElement && stripos($this->cleanText($child->textContent ?? ''), 'Best of') !== false) {
+                    $nested++;
+                }
+            }
+            if ($nested > 1) {
+                continue;
+            }
+
+            $nodePlayers = $this->playersInNode($node, $knownPlayers, $text);
+            if (count($nodePlayers) < 2) {
+                continue;
+            }
+            $nodePlayers = array_slice($nodePlayers, 0, 2);
+
+            $matchId = $this->matchIdInNode($node);
+            $round = $this->roundFromText($text);
+            $board = $this->boardFromText($text);
+            [$scoreA, $scoreB] = $this->scoresFromText($text, $nodePlayers[0]['name'], $nodePlayers[1]['name']);
+            $averages = $this->averagesFromText($text);
+            $bestOf = max(1, (int) $bestMatch[1]);
+            $legsToWin = intdiv($bestOf, 2) + 1;
+
+            if ($matchId === null) {
+                $matchId = 'derived-' . substr(hash('sha256', implode('|', [
+                    $tournamentId,
+                    $round ?? '',
+                    (string) ($board ?? ''),
+                    (string) ($nodePlayers[0]['external_id'] ?? $this->normaliseName($nodePlayers[0]['name'])),
+                    (string) ($nodePlayers[1]['external_id'] ?? $this->normaliseName($nodePlayers[1]['name'])),
+                ])), 0, 32);
+            }
+
+            $status = 'pending';
+            if ($scoreA >= $legsToWin || $scoreB >= $legsToWin) {
+                $status = 'completed';
+            } elseif (($scoreA + $scoreB) > 0 || $board !== null) {
+                $status = 'in_progress';
+            }
+
+            $rows[$matchId] = [
+                'external_id' => $matchId,
+                'url' => str_starts_with($matchId, 'derived-') ? null : $this->absoluteUrl('/matches/' . $matchId),
+                'round_label' => $round,
+                'board_number' => $board,
+                'best_of_legs' => $bestOf,
+                'legs_to_win' => $legsToWin,
+                'status' => $status,
+                'player_a' => $nodePlayers[0],
+                'player_b' => $nodePlayers[1],
+                'player_a_legs' => $scoreA,
+                'player_b_legs' => $scoreB,
+                'average_a' => $averages[0] ?? null,
+                'average_b' => $averages[1] ?? null,
+                'raw_text' => $text,
+            ];
+        }
+
+        return array_values($rows);
     }
 
     private function extractBroadcastState(string $html): array
@@ -170,10 +275,98 @@ final class DartsAtlasHtmlParser
 
         $visible = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $html) ?? $html;
         $visible = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $visible) ?? $visible;
-        $state['diagnostics']['visible_text'] = mb_substr($this->cleanText(strip_tags($visible)), 0, 4000);
-        $state['players'] = array_values($state['players']);
+        $visibleText = $this->cleanText(strip_tags($visible));
+        $state['diagnostics']['visible_text'] = mb_substr($visibleText, 0, 4000);
 
+        $state['players'] = array_values($state['players']);
         return $state;
+    }
+
+    private function playersInNode(DOMNode $node, array $knownPlayers, string $text): array
+    {
+        $found = [];
+        if ($node instanceof DOMElement) {
+            foreach ($node->getElementsByTagName('a') as $anchor) {
+                $player = $this->playerFromHref((string) $anchor->getAttribute('href'), $this->cleanText($anchor->textContent ?? ''));
+                if ($player !== null) {
+                    $found[$player['external_id']] = $player;
+                }
+            }
+        }
+        if (count($found) >= 2) {
+            return array_values($found);
+        }
+
+        $positioned = [];
+        foreach ($knownPlayers as $player) {
+            $position = mb_stripos($text, (string) $player['name']);
+            if ($position !== false) {
+                $positioned[] = ['position' => $position, 'player' => $player];
+            }
+        }
+        usort($positioned, static fn(array $a, array $b): int => $a['position'] <=> $b['position']);
+        foreach ($positioned as $item) {
+            $found[(string) $item['player']['external_id']] = $item['player'];
+        }
+        return array_values($found);
+    }
+
+    private function matchIdInNode(DOMNode $node): ?string
+    {
+        if (!($node instanceof DOMElement)) {
+            return null;
+        }
+        foreach ($node->getElementsByTagName('a') as $anchor) {
+            if (preg_match('~/matches/([^/?#]+)~', (string) $anchor->getAttribute('href'), $match)) {
+                return $match[1];
+            }
+        }
+        return null;
+    }
+
+    private function roundFromText(string $text): ?string
+    {
+        if (preg_match('/\b(Round\s+\d+|Last\s+\d+|Quarter[- ]?Final|Semi[- ]?Final|Final)\b/i', $text, $match)) {
+            return trim($match[1]);
+        }
+        return null;
+    }
+
+    private function boardFromText(string $text): ?int
+    {
+        return preg_match('/\bBoard\s+(\d+)\b/i', $text, $match) ? (int) $match[1] : null;
+    }
+
+    private function scoresFromText(string $text, string $nameA, string $nameB): array
+    {
+        $posA = mb_stripos($text, $nameA);
+        $posB = mb_stripos($text, $nameB);
+        if ($posA === false || $posB === false || $posB <= $posA) {
+            return [0, 0];
+        }
+        $afterA = mb_substr($text, $posA + mb_strlen($nameA), $posB - ($posA + mb_strlen($nameA)));
+        $afterB = mb_substr($text, $posB + mb_strlen($nameB));
+        $scoreA = preg_match('/\b(\d{1,2})\b/', $afterA, $a) ? (int) $a[1] : 0;
+        $scoreB = preg_match('/^\s*(\d{1,2})\b/', $afterB, $b) ? (int) $b[1] : 0;
+        return [$scoreA, $scoreB];
+    }
+
+    private function averagesFromText(string $text): array
+    {
+        preg_match_all('/\b(\d{1,3}(?:\.\d{1,2})?)\s*Avg\b/i', $text, $matches);
+        return array_map('floatval', array_slice($matches[1] ?? [], 0, 2));
+    }
+
+    private function tournamentSubpages(string $html, string $tournamentId): array
+    {
+        $result = [];
+        foreach ($this->anchors($html) as $anchor) {
+            $path = (string) (parse_url($anchor['href'], PHP_URL_PATH) ?: '');
+            if (preg_match('~^/tournaments/' . preg_quote($tournamentId, '~') . '/(group|bracket|knockout|results)(?:/|$)~i', $path)) {
+                $result[$path] = $this->absoluteUrl($path);
+            }
+        }
+        return array_values($result);
     }
 
     private function anchors(string $html): array
@@ -226,8 +419,10 @@ final class DartsAtlasHtmlParser
     {
         foreach ([
             '~/seasons/[^/]+/player_stats/([^/?#]+)~',
+            '~/tournaments/[^/]+/player_stats/([^/?#]+)~',
             '~/players/([^/?#]+)~',
             '~/profiles/([^/?#]+)~',
+            '~/users/([^/?#]+)~',
         ] as $pattern) {
             if (preg_match($pattern, $href, $match)) {
                 return [
