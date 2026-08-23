@@ -15,10 +15,20 @@ return [
     'db' => [
         'host' => '127.0.0.1',
         'port' => 3306,
-        'database' => 'shared_database_name',
-        'username' => 'database_user',
-        'password' => 'database_password',
+        'database' => 'dart_database_name',
+        'username' => 'dart_database_user',
+        'password' => 'dart_database_password',
         'table_prefix' => 'bd_test_',
+    ],
+    // Optional read-only connection to the existing Blindleia member registry.
+    // DartsAtlas Live remains functional when this is empty; only automatic
+    // player -> medlemmer.id linking is disabled.
+    'members_db' => [
+        'host' => '',
+        'port' => 3306,
+        'database' => '',
+        'username' => '',
+        'password' => '',
     ],
     'dartsatlas' => [
         'season_id' => 'rFByCgOqI1rq',
