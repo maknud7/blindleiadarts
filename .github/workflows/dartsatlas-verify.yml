@@ -7,6 +7,7 @@ on:
     paths:
       - 'apps/api/**'
       - 'packages/connectors/src/DartsAtlas/**'
+      - 'packages/connectors/tests/**'
       - 'infra/sql/**'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/dartsatlas-verify.yml'
@@ -14,9 +15,6 @@ on:
 
 permissions:
   contents: read
-
-env:
-  DARTSATLAS_VERIFY_SEASON_ID: rFByCgOqI1rq
 
 jobs:
   verify:
@@ -37,6 +35,9 @@ jobs:
         run: |
           find apps packages infra -type f -name '*.php' -print0 \
             | xargs -0 -n1 php -l
+
+      - name: DartsAtlas parser smoke test
+        run: php -d zend.assertions=1 -d assert.exception=1 packages/connectors/tests/dartsatlas_parser_smoke.php
 
       - name: Run test migrations
         run: php infra/sql/migrate.php
@@ -83,10 +84,5 @@ jobs:
       - name: DartsAtlas schema doctor
         run: php apps/api/bin/dartsatlas_doctor.php
 
-      - name: DartsAtlas season sync
-        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID:-${DARTSATLAS_VERIFY_SEASON_ID}}"
-        env:
-          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
-
-      - name: DartsAtlas live read model
-        run: php apps/api/dartsatlas-live.php
+      - name: Release package smoke test
+        run: bash infra/deploy/build-release.sh test
