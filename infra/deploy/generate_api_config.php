@@ -55,6 +55,13 @@ $config = [
         'password' => env_required('DB_PASSWORD'),
         'table_prefix' => env_required('DB_TABLE_PREFIX'),
     ],
+    'members_db' => [
+        'host' => env_optional('MEMBERS_DB_HOST', ''),
+        'port' => (int) (env_optional('MEMBERS_DB_PORT', '3306') ?? '3306'),
+        'database' => env_optional('MEMBERS_DB_NAME', ''),
+        'username' => env_optional('MEMBERS_DB_USERNAME', ''),
+        'password' => env_optional('MEMBERS_DB_PASSWORD', ''),
+    ],
     'dartsatlas' => [
         'season_id' => env_optional('DARTSATLAS_SEASON_ID', ''),
         'tournament_id' => env_optional('DARTSATLAS_TOURNAMENT_ID', ''),

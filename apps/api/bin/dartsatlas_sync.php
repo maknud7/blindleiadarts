@@ -6,6 +6,7 @@ use Blindleia\Dartkiosk\Api\Repository\DartsAtlasRepository;
 use Blindleia\Dartkiosk\Api\Service\DartsAtlasSyncService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasHttpClient;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasParser;
 
@@ -26,21 +27,24 @@ $db = $database->connection();
 $prefix = $database->tablePrefix();
 
 if ($dartsAtlas->clubId() <= 0) {
+    $clubsTable = $prefix . 'clubs';
     $slug = trim($config->screenDefaultClubSlug());
-    if ($slug === '') {
-        fwrite(STDERR, "DartsAtlas club_id is not configured and screen.default_club_slug is empty.\n");
-        exit(2);
+    $row = null;
+
+    if ($slug !== '') {
+        $statement = $db->prepare("SELECT id FROM `{$clubsTable}` WHERE slug = ? LIMIT 1");
+        $statement->bind_param('s', $slug);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+    } elseif ($config->appEnv() !== 'prod') {
+        $result = $db->query("SELECT id FROM `{$clubsTable}` ORDER BY id ASC LIMIT 1");
+        $row = $result->fetch_assoc() ?: null;
+        $result->free();
     }
 
-    $clubsTable = $prefix . 'clubs';
-    $statement = $db->prepare("SELECT id FROM `{$clubsTable}` WHERE slug = ? LIMIT 1");
-    $statement->bind_param('s', $slug);
-    $statement->execute();
-    $row = $statement->get_result()->fetch_assoc();
-    $statement->close();
-
     if (!$row) {
-        fwrite(STDERR, "Could not resolve DartsAtlas club from screen.default_club_slug.\n");
+        fwrite(STDERR, "Could not resolve DartsAtlas club. Configure club_id or screen.default_club_slug.\n");
         exit(2);
     }
 
@@ -78,6 +82,9 @@ if ($watch && $tournamentId === '') {
     exit(2);
 }
 
+$membership = new MembershipDatabase($config, $database, $dartsAtlas->membersTable());
+$membershipSource = $membership->prepareRepositoryBridge();
+
 $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
 $service = new DartsAtlasSyncService(
     new DartsAtlasHttpClient($dartsAtlas->userAgent()),
@@ -86,8 +93,9 @@ $service = new DartsAtlasSyncService(
     $dartsAtlas,
 );
 
-$run = static function () use ($service, $seasonId, $tournamentId): void {
+$run = static function () use ($service, $seasonId, $tournamentId, $membershipSource): void {
     $summary = $service->sync($seasonId, $tournamentId !== '' ? $tournamentId : null);
+    $summary['member_registry_source'] = $membershipSource;
     fwrite(STDOUT, json_encode(
         $summary,
         JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT,

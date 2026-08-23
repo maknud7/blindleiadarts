@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
 use Blindleia\Dartkiosk\Api\Service\DartsAtlasSyncService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasHttpClient;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasParser;
 
@@ -18,10 +19,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $respond = static function (array $payload, int $status = 200): never {
     http_response_code($status);
-    echo json_encode(
-        $payload,
-        JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
+    echo json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 };
 
@@ -34,65 +32,139 @@ try {
 
     $clubId = $dartsAtlas->clubId();
     if ($clubId <= 0) {
+        $clubsTable = $prefix . 'clubs';
         $slug = trim($config->screenDefaultClubSlug());
-        if ($slug === '') {
-            throw new RuntimeException('No DartsAtlas club id or screen club slug configured.');
+        $club = null;
+
+        if ($slug !== '') {
+            $statement = $db->prepare("SELECT id FROM `{$clubsTable}` WHERE slug = ? LIMIT 1");
+            $statement->bind_param('s', $slug);
+            $statement->execute();
+            $club = $statement->get_result()->fetch_assoc() ?: null;
+            $statement->close();
+        } elseif ($config->appEnv() !== 'prod') {
+            $result = $db->query("SELECT id FROM `{$clubsTable}` ORDER BY id ASC LIMIT 1");
+            $club = $result->fetch_assoc() ?: null;
+            $result->free();
         }
-        $clubs = $prefix . 'clubs';
-        $statement = $db->prepare("SELECT id FROM `{$clubs}` WHERE slug = ? LIMIT 1");
-        $statement->bind_param('s', $slug);
-        $statement->execute();
-        $row = $statement->get_result()->fetch_assoc();
-        $statement->close();
-        if (!$row) {
-            throw new RuntimeException('Configured screen club was not found.');
+
+        if (!$club) {
+            throw new RuntimeException('Could not resolve DartsAtlas club. Configure club_id or screen.default_club_slug.');
         }
-        $clubId = (int) $row['id'];
+
+        $clubId = (int) $club['id'];
         $dartsAtlas = $dartsAtlas->withClubId($clubId);
     }
 
+    if ($dartsAtlas->localSeasonId() === null) {
+        $seasonsTable = $prefix . 'seasons';
+        $statement = $db->prepare(
+            "SELECT id FROM `{$seasonsTable}` WHERE club_id = ? ORDER BY is_active DESC, id DESC LIMIT 1"
+        );
+        $statement->bind_param('i', $clubId);
+        $statement->execute();
+        $season = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+        if ($season) {
+            $dartsAtlas = $dartsAtlas->withLocalSeasonId((int) $season['id']);
+        }
+    }
+
+    $sync = static function (string $seasonExternalId, ?string $tournamentExternalId = null) use (
+        $config,
+        $database,
+        $dartsAtlas
+    ): array {
+        $membership = new MembershipDatabase($config, $database, $dartsAtlas->membersTable());
+        $memberRegistrySource = $membership->prepareRepositoryBridge();
+        $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
+        $service = new DartsAtlasSyncService(
+            new DartsAtlasHttpClient($dartsAtlas->userAgent()),
+            new DartsAtlasParser(),
+            $repository,
+            $dartsAtlas,
+        );
+        $summary = $service->syncSeason($seasonExternalId, $tournamentExternalId);
+        $summary['member_registry_source'] = $memberRegistrySource;
+        return $summary;
+    };
+
+    $findTournament = static function (?int $requestedTournamentId = null) use ($db, $prefix, $clubId): ?array {
+        $tournaments = $prefix . 'tournaments';
+        $clubs = $prefix . 'clubs';
+
+        if ($requestedTournamentId !== null) {
+            $statement = $db->prepare(
+                "SELECT t.id, t.name, t.status, t.season_id, t.provider_system, t.provider_metadata,
+                        c.name AS club_name, c.logo_url AS club_logo_url
+                 FROM `{$tournaments}` t
+                 INNER JOIN `{$clubs}` c ON c.id = t.club_id
+                 WHERE t.id = ? AND t.club_id = ? AND t.provider_system = 'dartsatlas'
+                 LIMIT 1"
+            );
+            $statement->bind_param('ii', $requestedTournamentId, $clubId);
+        } else {
+            $statement = $db->prepare(
+                "SELECT t.id, t.name, t.status, t.season_id, t.provider_system, t.provider_metadata,
+                        c.name AS club_name, c.logo_url AS club_logo_url
+                 FROM `{$tournaments}` t
+                 INNER JOIN `{$clubs}` c ON c.id = t.club_id
+                 WHERE t.club_id = ? AND t.provider_system = 'dartsatlas'
+                 ORDER BY FIELD(t.status, 'in_progress', 'ready', 'completed', 'archived'),
+                          COALESCE(t.start_at, t.updated_at) DESC, t.id DESC
+                 LIMIT 1"
+            );
+            $statement->bind_param('i', $clubId);
+        }
+
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+        return $row;
+    };
+
     $requestedTournament = filter_input(INPUT_GET, 'tournament_id', FILTER_VALIDATE_INT);
-    $tournamentId = is_int($requestedTournament) && $requestedTournament > 0
+    $requestedTournamentId = is_int($requestedTournament) && $requestedTournament > 0
         ? $requestedTournament
         : null;
 
-    $tournaments = $prefix . 'tournaments';
-    $clubs = $prefix . 'clubs';
-    if ($tournamentId !== null) {
-        $statement = $db->prepare(
-            "SELECT t.id, t.name, t.status, t.season_id, t.provider_system, t.provider_metadata,
-                    c.name AS club_name, c.logo_url AS club_logo_url
-             FROM `{$tournaments}` t
-             INNER JOIN `{$clubs}` c ON c.id = t.club_id
-             WHERE t.id = ? AND t.club_id = ? AND t.provider_system = 'dartsatlas'
-             LIMIT 1"
-        );
-        $statement->bind_param('ii', $tournamentId, $clubId);
-    } else {
-        $statement = $db->prepare(
-            "SELECT t.id, t.name, t.status, t.season_id, t.provider_system, t.provider_metadata,
-                    c.name AS club_name, c.logo_url AS club_logo_url
-             FROM `{$tournaments}` t
-             INNER JOIN `{$clubs}` c ON c.id = t.club_id
-             WHERE t.club_id = ? AND t.provider_system = 'dartsatlas'
-             ORDER BY FIELD(t.status, 'in_progress', 'ready', 'completed', 'archived'),
-                      COALESCE(t.start_at, t.updated_at) DESC, t.id DESC
-             LIMIT 1"
-        );
-        $statement->bind_param('i', $clubId);
-    }
+    $tournament = $findTournament($requestedTournamentId);
+    $bootstrap = [
+        'attempted' => false,
+        'status' => 'not_needed',
+    ];
 
-    $statement->execute();
-    $tournament = $statement->get_result()->fetch_assoc() ?: null;
-    $statement->close();
+    if ($tournament === null && $requestedTournamentId === null && trim($dartsAtlas->seasonId()) !== '') {
+        $bootstrap['attempted'] = true;
+        try {
+            $summary = $sync(trim($dartsAtlas->seasonId()), null);
+            $bootstrap['status'] = 'completed';
+            $bootstrap['summary'] = [
+                'tournaments_seen' => (int) ($summary['tournaments_seen'] ?? 0),
+                'matches_seen' => (int) ($summary['matches_seen'] ?? 0),
+                'member_registry_source' => $summary['member_registry_source'] ?? 'unavailable',
+            ];
+            $tournament = $findTournament(null);
+        } catch (Throwable $bootstrapError) {
+            $bootstrap['status'] = 'failed';
+            if ($config->appEnv() !== 'prod') {
+                $bootstrap['error'] = $bootstrapError->getMessage();
+            }
+        }
+    }
 
     if ($tournament === null) {
         $respond([
             'ok' => true,
+            'generated_at' => gmdate('c'),
             'data' => [
                 'club_id' => $clubId,
                 'tournament' => null,
-                'feed' => ['provider' => 'dartsatlas', 'status' => 'idle'],
+                'feed' => [
+                    'provider' => 'dartsatlas',
+                    'status' => $bootstrap['status'] === 'failed' ? 'error' : 'idle',
+                    'bootstrap' => $bootstrap,
+                ],
                 'live_boards' => [],
                 'next_matches' => [],
                 'standings' => [],
@@ -109,22 +181,20 @@ try {
         ? (int) $feed['age_seconds']
         : null;
 
-    $canRefresh = in_array((string) $tournament['status'], ['ready', 'in_progress'], true);
-    $refreshDue = $canRefresh
-        && ($feedAge === null || $feedAge >= $dartsAtlas->pollIntervalSeconds());
     $refreshAttempted = false;
     $refreshSkipped = null;
+    $memberRegistrySource = $bootstrap['summary']['member_registry_source'] ?? 'not_checked';
+    $canRefresh = in_array((string) $tournament['status'], ['ready', 'in_progress'], true);
+    $refreshDue = $canRefresh && ($feedAge === null || $feedAge >= $dartsAtlas->pollIntervalSeconds());
 
     if ($refreshDue) {
         $references = $prefix . 'external_references';
         $statement = $db->prepare(
-            "SELECT external_id
-             FROM `{$references}`
-             WHERE external_system = 'dartsatlas'
-               AND external_entity_type = 'tournament'
-               AND internal_entity_type = 'tournament'
-               AND internal_id = ?
-             LIMIT 1"
+            "SELECT external_id FROM `{$references}`
+             WHERE external_system='dartsatlas'
+               AND external_entity_type='tournament'
+               AND internal_entity_type='tournament'
+               AND internal_id=? LIMIT 1"
         );
         $statement->bind_param('i', $tournamentId);
         $statement->execute();
@@ -151,31 +221,25 @@ try {
         } else {
             $refreshAttempted = true;
             try {
-                $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
-                $service = new DartsAtlasSyncService(
-                    new DartsAtlasHttpClient($dartsAtlas->userAgent()),
-                    new DartsAtlasParser(),
-                    $repository,
-                    $dartsAtlas,
-                );
-                $summary = $service->syncSeason($seasonExternalId, $externalTournamentId);
+                $summary = $sync($seasonExternalId, $externalTournamentId);
+                $memberRegistrySource = (string) ($summary['member_registry_source'] ?? $memberRegistrySource);
                 if (($summary['skipped'] ?? false) === true) {
                     $refreshSkipped = (string) ($summary['reason'] ?? 'sync_skipped');
                 }
-            } catch (Throwable $syncError) {
-                // A transient upstream/parser problem must never blank the venue display.
+            } catch (Throwable) {
                 $refreshSkipped = 'refresh_failed';
             }
-
             $feed = $screenRepository->feedStatus($tournamentId);
         }
     }
 
     $feed['refresh_attempted'] = $refreshAttempted;
+    $feed['poll_interval_seconds'] = $dartsAtlas->pollIntervalSeconds();
+    $feed['member_registry_source'] = $memberRegistrySource;
+    $feed['bootstrap'] = $bootstrap;
     if ($refreshSkipped !== null) {
         $feed['refresh_skipped'] = $refreshSkipped;
     }
-    $feed['poll_interval_seconds'] = $dartsAtlas->pollIntervalSeconds();
 
     $respond([
         'ok' => true,

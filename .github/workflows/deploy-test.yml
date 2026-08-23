@@ -49,7 +49,7 @@ jobs:
           APP_ENV: test
           BASE_URL: ${{ vars.TEST_BASE_URL }}
           STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL }}
-          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.TEST_SCREEN_CLUB_SLUG }}
+          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.TEST_SCREEN_CLUB_SLUG || 'blindleia-dartklubb' }}
           REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
@@ -59,7 +59,12 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
-          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
+          MEMBERS_DB_HOST: ${{ secrets.MEMBERS_DB_HOST }}
+          MEMBERS_DB_PORT: ${{ secrets.MEMBERS_DB_PORT }}
+          MEMBERS_DB_NAME: ${{ secrets.MEMBERS_DB_NAME }}
+          MEMBERS_DB_USERNAME: ${{ secrets.MEMBERS_DB_USERNAME }}
+          MEMBERS_DB_PASSWORD: ${{ secrets.MEMBERS_DB_PASSWORD }}
+          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID || 'rFByCgOqI1rq' }}
           DARTSATLAS_TOURNAMENT_ID: ${{ vars.DARTSATLAS_TOURNAMENT_ID }}
           DARTSATLAS_CLUB_ID: ${{ vars.DARTSATLAS_CLUB_ID }}
           DARTSATLAS_LOCAL_SEASON_ID: ${{ vars.DARTSATLAS_LOCAL_SEASON_ID }}
@@ -72,11 +77,6 @@ jobs:
 
       - name: Verify DartsAtlas database readiness
         run: php apps/api/bin/dartsatlas_doctor.php | tee dist/test/dartsatlas-health.json
-
-      - name: Seed DartsAtlas season into test database
-        run: php apps/api/bin/dartsatlas_sync.php --season-id="${DARTSATLAS_SEASON_ID:-rFByCgOqI1rq}" | tee dist/test/dartsatlas-sync.json
-        env:
-          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
 
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
@@ -108,3 +108,30 @@ jobs:
           remote_path: /www/blindleiadarts/test
           sftp_only: true
           rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
+
+      - name: Bootstrap and verify DartsAtlas from test host
+        env:
+          TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
+        run: |
+          TEST_ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
+          LIVE_URL="${TEST_ROOT%/}/api/dartsatlas-live.php"
+          echo "Verifying DartsAtlas through ${LIVE_URL}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            "${LIVE_URL}" -o dartsatlas-live.json
+          php -r '
+            $data = json_decode(file_get_contents("dartsatlas-live.json"), true);
+            if (!is_array($data) || !($data["ok"] ?? false)) {
+                fwrite(STDERR, "DartsAtlas live endpoint did not return ok=true\n");
+                fwrite(STDERR, file_get_contents("dartsatlas-live.json") . "\n");
+                exit(1);
+            }
+            $payload = $data["data"] ?? [];
+            if (($payload["tournament"] ?? null) === null) {
+                fwrite(STDERR, "DartsAtlas bootstrap returned no tournament.\n");
+                fwrite(STDERR, file_get_contents("dartsatlas-live.json") . "\n");
+                exit(1);
+            }
+            $feed = $payload["feed"] ?? [];
+            echo "DartsAtlas test host verified. Tournament: " . ($payload["tournament"]["name"] ?? "unknown") . "\n";
+            echo "Feed status: " . ($feed["status"] ?? "unknown") . "\n";
+          '
