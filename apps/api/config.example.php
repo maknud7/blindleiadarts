@@ -12,4 +12,24 @@ return [
         'password' => 'database_password',
         'table_prefix' => 'bd_test_',
     ],
+
+    // Existing Blindleia admin/member register in the same physical database.
+    'member_table' => 'medlemmer',
+
+    'dartsatlas' => [
+        'base_url' => 'https://www.dartsatlas.com',
+
+        // Set one tournament directly for the most predictable live polling.
+        'tournament_id' => '',
+
+        // Or discover tournament links from a Darts Atlas venue/season calendar.
+        'source_url' => 'https://www.dartsatlas.com/venues/blindleia-dartklubb/tournaments/calendar',
+
+        // Optional season reference for metadata.
+        'season_id' => '',
+
+        // Discovery is intentionally conservative so a live poll cannot fan out
+        // into dozens of old tournaments.
+        'max_tournaments_per_run' => 3,
+    ],
 ];
