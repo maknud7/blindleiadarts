@@ -105,6 +105,31 @@ jobs:
           sftp_only: true
           rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
 
+      - name: Verify admin deployment
+        env:
+          TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
+        run: |
+          TEST_ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
+          ADMIN_URL="${TEST_ROOT%/}/admin/"
+          ADMIN_API_URL="${TEST_ROOT%/}/api/dartsatlas-admin.php"
+
+          echo "Verifying admin page: ${ADMIN_URL}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
+            "${ADMIN_URL}" -o admin.html
+          grep -q "Det vi faktisk bruker nå" admin.html || {
+            echo "Admin page is missing or an old build is still served."
+            exit 1
+          }
+
+          echo "Verifying DartsAtlas admin endpoint exists: ${ADMIN_API_URL}"
+          STATUS=$(curl --silent --show-error --output admin-api.json --write-out "%{http_code}" --max-time 30 "${ADMIN_API_URL}")
+          if [ "$STATUS" = "404" ] || [ "$STATUS" = "000" ]; then
+            echo "DartsAtlas admin endpoint is not deployed (HTTP ${STATUS})."
+            cat admin-api.json || true
+            exit 1
+          fi
+          echo "Admin deployment verified (endpoint HTTP ${STATUS}; 401 without token is expected)."
+
       - name: Bootstrap and verify DartsAtlas from test host
         env:
           TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
