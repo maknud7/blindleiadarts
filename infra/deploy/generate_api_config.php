@@ -14,6 +14,15 @@ function env_required(string $key): string
     return $value;
 }
 
+function env_optional(string $key, ?string $default = null): ?string
+{
+    $value = getenv($key);
+    if ($value === false || $value === '') {
+        return $default;
+    }
+    return $value;
+}
+
 $output = null;
 
 foreach ($argv as $argument) {
@@ -27,6 +36,8 @@ if ($output === null || $output === '') {
     exit(1);
 }
 
+$localSeason = env_optional('DARTSATLAS_LOCAL_SEASON_ID');
+
 $config = [
     'app_env' => env_required('APP_ENV'),
     'base_url' => getenv('BASE_URL') ?: '',
@@ -38,6 +49,15 @@ $config = [
         'username' => env_required('DB_USERNAME'),
         'password' => env_required('DB_PASSWORD'),
         'table_prefix' => env_required('DB_TABLE_PREFIX'),
+    ],
+    'dartsatlas' => [
+        'season_id' => env_optional('DARTSATLAS_SEASON_ID', ''),
+        'tournament_id' => env_optional('DARTSATLAS_TOURNAMENT_ID', ''),
+        'club_id' => (int) (env_optional('DARTSATLAS_CLUB_ID', '0') ?? '0'),
+        'local_season_id' => ($localSeason === null || $localSeason === '') ? null : (int) $localSeason,
+        'members_table' => env_optional('DARTSATLAS_MEMBERS_TABLE', 'medlemmer'),
+        'poll_interval_seconds' => max(5, (int) (env_optional('DARTSATLAS_POLL_INTERVAL_SECONDS', '8') ?? '8')),
+        'user_agent' => env_optional('DARTSATLAS_USER_AGENT', 'BlindleiaDarts/1.0'),
     ],
 ];
 
@@ -56,4 +76,3 @@ if (file_put_contents($output, $contents) === false) {
 }
 
 fwrite(STDOUT, "Wrote API config to {$output}" . PHP_EOL);
-
