@@ -5,12 +5,10 @@ declare(strict_types=1);
 function env_required(string $key): string
 {
     $value = getenv($key);
-
     if ($value === false || $value === '') {
         fwrite(STDERR, "Missing required environment variable: {$key}" . PHP_EOL);
         exit(1);
     }
-
     return $value;
 }
 
@@ -21,7 +19,6 @@ function env_optional(string $key, ?string $default = null): ?string
 }
 
 $output = null;
-
 foreach ($argv as $argument) {
     if (str_starts_with($argument, '--output=')) {
         $output = substr($argument, 9);
@@ -56,12 +53,10 @@ $config = [
         'table_prefix' => env_required('DB_TABLE_PREFIX'),
     ],
     'members_db' => [
-        'sqlconnect_path' => env_optional('MEMBERS_SQLCONNECT_PATH', '../sqlconnect.php'),
-        'host' => env_optional('MEMBERS_DB_HOST', ''),
-        'port' => (int) (env_optional('MEMBERS_DB_PORT', '3306') ?? '3306'),
-        'database' => env_optional('MEMBERS_DB_NAME', ''),
-        'username' => env_optional('MEMBERS_DB_USERNAME', ''),
-        'password' => env_optional('MEMBERS_DB_PASSWORD', ''),
+        'sqlconnect_path' => env_optional(
+            'MEMBERS_SQLCONNECT_PATH',
+            '/home/1/i/ingenting/dart/sqlconnect.php'
+        ),
     ],
     'dartsatlas' => [
         'season_id' => env_optional('DARTSATLAS_SEASON_ID', ''),
@@ -87,14 +82,12 @@ $config = [
 ];
 
 $directory = dirname($output);
-
 if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
     fwrite(STDERR, "Failed to create directory: {$directory}" . PHP_EOL);
     exit(1);
 }
 
 $contents = "<?php\n\nreturn " . var_export($config, true) . ";\n";
-
 if (file_put_contents($output, $contents) === false) {
     fwrite(STDERR, "Failed to write config file: {$output}" . PHP_EOL);
     exit(1);
