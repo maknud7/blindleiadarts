@@ -56,6 +56,7 @@ $config = [
         'table_prefix' => env_required('DB_TABLE_PREFIX'),
     ],
     'members_db' => [
+        'sqlconnect_path' => env_optional('MEMBERS_SQLCONNECT_PATH', '../sqlconnect.php'),
         'host' => env_optional('MEMBERS_DB_HOST', ''),
         'port' => (int) (env_optional('MEMBERS_DB_PORT', '3306') ?? '3306'),
         'database' => env_optional('MEMBERS_DB_NAME', ''),
