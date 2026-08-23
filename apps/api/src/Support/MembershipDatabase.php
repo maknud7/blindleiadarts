@@ -39,6 +39,66 @@ final class MembershipDatabase
     }
 
     /**
+     * @return array<int, array{id:int,navn:string}>
+     */
+    public function listMembers(): array
+    {
+        $connection = $this->connection();
+        if (!$connection instanceof mysqli || !preg_match('/^[A-Za-z0-9_]+$/', $this->membersTable)) {
+            return [];
+        }
+
+        try {
+            $table = $this->membersTable;
+            $result = $connection->query("SELECT id, navn FROM `{$table}` ORDER BY navn ASC, id ASC");
+            $items = [];
+            while ($row = $result->fetch_assoc()) {
+                $items[] = [
+                    'id' => (int) $row['id'],
+                    'navn' => (string) $row['navn'],
+                ];
+            }
+            $result->free();
+            return $items;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return array{id:int,navn:string}|null */
+    public function findMemberById(int $memberId): ?array
+    {
+        if ($memberId <= 0) {
+            return null;
+        }
+
+        $connection = $this->connection();
+        if (!$connection instanceof mysqli || !preg_match('/^[A-Za-z0-9_]+$/', $this->membersTable)) {
+            return null;
+        }
+
+        try {
+            $table = $this->membersTable;
+            $statement = $connection->prepare("SELECT id, navn FROM `{$table}` WHERE id = ? LIMIT 1");
+            $statement->bind_param('i', $memberId);
+            $statement->execute();
+            $row = $statement->get_result()->fetch_assoc() ?: null;
+            $statement->close();
+
+            if ($row === null) {
+                return null;
+            }
+
+            return [
+                'id' => (int) $row['id'],
+                'navn' => (string) $row['navn'],
+            ];
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * DartsAtlasRepository reads member names through the primary mysqli session.
      * The authoritative registry remains the existing admin database opened by the
      * shared sqlconnect.php. Only id+navn are mirrored into a TEMPORARY session table.
