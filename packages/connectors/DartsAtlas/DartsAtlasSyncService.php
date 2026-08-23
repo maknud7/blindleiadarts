@@ -14,9 +14,12 @@ final class DartsAtlasSyncService
 
     public function syncSeason(string $seasonExternalId, ?string $tournamentExternalId = null): array
     {
-        $jobId = $this->repository->startJob('live_sync', 'season', $this->localSeasonId);
+        $targeted = $tournamentExternalId !== null && $tournamentExternalId !== '';
+        $jobId = $this->repository->startJob($targeted ? 'live_tournament_sync' : 'season_sync', 'season', $this->localSeasonId);
         $summary = [
+            'mode' => $targeted ? 'live_tournament' : 'full_season',
             'season_external_id' => $seasonExternalId,
+            'tournament_external_id' => $targeted ? $tournamentExternalId : null,
             'resources_fetched' => 0,
             'resources_not_modified' => 0,
             'players_seen' => 0,
@@ -27,53 +30,55 @@ final class DartsAtlasSyncService
         ];
 
         try {
-            $seasonUrl = "https://www.dartsatlas.com/seasons/{$seasonExternalId}";
-            $season = $this->fetchParsed(
-                'season',
-                $seasonExternalId,
-                $seasonUrl,
-                null,
-                fn(string $html) => $this->parser->parseSeason($html, $seasonUrl),
-                $summary,
-            ) ?? $this->cachedPayload('season', $seasonExternalId);
-
-            if ($season === null) {
-                throw new RuntimeException('Season page returned no parseable data.');
-            }
-
-            $resultsUrl = $seasonUrl . '/tournaments/results';
-            $results = $this->fetchParsed(
-                'season_results',
-                $seasonExternalId,
-                $resultsUrl,
-                $seasonExternalId,
-                fn(string $html) => $this->parser->parseSeason($html, $seasonUrl),
-                $summary,
-            ) ?? $this->cachedPayload('season_results', $seasonExternalId);
-
-            if (is_array($results)) {
-                $season['players'] = $this->mergeByExternalId($season['players'] ?? [], $results['players'] ?? []);
-                $season['tournaments'] = $this->mergeByExternalId($season['tournaments'] ?? [], $results['tournaments'] ?? []);
-            }
-
             $playerMap = [];
-            foreach ($season['players'] ?? [] as $player) {
-                $name = trim((string) ($player['name'] ?? ''));
-                $externalId = (string) ($player['external_id'] ?? '');
-                if ($name === '' || $externalId === '') {
-                    continue;
-                }
-                $playerMap[$externalId] = $this->repository->upsertPlayer($this->clubId, $externalId, $name);
-                $summary['players_seen']++;
-            }
 
-            $tournaments = $season['tournaments'] ?? [];
-            if ($tournamentExternalId !== null && $tournamentExternalId !== '') {
+            if ($targeted) {
                 $tournaments = [[
                     'external_id' => $tournamentExternalId,
                     'name' => 'DartsAtlas ' . $tournamentExternalId,
                     'url' => "https://www.dartsatlas.com/tournaments/{$tournamentExternalId}",
                 ]];
+            } else {
+                $seasonUrl = "https://www.dartsatlas.com/seasons/{$seasonExternalId}";
+                $season = $this->fetchParsed(
+                    'season',
+                    $seasonExternalId,
+                    $seasonUrl,
+                    null,
+                    fn(string $html) => $this->parser->parseSeason($html, $seasonUrl),
+                    $summary,
+                ) ?? $this->cachedPayload('season', $seasonExternalId);
+
+                if ($season === null) {
+                    throw new RuntimeException('Season page returned no parseable data.');
+                }
+
+                $resultsUrl = $seasonUrl . '/tournaments/results';
+                $results = $this->fetchParsed(
+                    'season_results',
+                    $seasonExternalId,
+                    $resultsUrl,
+                    $seasonExternalId,
+                    fn(string $html) => $this->parser->parseSeason($html, $seasonUrl),
+                    $summary,
+                ) ?? $this->cachedPayload('season_results', $seasonExternalId);
+
+                if (is_array($results)) {
+                    $season['players'] = $this->mergeByExternalId($season['players'] ?? [], $results['players'] ?? []);
+                    $season['tournaments'] = $this->mergeByExternalId($season['tournaments'] ?? [], $results['tournaments'] ?? []);
+                }
+
+                foreach ($season['players'] ?? [] as $player) {
+                    $name = trim((string) ($player['name'] ?? ''));
+                    $externalId = (string) ($player['external_id'] ?? '');
+                    if ($name === '' || $externalId === '') {
+                        continue;
+                    }
+                    $playerMap[$externalId] = $this->repository->upsertPlayer($this->clubId, $externalId, $name);
+                    $summary['players_seen']++;
+                }
+
+                $tournaments = $season['tournaments'] ?? [];
             }
 
             foreach ($tournaments as $tournamentInfo) {
@@ -115,6 +120,7 @@ final class DartsAtlasSyncService
                     }
                     $playerMap[$externalId] ??= $this->repository->upsertPlayer($this->clubId, $externalId, $name);
                     $this->repository->addTournamentPlayer($tournamentId, $playerMap[$externalId]);
+                    $summary['players_seen']++;
                 }
 
                 foreach ($tournament['matches'] ?? [] as $matchInfo) {
