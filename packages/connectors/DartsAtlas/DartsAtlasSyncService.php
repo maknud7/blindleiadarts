@@ -15,6 +15,20 @@ final class DartsAtlasSyncService
     public function syncSeason(string $seasonExternalId, ?string $tournamentExternalId = null): array
     {
         $targeted = $tournamentExternalId !== null && $tournamentExternalId !== '';
+        $lockName = $targeted
+            ? 'tournament:' . $tournamentExternalId
+            : 'season:' . $seasonExternalId;
+
+        if (!$this->repository->acquireLock($lockName)) {
+            return [
+                'mode' => $targeted ? 'live_tournament' : 'full_season',
+                'skipped' => true,
+                'reason' => 'sync_already_running',
+                'season_external_id' => $seasonExternalId,
+                'tournament_external_id' => $tournamentExternalId,
+            ];
+        }
+
         $jobId = $this->repository->startJob($targeted ? 'live_tournament_sync' : 'season_sync', 'season', $this->localSeasonId);
         $summary = [
             'mode' => $targeted ? 'live_tournament' : 'full_season',
@@ -26,11 +40,13 @@ final class DartsAtlasSyncService
             'tournaments_seen' => 0,
             'matches_seen' => 0,
             'matches_mapped' => 0,
+            'live_states_written' => 0,
             'warnings' => [],
         ];
 
         try {
             $playerMap = [];
+            $playerNameMap = [];
 
             if ($targeted) {
                 $tournaments = [[
@@ -53,29 +69,30 @@ final class DartsAtlasSyncService
                     throw new RuntimeException('Season page returned no parseable data.');
                 }
 
-                $resultsUrl = $seasonUrl . '/tournaments/results';
-                $results = $this->fetchParsed(
-                    'season_results',
-                    $seasonExternalId,
-                    $resultsUrl,
-                    $seasonExternalId,
-                    fn(string $html) => $this->parser->parseSeason($html, $seasonUrl),
-                    $summary,
-                ) ?? $this->cachedPayload('season_results', $seasonExternalId);
+                foreach (['results', 'calendar'] as $page) {
+                    $pageUrl = $seasonUrl . '/tournaments/' . $page;
+                    try {
+                        $payload = $this->fetchParsed(
+                            'season_' . $page,
+                            $seasonExternalId,
+                            $pageUrl,
+                            $seasonExternalId,
+                            fn(string $html) => $this->parser->parseSeason($html, $seasonUrl),
+                            $summary,
+                        ) ?? $this->cachedPayload('season_' . $page, $seasonExternalId);
+                    } catch (Throwable $error) {
+                        $summary['warnings'][] = "Season {$page} page could not be read: {$error->getMessage()}";
+                        $payload = null;
+                    }
 
-                if (is_array($results)) {
-                    $season['players'] = $this->mergeByExternalId($season['players'] ?? [], $results['players'] ?? []);
-                    $season['tournaments'] = $this->mergeByExternalId($season['tournaments'] ?? [], $results['tournaments'] ?? []);
+                    if (is_array($payload)) {
+                        $season['players'] = $this->mergeByExternalId($season['players'] ?? [], $payload['players'] ?? []);
+                        $season['tournaments'] = $this->mergeByExternalId($season['tournaments'] ?? [], $payload['tournaments'] ?? []);
+                    }
                 }
 
                 foreach ($season['players'] ?? [] as $player) {
-                    $name = trim((string) ($player['name'] ?? ''));
-                    $externalId = (string) ($player['external_id'] ?? '');
-                    if ($name === '' || $externalId === '') {
-                        continue;
-                    }
-                    $playerMap[$externalId] = $this->repository->upsertPlayer($this->clubId, $externalId, $name);
-                    $summary['players_seen']++;
+                    $this->registerPlayer($player, $playerMap, $playerNameMap, $summary);
                 }
 
                 $tournaments = $season['tournaments'] ?? [];
@@ -113,47 +130,57 @@ final class DartsAtlasSyncService
                 $summary['tournaments_seen']++;
 
                 foreach ($tournament['players'] ?? [] as $player) {
-                    $externalId = (string) ($player['external_id'] ?? '');
-                    $name = trim((string) ($player['name'] ?? ''));
-                    if ($externalId === '' || $name === '') {
-                        continue;
+                    $playerId = $this->registerPlayer($player, $playerMap, $playerNameMap, $summary);
+                    if ($playerId !== null) {
+                        $this->repository->addTournamentPlayer($tournamentId, $playerId);
                     }
-                    $playerMap[$externalId] ??= $this->repository->upsertPlayer($this->clubId, $externalId, $name);
-                    $this->repository->addTournamentPlayer($tournamentId, $playerMap[$externalId]);
-                    $summary['players_seen']++;
                 }
 
                 foreach ($tournament['matches'] ?? [] as $matchInfo) {
                     $summary['matches_seen']++;
-                    $matchExternalId = (string) ($matchInfo['external_id'] ?? '');
+                    $matchExternalId = trim((string) ($matchInfo['external_id'] ?? ''));
                     if ($matchExternalId === '') {
                         continue;
                     }
 
-                    $matchUrl = "https://www.dartsatlas.com/matches/{$matchExternalId}";
-                    $match = $this->fetchParsed(
-                        'match',
-                        $matchExternalId,
-                        $matchUrl,
-                        $externalTournamentId,
-                        fn(string $html) => $this->parser->parseMatch($html, $matchUrl),
-                        $summary,
-                    ) ?? $this->cachedPayload('match', $matchExternalId);
+                    $matchPayload = null;
+                    $isDerived = str_starts_with($matchExternalId, 'derived-');
+                    $matchUrl = isset($matchInfo['url']) && is_string($matchInfo['url']) && $matchInfo['url'] !== ''
+                        ? $matchInfo['url']
+                        : "https://www.dartsatlas.com/matches/{$matchExternalId}";
 
-                    if ($match === null) {
-                        continue;
+                    if (!$isDerived) {
+                        try {
+                            $matchPayload = $this->fetchParsed(
+                                'match',
+                                $matchExternalId,
+                                $matchUrl,
+                                $externalTournamentId,
+                                fn(string $html) => $this->parser->parseMatch($html, $matchUrl),
+                                $summary,
+                            ) ?? $this->cachedPayload('match', $matchExternalId);
+                        } catch (Throwable $error) {
+                            $summary['warnings'][] = "Match {$matchExternalId} page failed; tournament snapshot retained.";
+                        }
                     }
 
                     $matchPlayers = [];
-                    foreach ($match['players'] ?? [] as $player) {
-                        $externalId = (string) ($player['external_id'] ?? '');
-                        $name = trim((string) ($player['name'] ?? ''));
-                        if ($externalId === '' || $name === '') {
-                            continue;
+                    foreach (['player_a', 'player_b'] as $key) {
+                        if (isset($matchInfo[$key]) && is_array($matchInfo[$key])) {
+                            $playerId = $this->registerPlayer($matchInfo[$key], $playerMap, $playerNameMap, $summary);
+                            if ($playerId !== null) {
+                                $matchPlayers[] = $playerId;
+                                $this->repository->addTournamentPlayer($tournamentId, $playerId);
+                            }
                         }
-                        $playerMap[$externalId] ??= $this->repository->upsertPlayer($this->clubId, $externalId, $name);
-                        $matchPlayers[] = $playerMap[$externalId];
-                        $this->repository->addTournamentPlayer($tournamentId, $playerMap[$externalId]);
+                    }
+
+                    foreach ($matchPayload['players'] ?? [] as $player) {
+                        $playerId = $this->registerPlayer($player, $playerMap, $playerNameMap, $summary);
+                        if ($playerId !== null) {
+                            $matchPlayers[] = $playerId;
+                            $this->repository->addTournamentPlayer($tournamentId, $playerId);
+                        }
                     }
 
                     $matchPlayers = array_values(array_unique($matchPlayers));
@@ -162,24 +189,51 @@ final class DartsAtlasSyncService
                         continue;
                     }
 
-                    $this->repository->upsertMatch(
+                    $matchId = $this->repository->upsertMatch(
                         $tournamentId,
                         $matchExternalId,
                         $matchPlayers[0],
                         $matchPlayers[1],
-                        ['source_url' => $matchUrl],
+                        [
+                            'source_url' => $isDerived ? $url : $matchUrl,
+                            'provider' => 'dartsatlas',
+                            'external_id' => $matchExternalId,
+                        ],
                     );
                     $summary['matches_mapped']++;
 
-                    $broadcastUrl = $matchUrl . '/broadcast?mode=dual_cam_stats';
-                    $this->fetchParsed(
-                        'match_broadcast',
-                        $matchExternalId,
-                        $broadcastUrl,
-                        $externalTournamentId,
-                        fn(string $html) => $this->parser->parseBroadcast($html, $matchExternalId),
-                        $summary,
-                    );
+                    if (isset($matchInfo['status']) || isset($matchInfo['player_a_legs']) || isset($matchInfo['average_a'])) {
+                        $this->repository->applyMatchSnapshot($matchId, $matchInfo);
+                        $summary['live_states_written']++;
+                    }
+
+                    if (is_array($matchPayload['live'] ?? null)) {
+                        $this->repository->applyBroadcastState($matchId, $matchPayload['live'], $playerMap);
+                        $summary['live_states_written']++;
+                    }
+
+                    if (!$isDerived) {
+                        $broadcastUrl = $matchUrl . '/broadcast?mode=dual_cam_stats';
+                        try {
+                            $broadcast = $this->fetchParsed(
+                                'match_broadcast',
+                                $matchExternalId,
+                                $broadcastUrl,
+                                $externalTournamentId,
+                                fn(string $html) => $this->parser->parseBroadcast($html, $matchExternalId),
+                                $summary,
+                            ) ?? $this->cachedPayload('match_broadcast', $matchExternalId);
+
+                            if (is_array($broadcast)) {
+                                $this->repository->applyBroadcastState($matchId, $broadcast, $playerMap);
+                                $summary['live_states_written']++;
+                            }
+                        } catch (Throwable $error) {
+                            // Broadcast is a live enhancement. A missing/changed broadcast page must not
+                            // make the durable tournament/result sync fail.
+                            $summary['warnings'][] = "Broadcast for {$matchExternalId} unavailable; base match data kept.";
+                        }
+                    }
                 }
             }
 
@@ -189,7 +243,25 @@ final class DartsAtlasSyncService
         } catch (Throwable $error) {
             $this->repository->failJob($jobId, $error, $summary);
             throw $error;
+        } finally {
+            $this->repository->releaseLock($lockName);
         }
+    }
+
+    private function registerPlayer(array $player, array &$playerMap, array &$playerNameMap, array &$summary): ?int
+    {
+        $externalId = trim((string) ($player['external_id'] ?? ''));
+        $name = trim((string) ($player['name'] ?? ''));
+        if ($externalId === '' || $name === '') {
+            return null;
+        }
+
+        if (!isset($playerMap[$externalId])) {
+            $playerMap[$externalId] = $this->repository->upsertPlayer($this->clubId, $externalId, $name);
+            $summary['players_seen']++;
+        }
+        $playerNameMap[$this->normaliseName($name)] = $playerMap[$externalId];
+        return (int) $playerMap[$externalId];
     }
 
     private function fetchParsed(
@@ -266,5 +338,12 @@ final class DartsAtlasSyncService
             $merged[$id] = array_merge($merged[$id] ?? [], $item);
         }
         return array_values($merged);
+    }
+
+    private function normaliseName(string $name): string
+    {
+        $name = mb_strtolower(trim($name), 'UTF-8');
+        $name = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $name) ?? $name;
+        return trim((string) preg_replace('/\s+/u', ' ', $name));
     }
 }
