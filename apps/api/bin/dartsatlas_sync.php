@@ -6,6 +6,7 @@ use Blindleia\Dartkiosk\Api\Repository\DartsAtlasRepository;
 use Blindleia\Dartkiosk\Api\Service\DartsAtlasSyncService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasHttpClient;
 use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasParser;
 
@@ -78,6 +79,9 @@ if ($watch && $tournamentId === '') {
     exit(2);
 }
 
+$membership = new MembershipDatabase($config, $database, $dartsAtlas->membersTable());
+$membershipSource = $membership->prepareRepositoryBridge();
+
 $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
 $service = new DartsAtlasSyncService(
     new DartsAtlasHttpClient($dartsAtlas->userAgent()),
@@ -86,8 +90,9 @@ $service = new DartsAtlasSyncService(
     $dartsAtlas,
 );
 
-$run = static function () use ($service, $seasonId, $tournamentId): void {
+$run = static function () use ($service, $seasonId, $tournamentId, $membershipSource): void {
     $summary = $service->sync($seasonId, $tournamentId !== '' ? $tournamentId : null);
+    $summary['member_registry_source'] = $membershipSource;
     fwrite(STDOUT, json_encode(
         $summary,
         JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT,
