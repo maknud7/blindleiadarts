@@ -6,7 +6,7 @@ Production-oriented tournament platform for Blindleia Dartklubb with three prima
 - public screen / venue display
 - club admin backoffice
 
-The platform is designed to run the venue locally without depending on Challonge or other external systems at runtime. External systems are supported through generic provider connectors.
+The platform is designed to run the venue locally without depending on external tournament systems at runtime. External systems are supported through generic provider connectors.
 
 ## Repository Shape
 
@@ -34,7 +34,7 @@ The platform is designed to run the venue locally without depending on Challonge
 
 - API-first: all frontends talk to the internal API only.
 - Internal domain first: local entities and rules are the source of truth.
-- Provider boundaries: Challonge and future systems plug in through generic adapters.
+- Provider boundaries: external systems plug in through generic adapters.
 - Event-oriented design: state changes should align with explicit domain events.
 - Venue runtime independence: local tournament operations must continue without external availability.
 
@@ -43,28 +43,20 @@ The platform is designed to run the venue locally without depending on Challonge
 - `apps/api`: internal API and domain orchestration, currently expected to stay PHP-friendly.
 - `apps/kiosk`: match input UI for each board kiosk.
 - `apps/screen`: public venue display for live boards and rankings.
-- `apps/admin`: future club admin backoffice.
+- `apps/admin`: club admin backoffice.
 
 ## Priority Roadmap
 
-1. Stabilize kiosk match lifecycle.
-2. Ensure match completion transitions cleanly to idle or next assignment.
-3. Confirm averages and countdown overlay on win.
-4. Clean and version internal API contracts.
-5. Add admin media upload flows for club and sponsor branding.
-6. Introduce generic provider framework.
-7. Implement Challonge as the first connector.
-
-## Milestones
-
-- Milestone 1: Core runtime
-- Milestone 2: Admin basics
-- Milestone 3: Rankings
-- Milestone 4: Challonge connector
+1. Darts Atlas phase 1: tournament/match sync and Blindleia Live state.
+2. Link Darts Atlas player identities to the existing `medlemmer` register.
+3. Build the venue screen on the internal live-state API.
+4. Import historical Darts Atlas data for rankings, records and statistics.
+5. Scolia phase 2: ingest visit/dart events without changing the core identity model.
+6. Add other provider adapters such as Challonge only where they add value.
 
 ## Key Rule
 
-Keep the core match engine local. Connector logic must not leak provider-specific assumptions into UI or domain code.
+Keep the core match and identity model local. Connector logic must not leak provider-specific assumptions into UI or domain code.
 
 ## Deployment
 
