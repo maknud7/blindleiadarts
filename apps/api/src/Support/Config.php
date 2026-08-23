@@ -10,14 +10,10 @@ use RuntimeException;
 
 final class Config
 {
-    /**
-     * @var array<string, mixed>
-     */
+    /** @var array<string, mixed> */
     private array $config;
 
-    /**
-     * @param array<string, mixed> $config
-     */
+    /** @param array<string, mixed> $config */
     private function __construct(array $config)
     {
         $this->config = $config;
@@ -43,70 +39,39 @@ final class Config
         throw new RuntimeException('No API configuration file found.');
     }
 
-    public function appEnv(): string
+    public function appEnv(): string { return (string) ($this->config['app_env'] ?? 'unknown'); }
+    public function dbHost(): string { return (string) (($this->config['db']['host'] ?? '') ?: ''); }
+    public function dbPort(): int { return (int) (($this->config['db']['port'] ?? 3306) ?: 3306); }
+    public function dbName(): string { return (string) (($this->config['db']['database'] ?? '') ?: ''); }
+    public function dbUsername(): string { return (string) (($this->config['db']['username'] ?? '') ?: ''); }
+    public function dbPassword(): string { return (string) (($this->config['db']['password'] ?? '') ?: ''); }
+    public function dbTablePrefix(): string { return (string) (($this->config['db']['table_prefix'] ?? '') ?: ''); }
+
+    /** @return array{host:string,port:int,database:string,username:string,password:string} */
+    public function membersDb(): array
     {
-        return (string) ($this->config['app_env'] ?? 'unknown');
+        $members = is_array($this->config['members_db'] ?? null) ? $this->config['members_db'] : [];
+        return [
+            'host' => (string) (($members['host'] ?? '') ?: ''),
+            'port' => (int) (($members['port'] ?? 3306) ?: 3306),
+            'database' => (string) (($members['database'] ?? '') ?: ''),
+            'username' => (string) (($members['username'] ?? '') ?: ''),
+            'password' => (string) (($members['password'] ?? '') ?: ''),
+        ];
     }
 
-    public function dbHost(): string
+    public function membersDbConfigured(): bool
     {
-        return (string) (($this->config['db']['host'] ?? '') ?: '');
+        $members = $this->membersDb();
+        return $members['host'] !== '' && $members['database'] !== '' && $members['username'] !== '';
     }
 
-    public function dbPort(): int
-    {
-        return (int) (($this->config['db']['port'] ?? 3306) ?: 3306);
-    }
-
-    public function dbName(): string
-    {
-        return (string) (($this->config['db']['database'] ?? '') ?: '');
-    }
-
-    public function dbUsername(): string
-    {
-        return (string) (($this->config['db']['username'] ?? '') ?: '');
-    }
-
-    public function dbPassword(): string
-    {
-        return (string) (($this->config['db']['password'] ?? '') ?: '');
-    }
-
-    public function dbTablePrefix(): string
-    {
-        return (string) (($this->config['db']['table_prefix'] ?? '') ?: '');
-    }
-
-    public function screenDefaultClubSlug(): string
-    {
-        return (string) (($this->config['screen']['default_club_slug'] ?? '') ?: '');
-    }
-
-    public function realtimeWebsocketUrl(): string
-    {
-        return (string) (($this->config['realtime']['websocket_url'] ?? '') ?: '');
-    }
-
-    public function realtimePublishUrl(): string
-    {
-        return (string) (($this->config['realtime']['publish_url'] ?? '') ?: '');
-    }
-
-    public function realtimePublishSecret(): string
-    {
-        return (string) (($this->config['realtime']['publish_secret'] ?? '') ?: '');
-    }
-
-    public function realtimeEnabled(): bool
-    {
-        return $this->realtimeWebsocketUrl() !== '';
-    }
-
-    public function realtimePublishEnabled(): bool
-    {
-        return $this->realtimePublishUrl() !== '' && $this->realtimePublishSecret() !== '';
-    }
+    public function screenDefaultClubSlug(): string { return (string) (($this->config['screen']['default_club_slug'] ?? '') ?: ''); }
+    public function realtimeWebsocketUrl(): string { return (string) (($this->config['realtime']['websocket_url'] ?? '') ?: ''); }
+    public function realtimePublishUrl(): string { return (string) (($this->config['realtime']['publish_url'] ?? '') ?: ''); }
+    public function realtimePublishSecret(): string { return (string) (($this->config['realtime']['publish_secret'] ?? '') ?: ''); }
+    public function realtimeEnabled(): bool { return $this->realtimeWebsocketUrl() !== ''; }
+    public function realtimePublishEnabled(): bool { return $this->realtimePublishUrl() !== '' && $this->realtimePublishSecret() !== ''; }
 
     public function dartsAtlas(): DartsAtlasConfig
     {
@@ -130,7 +95,6 @@ final class Config
     {
         /** @var array<string, mixed> $challonge */
         $challonge = is_array($this->config['challonge'] ?? null) ? $this->config['challonge'] : [];
-
         /** @var array<int, string> $defaultScopes */
         $defaultScopes = is_array($challonge['default_scopes'] ?? null) ? $challonge['default_scopes'] : [];
 
