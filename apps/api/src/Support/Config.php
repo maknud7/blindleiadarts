@@ -14,26 +14,27 @@ final class Config
     private array $config;
 
     /** @param array<string, mixed> $config */
-    private function __construct(array $config)
+    private function __construct(array $config, private readonly string $rootPath)
     {
         $this->config = $config;
     }
 
     public static function load(string $rootPath): self
     {
+        $rootPath = rtrim($rootPath, '/\\');
         $configPath = $rootPath . '/config.php';
         $fallbackPath = $rootPath . '/config.example.php';
 
         if (is_file($configPath)) {
             /** @var array<string, mixed> $config */
             $config = require $configPath;
-            return new self($config);
+            return new self($config, $rootPath);
         }
 
         if (is_file($fallbackPath)) {
             /** @var array<string, mixed> $config */
             $config = require $fallbackPath;
-            return new self($config);
+            return new self($config, $rootPath);
         }
 
         throw new RuntimeException('No API configuration file found.');
@@ -64,6 +65,21 @@ final class Config
     {
         $members = $this->membersDb();
         return $members['host'] !== '' && $members['database'] !== '' && $members['username'] !== '';
+    }
+
+    public function membersSqlconnectPath(): string
+    {
+        $members = is_array($this->config['members_db'] ?? null) ? $this->config['members_db'] : [];
+        $path = trim((string) (($members['sqlconnect_path'] ?? '../sqlconnect.php') ?: ''));
+        if ($path === '') {
+            return '';
+        }
+
+        if (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1) {
+            return $path;
+        }
+
+        return $this->rootPath . DIRECTORY_SEPARATOR . $path;
     }
 
     public function screenDefaultClubSlug(): string { return (string) (($this->config['screen']['default_club_slug'] ?? '') ?: ''); }
