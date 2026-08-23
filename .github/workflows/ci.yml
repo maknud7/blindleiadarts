@@ -29,6 +29,9 @@ jobs:
           find apps packages infra -type f -name '*.php' -print0 \
             | xargs -0 -n1 php -l
 
+      - name: JavaScript syntax check
+        run: node --check apps/screen/app.js
+
       - name: DartsAtlas parser smoke test
         run: php -d zend.assertions=1 -d assert.exception=1 packages/connectors/tests/dartsatlas_parser_smoke.php
 
