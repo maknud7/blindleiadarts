@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Blindleia\Dartkiosk\Api\Support;
 
 use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeConfig;
+use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasConfig;
 use RuntimeException;
 
 final class Config
@@ -105,6 +106,24 @@ final class Config
     public function realtimePublishEnabled(): bool
     {
         return $this->realtimePublishUrl() !== '' && $this->realtimePublishSecret() !== '';
+    }
+
+    public function dartsAtlas(): DartsAtlasConfig
+    {
+        /** @var array<string, mixed> $dartsAtlas */
+        $dartsAtlas = is_array($this->config['dartsatlas'] ?? null) ? $this->config['dartsatlas'] : [];
+        $localSeasonRaw = $dartsAtlas['local_season_id'] ?? null;
+        $localSeasonId = ($localSeasonRaw === null || $localSeasonRaw === '') ? null : (int) $localSeasonRaw;
+
+        return new DartsAtlasConfig(
+            (string) (($dartsAtlas['season_id'] ?? '') ?: ''),
+            (string) (($dartsAtlas['tournament_id'] ?? '') ?: ''),
+            (int) (($dartsAtlas['club_id'] ?? 0) ?: 0),
+            $localSeasonId,
+            (string) (($dartsAtlas['members_table'] ?? 'medlemmer') ?: 'medlemmer'),
+            max(5, (int) (($dartsAtlas['poll_interval_seconds'] ?? 8) ?: 8)),
+            (string) (($dartsAtlas['user_agent'] ?? 'BlindleiaDarts/1.0') ?: 'BlindleiaDarts/1.0'),
+        );
     }
 
     public function challonge(): ChallongeConfig

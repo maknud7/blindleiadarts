@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          find apps packages infra -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: DartsAtlas parser smoke test
+        run: php -d zend.assertions=1 -d assert.exception=1 packages/connectors/tests/dartsatlas_parser_smoke.php
+
+      - name: Release package smoke test
+        run: bash infra/deploy/build-release.sh test
