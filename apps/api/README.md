@@ -40,17 +40,18 @@ Guidelines:
 - `POST /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/import`
 - `GET /v1/connectors/challonge/callback`
 
-## Server-local member registry
+## Shared member registry
 
-DartsAtlas player linking prefers the club's existing server-local `sqlconnect.php` instead of storing the member database password in GitHub.
+DartsAtlas player linking uses the exact same physical database connection file as the existing Blindleia member admin:
 
-- default path is `../sqlconnect.php` relative to the deployed `api/` directory, i.e. `<release-root>/sqlconnect.php`
-- the file is not versioned or included in release packages
-- the loader accepts the existing club-admin convention where `sqlconnect.php` creates a `mysqli` connection in `$conn`
+`/home/1/i/ingenting/dart/sqlconnect.php`
+
+- this file is the only supported source for the member registry
+- there is no `MEMBERS_DB_*` credential fallback and no separate copy of `sqlconnect.php`
+- the loader accepts the existing admin convention where `sqlconnect.php` creates a `mysqli` connection in `$conn`
 - any output produced while loading the file is suppressed for API/CLI use
-- only `medlemmer.id` and `medlemmer.navn` are copied into a temporary in-session bridge table during DartsAtlas sync; the member registry is never persisted in the dart database
-- `MEMBERS_SQLCONNECT_PATH` can override the path, including with an absolute server path to an already existing `sqlconnect.php`
-- `MEMBERS_DB_*` remains an optional fallback; if neither source is available, DartsAtlas Live continues but automatic member linking is disabled
+- only `medlemmer.id` and `medlemmer.navn` are mirrored into a temporary in-session bridge table during DartsAtlas sync; the member registry is never persisted in the dart database
+- if the shared file is unavailable, DartsAtlas Live continues but automatic member linking is disabled and doctor reports the failure
 
 ## Notes
 
