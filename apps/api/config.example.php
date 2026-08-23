@@ -20,6 +20,15 @@ return [
         'password' => 'database_password',
         'table_prefix' => 'bd_test_',
     ],
+    'dartsatlas' => [
+        'season_id' => 'rFByCgOqI1rq',
+        'tournament_id' => '',
+        'club_id' => 1,
+        'local_season_id' => null,
+        'members_table' => 'medlemmer',
+        'poll_interval_seconds' => 8,
+        'user_agent' => 'BlindleiaDarts/1.0',
+    ],
     'challonge' => [
         'api_base_url' => 'https://api.challonge.com/v2.1',
         'oauth_authorize_url' => 'https://api.challonge.com/oauth/authorize',
