@@ -21,19 +21,9 @@ return [
         'table_prefix' => 'bd_test_',
     ],
     'members_db' => [
-        // Preferred source on the server. Relative paths are resolved from apps/api.
-        // In a deployed release ../sqlconnect.php means <release-root>/sqlconnect.php.
-        // The file should create a mysqli connection in $conn, like the existing club admin.
-        'sqlconnect_path' => '../sqlconnect.php',
-
-        // Optional fallback only. DartsAtlas Live still works if both the local
-        // sqlconnect.php and these credentials are unavailable; only automatic
-        // player -> medlemmer.id linking is disabled.
-        'host' => '',
-        'port' => 3306,
-        'database' => '',
-        'username' => '',
-        'password' => '',
+        // The member registry must use the exact same physical file as Blindleia admin.
+        // No alternate credentials or local copy are used.
+        'sqlconnect_path' => '/home/1/i/ingenting/dart/sqlconnect.php',
     ],
     'dartsatlas' => [
         'season_id' => 'rFByCgOqI1rq',

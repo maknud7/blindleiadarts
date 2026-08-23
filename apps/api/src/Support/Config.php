@@ -48,29 +48,10 @@ final class Config
     public function dbPassword(): string { return (string) (($this->config['db']['password'] ?? '') ?: ''); }
     public function dbTablePrefix(): string { return (string) (($this->config['db']['table_prefix'] ?? '') ?: ''); }
 
-    /** @return array{host:string,port:int,database:string,username:string,password:string} */
-    public function membersDb(): array
-    {
-        $members = is_array($this->config['members_db'] ?? null) ? $this->config['members_db'] : [];
-        return [
-            'host' => (string) (($members['host'] ?? '') ?: ''),
-            'port' => (int) (($members['port'] ?? 3306) ?: 3306),
-            'database' => (string) (($members['database'] ?? '') ?: ''),
-            'username' => (string) (($members['username'] ?? '') ?: ''),
-            'password' => (string) (($members['password'] ?? '') ?: ''),
-        ];
-    }
-
-    public function membersDbConfigured(): bool
-    {
-        $members = $this->membersDb();
-        return $members['host'] !== '' && $members['database'] !== '' && $members['username'] !== '';
-    }
-
     public function membersSqlconnectPath(): string
     {
         $members = is_array($this->config['members_db'] ?? null) ? $this->config['members_db'] : [];
-        $path = trim((string) (($members['sqlconnect_path'] ?? '../sqlconnect.php') ?: ''));
+        $path = trim((string) (($members['sqlconnect_path'] ?? '/home/1/i/ingenting/dart/sqlconnect.php') ?: ''));
         if ($path === '') {
             return '';
         }
