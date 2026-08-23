@@ -42,6 +42,11 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
+          DARTSATLAS_TOURNAMENT_ID: ${{ vars.DARTSATLAS_TOURNAMENT_ID }}
+          DARTSATLAS_CLUB_ID: ${{ vars.DARTSATLAS_CLUB_ID }}
+          DARTSATLAS_LOCAL_SEASON_ID: ${{ vars.DARTSATLAS_LOCAL_SEASON_ID }}
+          DARTSATLAS_POLL_INTERVAL_SECONDS: ${{ vars.DARTSATLAS_POLL_INTERVAL_SECONDS }}
 
       - name: Deploy test via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
