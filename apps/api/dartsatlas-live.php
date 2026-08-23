@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use Blindleia\Dartkiosk\Api\Repository\DartsAtlasRepository;
 use Blindleia\Dartkiosk\Api\Repository\DartsAtlasScreenRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
+use Blindleia\Dartkiosk\Api\Service\DartsAtlasSyncService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasHttpClient;
+use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasParser;
 
 require __DIR__ . '/bootstrap.php';
 
@@ -44,6 +48,7 @@ try {
             throw new RuntimeException('Configured screen club was not found.');
         }
         $clubId = (int) $row['id'];
+        $dartsAtlas = $dartsAtlas->withClubId($clubId);
     }
 
     $requestedTournament = filter_input(INPUT_GET, 'tournament_id', FILTER_VALIDATE_INT);
@@ -55,7 +60,7 @@ try {
     $clubs = $prefix . 'clubs';
     if ($tournamentId !== null) {
         $statement = $db->prepare(
-            "SELECT t.id, t.name, t.status, t.season_id, t.provider_system,
+            "SELECT t.id, t.name, t.status, t.season_id, t.provider_system, t.provider_metadata,
                     c.name AS club_name, c.logo_url AS club_logo_url
              FROM `{$tournaments}` t
              INNER JOIN `{$clubs}` c ON c.id = t.club_id
@@ -65,7 +70,7 @@ try {
         $statement->bind_param('ii', $tournamentId, $clubId);
     } else {
         $statement = $db->prepare(
-            "SELECT t.id, t.name, t.status, t.season_id, t.provider_system,
+            "SELECT t.id, t.name, t.status, t.season_id, t.provider_system, t.provider_metadata,
                     c.name AS club_name, c.logo_url AS club_logo_url
              FROM `{$tournaments}` t
              INNER JOIN `{$clubs}` c ON c.id = t.club_id
@@ -99,6 +104,78 @@ try {
     $tournamentId = (int) $tournament['id'];
     $screenRepository = new DartsAtlasScreenRepository($database);
     $tournamentRepository = new TournamentRepository($database);
+    $feed = $screenRepository->feedStatus($tournamentId);
+    $feedAge = isset($feed['age_seconds']) && is_numeric($feed['age_seconds'])
+        ? (int) $feed['age_seconds']
+        : null;
+
+    $canRefresh = in_array((string) $tournament['status'], ['ready', 'in_progress'], true);
+    $refreshDue = $canRefresh
+        && ($feedAge === null || $feedAge >= $dartsAtlas->pollIntervalSeconds());
+    $refreshAttempted = false;
+    $refreshSkipped = null;
+
+    if ($refreshDue) {
+        $references = $prefix . 'external_references';
+        $statement = $db->prepare(
+            "SELECT external_id
+             FROM `{$references}`
+             WHERE external_system = 'dartsatlas'
+               AND external_entity_type = 'tournament'
+               AND internal_entity_type = 'tournament'
+               AND internal_id = ?
+             LIMIT 1"
+        );
+        $statement->bind_param('i', $tournamentId);
+        $statement->execute();
+        $reference = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+
+        $externalTournamentId = trim((string) ($reference['external_id'] ?? ''));
+        $metadata = [];
+        if (is_string($tournament['provider_metadata'] ?? null) && $tournament['provider_metadata'] !== '') {
+            $decoded = json_decode((string) $tournament['provider_metadata'], true);
+            if (is_array($decoded)) {
+                $metadata = $decoded;
+            }
+        }
+        $seasonExternalId = trim($dartsAtlas->seasonId());
+        if ($seasonExternalId === '') {
+            $seasonExternalId = trim((string) ($metadata['season_external_id'] ?? ''));
+        }
+
+        if ($externalTournamentId === '') {
+            $refreshSkipped = 'missing_external_tournament_id';
+        } elseif ($seasonExternalId === '') {
+            $refreshSkipped = 'missing_external_season_id';
+        } else {
+            $refreshAttempted = true;
+            try {
+                $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
+                $service = new DartsAtlasSyncService(
+                    new DartsAtlasHttpClient($dartsAtlas->userAgent()),
+                    new DartsAtlasParser(),
+                    $repository,
+                    $dartsAtlas,
+                );
+                $summary = $service->syncSeason($seasonExternalId, $externalTournamentId);
+                if (($summary['skipped'] ?? false) === true) {
+                    $refreshSkipped = (string) ($summary['reason'] ?? 'sync_skipped');
+                }
+            } catch (Throwable $syncError) {
+                // A transient upstream/parser problem must never blank the venue display.
+                $refreshSkipped = 'refresh_failed';
+            }
+
+            $feed = $screenRepository->feedStatus($tournamentId);
+        }
+    }
+
+    $feed['refresh_attempted'] = $refreshAttempted;
+    if ($refreshSkipped !== null) {
+        $feed['refresh_skipped'] = $refreshSkipped;
+    }
+    $feed['poll_interval_seconds'] = $dartsAtlas->pollIntervalSeconds();
 
     $respond([
         'ok' => true,
@@ -116,7 +193,7 @@ try {
                 'season_id' => $tournament['season_id'] !== null ? (int) $tournament['season_id'] : null,
                 'provider_system' => 'dartsatlas',
             ],
-            'feed' => $screenRepository->feedStatus($tournamentId),
+            'feed' => $feed,
             'live_boards' => $screenRepository->listScreenBoardsByTournament($clubId, $tournamentId),
             'next_matches' => $tournamentRepository->listUpcomingMatchesByTournamentId($tournamentId, 8),
             'standings' => $screenRepository->listStandingsByTournamentId($tournamentId, 8),
