@@ -45,7 +45,7 @@ final class MembershipDatabase
                 }
                 $connection->close();
             } catch (Throwable) {
-                // Member matching is an enhancement. DartsAtlas sync must continue without it.
+                // Member matching is optional for the core DartsAtlas import.
             }
         }
 
@@ -57,12 +57,65 @@ final class MembershipDatabase
                 return $this->connection;
             }
         } catch (Throwable) {
-            // Primary DB errors are handled by the caller's normal database path.
+            // Primary DB failures are handled through the normal database path.
         }
 
         $this->source = 'unavailable';
-        $this->connection = null;
         return null;
+    }
+
+    /**
+     * DartsAtlasRepository historically reads the members table through the primary mysqli session.
+     * When the real registry lives in a separate database, expose only id+navn as a TEMPORARY
+     * session table. Nothing is persisted or copied into the dart schema.
+     */
+    public function prepareRepositoryBridge(): string
+    {
+        $primary = $this->primaryDatabase->connection();
+        if ($this->tableExists($primary, $this->membersTable)) {
+            $this->source = 'primary_database';
+            return $this->source;
+        }
+
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $this->membersTable)) {
+            return 'unavailable';
+        }
+
+        $source = $this->connection();
+        $table = $this->membersTable;
+
+        $primary->query(
+            "CREATE TEMPORARY TABLE IF NOT EXISTS `{$table}` (
+                `id` BIGINT UNSIGNED NOT NULL,
+                `navn` VARCHAR(255) NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `idx_temp_members_name` (`navn`)
+            ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+        $primary->query("TRUNCATE TABLE `{$table}`");
+
+        if (!$source instanceof mysqli) {
+            $this->source = 'unavailable';
+            return $this->source;
+        }
+
+        try {
+            $result = $source->query("SELECT id, navn FROM `{$table}` ORDER BY id");
+            $insert = $primary->prepare("INSERT INTO `{$table}` (id, navn) VALUES (?, ?)");
+            while ($row = $result->fetch_assoc()) {
+                $id = (int) $row['id'];
+                $name = (string) $row['navn'];
+                $insert->bind_param('is', $id, $name);
+                $insert->execute();
+            }
+            $insert->close();
+            $result->free();
+            $this->source = 'separate_database';
+        } catch (Throwable) {
+            $this->source = 'unavailable';
+        }
+
+        return $this->source;
     }
 
     public function source(): string
