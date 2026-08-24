@@ -124,7 +124,6 @@ async function savePlayerPreference(mode) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) return;
 
-  // Keep the visible mode stable after the write even if another normal kiosk render happened meanwhile.
   const returned = payload.data || {};
   if (Number(returned.current_player_id || 0) === playerId) applyPreferredMode(mode);
 }
@@ -155,6 +154,71 @@ function schedulePreferenceSync(delay = 80) {
   preferenceSyncTimer = setTimeout(syncPlayerPreference, wait);
 }
 
+function ensureSponsorStyles() {
+  if (document.getElementById("boardSponsorRuntimeStyles")) return;
+  const style = document.createElement("style");
+  style.id = "boardSponsorRuntimeStyles";
+  style.textContent = `
+    .board-sponsor-badge{display:flex;align-items:center;gap:9px;max-width:300px;padding:7px 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05)}
+    .board-sponsor-badge.hidden{display:none}
+    .board-sponsor-badge img{width:42px;height:42px;object-fit:contain;border-radius:8px;background:#fff;padding:3px}
+    .board-sponsor-copy{display:grid;gap:1px;min-width:0}
+    .board-sponsor-copy span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.65}
+    .board-sponsor-copy strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    @media (max-width:700px){.board-sponsor-badge{max-width:190px}.board-sponsor-copy span{display:none}.board-sponsor-badge img{width:34px;height:34px}}
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureSponsorBadge() {
+  ensureSponsorStyles();
+  let badge = document.getElementById("boardSponsorBadge");
+  if (badge) return badge;
+
+  const status = document.querySelector(".terminal-status");
+  if (!status) return null;
+
+  badge = document.createElement("div");
+  badge.id = "boardSponsorBadge";
+  badge.className = "board-sponsor-badge hidden";
+  badge.innerHTML = `<img id="boardSponsorLogo" class="hidden" alt="Sponsorlogo"><div class="board-sponsor-copy"><span>Presentert av</span><strong id="boardSponsorLabel"></strong></div>`;
+  status.prepend(badge);
+  return badge;
+}
+
+function renderBoardSponsor() {
+  const badge = ensureSponsorBadge();
+  if (!badge) return;
+
+  let kiosk = null;
+  try {
+    kiosk = typeof currentKiosk === "function" ? currentKiosk() : null;
+  } catch {
+    kiosk = null;
+  }
+
+  const label = String(kiosk?.sponsor_label || "").trim();
+  const logoUrl = String(kiosk?.sponsor_logo_url || "").trim();
+  const logo = document.getElementById("boardSponsorLogo");
+  const labelNode = document.getElementById("boardSponsorLabel");
+
+  if (!label && !logoUrl) {
+    badge.classList.add("hidden");
+    return;
+  }
+
+  labelNode.textContent = label || "Sponsor";
+  if (logoUrl) {
+    logo.src = logoUrl;
+    logo.classList.remove("hidden");
+    logo.onerror = () => logo.classList.add("hidden");
+  } else {
+    logo.removeAttribute("src");
+    logo.classList.add("hidden");
+  }
+  badge.classList.remove("hidden");
+}
+
 renewButton?.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -175,6 +239,7 @@ if (throwingPlayer && typeof MutationObserver === "function") {
 }
 
 setInterval(() => {
+  renderBoardSponsor();
   if (paired()) {
     localStorage.removeItem(DEADLINE_KEY);
     schedulePreferenceSync(0);
@@ -185,4 +250,5 @@ setInterval(() => {
 }, 3000);
 
 ensureLocalDeadline();
+renderBoardSponsor();
 if (paired()) setTimeout(() => schedulePreferenceSync(0), 500);
