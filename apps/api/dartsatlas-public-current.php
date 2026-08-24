@@ -34,7 +34,35 @@ $parseVisibleDate = static function (string $raw) use ($timezone): ?DateTimeImmu
         try {
             return (new DateTimeImmutable($iso[1], $timezone))->setTimezone($timezone);
         } catch (Throwable) {
-            // Continue with the visible English date format below.
+            // Continue with DartsAtlas' visible schedule formats below.
+        }
+    }
+
+    // Actual DartsAtlas season schedule format observed in production, e.g.
+    // "2026 Aug 24 Monday 6:15pm CEST". DartsAtlas expresses the wall-clock
+    // time in the season's local timezone, which for Blindleia is Europe/Oslo.
+    if (preg_match(
+        '/\b(20\d{2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday))?\s+(\d{1,2}:\d{2})\s*(am|pm)(?:\s+(?:CEST|CET|UTC|GMT|BST|[+\-]\d{2}:?\d{2}))?/iu',
+        $raw,
+        $scheduleMatch
+    )) {
+        $dateText = sprintf(
+            '%04d %s %02d %s%s',
+            (int) $scheduleMatch[1],
+            ucfirst(strtolower($scheduleMatch[2])),
+            (int) $scheduleMatch[3],
+            strtolower($scheduleMatch[4]),
+            strtolower($scheduleMatch[5])
+        );
+        $parsed = DateTimeImmutable::createFromFormat('!Y M d g:ia', $dateText, $timezone);
+        if ($parsed instanceof DateTimeImmutable) {
+            return $parsed;
+        }
+
+        // Full month names are accepted by F even when M did not match.
+        $parsed = DateTimeImmutable::createFromFormat('!Y F d g:ia', $dateText, $timezone);
+        if ($parsed instanceof DateTimeImmutable) {
+            return $parsed;
         }
     }
 
@@ -121,8 +149,6 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use 
             return $parsed;
         }
 
-        // Schedule pages can put the date in a heading immediately before a
-        // tournament card. Walk a few previous siblings of the card/containers.
         $sibling = $node->previousSibling;
         $checked = 0;
         while ($sibling !== null && $checked < 6) {
@@ -221,7 +247,7 @@ try {
             }
 
             $externalId = trim($match[1]);
-            if ($externalId === '') {
+            if ($externalId === '' || in_array($externalId, ['schedule', 'calendar', 'results', 'search'], true)) {
                 continue;
             }
 
