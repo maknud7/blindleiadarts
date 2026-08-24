@@ -1,1 +1,0 @@
-Regression: a tournament resolved as in_progress must leave waiting mode immediately, even before a parsed live match card or recent result exists. Otherwise CSS hides live matches, next matches, results and statistics while groups and ELO remain visible.
