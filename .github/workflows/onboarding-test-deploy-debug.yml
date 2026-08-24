@@ -4,8 +4,6 @@ on:
   pull_request:
     branches:
       - develop
-    paths:
-      - '.github/workflows/onboarding-test-deploy-debug.yml'
 
 permissions:
   contents: read
