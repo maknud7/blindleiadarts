@@ -114,11 +114,16 @@ jobs:
           KIOSK_URL="${TEST_ROOT%/}/kiosk/"
           ADMIN_API_URL="${TEST_ROOT%/}/api/dartsatlas-admin.php"
           PAIRING_API_URL="${TEST_ROOT%/}/api/kiosk-pairing.php?action=admin-info&club_id=1&code=NOPE"
+          CREATE_PAIR_API_URL="${TEST_ROOT%/}/api/kiosk-pairing-create-board.php"
 
           echo "Verifying admin page: ${ADMIN_URL}"
           curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "${ADMIN_URL}" -o admin.html
           grep -q "Kiosker / boards" admin.html || {
             echo "Admin page is missing or an old build is still served."
+            exit 1
+          }
+          grep -q "Opprett og koble" admin.html || {
+            echo "Create-and-pair board admin build is not deployed."
             exit 1
           }
 
@@ -146,6 +151,14 @@ jobs:
           if [ "$PAIR_STATUS" = "404" ] || [ "$PAIR_STATUS" = "000" ]; then
             echo "Kiosk pairing endpoint is not deployed (HTTP ${PAIR_STATUS})."
             cat pairing-api.json || true
+            exit 1
+          fi
+
+          echo "Verifying create-and-pair endpoint exists"
+          CREATE_PAIR_STATUS=$(curl --silent --show-error --output create-pair-api.json --write-out "%{http_code}" --max-time 30 "${CREATE_PAIR_API_URL}")
+          if [ "$CREATE_PAIR_STATUS" = "404" ] || [ "$CREATE_PAIR_STATUS" = "000" ]; then
+            echo "Create-and-pair endpoint is not deployed (HTTP ${CREATE_PAIR_STATUS})."
+            cat create-pair-api.json || true
             exit 1
           fi
 
