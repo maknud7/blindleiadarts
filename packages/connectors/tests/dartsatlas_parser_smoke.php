@@ -50,6 +50,34 @@ assert($match['average_a'] === 58.42);
 assert($match['average_b'] === 55.10);
 assert($match['status'] === 'completed');
 
+$groupHtml = <<<'HTML'
+<html><head><title>Group 1</title></head><body>
+<table><tr class="match-row">
+<td><a href="/tournaments/PvGa73emrY6e/player_stats/player-a">Andre Kendrick</a></td>
+<td>2 - 0</td>
+<td><a href="/tournaments/PvGa73emrY6e/player_stats/player-b">Boye Buckingham</a></td>
+<td>Board 1 · Round 2 · Best of 3 · 46.20 Avg · 33.10 Avg</td>
+<td><a href="/matches/group-match-1">Match</a></td>
+</tr></table>
+</body></html>
+HTML;
+$group = $parser->parseTournament($groupHtml, 'https://www.dartsatlas.com/tournaments/PvGa73emrY6e');
+$groupMatch = null;
+foreach ($group['matches'] as $candidate) {
+    if (($candidate['external_id'] ?? '') === 'group-match-1') {
+        $groupMatch = $candidate;
+        break;
+    }
+}
+assert(is_array($groupMatch));
+assert($groupMatch['player_a']['external_id'] === 'player-a');
+assert($groupMatch['player_a']['name'] === 'Andre Kendrick');
+assert($groupMatch['player_b']['external_id'] === 'player-b');
+assert($groupMatch['player_b']['name'] === 'Boye Buckingham');
+assert($groupMatch['player_a_legs'] === 2);
+assert($groupMatch['player_b_legs'] === 0);
+assert($groupMatch['status'] === 'completed');
+
 $broadcast = $parser->parseBroadcast(
     '<div data-player-id="player-1" data-player-name="Magnus Knudsen" data-score="141" data-legs="2" data-average="58.42" data-score-180="1" data-highest-checkout="116"></div>'
     . '<div data-player-id="player-2" data-player-name="Thomas Kildal" data-score="204" data-legs="1" data-average="55,10"></div>',
