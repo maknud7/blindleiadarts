@@ -1,4 +1,4 @@
-const LIVE_URL = "../api/dartsatlas-live.php";
+const LIVE_URL = "../api/dartsatlas-public-live.php";
 const GROUPS_URL = "../api/dartsatlas-public-groups.php";
 
 const groupState = {
