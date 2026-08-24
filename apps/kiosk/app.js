@@ -1,10 +1,11 @@
 const API_ROOT = "../api/v1";
+const PAIRING_URL = "../api/kiosk-pairing.php";
 
 const state = {
   kioskCode: localStorage.getItem("bd:kioskCode") || "",
   pairingToken: localStorage.getItem("bd:kioskPairingToken") || "",
   pairingRequestCode: localStorage.getItem("bd:kioskPairingRequestCode") || "",
-  connectedClub: (() => { try { return JSON.parse(localStorage.getItem("bd:kioskClub") || "null"); } catch { return null; } })(),
+  pairingExpires: localStorage.getItem("bd:kioskPairingExpires") || "",
   snapshot: null,
   pollHandle: null,
   liveSource: null,
@@ -20,34 +21,74 @@ const state = {
 const el = {
   brandLogo: document.getElementById("brandLogo"), brandFallback: document.getElementById("brandFallback"), brandEyebrow: document.getElementById("brandEyebrow"), brandTitle: document.getElementById("brandTitle"),
   connectionPill: document.getElementById("connectionPill"), connectionText: document.getElementById("connectionText"), settingsButton: document.getElementById("settingsButton"),
-  setupState: document.getElementById("setupState"), clubStep: document.getElementById("clubStep"), pairStep: document.getElementById("pairStep"), clubConnectCode: document.getElementById("clubConnectCode"), connectClubButton: document.getElementById("connectClubButton"),
-  pairInstruction: document.getElementById("pairInstruction"), startPairingButton: document.getElementById("startPairingButton"), pairingCard: document.getElementById("pairingCard"), pairingCode: document.getElementById("pairingCode"),
+  setupState: document.getElementById("setupState"), pairingQr: document.getElementById("pairingQr"), qrLoading: document.getElementById("qrLoading"), pairingCode: document.getElementById("pairingCode"), pairingExpires: document.getElementById("pairingExpires"), pairingMessage: document.getElementById("pairingMessage"), newPairingButton: document.getElementById("newPairingButton"),
   idleState: document.getElementById("idleState"), idleClub: document.getElementById("idleClub"), idleBoard: document.getElementById("idleBoard"), idleMessage: document.getElementById("idleMessage"), idleMode: document.getElementById("idleMode"),
   assignedState: document.getElementById("assignedState"), assignedBoard: document.getElementById("assignedBoard"), assignedRound: document.getElementById("assignedRound"), assignedBestOf: document.getElementById("assignedBestOf"), assignedPlayerA: document.getElementById("assignedPlayerA"), assignedPlayerB: document.getElementById("assignedPlayerB"), startMatchButton: document.getElementById("startMatchButton"),
   matchState: document.getElementById("matchState"), playerABox: document.getElementById("playerABox"), playerBBox: document.getElementById("playerBBox"), playerATurn: document.getElementById("playerATurn"), playerBTurn: document.getElementById("playerBTurn"), playerAName: document.getElementById("playerAName"), playerBName: document.getElementById("playerBName"), playerARemaining: document.getElementById("playerARemaining"), playerBRemaining: document.getElementById("playerBRemaining"), playerALegs: document.getElementById("playerALegs"), playerBLegs: document.getElementById("playerBLegs"), matchBoard: document.getElementById("matchBoard"), currentLeg: document.getElementById("currentLeg"), matchRound: document.getElementById("matchRound"), undoButton: document.getElementById("undoButton"),
   manualScoring: document.getElementById("manualScoring"), scoliaScoring: document.getElementById("scoliaScoring"), throwingPlayer: document.getElementById("throwingPlayer"), sumModeButton: document.getElementById("sumModeButton"), dartModeButton: document.getElementById("dartModeButton"), sumMode: document.getElementById("sumMode"), dartMode: document.getElementById("dartMode"), sumDisplay: document.getElementById("sumDisplay"), sumHint: document.getElementById("sumHint"),
   dart1: document.getElementById("dart1"), dart2: document.getElementById("dart2"), dart3: document.getElementById("dart3"), dartTotal: document.getElementById("dartTotal"), numberGrid: document.getElementById("numberGrid"), dartBackButton: document.getElementById("dartBackButton"), dartSubmitButton: document.getElementById("dartSubmitButton"), recentVisits: document.getElementById("recentVisits"),
-  settingsOverlay: document.getElementById("settingsOverlay"), settingsDialog: document.getElementById("settingsDialog"), settingsCloseButton: document.getElementById("settingsCloseButton"), settingsMeta: document.getElementById("settingsMeta"), refreshButton: document.getElementById("refreshButton"), unpairButton: document.getElementById("unpairButton"), changeClubButton: document.getElementById("changeClubButton"),
+  settingsOverlay: document.getElementById("settingsOverlay"), settingsDialog: document.getElementById("settingsDialog"), settingsCloseButton: document.getElementById("settingsCloseButton"), settingsMeta: document.getElementById("settingsMeta"), refreshButton: document.getElementById("refreshButton"), unpairButton: document.getElementById("unpairButton"), resetTerminalButton: document.getElementById("resetTerminalButton"),
   checkoutDialog: document.getElementById("checkoutDialog"), toast: document.getElementById("toast"),
 };
 
-async function api(path, { method = "GET", body } = {}) {
+async function requestJson(url, { method = "GET", body, pairing = false } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (state.pairingToken) headers["X-Kiosk-Pairing-Token"] = state.pairingToken;
-  const response = await fetch(`${API_ROOT}${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined, cache: "no-store" });
-  let payload = null; try { payload = await response.json(); } catch { payload = null; }
-  if (!response.ok || !payload?.ok) { const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`); error.status = response.status; throw error; }
+  if ((pairing || String(url).includes("/kiosks/") || String(url).includes("kiosk-pairing-requests")) && state.pairingToken) {
+    headers["X-Kiosk-Pairing-Token"] = state.pairingToken;
+  }
+  const response = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined, cache: "no-store" });
+  let payload = null;
+  try { payload = await response.json(); } catch { payload = null; }
+  if (!response.ok || !payload?.ok) {
+    const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return payload.data;
 }
 
-function showToast(message) { clearTimeout(state.toastHandle); el.toast.textContent = message; el.toast.classList.remove("hidden"); state.toastHandle = setTimeout(() => el.toast.classList.add("hidden"), 2600); }
-function ensureToken() { if (!state.pairingToken) state.pairingToken = crypto?.randomUUID ? crypto.randomUUID() : `board-${Date.now()}-${Math.random().toString(16).slice(2)}`; localStorage.setItem("bd:kioskPairingToken", state.pairingToken); return state.pairingToken; }
-function persistClub(club) { state.connectedClub = club; club ? localStorage.setItem("bd:kioskClub", JSON.stringify(club)) : localStorage.removeItem("bd:kioskClub"); }
-function persistRequest(code) { state.pairingRequestCode = code || ""; code ? localStorage.setItem("bd:kioskPairingRequestCode", code) : localStorage.removeItem("bd:kioskPairingRequestCode"); }
-function persistPairing(code) { state.kioskCode = code; localStorage.setItem("bd:kioskCode", code); persistRequest(""); }
-function clearPairingLocal() { state.kioskCode = ""; localStorage.removeItem("bd:kioskCode"); persistRequest(""); state.snapshot = null; }
-function clearEverything() { closeLive(); clearPairingLocal(); persistClub(null); state.pairingToken = ""; localStorage.removeItem("bd:kioskPairingToken"); state.sumValue = ""; state.darts = []; }
+function api(path, options = {}) { return requestJson(`${API_ROOT}${path}`, options); }
+function pairingApi(action, options = {}) { return requestJson(`${PAIRING_URL}?action=${encodeURIComponent(action)}`, { ...options, pairing: true }); }
+
+function showToast(message) {
+  clearTimeout(state.toastHandle);
+  el.toast.textContent = message;
+  el.toast.classList.remove("hidden");
+  state.toastHandle = setTimeout(() => el.toast.classList.add("hidden"), 2600);
+}
+
+function newDeviceToken() {
+  return globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `board-${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+function ensureToken() {
+  if (!state.pairingToken) state.pairingToken = newDeviceToken();
+  localStorage.setItem("bd:kioskPairingToken", state.pairingToken);
+  return state.pairingToken;
+}
+function persistRequest(code, expiresAt = "") {
+  state.pairingRequestCode = code || "";
+  state.pairingExpires = expiresAt || "";
+  if (code) localStorage.setItem("bd:kioskPairingRequestCode", code); else localStorage.removeItem("bd:kioskPairingRequestCode");
+  if (expiresAt) localStorage.setItem("bd:kioskPairingExpires", expiresAt); else localStorage.removeItem("bd:kioskPairingExpires");
+}
+function persistPairing(code) {
+  state.kioskCode = code;
+  localStorage.setItem("bd:kioskCode", code);
+  persistRequest("");
+  localStorage.removeItem("bd:kioskClub");
+}
+function clearLocalPairing({ newToken = true } = {}) {
+  state.kioskCode = "";
+  state.snapshot = null;
+  localStorage.removeItem("bd:kioskCode");
+  localStorage.removeItem("bd:kioskClub");
+  persistRequest("");
+  if (newToken) {
+    state.pairingToken = newDeviceToken();
+    localStorage.setItem("bd:kioskPairingToken", state.pairingToken);
+  }
+}
 
 function currentKiosk() { return state.snapshot?.kiosk || null; }
 function currentMatch() { return state.snapshot?.match || null; }
@@ -55,28 +96,64 @@ function currentPlayer() { const m = currentMatch(); if (!m) return null; return
 function currentRemaining() { return Number(currentPlayer()?.remaining || 0); }
 function isManual() { return (currentKiosk()?.scoring_mode || "manual") === "manual"; }
 function roundLabel(match) { return match?.round_label || match?.bracket_label || "Kamp"; }
+function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 
 function setConnection(text, tone = "neutral") { el.connectionText.textContent = text; el.connectionPill.className = `status-pill ${tone}`; }
 function applyBranding() {
-  const kiosk = currentKiosk(), club = kiosk?.club || state.connectedClub;
+  const kiosk = currentKiosk(), club = kiosk?.club || null;
   const initials = String(club?.name || "BD").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-  el.brandFallback.textContent = initials || "BD"; el.brandEyebrow.textContent = club?.name || "Blindleia Darts"; el.brandTitle.textContent = kiosk ? (kiosk.name || `Board ${kiosk.board_number}`) : "Board Terminal";
-  if (club?.logo_url) { el.brandLogo.src = club.logo_url; el.brandLogo.classList.remove("hidden"); el.brandFallback.classList.add("hidden"); el.brandLogo.onerror = () => { el.brandLogo.classList.add("hidden"); el.brandFallback.classList.remove("hidden"); }; }
-  else { el.brandLogo.classList.add("hidden"); el.brandFallback.classList.remove("hidden"); }
+  el.brandFallback.textContent = initials || "BD";
+  el.brandEyebrow.textContent = club?.name || "Blindleia Darts";
+  el.brandTitle.textContent = kiosk ? (kiosk.name || `Board ${kiosk.board_number}`) : "Board Terminal";
+  if (club?.logo_url) {
+    el.brandLogo.src = club.logo_url;
+    el.brandLogo.classList.remove("hidden");
+    el.brandFallback.classList.add("hidden");
+    el.brandLogo.onerror = () => { el.brandLogo.classList.add("hidden"); el.brandFallback.classList.remove("hidden"); };
+  } else {
+    el.brandLogo.classList.add("hidden");
+    el.brandFallback.classList.remove("hidden");
+  }
 }
 function hideStates() { [el.setupState, el.idleState, el.assignedState, el.matchState].forEach((node) => node.classList.add("hidden")); }
 
+function adminPairingUrl(code) {
+  const url = new URL("../admin/", window.location.href);
+  url.searchParams.set("pairing", code);
+  url.hash = "kiosks";
+  return url.toString();
+}
+function qrUrl(code) {
+  return `https://quickchart.io/qr?size=420&margin=2&text=${encodeURIComponent(adminPairingUrl(code))}`;
+}
+function formatExpiry(value) {
+  if (!value) return "Koden er gyldig i 30 minutter.";
+  const date = new Date(String(value).replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return "Koden er gyldig i 30 minutter.";
+  return `Koden utløper ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date)}.`;
+}
 function renderSetup() {
-  hideStates(); el.setupState.classList.remove("hidden"); applyBranding(); setConnection(state.connectedClub ? "Venter på pairing" : "Ikke satt opp", "neutral");
-  const hasClub = Boolean(state.connectedClub?.id); el.clubStep.classList.toggle("done-step", hasClub); el.pairStep.classList.toggle("disabled-step", !hasClub); el.startPairingButton.disabled = !hasClub || Boolean(state.pairingRequestCode);
-  if (hasClub) { el.clubConnectCode.value = state.connectedClub.kiosk_pairing_code || ""; el.pairInstruction.textContent = `Koblet til ${state.connectedClub.name}. Start pairing og godkjenn nettbrettet i Admin.`; }
-  else { el.pairInstruction.textContent = "Koble til klubben først."; }
-  if (state.pairingRequestCode) { el.pairingCard.classList.remove("hidden"); el.pairingCode.textContent = state.pairingRequestCode; } else { el.pairingCard.classList.add("hidden"); el.pairingCode.textContent = "—"; }
+  hideStates();
+  el.setupState.classList.remove("hidden");
+  applyBranding();
+  setConnection(state.pairingRequestCode ? "Venter på admin" : "Ikke satt opp", "neutral");
+  el.pairingCode.textContent = state.pairingRequestCode || "—";
+  el.pairingExpires.textContent = formatExpiry(state.pairingExpires);
+  el.pairingMessage.textContent = state.pairingRequestCode ? "Venter på at en admin velger board …" : "Lager pairingkode …";
+  if (state.pairingRequestCode) {
+    el.pairingQr.src = qrUrl(state.pairingRequestCode);
+    el.pairingQr.classList.remove("hidden");
+    el.qrLoading.classList.add("hidden");
+  } else {
+    el.pairingQr.removeAttribute("src");
+    el.pairingQr.classList.add("hidden");
+    el.qrLoading.classList.remove("hidden");
+  }
   renderSettings();
 }
 function renderIdle() {
   const kiosk = currentKiosk(); hideStates(); el.idleState.classList.remove("hidden"); applyBranding(); setConnection(`Board ${kiosk.board_number} · klar`, "good");
-  el.idleClub.textContent = kiosk.club?.name || "Blindleia Dartklubb"; el.idleBoard.textContent = kiosk.name || `Board ${kiosk.board_number}`; el.idleMessage.textContent = "Venter på at Blindleia tildeler neste kamp."; el.idleMode.textContent = kiosk.scoring_mode === "scolia" ? "Scolia scoring" : "Manuell scoring"; renderSettings();
+  el.idleClub.textContent = kiosk.club?.name || "Blindleia Dartklubb"; el.idleBoard.textContent = kiosk.name || `Board ${kiosk.board_number}`; el.idleMessage.textContent = "Venter på neste kamp på dette boardet."; el.idleMode.textContent = kiosk.scoring_mode === "scolia" ? "Scolia scoring" : "Manuell scoring"; renderSettings();
 }
 function renderAssigned() {
   const kiosk = currentKiosk(), match = currentMatch(); hideStates(); el.assignedState.classList.remove("hidden"); applyBranding(); setConnection(`Board ${kiosk.board_number} · kamp klar`, "good");
@@ -86,7 +163,6 @@ function renderVisits() {
   const visits = currentMatch()?.recent_visits || [];
   el.recentVisits.innerHTML = visits.length ? visits.map((visit) => `<div class="visit-row"><div><strong>${escapeHtml(visit.player_name)}</strong><span>#${Number(visit.visit_number || 0)}</span></div><div><strong class="visit-score">${Number(visit.score || 0)}</strong><span>${Number(visit.is_bust) === 1 ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</span></div></div>`).join("") : `<div class="empty-visits">Ingen kast registrert ennå.</div>`;
 }
-function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 function renderMatch() {
   const kiosk = currentKiosk(), match = currentMatch(), player = currentPlayer(); hideStates(); el.matchState.classList.remove("hidden"); applyBranding(); setConnection(`Board ${kiosk.board_number} · live`, "good");
   el.playerAName.textContent = match.player_a.display_name; el.playerBName.textContent = match.player_b.display_name; el.playerARemaining.textContent = match.player_a.remaining; el.playerBRemaining.textContent = match.player_b.remaining; el.playerALegs.textContent = `${match.player_a.legs_won} legs`; el.playerBLegs.textContent = `${match.player_b.legs_won} legs`;
@@ -102,16 +178,18 @@ function render() {
 }
 
 function possibleVisitScores() {
-  const singles = new Set([0,25,50]); for (let i=1;i<=20;i+=1) { singles.add(i); singles.add(i*2); singles.add(i*3); }
-  const vals = [...singles], totals = new Set(); for (const a of vals) for (const b of vals) for (const c of vals) totals.add(a+b+c); return totals;
+  const singles = new Set([0, 25, 50]);
+  for (let i = 1; i <= 20; i += 1) { singles.add(i); singles.add(i * 2); singles.add(i * 3); }
+  const vals = [...singles], totals = new Set();
+  for (const a of vals) for (const b of vals) for (const c of vals) totals.add(a + b + c);
+  return totals;
 }
 const POSSIBLE = possibleVisitScores();
-function isCheckoutNumber(value) { return value > 1 && value <= 170 && ![159,162,163,165,166,168,169].includes(value); }
+function isCheckoutNumber(value) { return value > 1 && value <= 170 && ![159, 162, 163, 165, 166, 168, 169].includes(value); }
 function dartScore(dart) { if (dart.value === "BULL") return dart.multiplier === "D" ? 50 : 25; if (dart.value === 0) return 0; return dart.value * (dart.multiplier === "T" ? 3 : dart.multiplier === "D" ? 2 : 1); }
-function totalDarts() { return state.darts.reduce((sum,dart) => sum + dartScore(dart),0); }
+function totalDarts() { return state.darts.reduce((sum, dart) => sum + dartScore(dart), 0); }
 function dartLabel(dart) { if (!dart) return "—"; if (dart.value === 0) return "MISS"; if (dart.value === "BULL") return dart.multiplier === "D" ? "BULL" : "25"; return `${dart.multiplier === "S" ? "" : dart.multiplier}${dart.value}`; }
 function isDoubleOut() { const last = [...state.darts].reverse().find((dart) => dart.value !== 0); return Boolean(last && last.multiplier === "D"); }
-
 function renderInput() {
   el.sumModeButton.classList.toggle("active", state.inputMode === "sum"); el.dartModeButton.classList.toggle("active", state.inputMode === "per_dart"); el.sumMode.classList.toggle("hidden", state.inputMode !== "sum"); el.dartMode.classList.toggle("hidden", state.inputMode !== "per_dart");
   const score = Number(state.sumValue || 0), after = currentRemaining() - score; el.sumDisplay.textContent = state.sumValue || "—";
@@ -125,23 +203,56 @@ function renderInput() {
 }
 function resetInput() { state.sumValue = ""; state.darts = []; state.multiplier = "S"; renderInput(); }
 
-async function connectClub() {
-  const code = el.clubConnectCode.value.trim().toUpperCase(); if (!code) throw new Error("Skriv inn klubbkoden.");
-  const data = await api("/public/kiosk/connect", { method: "POST", body: { code } }); persistClub(data.club); ensureToken(); render(); showToast(`Koblet til ${data.club.name}.`);
-}
-async function startPairing() {
-  if (!state.connectedClub?.id) throw new Error("Koble til klubben først."); ensureToken();
-  const data = await api("/kiosk-pairing-requests", { method: "POST", body: { club_id: state.connectedClub.id, device_name: `Board-terminal ${navigator.platform || "nettbrett"}` } }); persistRequest(data.request.request_code); render(); startPolling();
+async function ensurePairingRequest({ forceNew = false } = {}) {
+  if (state.kioskCode) return;
+  if (forceNew) {
+    state.pairingToken = newDeviceToken();
+    localStorage.setItem("bd:kioskPairingToken", state.pairingToken);
+    persistRequest("");
+  }
+  ensureToken();
+  if (state.pairingRequestCode && !forceNew) return;
+  render();
+  const data = await pairingApi("create", {
+    method: "POST",
+    body: { device_name: `Board Terminal · ${navigator.platform || "nettbrett"}` },
+  });
+  persistRequest(data.request.request_code, data.request.expires_at || "");
+  render();
 }
 async function checkPairing() {
   if (!state.pairingRequestCode) return;
-  const data = await api(`/kiosk-pairing-requests/${encodeURIComponent(state.pairingRequestCode)}`);
-  if (data.status === "approved" && data.kiosk?.code) { persistPairing(data.kiosk.code); state.snapshot = data.snapshot || null; render(); await startLive(); showToast(`Paret mot ${data.kiosk.name || data.kiosk.code}.`); }
+  try {
+    const data = await api(`/kiosk-pairing-requests/${encodeURIComponent(state.pairingRequestCode)}`);
+    if (data.status === "approved" && data.kiosk?.code) {
+      persistPairing(data.kiosk.code);
+      state.snapshot = data.snapshot || null;
+      render();
+      await startLive();
+      showToast(`Terminalen er koblet til ${data.kiosk.name || data.kiosk.code}.`);
+    }
+  } catch (error) {
+    if ([404, 409, 410].includes(Number(error.status))) {
+      persistRequest("");
+      await ensurePairingRequest({ forceNew: true });
+      return;
+    }
+    throw error;
+  }
 }
 async function loadState() {
   if (!state.kioskCode) return;
   try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`); render(); }
-  catch (error) { if ([401,403,404].includes(Number(error.status))) { clearPairingLocal(); render(); showToast("Pairingen er ikke lenger gyldig. Pair nettbrettet på nytt."); return; } throw error; }
+  catch (error) {
+    if ([401, 403, 404].includes(Number(error.status))) {
+      clearLocalPairing({ newToken: true });
+      await ensurePairingRequest();
+      render();
+      showToast("Pairingen er ikke lenger gyldig. Ny pairingkode er laget.");
+      return;
+    }
+    throw error;
+  }
 }
 async function startMatch() { state.mutating = true; el.startMatchButton.disabled = true; try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/start-match`, { method: "POST" }); resetInput(); render(); } finally { state.mutating = false; } }
 async function undo() { state.mutating = true; try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/undo`, { method: "POST" }); resetInput(); render(); } finally { state.mutating = false; } }
@@ -154,58 +265,113 @@ function requestCheckoutDarts() {
   });
 }
 async function submitSum() {
-  if (!isManual() || state.mutating) return; const score = Number(state.sumValue || 0); if (!Number.isFinite(score) || score < 0 || !POSSIBLE.has(score)) { showToast("Ugyldig score."); return; }
-  const checkout = currentRemaining() - score === 0 && isCheckoutNumber(currentRemaining()); const dartsUsed = checkout ? await requestCheckoutDarts() : 3;
-  state.mutating = true; try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, { method: "POST", body: { score, darts_used: dartsUsed, input_mode: "sum" } }); resetInput(); render(); } catch (error) { showToast(error.message); } finally { state.mutating = false; }
+  if (!isManual() || state.mutating) return;
+  const score = Number(state.sumValue || 0);
+  if (!Number.isFinite(score) || score < 0 || !POSSIBLE.has(score)) { showToast("Ugyldig score."); return; }
+  const checkout = currentRemaining() - score === 0 && isCheckoutNumber(currentRemaining());
+  const dartsUsed = checkout ? await requestCheckoutDarts() : 3;
+  state.mutating = true;
+  try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, { method: "POST", body: { score, darts_used: dartsUsed, input_mode: "sum" } }); resetInput(); render(); }
+  catch (error) { showToast(error.message); }
+  finally { state.mutating = false; }
 }
 async function submitDarts() {
-  if (!isManual() || !state.darts.length || state.mutating) return; const score = totalDarts(), checkout = currentRemaining() - score === 0 && isDoubleOut(); const darts = state.darts.slice(); while (!checkout && darts.length < 3) darts.push({ multiplier: "S", value: 0 });
-  state.mutating = true; try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, { method: "POST", body: { input_mode: "per_dart", darts_used: checkout ? state.darts.length : 3, darts } }); resetInput(); render(); } catch (error) { showToast(error.message); } finally { state.mutating = false; }
+  if (!isManual() || !state.darts.length || state.mutating) return;
+  const score = totalDarts(), checkout = currentRemaining() - score === 0 && isDoubleOut();
+  const darts = state.darts.slice();
+  while (!checkout && darts.length < 3) darts.push({ multiplier: "S", value: 0 });
+  state.mutating = true;
+  try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, { method: "POST", body: { input_mode: "per_dart", darts_used: checkout ? state.darts.length : 3, darts } }); resetInput(); render(); }
+  catch (error) { showToast(error.message); }
+  finally { state.mutating = false; }
 }
 
 function startPolling() {
-  clearInterval(state.pollHandle); state.pollHandle = setInterval(() => { if (state.mutating) return; if (state.kioskCode) loadState().catch(() => undefined); else if (state.pairingRequestCode) checkPairing().catch(() => undefined); }, 1500);
+  clearInterval(state.pollHandle);
+  state.pollHandle = setInterval(() => {
+    if (state.mutating) return;
+    if (state.kioskCode) loadState().catch(() => undefined);
+    else if (state.pairingRequestCode) checkPairing().catch(() => undefined);
+  }, 1500);
 }
-function closeLive() { if (state.liveSource) { state.liveSource.close(); state.liveSource = null; } clearTimeout(state.reconnectHandle); clearInterval(state.pollHandle); state.pollHandle = null; }
+function closeLive() {
+  if (state.liveSource) { state.liveSource.close(); state.liveSource = null; }
+  clearTimeout(state.reconnectHandle);
+  clearInterval(state.pollHandle);
+  state.pollHandle = null;
+}
 async function startLive() {
-  closeLive(); if (!state.kioskCode) { startPolling(); return; }
+  closeLive();
+  if (!state.kioskCode) { startPolling(); return; }
   if (typeof EventSource !== "function") { startPolling(); return; }
-  const url = `${API_ROOT}/kiosks/${encodeURIComponent(state.kioskCode)}/live?pairing_token=${encodeURIComponent(state.pairingToken)}`; const source = new EventSource(url); state.liveSource = source;
+  const url = `${API_ROOT}/kiosks/${encodeURIComponent(state.kioskCode)}/live?pairing_token=${encodeURIComponent(state.pairingToken)}`;
+  const source = new EventSource(url); state.liveSource = source;
   source.addEventListener("snapshot", (event) => { if (state.mutating) return; try { state.snapshot = JSON.parse(event.data); render(); } catch {} });
   source.onerror = () => { if (state.liveSource === source) state.liveSource = null; source.close(); startPolling(); clearTimeout(state.reconnectHandle); state.reconnectHandle = setTimeout(() => startLive().catch(() => undefined), 2500); };
 }
 
 function renderSettings() {
-  const kiosk = currentKiosk(); el.settingsMeta.innerHTML = kiosk ? `<div><span>Klubb</span><strong>${escapeHtml(kiosk.club?.name || "—")}</strong></div><div><span>Board</span><strong>${escapeHtml(kiosk.name || kiosk.code)}</strong></div><div><span>Scoring</span><strong>${kiosk.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</strong></div><div><span>Enhet</span><strong>${escapeHtml(kiosk.paired_device_name || "Dette nettbrettet")}</strong></div>` : `<div><span>Status</span><strong>${state.connectedClub ? `Koblet til ${escapeHtml(state.connectedClub.name)}` : "Ikke satt opp"}</strong></div>`;
-  el.unpairButton.classList.toggle("hidden", !state.kioskCode); el.changeClubButton.classList.toggle("hidden", !state.connectedClub);
+  const kiosk = currentKiosk();
+  el.settingsMeta.innerHTML = kiosk
+    ? `<div><span>Klubb</span><strong>${escapeHtml(kiosk.club?.name || "—")}</strong></div><div><span>Board</span><strong>${escapeHtml(kiosk.name || kiosk.code)}</strong></div><div><span>Scoring</span><strong>${kiosk.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</strong></div><div><span>Enhet</span><strong>${escapeHtml(kiosk.paired_device_name || "Dette nettbrettet")}</strong></div>`
+    : `<div><span>Status</span><strong>${state.pairingRequestCode ? `Venter på pairingkode ${escapeHtml(state.pairingRequestCode)}` : "Ikke satt opp"}</strong></div>`;
+  el.unpairButton.classList.toggle("hidden", !state.kioskCode);
 }
 function openSettings() { renderSettings(); el.settingsOverlay.classList.remove("hidden"); el.settingsDialog.classList.remove("hidden"); }
 function closeSettings() { el.settingsOverlay.classList.add("hidden"); el.settingsDialog.classList.add("hidden"); }
-async function unpair() { if (state.kioskCode) { try { await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/unpair`, { method: "POST" }); } catch {} } clearPairingLocal(); closeLive(); closeSettings(); render(); showToast("Pairing fjernet."); }
+async function resetTerminal() {
+  if (state.kioskCode) {
+    try { await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/unpair`, { method: "POST" }); } catch {}
+  }
+  closeLive();
+  clearLocalPairing({ newToken: true });
+  closeSettings();
+  await ensurePairingRequest();
+  render();
+  startPolling();
+  showToast("Terminalen er nullstilt. Ny pairingkode er laget.");
+}
 
 function renderNumberGrid() { el.numberGrid.innerHTML = Array.from({ length: 20 }, (_, i) => 20 - i).map((value) => `<button type="button" data-number="${value}">${value}</button>`).join(""); }
 function bindEvents() {
-  el.connectClubButton.addEventListener("click", () => connectClub().catch((error) => showToast(error.message)));
-  el.startPairingButton.addEventListener("click", () => startPairing().catch((error) => showToast(error.message)));
+  el.newPairingButton.addEventListener("click", () => ensurePairingRequest({ forceNew: true }).then(() => startPolling()).catch((error) => showToast(error.message)));
   el.startMatchButton.addEventListener("click", () => startMatch().catch((error) => showToast(error.message)));
   el.undoButton.addEventListener("click", () => undo().catch((error) => showToast(error.message)));
   el.sumModeButton.addEventListener("click", () => { state.inputMode = "sum"; localStorage.setItem("bd:kioskInputMode", state.inputMode); renderInput(); });
   el.dartModeButton.addEventListener("click", () => { state.inputMode = "per_dart"; localStorage.setItem("bd:kioskInputMode", state.inputMode); renderInput(); });
-  document.querySelectorAll("[data-key]").forEach((button) => button.addEventListener("click", () => { const key = button.dataset.key; if (key === "del") state.sumValue = state.sumValue.slice(0,-1); else if (key === "ok") { submitSum(); return; } else if (state.sumValue.length < 3) state.sumValue += key; renderInput(); }));
+  document.querySelectorAll("[data-key]").forEach((button) => button.addEventListener("click", () => { const key = button.dataset.key; if (key === "del") state.sumValue = state.sumValue.slice(0, -1); else if (key === "ok") { submitSum(); return; } else if (state.sumValue.length < 3) state.sumValue += key; renderInput(); }));
   document.querySelectorAll("[data-multiplier]").forEach((button) => button.addEventListener("click", () => { state.multiplier = button.dataset.multiplier; renderInput(); }));
   el.numberGrid.addEventListener("click", (event) => { const button = event.target.closest("[data-number]"); if (!button || state.darts.length >= 3) return; state.darts.push({ multiplier: state.multiplier, value: Number(button.dataset.number) }); state.multiplier = "S"; renderInput(); });
   document.querySelectorAll("[data-special]").forEach((button) => button.addEventListener("click", () => { if (state.darts.length >= 3) return; const special = button.dataset.special; state.darts.push(special === "miss" ? { multiplier: "S", value: 0 } : { multiplier: special === "dbull" ? "D" : "S", value: "BULL" }); renderInput(); }));
-  el.dartBackButton.addEventListener("click", () => { state.darts.pop(); renderInput(); }); el.dartSubmitButton.addEventListener("click", submitDarts);
+  el.dartBackButton.addEventListener("click", () => { state.darts.pop(); renderInput(); });
+  el.dartSubmitButton.addEventListener("click", submitDarts);
   el.settingsButton.addEventListener("click", openSettings); el.settingsCloseButton.addEventListener("click", closeSettings); el.settingsOverlay.addEventListener("click", closeSettings);
   el.refreshButton.addEventListener("click", () => (state.kioskCode ? loadState() : checkPairing()).then(() => { closeSettings(); showToast("Oppdatert."); }).catch((error) => showToast(error.message)));
-  el.unpairButton.addEventListener("click", unpair); el.changeClubButton.addEventListener("click", () => { clearEverything(); closeSettings(); render(); showToast("Oppsettet er nullstilt."); });
+  el.unpairButton.addEventListener("click", () => resetTerminal().catch((error) => showToast(error.message)));
+  el.resetTerminalButton.addEventListener("click", () => resetTerminal().catch((error) => showToast(error.message)));
 }
 
 async function boot() {
-  renderNumberGrid(); bindEvents(); applyBranding();
-  if (state.connectedClub?.kiosk_pairing_code) el.clubConnectCode.value = state.connectedClub.kiosk_pairing_code;
-  if (!state.kioskCode) { render(); if (state.pairingRequestCode) { await checkPairing().catch(() => undefined); startPolling(); } return; }
+  localStorage.removeItem("bd:kioskClub");
+  renderNumberGrid();
+  bindEvents();
+  applyBranding();
   ensureToken();
-  try { await loadState(); await startLive(); } catch (error) { render(); showToast(error.message); }
+
+  if (!state.kioskCode) {
+    render();
+    try {
+      await ensurePairingRequest();
+      await checkPairing();
+    } catch (error) {
+      showToast(error.message);
+    }
+    startPolling();
+    return;
+  }
+
+  try { await loadState(); await startLive(); }
+  catch (error) { render(); showToast(error.message); }
 }
+
 boot();
