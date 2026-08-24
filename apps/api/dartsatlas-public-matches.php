@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Blindleia\Dartkiosk\Api\Repository\DartsAtlasRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasHttpClient;
+use Blindleia\Dartkiosk\Connectors\DartsAtlas\DartsAtlasParser;
 
 require __DIR__ . '/bootstrap.php';
 
@@ -65,9 +68,16 @@ try {
     }
 
     $tournaments = $prefix . 'tournaments';
+    $references = $prefix . 'external_references';
     $statement = $db->prepare(
-        "SELECT id, name, status FROM `{$tournaments}`
-         WHERE id = ? AND club_id = ? AND provider_system = 'dartsatlas'
+        "SELECT t.id, t.name, t.status, er.external_id
+         FROM `{$tournaments}` t
+         LEFT JOIN `{$references}` er
+           ON er.external_system='dartsatlas'
+          AND er.external_entity_type='tournament'
+          AND er.internal_entity_type='tournament'
+          AND er.internal_id=t.id
+         WHERE t.id = ? AND t.club_id = ? AND t.provider_system = 'dartsatlas'
          LIMIT 1"
     );
     $statement->bind_param('ii', $tournamentId, $clubId);
@@ -83,6 +93,204 @@ try {
                 'message' => 'DartsAtlas tournament was not found.',
             ],
         ], 404);
+    }
+
+    /*
+     * The normal connector historically parsed only the tournament landing page.
+     * During group play DartsAtlas can keep the actual match rows on a child tab,
+     * while /groups continues to update. If the tournament is in progress, probe
+     * the landing page plus any discovered match/group/result/bracket tabs and
+     * persist the parsed snapshots into the canonical connector tables.
+     *
+     * This scan is throttled to five seconds and protected by the connector lock,
+     * so a 2-second browser poll cannot fan out into parallel DartsAtlas scrapes.
+     */
+    $direct = [
+        'attempted' => false,
+        'status' => 'not_needed',
+        'pages' => [],
+        'matches_found' => 0,
+        'matches_persisted' => 0,
+    ];
+
+    $externalTournamentId = trim((string) ($tournament['external_id'] ?? ''));
+    if ((string) $tournament['status'] === 'in_progress' && $externalTournamentId !== '') {
+        $resources = $prefix . 'connector_resources';
+        $scanType = 'public_match_scan';
+        $ageStatement = $db->prepare(
+            "SELECT TIMESTAMPDIFF(SECOND, last_seen_at, NOW()) AS age_seconds
+             FROM `{$resources}`
+             WHERE external_system='dartsatlas' AND resource_type=? AND external_id=?
+             LIMIT 1"
+        );
+        $ageStatement->bind_param('ss', $scanType, $externalTournamentId);
+        $ageStatement->execute();
+        $ageRow = $ageStatement->get_result()->fetch_assoc() ?: [];
+        $ageStatement->close();
+        $scanAge = isset($ageRow['age_seconds']) ? (int) $ageRow['age_seconds'] : null;
+
+        if ($scanAge === null || $scanAge >= 5) {
+            $repository = new DartsAtlasRepository($database, $config->dartsAtlas()->membersTable());
+            $lockScope = 'public-match-scan:' . $externalTournamentId;
+            if ($repository->acquireLock($lockScope)) {
+                $direct['attempted'] = true;
+                $direct['status'] = 'completed';
+                try {
+                    $http = new DartsAtlasHttpClient($config->dartsAtlas()->userAgent(), 4, 10);
+                    $parser = new DartsAtlasParser();
+                    $baseUrl = 'https://www.dartsatlas.com/tournaments/' . rawurlencode($externalTournamentId);
+                    $queue = [$baseUrl];
+                    foreach (['groups', 'results', 'matches', 'bracket', 'brackets', 'fixtures'] as $suffix) {
+                        $queue[] = $baseUrl . '/' . $suffix;
+                    }
+
+                    $seenUrls = [];
+                    $parsedMatches = [];
+                    $playerMap = [];
+
+                    while ($queue !== [] && count($seenUrls) < 12) {
+                        $url = array_shift($queue);
+                        if (!is_string($url) || $url === '' || isset($seenUrls[$url])) {
+                            continue;
+                        }
+                        $seenUrls[$url] = true;
+
+                        try {
+                            $response = $http->get($url);
+                            $payload = $parser->parseTournament($response->body, $baseUrl);
+                            $pageMatches = is_array($payload['matches'] ?? null) ? $payload['matches'] : [];
+                            $direct['pages'][] = [
+                                'url' => $response->url,
+                                'status' => $response->status,
+                                'matches' => count($pageMatches),
+                            ];
+
+                            foreach ($pageMatches as $match) {
+                                if (!is_array($match)) {
+                                    continue;
+                                }
+                                $matchExternalId = trim((string) ($match['external_id'] ?? ''));
+                                if ($matchExternalId === '') {
+                                    continue;
+                                }
+                                $parsedMatches[$matchExternalId] = array_merge($parsedMatches[$matchExternalId] ?? [], $match);
+                            }
+
+                            if (preg_match_all('/href=["\']([^"\']+)["\']/iu', $response->body, $hrefMatches)) {
+                                foreach ($hrefMatches[1] as $href) {
+                                    $href = html_entity_decode((string) $href, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                                    if (!preg_match('~^/tournaments/' . preg_quote($externalTournamentId, '~') . '/([^?#]+)~u', $href, $pathMatch)) {
+                                        continue;
+                                    }
+                                    $tail = strtolower((string) $pathMatch[1]);
+                                    if (!preg_match('/group|result|match|bracket|fixture|round/u', $tail)) {
+                                        continue;
+                                    }
+                                    $queue[] = 'https://www.dartsatlas.com' . $href;
+                                }
+                            }
+                        } catch (Throwable $pageError) {
+                            $direct['pages'][] = [
+                                'url' => $url,
+                                'status' => 'unavailable',
+                            ];
+                        }
+                    }
+
+                    $direct['matches_found'] = count($parsedMatches);
+
+                    foreach ($parsedMatches as $matchExternalId => $match) {
+                        $playerA = is_array($match['player_a'] ?? null) ? $match['player_a'] : null;
+                        $playerB = is_array($match['player_b'] ?? null) ? $match['player_b'] : null;
+                        if ($playerA === null || $playerB === null) {
+                            continue;
+                        }
+
+                        $externalA = trim((string) ($playerA['external_id'] ?? ''));
+                        $externalB = trim((string) ($playerB['external_id'] ?? ''));
+                        $nameA = trim((string) ($playerA['name'] ?? ''));
+                        $nameB = trim((string) ($playerB['name'] ?? ''));
+                        if ($externalA === '' || $externalB === '' || $nameA === '' || $nameB === '') {
+                            continue;
+                        }
+
+                        if (!isset($playerMap[$externalA])) {
+                            $playerMap[$externalA] = $repository->upsertPlayer($clubId, $externalA, $nameA);
+                        }
+                        if (!isset($playerMap[$externalB])) {
+                            $playerMap[$externalB] = $repository->upsertPlayer($clubId, $externalB, $nameB);
+                        }
+                        $repository->addTournamentPlayer($tournamentId, $playerMap[$externalA]);
+                        $repository->addTournamentPlayer($tournamentId, $playerMap[$externalB]);
+
+                        $matchUrl = isset($match['url']) && is_string($match['url']) && trim($match['url']) !== ''
+                            ? trim($match['url'])
+                            : null;
+                        $localMatchId = $repository->upsertMatch(
+                            $tournamentId,
+                            (string) $matchExternalId,
+                            $playerMap[$externalA],
+                            $playerMap[$externalB],
+                            [
+                                'source_url' => $matchUrl,
+                                'provider' => 'dartsatlas',
+                                'external_id' => (string) $matchExternalId,
+                                'board_number' => $match['board_number'] ?? null,
+                                'fallback_scan' => true,
+                            ],
+                        );
+                        $repository->applyMatchSnapshot($localMatchId, $clubId, $match);
+                        $direct['matches_persisted']++;
+
+                        if (($match['status'] ?? null) === 'in_progress' && $matchUrl !== null && !str_starts_with((string) $matchExternalId, 'derived-')) {
+                            try {
+                                $matchResponse = $http->get($matchUrl);
+                                $matchPayload = $parser->parseMatch($matchResponse->body, $matchUrl);
+                                if (is_array($matchPayload['live'] ?? null)) {
+                                    $repository->applyBroadcastState($localMatchId, $matchPayload['live'], $playerMap);
+                                }
+                            } catch (Throwable) {
+                                // Tournament snapshot is still useful without the match detail page.
+                            }
+
+                            try {
+                                $broadcastUrl = rtrim($matchUrl, '/') . '/broadcast?mode=dual_cam_stats';
+                                $broadcastResponse = $http->get($broadcastUrl);
+                                $broadcast = $parser->parseBroadcast($broadcastResponse->body, (string) $matchExternalId);
+                                $repository->applyBroadcastState($localMatchId, $broadcast, $playerMap);
+                            } catch (Throwable) {
+                                // Live score/statistics enrichment is optional.
+                            }
+                        }
+                    }
+
+                    $repository->upsertResource(
+                        $scanType,
+                        $externalTournamentId,
+                        $baseUrl,
+                        200,
+                        null,
+                        null,
+                        hash('sha256', json_encode($direct, JSON_THROW_ON_ERROR)),
+                        $externalTournamentId,
+                        $direct,
+                        true,
+                    );
+                } catch (Throwable $scanError) {
+                    $direct['status'] = 'failed';
+                    if ($config->appEnv() !== 'prod') {
+                        $direct['error'] = $scanError->getMessage();
+                    }
+                } finally {
+                    $repository->releaseLock($lockScope);
+                }
+            } else {
+                $direct['status'] = 'sync_already_running';
+            }
+        } else {
+            $direct['status'] = 'throttled';
+            $direct['cache_age_seconds'] = $scanAge;
+        }
     }
 
     $matches = $prefix . 'matches';
@@ -233,6 +441,7 @@ try {
             ],
             'live_matches' => array_map($formatLive, $liveRows),
             'recent_results' => $recentResults,
+            'direct_sync' => $direct,
         ],
     ]);
 } catch (Throwable $error) {
