@@ -3,10 +3,44 @@
   const isolatedProd = window.location.hostname === "dart.ingenting.org" && window.location.pathname.startsWith("/live");
   const apiBase = isolatedProd ? "./api" : "../api";
   const CURRENT_URL = `${apiBase}/dartsatlas-public-current.php`;
+  const LIVE_PROBE_URL = `${apiBase}/dartsatlas-public-live.php`;
   const SEASON_ELO_URL = `${apiBase}/dartsatlas-public-season-elo.php`;
   let cachedTournamentId = null;
   let cacheExpiresAt = 0;
   let resolverPromise = null;
+
+  function osloDateKey() {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Oslo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  }
+
+  async function probeRunningTournament(excludeId = null) {
+    try {
+      // Use the live API's own ranking here. It prioritises tournaments with
+      // actual in-progress matches over merely scheduled/ready tournaments.
+      // nativeFetch deliberately bypasses this router to avoid recursion.
+      const response = await nativeFetch(`${LIVE_PROBE_URL}?route_probe=${Date.now()}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) return null;
+
+      const tournament = payload?.data?.tournament || null;
+      const id = Number(tournament?.id || 0);
+      if (!Number.isFinite(id) || id <= 0 || id === Number(excludeId || 0)) return null;
+
+      const tournamentStatus = String(tournament?.status || "").toLowerCase();
+      const feedStatus = String(payload?.data?.feed?.status || "").toLowerCase();
+      const isRunning = tournamentStatus === "in_progress" || feedStatus === "live";
+      return isRunning ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   async function resolveTournamentId() {
     if (Date.now() < cacheExpiresAt) return cachedTournamentId;
@@ -23,7 +57,24 @@
         }
 
         const id = Number(payload?.data?.tournament_id || 0);
-        cachedTournamentId = Number.isFinite(id) && id > 0 ? id : null;
+        const scheduledDate = String(payload?.data?.scheduled_date || "");
+        const today = osloDateKey();
+        const scheduledId = Number.isFinite(id) && id > 0 ? id : null;
+
+        // DartsAtlas removes a tournament from the upcoming schedule when it
+        // starts. At that exact transition the schedule resolver can already
+        // point to next week's event. Before accepting a future tournament,
+        // ask the live feed whether another tournament is actually running.
+        if (scheduledId && scheduledDate && scheduledDate > today) {
+          const runningId = await probeRunningTournament(scheduledId);
+          if (runningId) {
+            cachedTournamentId = runningId;
+            cacheExpiresAt = Date.now() + 5000;
+            return cachedTournamentId;
+          }
+        }
+
+        cachedTournamentId = scheduledId;
         cacheExpiresAt = Date.now() + (cachedTournamentId ? 60000 : 15000);
         return cachedTournamentId;
       } catch (_) {
