@@ -39,12 +39,10 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
-          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          DOMENESHOP_SSH_PRIVATE_KEY: ${{ secrets.DOMENESHOP_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          for name in PROD_BASE_URL DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD SFTP_HOST SFTP_USERNAME SFTP_PASSWORD; do
+          for name in PROD_BASE_URL DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD DOMENESHOP_SSH_PRIVATE_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Repository is missing required production config/shared credential: ${name}"
               exit 1
@@ -97,56 +95,13 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.PROD_CHALLONGE_REDIRECT_URI }}
 
-      - name: Install sshpass
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-
-      - name: Verify SFTP and ensure remote directories
+      - name: Configure Domeneshop SSH
         env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
-          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
-          REMOTE_ROOT: /www/blindleiadarts/prod
-        run: |
-          set -euo pipefail
-          {
-            echo "-mkdir ${REMOTE_ROOT}"
-            find dist/prod -type d | sed 's#^dist/prod##' | sed '/^$/d' | while read -r dir; do
-              echo "-mkdir ${REMOTE_ROOT}${dir}"
-            done
-            echo "ls ${REMOTE_ROOT}"
-            echo "quit"
-          } > sftp-batch.txt
-          sshpass -p "$SFTP_PASSWORD" sftp \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+          DOMENESHOP_SSH_PRIVATE_KEY: ${{ secrets.DOMENESHOP_SSH_PRIVATE_KEY }}
+        run: bash infra/deploy/configure-domeneshop-ssh.sh
 
-      - name: Deploy production via SFTP
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
-        with:
-          server: ${{ secrets.SFTP_HOST }}
-          username: ${{ secrets.SFTP_USERNAME }}
-          password: ${{ secrets.SFTP_PASSWORD }}
-          port: 22
-          local_path: ./dist/prod/*
-          remote_path: /www/blindleiadarts/prod
-          sftp_only: true
-          rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
-
-      - name: Publish release marker last
-        env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
-          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          printf '%s\n' \
-            'put dist/prod/release.json /www/blindleiadarts/prod/release.json' \
-            'quit' > sftp-release.txt
-          sshpass -p "$SFTP_PASSWORD" sftp \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -b sftp-release.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+      - name: Deploy production over SSH
+        run: bash infra/deploy/deploy-over-ssh.sh dist/prod /www/blindleiadarts/prod
 
       - name: Verify exact production release and internal health
         env:
