@@ -388,6 +388,7 @@ final class DartsAtlasParser
     {
         foreach ([
             '~/seasons/[^/]+/player_stats/([^/?#]+)~',
+            '~/tournaments/[^/]+/player_stats/([^/?#]+)~',
             '~/players/([^/?#]+)~',
             '~/profiles/([^/?#]+)~',
         ] as $pattern) {
