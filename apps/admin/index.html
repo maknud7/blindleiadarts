@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blindleia Darts Admin</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./pairing-claim.css">
 </head>
 <body>
   <section id="authGate" class="auth-shell">
@@ -73,18 +74,35 @@
           <div>
             <p class="eyebrow">Board Terminal</p>
             <h2>Kiosker / boards</h2>
-            <p class="muted">Hvert nettbrett pares én gang mot en fysisk skive. Blindleia sender deretter riktig kamp til riktig board.</p>
+            <p class="muted">Hvert nettbrett pares én gang mot en fysisk skive. DartsAtlas-boardnummeret mappes deretter automatisk til riktig terminal.</p>
           </div>
           <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
         </div>
 
-        <div class="kiosk-code-strip">
-          <div><span>Klubbkode for førstegangsoppsett</span><strong id="kioskClubCode">—</strong></div>
-          <button id="copyKioskClubCode" type="button" class="button secondary">Kopier klubbkode</button>
+        <div class="claim-admin-card">
+          <div class="claim-admin-grid">
+            <div>
+              <p class="eyebrow">Koble nytt nettbrett</p>
+              <h3>Scan QR-koden på terminalen</h3>
+              <p class="muted">Et nytt nettbrett viser automatisk en QR-kode og en kort pairingkode. QR-en åpner denne siden med koden ferdig utfylt. Du velger bare hvilket board terminalen står ved.</p>
+              <div class="claim-tip"><span>1</span><p class="muted">Åpne <strong>/kiosk/</strong> på nettbrettet.</p></div>
+              <div class="claim-tip"><span>2</span><p class="muted">Scan QR-koden med mobilen du bruker til admin.</p></div>
+              <div class="claim-tip"><span>3</span><p class="muted">Velg board og trykk <strong>Koble til board</strong>.</p></div>
+            </div>
+            <form id="claimKioskForm" class="claim-form">
+              <label><span>Pairingkode</span><input id="claimKioskCode" class="claim-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="B7K4P2" required></label>
+              <label><span>Board</span><select id="claimKioskBoard" required><option value="">Velg board …</option></select></label>
+              <button id="claimKioskButton" type="submit">Koble til board</button>
+              <div id="claimKioskStatus" class="claim-status hidden"></div>
+            </form>
+          </div>
         </div>
 
-        <div class="subsection-head"><h3>Venter på pairing</h3><span id="pairingCount" class="pill">0</span></div>
-        <div id="pairingRequestList" class="list"></div>
+        <!-- Beholdes skjult for bakoverkompatibilitet med eldre admin-JS mens QR-claim er normalflyt. -->
+        <div class="hidden" aria-hidden="true">
+          <div class="kiosk-code-strip"><div><span>Legacy klubbkode</span><strong id="kioskClubCode">—</strong></div><button id="copyKioskClubCode" type="button">Kopier</button></div>
+          <div id="pairingRequestList"></div><span id="pairingCount">0</span>
+        </div>
 
         <div class="kiosk-layout">
           <form id="kioskForm" class="create-card">
@@ -128,5 +146,6 @@
   </div>
 
   <script src="./app.js" type="module"></script>
+  <script src="./pairing-claim.js" type="module"></script>
 </body>
 </html>
