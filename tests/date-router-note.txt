@@ -1,0 +1,1 @@
+Regression: when DartsAtlas removes today's started tournament from the season schedule, the public date router must prefer an actually in-progress tournament from the live feed over the next scheduled future tournament.
