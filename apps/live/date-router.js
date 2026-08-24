@@ -1,7 +1,9 @@
 (() => {
   const nativeFetch = window.fetch.bind(window);
-  const CURRENT_URL = "./api/dartsatlas-public-current.php";
-  const SEASON_ELO_URL = "./api/dartsatlas-public-season-elo.php";
+  const isolatedProd = window.location.hostname === "dart.ingenting.org" && window.location.pathname.startsWith("/live");
+  const apiBase = isolatedProd ? "./api" : "../api";
+  const CURRENT_URL = `${apiBase}/dartsatlas-public-current.php`;
+  const SEASON_ELO_URL = `${apiBase}/dartsatlas-public-season-elo.php`;
   let cachedTournamentId = null;
   let cacheExpiresAt = 0;
   let resolverPromise = null;
