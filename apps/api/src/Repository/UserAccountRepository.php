@@ -36,7 +36,12 @@ final class UserAccountRepository
                 mp.contact_phone,
                 mp.player_id,
                 p.display_name AS player_display_name,
-                p.club_id AS player_club_id
+                p.club_id AS player_club_id,
+                p.member_id AS player_member_id,
+                p.member_link_source AS player_member_link_source,
+                (SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ",")
+                   FROM `%1$sclub_user_roles` cur
+                  WHERE cur.user_account_id = ua.id AND cur.role = "club_admin") AS admin_club_ids
              FROM `%1$suser_accounts` ua
              LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
              LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
@@ -73,6 +78,11 @@ final class UserAccountRepository
                 mp.player_id,
                 p.club_id AS player_club_id,
                 p.display_name AS player_display_name,
+                p.member_id AS player_member_id,
+                p.member_link_source AS player_member_link_source,
+                (SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ",")
+                   FROM `%1$sclub_user_roles` cur
+                  WHERE cur.user_account_id = ua.id AND cur.role = "club_admin") AS admin_club_ids,
                 s.id AS session_id,
                 s.expires_at,
                 s.revoked_at
