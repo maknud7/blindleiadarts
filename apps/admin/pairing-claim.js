@@ -61,7 +61,7 @@ async function inspectCode() {
     const data = await requestJson(url, { auth: true });
     const request = data.request || {};
     if (!request.claimable) {
-      const text = request.status === "expired" ? "Koden er utløpt. Lag en ny kode på nettbrettet." : `Status: ${request.status || "ukjent"}`;
+      const text = request.status === "expired" ? "Koden er utløpt. Nettbrettet lager automatisk en ny kode." : `Status: ${request.status || "ukjent"}`;
       showStatus("Denne koden kan ikke kobles", text, "bad");
       return request;
     }
@@ -104,29 +104,22 @@ form?.addEventListener("submit", async (event) => {
   }
 });
 
-codeInput?.addEventListener("input", () => {
-  codeInput.value = normalizeCode(codeInput.value);
-});
+codeInput?.addEventListener("input", () => { codeInput.value = normalizeCode(codeInput.value); });
 codeInput?.addEventListener("change", () => inspectCode());
 clubSelect?.addEventListener("change", async () => {
   await loadBoards().catch(() => undefined);
   if (codeInput.value) await inspectCode();
 });
 
-async function waitForAdminReady() {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    if (token() && clubId() && !document.getElementById("adminApp")?.classList.contains("hidden")) return true;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return false;
+function adminReady() {
+  return Boolean(token() && clubId() && !document.getElementById("adminApp")?.classList.contains("hidden"));
 }
 
-async function bootClaim() {
-  const pairing = normalizeCode(new URLSearchParams(window.location.search).get("pairing") || "");
-  if (pairing) codeInput.value = pairing;
-
-  const ready = await waitForAdminReady();
-  if (!ready) return;
+async function initializeWhenReady(pairing) {
+  if (!adminReady()) {
+    setTimeout(() => initializeWhenReady(pairing), 350);
+    return;
+  }
 
   await loadBoards().catch((error) => showStatus("Kunne ikke laste boards", error.message, "bad"));
   if (pairing) {
@@ -134,6 +127,12 @@ async function bootClaim() {
     await inspectCode();
     if (boardSelect.options.length === 2 && !boardSelect.options[1].disabled) boardSelect.selectedIndex = 1;
   }
+}
+
+function bootClaim() {
+  const pairing = normalizeCode(new URLSearchParams(window.location.search).get("pairing") || "");
+  if (pairing) codeInput.value = pairing;
+  initializeWhenReady(pairing);
 }
 
 bootClaim();
