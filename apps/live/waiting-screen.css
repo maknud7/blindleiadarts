@@ -84,6 +84,27 @@
   text-transform: uppercase;
 }
 
+/* Before the first live/result activity, keep the public page focused on the
+   upcoming event and the season ELO instead of showing a wall of empty cards. */
+body.is-waiting .summary-grid,
+body.is-waiting .content-grid > .panel:not(.elo-table-panel) {
+  display: none;
+}
+
+body.is-waiting .content-grid {
+  grid-template-columns: minmax(0, 920px);
+  justify-content: center;
+}
+
+body.is-waiting .elo-table-panel {
+  width: 100%;
+  grid-column: 1;
+}
+
+body.is-waiting .elo-table-panel .panel-heading {
+  margin-bottom: 16px;
+}
+
 @media (max-width: 900px) {
   .waiting-panel { grid-template-columns: 1fr; }
 }
