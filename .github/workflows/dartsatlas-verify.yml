@@ -39,6 +39,15 @@ jobs:
       - name: DartsAtlas parser smoke test
         run: php -d zend.assertions=1 -d assert.exception=1 packages/connectors/tests/dartsatlas_parser_smoke.php
 
+      - name: Identify target database
+        run: php infra/sql/db_identity.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
       - name: Run test migrations
         run: php infra/sql/migrate.php
         env:
