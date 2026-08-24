@@ -265,6 +265,7 @@ h2 {
   gap: 14px;
 }
 .content-grid > .panel { padding: 18px; }
+.wide-panel { grid-column: 1 / -1; }
 
 .stack { display: grid; gap: 8px; }
 .list-row {
@@ -294,6 +295,69 @@ h2 {
   font-weight: 850;
 }
 
+.visit-value {
+  min-width: 72px;
+  text-align: right;
+  color: #ffad68;
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: -.04em;
+}
+.visit-value small {
+  margin-top: 1px;
+  color: #8f9baa;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.elo-rating {
+  min-width: 62px;
+  color: #ffb36f;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.elo-change-row {
+  display: grid;
+  grid-template-columns: minmax(210px, .8fr) minmax(0, 1.8fr);
+  align-items: center;
+  gap: 18px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+}
+.elo-change-head strong,
+.elo-change-head small { display: block; }
+.elo-change-head small { margin-top: 3px; color: #8f9baa; }
+.elo-change-players {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.elo-change-players > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.16);
+  font-weight: 700;
+}
+.elo-change-players small {
+  grid-column: 1 / -1;
+  color: #8491a0;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.elo-delta {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.elo-delta.positive { color: #6ee58b; }
+.elo-delta.negative { color: #ff8585; }
+
 .empty-state {
   grid-column: 1 / -1;
   display: flex;
@@ -311,7 +375,7 @@ h2 {
 
 footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 14px;
   padding: 18px 4px 4px;
   color: #677382;
@@ -323,6 +387,8 @@ footer {
   .hero-status { min-width: 0; }
   .summary-grid { grid-template-columns: 1fr; }
   .content-grid { grid-template-columns: 1fr; }
+  .wide-panel { grid-column: auto; }
+  .elo-change-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 650px) {
@@ -332,5 +398,7 @@ footer {
   .club-mark { width: 54px; height: 54px; flex-basis: 54px; border-radius: 15px; }
   .live-panel { padding: 15px; }
   .live-grid { grid-template-columns: 1fr; }
+  .elo-change-players { grid-template-columns: 1fr; }
+  .panel-heading { align-items: flex-start; }
   footer { flex-direction: column; }
 }
