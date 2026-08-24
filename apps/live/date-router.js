@@ -18,6 +18,7 @@
           cacheExpiresAt = Date.now() + 15000;
           return null;
         }
+
         const id = Number(payload?.data?.tournament_id || 0);
         cachedTournamentId = Number.isFinite(id) && id > 0 ? id : null;
         cacheExpiresAt = Date.now() + (cachedTournamentId ? 60000 : 15000);
@@ -34,6 +35,36 @@
     return resolverPromise;
   }
 
+  function noCurrentTournamentResponse() {
+    const body = {
+      ok: true,
+      generated_at: new Date().toISOString(),
+      data: {
+        club: null,
+        tournament: null,
+        feed: {
+          provider: "dartsatlas",
+          status: "idle",
+          selection: "scheduled_today_or_future",
+          reason: "no_current_or_future_tournament_resolved",
+        },
+        next_matches: [],
+        standings: [],
+        stats: {
+          highlights: {},
+          best_match_averages: [],
+          top_visits: [],
+          live_elo: { baseline: 1000, table: [], changes: [] },
+        },
+      },
+    };
+
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+
   window.fetch = async (input, init) => {
     const rawUrl = typeof input === "string" ? input : input?.url;
     if (!rawUrl || !rawUrl.includes("dartsatlas-public-live.php") || rawUrl.includes("tournament_id=")) {
@@ -42,7 +73,10 @@
 
     const tournamentId = await resolveTournamentId();
     if (!tournamentId) {
-      return nativeFetch(input, init);
+      // Never fall back to the API's historical "latest tournament" heuristic.
+      // If the DartsAtlas calendar cannot resolve today or a future event, the
+      // public page waits instead of showing an old completed Monday.
+      return noCurrentTournamentResponse();
     }
 
     const separator = rawUrl.includes("?") ? "&" : "?";
