@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aktiver medlemskonto · Blindleia Darts</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <div class="brand">BD</div>
+      <p class="eyebrow">Blindleia Dartklubb</p>
+      <h1 id="title">Aktiver medlemskonto</h1>
+      <p id="intro" class="muted">Kontrollerer invitasjonslenken …</p>
+
+      <div id="message" class="message hidden"></div>
+
+      <form id="onboardingForm" class="form hidden">
+        <label>
+          <span>E-post</span>
+          <input id="email" type="email" autocomplete="email" required>
+        </label>
+        <label>
+          <span>Velg passord</span>
+          <input id="password" type="password" autocomplete="new-password" minlength="10" required>
+          <small>Minst 10 tegn.</small>
+        </label>
+        <label>
+          <span>Gjenta passord</span>
+          <input id="passwordConfirm" type="password" autocomplete="new-password" minlength="10" required>
+        </label>
+        <button id="submitButton" type="submit">Aktiver konto</button>
+      </form>
+
+      <div id="success" class="success hidden">
+        <h2>Kontoen er aktivert</h2>
+        <p>Medlemskapet ditt er nå koblet til innloggingen. Du trenger ikke gjøre noe mer nå.</p>
+      </div>
+    </section>
+  </main>
+  <script src="./app.js" type="module"></script>
+</body>
+</html>
