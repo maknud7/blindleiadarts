@@ -1,4 +1,4 @@
-name: Verify DartsAtlas Test DB
+name: Verify Core Test DB
 
 on:
   pull_request:
@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - 'apps/api/**'
+      - 'apps/onboarding/**'
       - 'packages/connectors/src/DartsAtlas/**'
       - 'packages/connectors/tests/**'
       - 'infra/sql/**'
@@ -59,6 +60,16 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
+      - name: Verify member onboarding model
+        run: php infra/sql/onboarding_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
       - name: Generate test API config
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
         env:
@@ -87,8 +98,12 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
 
-      - name: DartsAtlas schema doctor
+      - name: DartsAtlas connector schema doctor
         run: php apps/api/bin/dartsatlas_doctor.php
 
       - name: Release package smoke test
-        run: bash infra/deploy/build-release.sh test
+        run: |
+          bash infra/deploy/build-release.sh test
+          test -f dist/test/onboarding/index.html
+          test -f dist/test/onboarding/app.js
+          test -f dist/test/api/member-onboarding.php
