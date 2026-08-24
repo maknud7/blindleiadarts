@@ -23,6 +23,8 @@ final class UserAccountRepository
 
     /**
      * Transitional login lookup: accepts either the account e-mail or the legacy username.
+     * Account identity now points directly to a player; member_profiles is retained only
+     * as a backwards-compatible contact profile during the transition.
      *
      * @return array<string, mixed>|null
      */
@@ -36,21 +38,35 @@ final class UserAccountRepository
                 ua.email,
                 ua.password_hash,
                 ua.display_name,
-                ua.role,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM `%1$sglobal_user_roles` gur
+                        WHERE gur.user_account_id = ua.id AND gur.role = "super_admin"
+                    ) THEN "super_admin"
+                    WHEN EXISTS (
+                        SELECT 1 FROM `%1$sclub_user_roles` cur0
+                        WHERE cur0.user_account_id = ua.id AND cur0.role = "club_admin"
+                    ) THEN "club_admin"
+                    ELSE "player"
+                END AS role,
+                ua.role AS legacy_role,
                 ua.is_active,
                 mp.contact_email,
                 mp.contact_phone,
-                mp.player_id,
+                ua.player_id,
                 p.display_name AS player_display_name,
                 p.club_id AS player_club_id,
                 p.member_id AS player_member_id,
                 p.member_link_source AS player_member_link_source,
                 (SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ",")
                    FROM `%1$sclub_user_roles` cur
-                  WHERE cur.user_account_id = ua.id AND cur.role = "club_admin") AS admin_club_ids
+                  WHERE cur.user_account_id = ua.id AND cur.role = "club_admin") AS admin_club_ids,
+                (SELECT GROUP_CONCAT(gur.role ORDER BY gur.role SEPARATOR ",")
+                   FROM `%1$sglobal_user_roles` gur
+                  WHERE gur.user_account_id = ua.id) AS global_roles
              FROM `%1$suser_accounts` ua
              LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
-             LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
+             LEFT JOIN `%1$splayers` p ON p.id = ua.player_id
              WHERE LOWER(ua.username) = LOWER(?) OR LOWER(ua.email) = LOWER(?)
              LIMIT 1',
             $this->tablePrefix
@@ -78,11 +94,22 @@ final class UserAccountRepository
                 ua.username,
                 ua.email,
                 ua.display_name,
-                ua.role,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM `%1$sglobal_user_roles` gur
+                        WHERE gur.user_account_id = ua.id AND gur.role = "super_admin"
+                    ) THEN "super_admin"
+                    WHEN EXISTS (
+                        SELECT 1 FROM `%1$sclub_user_roles` cur0
+                        WHERE cur0.user_account_id = ua.id AND cur0.role = "club_admin"
+                    ) THEN "club_admin"
+                    ELSE "player"
+                END AS role,
+                ua.role AS legacy_role,
                 ua.is_active,
                 mp.contact_email,
                 mp.contact_phone,
-                mp.player_id,
+                ua.player_id,
                 p.club_id AS player_club_id,
                 p.display_name AS player_display_name,
                 p.member_id AS player_member_id,
@@ -90,13 +117,16 @@ final class UserAccountRepository
                 (SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ",")
                    FROM `%1$sclub_user_roles` cur
                   WHERE cur.user_account_id = ua.id AND cur.role = "club_admin") AS admin_club_ids,
+                (SELECT GROUP_CONCAT(gur.role ORDER BY gur.role SEPARATOR ",")
+                   FROM `%1$sglobal_user_roles` gur
+                  WHERE gur.user_account_id = ua.id) AS global_roles,
                 s.id AS session_id,
                 s.expires_at,
                 s.revoked_at
              FROM `%1$sauth_sessions` s
              INNER JOIN `%1$suser_accounts` ua ON ua.id = s.user_account_id
              LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
-             LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
+             LEFT JOIN `%1$splayers` p ON p.id = ua.player_id
              WHERE s.session_token_hash = ?
                AND s.revoked_at IS NULL
              LIMIT 1',
@@ -150,13 +180,6 @@ final class UserAccountRepository
         } finally {
             $statement->close();
         }
-
-        // Keep the contact profile aligned where one exists. Login still uses user_accounts.email.
-        $profileSql = sprintf('UPDATE `%1$smember_profiles` SET contact_email = ? WHERE user_account_id = ?', $this->tablePrefix);
-        $profile = $this->connection->prepare($profileSql);
-        $profile->bind_param('si', $email, $userAccountId);
-        $profile->execute();
-        $profile->close();
     }
 
     /**
