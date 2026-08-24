@@ -70,7 +70,7 @@ try {
     $tournaments = $prefix . 'tournaments';
     $references = $prefix . 'external_references';
     $statement = $db->prepare(
-        "SELECT t.id, t.name, t.status, er.external_id
+        "SELECT t.id, t.name, t.status, t.start_at, er.external_id
          FROM `{$tournaments}` t
          LEFT JOIN `{$references}` er
            ON er.external_system='dartsatlas'
@@ -102,6 +102,11 @@ try {
      * the landing page plus any discovered match/group/result/bracket tabs and
      * persist the parsed snapshots into the canonical connector tables.
      *
+     * The season resolver can know a tournament is In Progress before the local
+     * tournament row has been promoted from ready. Therefore a ready tournament
+     * with no known start_at, or with a start time that has already arrived, is
+     * also eligible for the direct scan. A future ready tournament remains quiet.
+     *
      * This scan is throttled to five seconds and protected by the connector lock,
      * so a 2-second browser poll cannot fan out into parallel DartsAtlas scrapes.
      */
@@ -114,7 +119,20 @@ try {
     ];
 
     $externalTournamentId = trim((string) ($tournament['external_id'] ?? ''));
-    if ((string) $tournament['status'] === 'in_progress' && $externalTournamentId !== '') {
+    $localStatus = (string) ($tournament['status'] ?? '');
+    $startAtRaw = trim((string) ($tournament['start_at'] ?? ''));
+    $startDue = false;
+    if ($startAtRaw !== '') {
+        try {
+            $startDue = (new DateTimeImmutable($startAtRaw))->getTimestamp() <= (time() + 300);
+        } catch (Throwable) {
+            $startDue = false;
+        }
+    }
+    $directEligible = $localStatus === 'in_progress'
+        || ($localStatus === 'ready' && ($startAtRaw === '' || $startDue));
+
+    if ($directEligible && $externalTournamentId !== '') {
         $resources = $prefix . 'connector_resources';
         $scanType = 'public_match_scan';
         $ageStatement = $db->prepare(
