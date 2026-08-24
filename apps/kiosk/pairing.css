@@ -1,0 +1,114 @@
+.claim-layout {
+  min-height: calc(100vh - 13rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+  gap: 2rem;
+  align-items: center;
+}
+
+.setup-copy h2 {
+  margin: .35rem 0 .8rem;
+  font-size: clamp(2.2rem, 5vw, 4.4rem);
+  line-height: .98;
+}
+
+.setup-copy > .muted {
+  max-width: 720px;
+  font-size: 1.08rem;
+}
+
+.claim-steps {
+  margin-top: 2rem;
+  display: grid;
+  gap: .85rem;
+}
+
+.claim-steps > div {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: .9rem;
+  align-items: center;
+  padding: .85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255,255,255,.04);
+}
+
+.claim-steps span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  font-weight: 900;
+}
+
+.claim-card {
+  border: 1px solid var(--line-strong);
+  border-radius: 28px;
+  padding: 1.25rem;
+  background: rgba(7, 20, 28, .9);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.qr-wrap {
+  width: min(100%, 330px);
+  aspect-ratio: 1;
+  margin: 0 auto 1rem;
+  border-radius: 22px;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: .8rem;
+}
+
+.pairing-qr {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.qr-loading {
+  color: #1a2630;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  align-items: center;
+  font-weight: 800;
+}
+
+.claim-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: .72rem;
+}
+
+.claim-code {
+  display: block;
+  margin: .3rem 0 .35rem;
+  font-size: clamp(2.5rem, 7vw, 4.6rem);
+  letter-spacing: .12em;
+  line-height: 1;
+}
+
+.claim-card .waiting-line {
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.claim-card .ghost-button {
+  width: 100%;
+}
+
+@media (max-width: 840px) {
+  .claim-layout {
+    min-height: auto;
+    grid-template-columns: 1fr;
+  }
+  .setup-copy h2 { font-size: 2.6rem; }
+  .qr-wrap { width: min(82vw, 330px); }
+}
