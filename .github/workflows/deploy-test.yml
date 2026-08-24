@@ -105,19 +105,26 @@ jobs:
           sftp_only: true
           rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
 
-      - name: Verify admin deployment
+      - name: Verify admin and kiosk deployment
         env:
           TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
         run: |
           TEST_ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
           ADMIN_URL="${TEST_ROOT%/}/admin/"
+          KIOSK_URL="${TEST_ROOT%/}/kiosk/"
           ADMIN_API_URL="${TEST_ROOT%/}/api/dartsatlas-admin.php"
 
           echo "Verifying admin page: ${ADMIN_URL}"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 \
-            "${ADMIN_URL}" -o admin.html
-          grep -q "Det vi faktisk bruker nå" admin.html || {
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "${ADMIN_URL}" -o admin.html
+          grep -q "Kiosker / boards" admin.html || {
             echo "Admin page is missing or an old build is still served."
+            exit 1
+          }
+
+          echo "Verifying board terminal: ${KIOSK_URL}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "${KIOSK_URL}" -o kiosk.html
+          grep -q "Board Terminal" kiosk.html || {
+            echo "Board Terminal is missing or an old kiosk build is still served."
             exit 1
           }
 
@@ -128,7 +135,7 @@ jobs:
             cat admin-api.json || true
             exit 1
           fi
-          echo "Admin deployment verified (endpoint HTTP ${STATUS}; 401 without token is expected)."
+          echo "Admin and kiosk deployment verified (admin endpoint HTTP ${STATUS}; 401 without token is expected)."
 
       - name: Bootstrap and verify DartsAtlas from test host
         env:
@@ -137,8 +144,7 @@ jobs:
           TEST_ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
           LIVE_URL="${TEST_ROOT%/}/api/dartsatlas-live.php"
           echo "Verifying DartsAtlas through ${LIVE_URL}"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            "${LIVE_URL}" -o dartsatlas-live.json
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 90 "${LIVE_URL}" -o dartsatlas-live.json
           php -r '
             $data = json_decode(file_get_contents("dartsatlas-live.json"), true);
             if (!is_array($data) || !($data["ok"] ?? false)) {
