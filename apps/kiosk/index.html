@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#07131b">
   <title>Blindleia Darts · Board Terminal</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./pairing.css">
 </head>
 <body>
   <div class="terminal-shell">
@@ -22,33 +23,29 @@
 
     <main class="terminal-main">
       <section id="setupState" class="state-card setup-state">
-        <div class="setup-copy">
-          <p class="eyebrow">Førstegangsoppsett</p>
-          <h2>Gjør nettbrettet til en fast board-terminal</h2>
-          <p class="muted">Dette gjøres én gang. Deretter husker nettbrettet hvilken skive det hører til.</p>
-        </div>
+        <div class="claim-layout">
+          <div class="setup-copy">
+            <p class="eyebrow">Førstegangsoppsett</p>
+            <h2>Koble denne terminalen til en skive</h2>
+            <p class="muted">Dette gjøres én gang. Scan QR-koden med mobilen til en klubbadmin, velg board og terminalen husker oppsettet videre.</p>
 
-        <div id="clubStep" class="setup-step">
-          <div class="step-number">1</div>
-          <div class="step-body">
-            <h3>Koble til klubben</h3>
-            <p class="muted">Finn klubbkoden i Admin → Kiosker / boards.</p>
-            <div class="inline-form"><input id="clubConnectCode" autocomplete="off" autocapitalize="characters" placeholder="Klubbkode"><button id="connectClubButton" type="button">Koble til</button></div>
-          </div>
-        </div>
-
-        <div id="pairStep" class="setup-step disabled-step">
-          <div class="step-number">2</div>
-          <div class="step-body">
-            <h3>Pair mot riktig board</h3>
-            <p id="pairInstruction" class="muted">Koble til klubben først.</p>
-            <button id="startPairingButton" type="button" disabled>Start pairing</button>
-            <div id="pairingCard" class="pairing-card hidden">
-              <span>Pairingkode</span>
-              <strong id="pairingCode">—</strong>
-              <p>Åpne Admin → Kiosker / boards, velg board og trykk Godkjenn.</p>
-              <div class="waiting-line"><span class="spinner"></span>Venter på godkjenning …</div>
+            <div class="claim-steps">
+              <div><span>1</span><p>Scan QR-koden med mobilen.</p></div>
+              <div><span>2</span><p>Logg inn i Blindleia Admin hvis du ikke allerede er innlogget.</p></div>
+              <div><span>3</span><p>Velg riktig board og trykk «Koble til».</p></div>
             </div>
+          </div>
+
+          <div class="claim-card">
+            <div id="pairingQrWrap" class="qr-wrap">
+              <img id="pairingQr" alt="QR-kode for pairing" class="pairing-qr hidden">
+              <div id="qrLoading" class="qr-loading"><span class="spinner"></span><span>Lager pairingkode …</span></div>
+            </div>
+            <p class="claim-label">Pairingkode</p>
+            <strong id="pairingCode" class="claim-code">—</strong>
+            <p id="pairingExpires" class="muted">Koden er gyldig i 30 minutter.</p>
+            <div class="waiting-line"><span class="spinner"></span><span id="pairingMessage">Venter på godkjenning …</span></div>
+            <button id="newPairingButton" class="ghost-button" type="button">Lag ny kode</button>
           </div>
         </div>
       </section>
@@ -145,7 +142,7 @@
     <div class="settings-actions">
       <button id="refreshButton" type="button" class="ghost-button">Oppdater nå</button>
       <button id="unpairButton" type="button" class="danger-button hidden">Fjern pairing</button>
-      <button id="changeClubButton" type="button" class="danger-button hidden">Bytt klubb / nullstill</button>
+      <button id="resetTerminalButton" type="button" class="danger-button">Nullstill terminal</button>
     </div>
   </section>
 
