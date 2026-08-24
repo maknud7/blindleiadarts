@@ -300,8 +300,6 @@ final class DartsAtlasRepository
         $legsB = $this->toInt($snapshot['player_b_legs'] ?? null);
         $bestOf = max(1, (int) ($snapshot['best_of_legs'] ?? 3));
         $legsToWin = max(1, (int) ($snapshot['legs_to_win'] ?? (intdiv($bestOf, 2) + 1)));
-        $board = $this->toInt($snapshot['board_number'] ?? null);
-        $kioskId = $this->kioskId($clubId, $board);
         $round = isset($snapshot['round_label']) ? trim((string) $snapshot['round_label']) : null;
         $winner = null;
 
@@ -312,7 +310,7 @@ final class DartsAtlasRepository
         $table = $this->table('matches');
         $metadata = $this->json($snapshot);
         $stmt = $this->db->prepare(
-            "UPDATE `{$table}` SET kiosk_id=COALESCE(?, kiosk_id), round_label=COALESCE(?, round_label),
+            "UPDATE `{$table}` SET round_label=COALESCE(?, round_label),
              status=?, best_of_legs=?, legs_to_win=?,
              winner_player_id=CASE WHEN ? IS NULL THEN winner_player_id ELSE ? END,
              provider_metadata=?,
@@ -321,8 +319,7 @@ final class DartsAtlasRepository
              WHERE id=?"
         );
         $stmt->bind_param(
-            'issiiiisssi',
-            $kioskId,
+            'ssiiiisssi',
             $round,
             $status,
             $bestOf,
@@ -578,22 +575,6 @@ final class DartsAtlasRepository
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         return !$row;
-    }
-
-    private function kioskId(int $clubId, ?int $boardNumber): ?int
-    {
-        if ($boardNumber === null || $boardNumber <= 0) {
-            return null;
-        }
-        $table = $this->table('kiosks');
-        $stmt = $this->db->prepare(
-            "SELECT id FROM `{$table}` WHERE club_id=? AND board_number=? AND is_active=1 LIMIT 1"
-        );
-        $stmt->bind_param('ii', $clubId, $boardNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        return $row ? (int) $row['id'] : null;
     }
 
     private function saveExternalReference(string $externalType, string $externalId, string $internalType, int $internalId): void
