@@ -3,6 +3,7 @@
   const isolatedProd = window.location.hostname === "dart.ingenting.org" && window.location.pathname.startsWith("/live");
   const apiBase = isolatedProd ? "./api" : "../api";
   const CURRENT_URL = `${apiBase}/dartsatlas-public-current.php`;
+  const ACTIVE_URL = `${apiBase}/dartsatlas-public-active.php`;
   const LIVE_PROBE_URL = `${apiBase}/dartsatlas-public-live.php`;
   const SEASON_ELO_URL = `${apiBase}/dartsatlas-public-season-elo.php`;
   let cachedTournamentId = null;
@@ -20,11 +21,20 @@
     return `${values.year}-${values.month}-${values.day}`;
   }
 
+  async function resolveActiveTournament() {
+    try {
+      const response = await nativeFetch(`${ACTIVE_URL}?_=${Date.now()}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok || !payload?.data?.active) return null;
+      const id = Number(payload?.data?.tournament_id || 0);
+      return Number.isFinite(id) && id > 0 ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function probeRunningTournament(excludeId = null) {
     try {
-      // Use the live API's own ranking here. It prioritises tournaments with
-      // actual in-progress matches over merely scheduled/ready tournaments.
-      // nativeFetch deliberately bypasses this router to avoid recursion.
       const response = await nativeFetch(`${LIVE_PROBE_URL}?route_probe=${Date.now()}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok || !payload?.ok) return null;
@@ -48,6 +58,15 @@
 
     resolverPromise = (async () => {
       try {
+        // Match activity is stronger evidence than DartsAtlas' upcoming
+        // schedule. A started tournament often disappears from /schedule.
+        const activeId = await resolveActiveTournament();
+        if (activeId) {
+          cachedTournamentId = activeId;
+          cacheExpiresAt = Date.now() + 5000;
+          return cachedTournamentId;
+        }
+
         const response = await nativeFetch(`${CURRENT_URL}?_=${Date.now()}`, { cache: "no-store" });
         const payload = await response.json();
         if (!response.ok || !payload?.ok) {
@@ -61,10 +80,6 @@
         const today = osloDateKey();
         const scheduledId = Number.isFinite(id) && id > 0 ? id : null;
 
-        // DartsAtlas removes a tournament from the upcoming schedule when it
-        // starts. At that exact transition the schedule resolver can already
-        // point to next week's event. Before accepting a future tournament,
-        // ask the live feed whether another tournament is actually running.
         if (scheduledId && scheduledDate && scheduledDate > today) {
           const runningId = await probeRunningTournament(scheduledId);
           if (runningId) {
@@ -142,9 +157,6 @@
 
     const tournamentId = await resolveTournamentId();
     if (!tournamentId) {
-      // Never fall back to the API's historical "latest tournament" heuristic.
-      // Keep the season ELO visible, but wait for a tournament scheduled today
-      // or in the future before showing tournament-specific data.
       return noCurrentTournamentResponse();
     }
 
