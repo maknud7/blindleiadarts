@@ -161,3 +161,10 @@ jobs:
             code=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${ROOT}${path}" || true)
             echo "${path} -> HTTP ${code}"
           done
+
+          echo '--- deployed release marker ---'
+          curl --fail --silent --show-error --max-time 20 "${ROOT}/release.json"
+          echo
+          echo '--- deployed health ---'
+          curl --fail --silent --show-error --max-time 20 "${ROOT}/api/health.php"
+          echo
