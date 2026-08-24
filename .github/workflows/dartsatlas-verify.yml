@@ -20,7 +20,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    environment: test
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -94,8 +93,8 @@ jobs:
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
         env:
           APP_ENV: test
-          BASE_URL: ${{ vars.TEST_BASE_URL }}
-          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL }}
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
           REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}

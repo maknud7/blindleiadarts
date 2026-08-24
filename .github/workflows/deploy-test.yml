@@ -16,7 +16,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: test
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +27,7 @@ jobs:
           extensions: mysqli, mbstring, curl, dom
           coverage: none
 
-      - name: Validate test environment
+      - name: Validate shared repository credentials
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
@@ -42,11 +41,11 @@ jobs:
           set -euo pipefail
           for name in DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD SFTP_HOST SFTP_USERNAME SFTP_PASSWORD; do
             if [ -z "${!name:-}" ]; then
-              echo "::error::Test environment is missing required value: ${name}"
+              echo "::error::Repository is missing required shared credential: ${name}"
               exit 1
             fi
           done
-          echo "Test environment configuration is present."
+          echo "Shared repository credentials are present."
 
       - name: Run test database migrations
         run: php infra/sql/migrate.php
@@ -76,8 +75,8 @@ jobs:
           cp dist/test/api/config.php apps/api/config.php
         env:
           APP_ENV: test
-          BASE_URL: ${{ vars.TEST_BASE_URL }}
-          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL }}
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.TEST_SCREEN_CLUB_SLUG || 'blindleia-dartklubb' }}
           REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
@@ -201,6 +200,17 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/onboarding/" -o /dev/null
           curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/onboarding/index.html" -o /dev/null
           curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/onboarding/app.js" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/kiosk/test-mode.js" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/api/kiosk-test-mode.php" -o kiosk-test-mode.json
+
+          php -r '
+            $data = json_decode(file_get_contents("kiosk-test-mode.json"), true);
+            if (!is_array($data) || !($data["ok"] ?? false)) {
+                fwrite(STDERR, "Kiosk test-mode API is not available in the deployed test release.\n");
+                exit(1);
+            }
+            echo "Kiosk test mode is reachable.\n";
+          '
 
           ONBOARDING_API_STATUS=$(curl --silent --show-error --retry 3 --retry-all-errors --max-time 30 \
             --output /dev/null --write-out "%{http_code}" "${TEST_ROOT}/api/member-onboarding.php")
