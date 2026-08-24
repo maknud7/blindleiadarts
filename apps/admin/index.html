@@ -13,17 +13,11 @@
       <div>
         <p class="eyebrow">Blindleia Darts</p>
         <h1>Admin</h1>
-        <p class="muted">DartsAtlas, Live, medlemskobling og skjermer.</p>
+        <p class="muted">DartsAtlas, Live, medlemmer, kiosker og skjermer.</p>
       </div>
       <form id="loginForm" class="login-form">
-        <label>
-          <span>Brukernavn</span>
-          <input id="loginUsername" autocomplete="username" required>
-        </label>
-        <label>
-          <span>Passord</span>
-          <input id="loginPassword" type="password" autocomplete="current-password" required>
-        </label>
+        <label><span>Brukernavn</span><input id="loginUsername" autocomplete="username" required></label>
+        <label><span>Passord</span><input id="loginPassword" type="password" autocomplete="current-password" required></label>
         <button type="submit">Logg inn</button>
       </form>
       <div id="loginMessage" class="message hidden"></div>
@@ -34,14 +28,12 @@
     <header class="topbar">
       <div class="topbar-brand">
         <div class="brand-mark small">BD</div>
-        <div>
-          <p class="eyebrow">Blindleia Darts</p>
-          <strong id="clubName">Admin</strong>
-        </div>
+        <div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Admin</strong></div>
       </div>
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
-        <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne Live-skjerm</a>
+        <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
+        <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne Live</a>
         <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button>
         <button id="logoutButton" type="button" class="button quiet">Logg ut</button>
       </div>
@@ -51,8 +43,8 @@
       <section class="hero">
         <div>
           <p class="eyebrow">Mandagsserien / klubbdrift</p>
-          <h1>Det vi faktisk bruker nå</h1>
-          <p class="muted">DartsAtlas er datakilden. Blindleia lagrer historikken, kobler spillere til medlemmer og viser Live.</p>
+          <h1>Blindleia Darts</h1>
+          <p class="muted">DartsAtlas leverer kampdata. Blindleia eier historikken, boardene, medlemskoblingen og skjermene i lokalet.</p>
         </div>
         <div id="globalMessage" class="message hidden"></div>
       </section>
@@ -61,92 +53,76 @@
 
       <nav class="section-nav" aria-label="Adminområder">
         <a href="#dartsatlas">DartsAtlas</a>
+        <a href="#kiosks">Kiosker / boards</a>
         <a href="#members">Medlemmer</a>
-        <a href="#screens">Skjermer</a>
+        <a href="#screens">Live-skjermer</a>
       </nav>
 
       <section id="dartsatlas" class="panel">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Datakilde</p>
-            <h2>DartsAtlas</h2>
-            <p class="muted">Status på synk, aktiv turnering og importert historikk.</p>
-          </div>
+          <div><p class="eyebrow">Datakilde</p><h2>DartsAtlas</h2><p class="muted">Status på synk, aktiv turnering og importert historikk.</p></div>
           <button id="refreshDartsAtlasButton" type="button" class="button">Hent / oppdater nå</button>
         </div>
-
         <div id="dartsAtlasStatus" class="status-grid"></div>
-
-        <div class="subsection-head">
-          <h3>Turneringer</h3>
-          <span id="seasonLabel" class="pill"></span>
-        </div>
+        <div class="subsection-head"><h3>Turneringer</h3><span id="seasonLabel" class="pill"></span></div>
         <div id="tournamentList" class="list"></div>
+      </section>
+
+      <section id="kiosks" class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Board Terminal</p>
+            <h2>Kiosker / boards</h2>
+            <p class="muted">Hvert nettbrett pares én gang mot en fysisk skive. Blindleia sender deretter riktig kamp til riktig board.</p>
+          </div>
+          <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
+        </div>
+
+        <div class="kiosk-code-strip">
+          <div><span>Klubbkode for førstegangsoppsett</span><strong id="kioskClubCode">—</strong></div>
+          <button id="copyKioskClubCode" type="button" class="button secondary">Kopier klubbkode</button>
+        </div>
+
+        <div class="subsection-head"><h3>Venter på pairing</h3><span id="pairingCount" class="pill">0</span></div>
+        <div id="pairingRequestList" class="list"></div>
+
+        <div class="kiosk-layout">
+          <form id="kioskForm" class="create-card">
+            <h3>Nytt board</h3>
+            <label><span>Boardnummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
+            <label><span>Navn</span><input name="name" placeholder="Board 1"></label>
+            <label><span>Scoring</span><select name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
+            <button type="submit" class="button">Opprett board</button>
+          </form>
+          <div>
+            <div class="subsection-head"><h3>Boards</h3><span id="kioskCount" class="pill">0</span></div>
+            <div id="kioskList" class="list"></div>
+          </div>
+        </div>
       </section>
 
       <section id="members" class="panel">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Identitet</p>
-            <h2>Spillere ↔ medlemmer</h2>
-            <p class="muted">Automatisk eksakt navnematch der det er trygt. Resten kan kobles manuelt mot samme medlemsregister som klubbadmin bruker.</p>
-          </div>
-          <label class="toggle">
-            <input id="unlinkedOnly" type="checkbox">
-            <span>Vis bare ukoblede</span>
-          </label>
+          <div><p class="eyebrow">Identitet</p><h2>Spillere ↔ medlemmer</h2><p class="muted">Automatisk eksakt navnematch der det er trygt. Resten kan kobles manuelt mot samme medlemsregister som klubbadmin bruker.</p></div>
+          <label class="toggle"><input id="unlinkedOnly" type="checkbox"><span>Vis bare ukoblede</span></label>
         </div>
         <div id="memberRegistryStatus" class="inline-status"></div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Spiller</th>
-                <th>Kilde</th>
-                <th>Medlem</th>
-                <th>Kobling</th>
-              </tr>
-            </thead>
-            <tbody id="playerRows"></tbody>
-          </table>
-        </div>
+        <div class="table-wrap"><table><thead><tr><th>Spiller</th><th>Kilde</th><th>Medlem</th><th>Kobling</th></tr></thead><tbody id="playerRows"></tbody></table></div>
       </section>
 
       <section id="screens" class="panel">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">Live</p>
-            <h2>Skjermkoder</h2>
-            <p class="muted">Lag en kode én gang, tast den inn på TV-en, og skjermen husker klubben videre.</p>
-          </div>
+          <div><p class="eyebrow">Live</p><h2>Live-skjermer</h2><p class="muted">Lag en kode én gang, tast den inn på TV-en, og skjermen husker klubben videre.</p></div>
           <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne screen</a>
         </div>
-
         <div class="screen-layout">
-          <form id="screenForm" class="create-card">
-            <h3>Ny skjerm</h3>
-            <label>
-              <span>Navn</span>
-              <input name="label" placeholder="Hovedskjerm, Bar-TV ..." required>
-            </label>
-            <button type="submit" class="button">Lag skjermkode</button>
-          </form>
-          <div>
-            <div class="subsection-head">
-              <h3>Eksisterende skjermer</h3>
-              <span id="screenCount" class="pill"></span>
-            </div>
-            <div id="screenList" class="list"></div>
-          </div>
+          <form id="screenForm" class="create-card"><h3>Ny skjerm</h3><label><span>Navn</span><input name="label" placeholder="Hovedskjerm, Bar-TV ..." required></label><button type="submit" class="button">Lag skjermkode</button></form>
+          <div><div class="subsection-head"><h3>Eksisterende skjermer</h3><span id="screenCount" class="pill"></span></div><div id="screenList" class="list"></div></div>
         </div>
       </section>
 
       <section class="roadmap">
-        <div>
-          <p class="eyebrow">Neste fase</p>
-          <h2>Scolia</h2>
-          <p class="muted">Når Scolia-integrasjonen kommer, bygges den inn mot den samme lokale kjernen. Den trenger ikke styre adminflaten før vi faktisk bruker den.</p>
-        </div>
+        <div><p class="eyebrow">Scoringkilde</p><h2>Scolia</h2><p class="muted">Board Terminal er allerede kildeuavhengig. I manuell modus registrerer spilleren visits på nettbrettet. I Scolia-modus skal samme board og samme kamp bruke Scolia-eventer når API-integrasjonen kommer.</p></div>
       </section>
     </main>
   </div>
