@@ -29,19 +29,29 @@ function run_multi_query(mysqli $mysqli, string $sql): void
     } while ($mysqli->more_results() && $mysqli->next_result());
 }
 
-function run_php_migration(mysqli $mysqli, string $file, string $prefix): void
+function run_php_migration(string $file, string $prefix, string $worker): void
 {
-    $migration = require $file;
-
-    if (!is_callable($migration)) {
-        throw new RuntimeException("PHP migration must return a callable: {$file}");
+    if (!is_file($worker)) {
+        throw new RuntimeException("PHP migration worker not found: {$worker}");
     }
 
-    $migration($mysqli, $prefix);
+    $command = implode(' ', [
+        escapeshellarg(PHP_BINARY),
+        escapeshellarg($worker),
+        escapeshellarg($file),
+        escapeshellarg($prefix),
+    ]);
+
+    passthru($command, $exitCode);
+
+    if ($exitCode !== 0) {
+        throw new RuntimeException("PHP migration failed with exit code {$exitCode}: {$file}");
+    }
 }
 
 $root = dirname(__DIR__, 2);
 $migrationsDir = $root . DIRECTORY_SEPARATOR . 'infra' . DIRECTORY_SEPARATOR . 'sql' . DIRECTORY_SEPARATOR . 'migrations';
+$phpMigrationWorker = $root . DIRECTORY_SEPARATOR . 'infra' . DIRECTORY_SEPARATOR . 'sql' . DIRECTORY_SEPARATOR . 'run_php_migration.php';
 $prefix = required_env('DB_TABLE_PREFIX');
 
 if (!is_dir($migrationsDir)) {
@@ -104,7 +114,7 @@ foreach ($files as $file) {
         $sql = str_replace('{{TABLE_PREFIX}}', $prefix, $sql);
         run_multi_query($mysqli, $sql);
     } elseif (str_ends_with($file, '.php')) {
-        run_php_migration($mysqli, $file, $prefix);
+        run_php_migration($file, $prefix, $phpMigrationWorker);
     } else {
         throw new RuntimeException("Unsupported migration file type: {$file}");
     }
