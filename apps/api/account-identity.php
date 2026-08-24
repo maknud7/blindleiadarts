@@ -69,7 +69,7 @@ try {
 
     $playerId = isset($user['player_id']) && $user['player_id'] !== null ? (int) $user['player_id'] : null;
     $playerClubId = isset($user['player_club_id']) && $user['player_club_id'] !== null ? (int) $user['player_club_id'] : null;
-    $memberId = isset($user['player_member_id']) && $user['player_member_id'] !== null ? (int) $user['player_member_id'] : null;
+    $memberId = isset($user['member_id']) && $user['member_id'] !== null ? (int) $user['member_id'] : null;
     $superAdmin = (string) ($user['role'] ?? '') === 'super_admin';
 
     $respond([
@@ -80,6 +80,7 @@ try {
                 'username' => (string) ($user['username'] ?? ''),
                 'email' => $user['email'] ?? null,
                 'display_name' => (string) ($user['display_name'] ?? ''),
+                'status' => (string) ($user['account_status'] ?? 'active'),
                 'is_active' => (int) ($user['is_active'] ?? 0) === 1,
             ],
             'player' => $playerId !== null ? [
@@ -89,14 +90,14 @@ try {
             ] : null,
             'member' => $memberId !== null ? [
                 'id' => $memberId,
-                'link_source' => $user['player_member_link_source'] ?? null,
+                'player_link_source' => $user['player_member_link_source'] ?? null,
             ] : null,
             'permissions' => [
                 'super_admin' => $superAdmin,
                 'club_admin_ids' => $adminClubIds,
             ],
             'capabilities' => [
-                'can_login' => true,
+                'can_login' => (string) ($user['account_status'] ?? '') === 'active',
                 'has_email_login' => isset($user['email']) && is_string($user['email']) && trim($user['email']) !== '',
                 'is_player' => $playerId !== null,
                 'is_member' => $memberId !== null,
