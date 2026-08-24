@@ -1,5 +1,5 @@
 (() => {
-  const CURRENT_URL = "../api/dartsatlas-public-current.php";
+  const CURRENT_URL = "./api/dartsatlas-public-current.php";
   const REFRESH_MS = 30000;
 
   const elements = {
