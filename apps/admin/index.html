@@ -74,7 +74,7 @@
           <div>
             <p class="eyebrow">Board Terminal</p>
             <h2>Kiosker / boards</h2>
-            <p class="muted">Hvert nettbrett pares én gang mot en fysisk skive. DartsAtlas-boardnummeret mappes deretter automatisk til riktig terminal.</p>
+            <p class="muted">Scan et nytt nettbrett og opprett boardet samtidig. Boardnummeret brukes mot DartsAtlas, mens navn og sponsor følger den fysiske skiva.</p>
           </div>
           <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
         </div>
@@ -84,15 +84,36 @@
             <div>
               <p class="eyebrow">Koble nytt nettbrett</p>
               <h3>Scan QR-koden på terminalen</h3>
-              <p class="muted">Et nytt nettbrett viser automatisk en QR-kode og en kort pairingkode. QR-en åpner denne siden med koden ferdig utfylt. Du velger bare hvilket board terminalen står ved.</p>
-              <div class="claim-tip"><span>1</span><p class="muted">Åpne <strong>/kiosk/</strong> på nettbrettet.</p></div>
-              <div class="claim-tip"><span>2</span><p class="muted">Scan QR-koden med mobilen du bruker til admin.</p></div>
-              <div class="claim-tip"><span>3</span><p class="muted">Velg board og trykk <strong>Koble til board</strong>.</p></div>
+              <p class="muted">Ved førstegangsoppsett oppretter du normalt boardet her. Hvis et nettbrett erstattes senere, velger du bare det eksisterende boardet.</p>
+              <div class="claim-tip"><span>1</span><p class="muted">Åpne <strong>/kiosk/</strong> på nettbrettet og scan QR-koden.</p></div>
+              <div class="claim-tip"><span>2</span><p class="muted">Velg <strong>Nytt board</strong> og gi skiva nummer, navn og eventuell sponsor.</p></div>
+              <div class="claim-tip"><span>3</span><p class="muted">Trykk <strong>Opprett og koble</strong>. Neste gang huskes boardet automatisk.</p></div>
             </div>
             <form id="claimKioskForm" class="claim-form">
               <label><span>Pairingkode</span><input id="claimKioskCode" class="claim-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="B7K4P2" required></label>
-              <label><span>Board</span><select id="claimKioskBoard" required><option value="">Velg board …</option></select></label>
-              <button id="claimKioskButton" type="submit">Koble til board</button>
+
+              <div class="board-choice" role="group" aria-label="Velg boardtype">
+                <button id="claimNewBoardChoice" class="active" type="button">+ Nytt board</button>
+                <button id="claimExistingBoardChoice" type="button">Eksisterende board</button>
+              </div>
+
+              <div id="claimNewBoardFields" class="claim-board-fields">
+                <div class="claim-two-columns">
+                  <label><span>Boardnummer</span><input id="claimBoardNumber" type="number" min="1" inputmode="numeric" required></label>
+                  <label><span>Scoring</span><select id="claimScoringMode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
+                </div>
+                <label><span>Navn på skiva</span><input id="claimBoardName" maxlength="120" placeholder="F.eks. Sjøbua Arena"></label>
+                <label><span>Sponsor / presentert av</span><input id="claimSponsorLabel" maxlength="150" placeholder="F.eks. Sjøbua"></label>
+                <label><span>Sponsorlogo (URL)</span><input id="claimSponsorLogoUrl" type="url" maxlength="255" placeholder="https://..."></label>
+                <p class="claim-help">Navnet og sponsoren tilhører boardet. Bytter du nettbrett senere, følger dette automatisk med.</p>
+              </div>
+
+              <div id="claimExistingBoardFields" class="claim-board-fields hidden">
+                <label><span>Eksisterende board</span><select id="claimKioskBoard"><option value="">Velg board …</option></select></label>
+                <p class="claim-help">Bruk dette når et nettbrett skal erstattes på en skive som allerede finnes.</p>
+              </div>
+
+              <button id="claimKioskButton" type="submit">Opprett og koble</button>
               <div id="claimKioskStatus" class="claim-status hidden"></div>
             </form>
           </div>
@@ -106,7 +127,8 @@
 
         <div class="kiosk-layout">
           <form id="kioskForm" class="create-card">
-            <h3>Nytt board</h3>
+            <h3>Opprett board uten nettbrett</h3>
+            <p class="muted">Avansert bruk. Normalflyten er å opprette boardet direkte når nettbrettet pares.</p>
             <label><span>Boardnummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
             <label><span>Navn</span><input name="name" placeholder="Board 1"></label>
             <label><span>Scoring</span><select name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
