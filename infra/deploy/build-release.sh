@@ -40,6 +40,7 @@ copy_dir() {
 copy_dir "$ROOT_DIR/apps/api" "$OUT_DIR/api"
 copy_dir "$ROOT_DIR/apps/kiosk" "$OUT_DIR/kiosk"
 copy_dir "$ROOT_DIR/apps/screen" "$OUT_DIR/screen"
+copy_dir "$ROOT_DIR/apps/live" "$OUT_DIR/live"
 copy_dir "$ROOT_DIR/apps/admin" "$OUT_DIR/admin"
 copy_dir "$ROOT_DIR/apps/player" "$OUT_DIR/player"
 copy_dir "$ROOT_DIR/apps/onboarding" "$OUT_DIR/onboarding"

@@ -157,6 +157,7 @@ final class DartsAtlasSyncService
                 }
 
                 $tournamentName = trim((string) ($tournament['name'] ?? $tournamentInfo['name'] ?? $externalTournamentId));
+                $tournamentStatus = $this->deriveTournamentStatus($tournament, $targeted);
                 $localTournamentId = $this->repository->upsertTournament(
                     $this->config->clubId(),
                     $this->config->localSeasonId(),
@@ -167,7 +168,7 @@ final class DartsAtlasSyncService
                         'season_external_id' => $seasonExternalId,
                         'external_id' => $externalTournamentId,
                     ],
-                    $targeted ? 'in_progress' : 'ready',
+                    $tournamentStatus,
                 );
                 $summary['tournaments_seen']++;
 
@@ -304,6 +305,38 @@ final class DartsAtlasSyncService
         } finally {
             $this->repository->releaseLock($lockScope);
         }
+    }
+
+    /** @param array<string, mixed> $tournament */
+    private function deriveTournamentStatus(array $tournament, bool $targeted): string
+    {
+        if (!$targeted) {
+            return 'ready';
+        }
+
+        $statuses = [];
+        foreach ($tournament['matches'] ?? [] as $match) {
+            if (!is_array($match)) {
+                continue;
+            }
+            $status = trim((string) ($match['status'] ?? ''));
+            if ($status !== '') {
+                $statuses[] = $status;
+            }
+        }
+
+        if (in_array('in_progress', $statuses, true)) {
+            return 'in_progress';
+        }
+
+        if ($statuses !== [] && count(array_filter(
+            $statuses,
+            static fn (string $status): bool => $status === 'completed'
+        )) === count($statuses)) {
+            return 'completed';
+        }
+
+        return 'ready';
     }
 
     /**
