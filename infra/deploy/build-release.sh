@@ -7,6 +7,11 @@ if [[ $# -ne 1 ]]; then
 fi
 
 ENVIRONMENT="$1"
+if [[ "$ENVIRONMENT" != "test" && "$ENVIRONMENT" != "prod" ]]; then
+  echo "Environment must be test or prod" >&2
+  exit 1
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT_DIR="$ROOT_DIR/dist/$ENVIRONMENT"
 RELEASE_SHA="${GITHUB_SHA:-}"
@@ -52,6 +57,28 @@ if [[ -f "$ROOT_DIR/index.html" ]]; then
   cp "$ROOT_DIR/index.html" "$OUT_DIR/index.html"
 fi
 
+# Make the deployed kiosk environment explicit in the release itself.
+# Runtime UI can then distinguish test/prod without relying on an extra
+# health request that may fail or be cached independently of the page.
+if [[ -f "$OUT_DIR/kiosk/index.html" ]]; then
+  php -r '
+    $path = $argv[1];
+    $env = $argv[2];
+    $html = file_get_contents($path);
+    if ($html === false) {
+        fwrite(STDERR, "Could not read kiosk index.\n");
+        exit(1);
+    }
+    $replacement = "<body data-app-env=\"" . htmlspecialchars($env, ENT_QUOTES) . "\">";
+    $updated = preg_replace("/<body(?:\\s[^>]*)?>/", $replacement, $html, 1, $count);
+    if ($updated === null || $count !== 1) {
+        fwrite(STDERR, "Could not embed kiosk app environment.\n");
+        exit(1);
+    }
+    file_put_contents($path, $updated);
+  ' "$OUT_DIR/kiosk/index.html" "$ENVIRONMENT"
+fi
+
 printf '{"environment":"%s","sha":"%s"}\n' "$ENVIRONMENT" "$RELEASE_SHA" > "$OUT_DIR/release.json"
 
-echo "Built release package at $OUT_DIR (sha=$RELEASE_SHA)"
+echo "Built release package at $OUT_DIR (sha=$RELEASE_SHA, env=$ENVIRONMENT)"
