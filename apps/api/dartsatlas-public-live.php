@@ -6,6 +6,7 @@ use Blindleia\Dartkiosk\Api\Repository\DartsAtlasRepository;
 use Blindleia\Dartkiosk\Api\Repository\DartsAtlasScreenRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
 use Blindleia\Dartkiosk\Api\Service\DartsAtlasSyncService;
+use Blindleia\Dartkiosk\Api\Service\PublicLiveInsights;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
@@ -23,13 +24,17 @@ $respond = static function (array $payload, int $status = 200): never {
     exit;
 };
 
+$stage = 'bootstrap';
+
 try {
+    $stage = 'config';
     $config = Config::load(__DIR__);
     $database = new Database($config);
     $db = $database->connection();
     $prefix = $database->tablePrefix();
     $dartsAtlas = $config->dartsAtlas();
 
+    $stage = 'club';
     $clubId = $dartsAtlas->clubId();
     if ($clubId <= 0) {
         $clubsTable = $prefix . 'clubs';
@@ -56,6 +61,7 @@ try {
         $dartsAtlas = $dartsAtlas->withClubId($clubId);
     }
 
+    $stage = 'season';
     if ($dartsAtlas->localSeasonId() === null) {
         $seasonsTable = $prefix . 'seasons';
         $statement = $db->prepare(
@@ -143,6 +149,7 @@ try {
         return $row;
     };
 
+    $stage = 'tournament_discovery';
     $requestedTournament = filter_input(INPUT_GET, 'tournament_id', FILTER_VALIDATE_INT);
     $requestedTournamentId = is_int($requestedTournament) && $requestedTournament > 0
         ? $requestedTournament
@@ -188,6 +195,7 @@ try {
                 $tournament = $findTournament(null);
             } catch (Throwable $bootstrapError) {
                 $bootstrap['status'] = 'failed';
+                $bootstrap['error_code'] = 'season_sync_failed';
                 if ($config->appEnv() !== 'prod') {
                     $bootstrap['error'] = $bootstrapError->getMessage();
                 }
@@ -210,15 +218,34 @@ try {
                 ],
                 'next_matches' => [],
                 'standings' => [],
-                'stats' => [],
+                'stats' => [
+                    'highlights' => [],
+                    'best_match_averages' => [],
+                    'top_visits' => [],
+                    'live_elo' => ['baseline' => 1000, 'k_factor' => 32, 'table' => [], 'changes' => []],
+                ],
             ],
         ]);
     }
 
+    $stage = 'tournament_feed';
     $tournamentId = (int) $tournament['id'];
     $screenRepository = new DartsAtlasScreenRepository($database);
     $tournamentRepository = new TournamentRepository($database);
-    $feed = $screenRepository->feedStatus($tournamentId);
+    $insights = new PublicLiveInsights($database);
+
+    try {
+        $feed = $screenRepository->feedStatus($tournamentId);
+    } catch (Throwable) {
+        $feed = [
+            'provider' => 'dartsatlas',
+            'status' => 'error',
+            'last_seen_at' => null,
+            'age_seconds' => null,
+            'warnings' => ['feed_status_unavailable'],
+        ];
+    }
+
     $feedAge = isset($feed['age_seconds']) && is_numeric($feed['age_seconds'])
         ? (int) $feed['age_seconds']
         : null;
@@ -271,7 +298,12 @@ try {
             } catch (Throwable) {
                 $refreshSkipped = 'refresh_failed';
             }
-            $feed = $screenRepository->feedStatus($tournamentId);
+            try {
+                $feed = $screenRepository->feedStatus($tournamentId);
+            } catch (Throwable) {
+                $feed['status'] = 'error';
+                $feed['warnings'][] = 'feed_status_refresh_unavailable';
+            }
             $tournament = $findTournament($tournamentId) ?? $tournament;
         }
     }
@@ -283,6 +315,30 @@ try {
     if ($refreshSkipped !== null) {
         $feed['refresh_skipped'] = $refreshSkipped;
     }
+
+    $stage = 'audience_enrichment';
+    $warnings = is_array($feed['warnings'] ?? null) ? $feed['warnings'] : [];
+    $safe = static function (string $code, callable $callback, mixed $fallback) use (&$warnings): mixed {
+        try {
+            return $callback();
+        } catch (Throwable) {
+            $warnings[] = $code;
+            return $fallback;
+        }
+    };
+
+    $seasonId = $tournament['season_id'] !== null ? (int) $tournament['season_id'] : null;
+    $nextMatches = $safe('next_matches_unavailable', fn () => $tournamentRepository->listUpcomingMatchesByTournamentId($tournamentId, 8), []);
+    $standings = $safe('standings_unavailable', fn () => $screenRepository->listStandingsByTournamentId($tournamentId, 8), []);
+    $highlights = $safe('highlights_unavailable', fn () => $screenRepository->highlights($tournamentId), []);
+    $bestAverages = $safe('best_averages_unavailable', fn () => $screenRepository->listBestMatchAveragesByTournamentId($tournamentId, 5), []);
+    $topVisits = $safe('top_visits_unavailable', fn () => $insights->topVisitBuckets($tournamentId, 5), []);
+    $liveElo = $safe(
+        'live_elo_unavailable',
+        fn () => $insights->liveElo($tournamentId, $seasonId, 20),
+        ['baseline' => 1000, 'k_factor' => 32, 'table' => [], 'changes' => []]
+    );
+    $feed['warnings'] = array_values(array_unique($warnings));
 
     $respond([
         'ok' => true,
@@ -297,27 +353,17 @@ try {
                 'id' => $tournamentId,
                 'name' => $tournament['name'],
                 'status' => $tournament['status'],
-                'season_id' => $tournament['season_id'] !== null ? (int) $tournament['season_id'] : null,
+                'season_id' => $seasonId,
                 'provider_system' => 'dartsatlas',
             ],
             'feed' => $feed,
-            'next_matches' => $tournamentRepository->listUpcomingMatchesByTournamentId($tournamentId, 8),
-            'standings' => $screenRepository->listStandingsByTournamentId($tournamentId, 8),
+            'next_matches' => $nextMatches,
+            'standings' => $standings,
             'stats' => [
-                'highlights' => $screenRepository->highlights($tournamentId),
-                'best_match_averages' => $screenRepository->listBestMatchAveragesByTournamentId($tournamentId, 5),
-                'elo' => $tournamentRepository->listScreenRankings(
-                    $tournamentId,
-                    $tournament['season_id'] !== null ? (int) $tournament['season_id'] : null,
-                    'elo',
-                    5
-                ),
-                'order_of_merit' => $tournamentRepository->listScreenRankings(
-                    $tournamentId,
-                    $tournament['season_id'] !== null ? (int) $tournament['season_id'] : null,
-                    'order_of_merit',
-                    5
-                ),
+                'highlights' => $highlights,
+                'best_match_averages' => $bestAverages,
+                'top_visits' => $topVisits,
+                'live_elo' => $liveElo,
             ],
         ],
     ]);
@@ -326,7 +372,8 @@ try {
         'ok' => false,
         'error' => [
             'code' => 'dartsatlas_public_live_unavailable',
-            'message' => 'Public DartsAtlas live data is not available.',
+            'message' => 'Live data is temporarily unavailable.',
+            'stage' => $stage,
             'detail' => isset($config) && $config->appEnv() === 'prod' ? null : $error->getMessage(),
         ],
     ], 503);
