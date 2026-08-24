@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10141b">
+  <title>Blindleia Dartklubb · Live</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="live-shell">
+    <header class="hero">
+      <div class="hero-brand">
+        <div id="clubMark" class="club-mark">BD</div>
+        <div>
+          <p class="eyebrow">BLINDLEIA DARTKLUBB</p>
+          <h1 id="tournamentName">Live fra DartsAtlas</h1>
+          <p id="tournamentMeta" class="hero-meta">Venter på turneringsdata …</p>
+        </div>
+      </div>
+      <div class="hero-status">
+        <span id="liveDot" class="live-dot"></span>
+        <div>
+          <strong id="feedLabel">Kobler til</strong>
+          <span id="updatedLabel">Oppdateres automatisk</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel live-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">AKKURAT NÅ</p>
+            <h2>Live kamper</h2>
+          </div>
+          <span id="pollLabel" class="soft-pill">Venter</span>
+        </div>
+        <div id="liveMatches" class="live-grid">
+          <div class="empty-state">
+            <strong>Venter på kveldens første kamp</strong>
+            <span>Siden følger DartsAtlas automatisk.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="summary-grid">
+        <article class="highlight-card">
+          <span>180-ere</span>
+          <strong id="total180">0</strong>
+          <small>I turneringen</small>
+        </article>
+        <article class="highlight-card">
+          <span>Høyeste checkout</span>
+          <strong id="highestCheckout">—</strong>
+          <small id="highestCheckoutPlayer">Ingen registrert ennå</small>
+        </article>
+        <article class="highlight-card">
+          <span>Beste matchsnitt</span>
+          <strong id="bestAverage">—</strong>
+          <small id="bestAveragePlayer">Ingen registrert ennå</small>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">PÅ TUR</p>
+              <h2>Neste kamper</h2>
+            </div>
+          </div>
+          <div id="nextMatches" class="stack"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">SIST FERDIG</p>
+              <h2>Resultater</h2>
+            </div>
+          </div>
+          <div id="recentResults" class="stack"></div>
+        </article>
+
+        <article class="panel standings-panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">TURNERING</p>
+              <h2>Tabell</h2>
+            </div>
+          </div>
+          <div id="standings" class="stack"></div>
+        </article>
+
+        <article class="panel averages-panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">FORMTOPP</p>
+              <h2>Beste matchsnitt</h2>
+            </div>
+          </div>
+          <div id="averages" class="stack"></div>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>Data hentes fra DartsAtlas</span>
+      <span>Ingen lokal terminal eller skjermkobling kreves</span>
+    </footer>
+  </div>
+
+  <script src="./app.js" type="module"></script>
+</body>
+</html>
