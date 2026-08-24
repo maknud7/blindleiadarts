@@ -1,4 +1,4 @@
-const LIVE_URL = "../api/dartsatlas-live.php";
+const LIVE_URL = "../api/dartsatlas-public-live.php";
 const MATCHES_URL = "../api/dartsatlas-public-matches.php";
 
 const state = {
