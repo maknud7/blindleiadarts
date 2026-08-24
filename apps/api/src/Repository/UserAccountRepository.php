@@ -21,13 +21,7 @@ final class UserAccountRepository
         $this->tablePrefix = $database->tablePrefix();
     }
 
-    /**
-     * Transitional login lookup: accepts either the account e-mail or the legacy username.
-     * Account identity now points directly to a player; member_profiles is retained only
-     * as a backwards-compatible contact profile during the transition.
-     *
-     * @return array<string, mixed>|null
-     */
+    /** @return array<string, mixed>|null */
     public function findByUsername(string $login): ?array
     {
         $login = trim($login);
@@ -38,6 +32,8 @@ final class UserAccountRepository
                 ua.email,
                 ua.password_hash,
                 ua.display_name,
+                ua.account_status,
+                ua.member_id AS account_member_id,
                 CASE
                     WHEN EXISTS (
                         SELECT 1 FROM `%1$sglobal_user_roles` gur
@@ -51,12 +47,13 @@ final class UserAccountRepository
                 END AS role,
                 ua.role AS legacy_role,
                 ua.is_active,
-                mp.contact_email,
-                mp.contact_phone,
+                ua.email AS contact_email,
+                ua.contact_phone,
                 ua.player_id,
                 p.display_name AS player_display_name,
                 p.club_id AS player_club_id,
                 p.member_id AS player_member_id,
+                COALESCE(ua.member_id, p.member_id) AS member_id,
                 p.member_link_source AS player_member_link_source,
                 (SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ",")
                    FROM `%1$sclub_user_roles` cur
@@ -65,7 +62,6 @@ final class UserAccountRepository
                    FROM `%1$sglobal_user_roles` gur
                   WHERE gur.user_account_id = ua.id) AS global_roles
              FROM `%1$suser_accounts` ua
-             LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
              LEFT JOIN `%1$splayers` p ON p.id = ua.player_id
              WHERE LOWER(ua.username) = LOWER(?) OR LOWER(ua.email) = LOWER(?)
              LIMIT 1',
@@ -75,16 +71,12 @@ final class UserAccountRepository
         $statement = $this->connection->prepare($sql);
         $statement->bind_param('ss', $login, $login);
         $statement->execute();
-        $result = $statement->get_result();
-        $row = $result->fetch_assoc() ?: null;
+        $row = $statement->get_result()->fetch_assoc() ?: null;
         $statement->close();
-
         return $row;
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
+    /** @return array<string, mixed>|null */
     public function findBySessionToken(string $token): ?array
     {
         $hash = hash('sha256', $token);
@@ -94,6 +86,8 @@ final class UserAccountRepository
                 ua.username,
                 ua.email,
                 ua.display_name,
+                ua.account_status,
+                ua.member_id AS account_member_id,
                 CASE
                     WHEN EXISTS (
                         SELECT 1 FROM `%1$sglobal_user_roles` gur
@@ -107,12 +101,13 @@ final class UserAccountRepository
                 END AS role,
                 ua.role AS legacy_role,
                 ua.is_active,
-                mp.contact_email,
-                mp.contact_phone,
+                ua.email AS contact_email,
+                ua.contact_phone,
                 ua.player_id,
                 p.club_id AS player_club_id,
                 p.display_name AS player_display_name,
                 p.member_id AS player_member_id,
+                COALESCE(ua.member_id, p.member_id) AS member_id,
                 p.member_link_source AS player_member_link_source,
                 (SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ",")
                    FROM `%1$sclub_user_roles` cur
@@ -125,10 +120,11 @@ final class UserAccountRepository
                 s.revoked_at
              FROM `%1$sauth_sessions` s
              INNER JOIN `%1$suser_accounts` ua ON ua.id = s.user_account_id
-             LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
              LEFT JOIN `%1$splayers` p ON p.id = ua.player_id
              WHERE s.session_token_hash = ?
                AND s.revoked_at IS NULL
+               AND ua.is_active = 1
+               AND ua.account_status = "active"
              LIMIT 1',
             $this->tablePrefix
         );
@@ -136,14 +132,12 @@ final class UserAccountRepository
         $statement = $this->connection->prepare($sql);
         $statement->bind_param('s', $hash);
         $statement->execute();
-        $result = $statement->get_result();
-        $row = $result->fetch_assoc() ?: null;
+        $row = $statement->get_result()->fetch_assoc() ?: null;
         $statement->close();
 
         if ($row === null) {
             return null;
         }
-
         if (isset($row['expires_at']) && is_string($row['expires_at']) && strtotime($row['expires_at']) < time()) {
             return null;
         }
@@ -156,7 +150,6 @@ final class UserAccountRepository
             $touch->execute();
             $touch->close();
         }
-
         return $row;
     }
 
@@ -182,9 +175,7 @@ final class UserAccountRepository
         }
     }
 
-    /**
-     * @return array{token:string,expires_at:string}
-     */
+    /** @return array{token:string,expires_at:string} */
     public function createSession(int $userAccountId): array
     {
         $token = bin2hex(random_bytes(32));
@@ -196,7 +187,6 @@ final class UserAccountRepository
              VALUES (?, ?, ?, NOW())',
             $this->tablePrefix
         );
-
         $statement = $this->connection->prepare($sql);
         $statement->bind_param('iss', $userAccountId, $hash, $expiresAt);
         $statement->execute();
@@ -208,9 +198,6 @@ final class UserAccountRepository
         $touch->execute();
         $touch->close();
 
-        return [
-            'token' => $token,
-            'expires_at' => $expiresAt,
-        ];
+        return ['token' => $token, 'expires_at' => $expiresAt];
     }
 }
