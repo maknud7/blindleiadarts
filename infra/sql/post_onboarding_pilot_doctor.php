@@ -62,6 +62,7 @@ $checks = [
     'super_admin_retained' => (int)$row['has_super_admin'] === 1,
     'invite_consumed' => (int)$row['used_invites'] >= 1,
     'no_open_invites' => (int)$row['open_invites'] === 0,
+    'old_sessions_revoked' => (int)$row['active_sessions'] === 0,
 ];
 
 $ok = true;
@@ -70,7 +71,6 @@ foreach ($checks as $name => $passed) {
     $ok = $ok && $passed;
 }
 
-echo 'ACTIVE_SESSIONS=' . (int)$row['active_sessions'] . "\n";
 echo 'POST_ONBOARDING_PILOT_OK=' . ($ok ? 'yes' : 'no') . "\n";
 
 if (!$ok) {
