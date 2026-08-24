@@ -1,6 +1,7 @@
 (() => {
   const nativeFetch = window.fetch.bind(window);
   const CURRENT_URL = "./api/dartsatlas-public-current.php";
+  const SEASON_ELO_URL = "./api/dartsatlas-public-season-elo.php";
   let cachedTournamentId = null;
   let cacheExpiresAt = 0;
   let resolverPromise = null;
@@ -35,12 +36,27 @@
     return resolverPromise;
   }
 
-  function noCurrentTournamentResponse() {
+  async function noCurrentTournamentResponse() {
+    let club = null;
+    let liveElo = { baseline: 1000, table: [], changes: [] };
+
+    try {
+      const response = await nativeFetch(`${SEASON_ELO_URL}?_=${Date.now()}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (response.ok && payload?.ok) {
+        club = payload?.data?.club || null;
+        liveElo = payload?.data?.live_elo || liveElo;
+      }
+    } catch (_) {
+      // The public page can still wait for the next tournament even if the
+      // optional season-ELO enrichment is temporarily unavailable.
+    }
+
     const body = {
       ok: true,
       generated_at: new Date().toISOString(),
       data: {
-        club: null,
+        club,
         tournament: null,
         feed: {
           provider: "dartsatlas",
@@ -54,7 +70,7 @@
           highlights: {},
           best_match_averages: [],
           top_visits: [],
-          live_elo: { baseline: 1000, table: [], changes: [] },
+          live_elo: liveElo,
         },
       },
     };
@@ -74,8 +90,8 @@
     const tournamentId = await resolveTournamentId();
     if (!tournamentId) {
       // Never fall back to the API's historical "latest tournament" heuristic.
-      // If the DartsAtlas calendar cannot resolve today or a future event, the
-      // public page waits instead of showing an old completed Monday.
+      // Keep the season ELO visible, but wait for a tournament scheduled today
+      // or in the future before showing tournament-specific data.
       return noCurrentTournamentResponse();
     }
 
