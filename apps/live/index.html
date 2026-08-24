@@ -29,7 +29,25 @@
     </header>
 
     <main>
-      <section class="panel live-panel">
+      <section id="waitingPanel" class="panel waiting-panel" hidden>
+        <div class="waiting-copy">
+          <p class="eyebrow">NESTE TURNERING</p>
+          <h2 id="waitingTournamentName">Mandagsserien</h2>
+          <p id="waitingStartLabel" class="waiting-start">Henter starttid fra DartsAtlas …</p>
+          <p id="waitingMessage" class="waiting-message">ELO-tabellen under viser stillingen inn mot neste kampkveld.</p>
+        </div>
+        <div class="countdown-wrap" aria-label="Nedtelling til turneringsstart">
+          <div id="countdownState" class="countdown-state">Starter om</div>
+          <div class="countdown-grid">
+            <div class="countdown-cell"><strong id="countdownDays">00</strong><span>dager</span></div>
+            <div class="countdown-cell"><strong id="countdownHours">00</strong><span>timer</span></div>
+            <div class="countdown-cell"><strong id="countdownMinutes">00</strong><span>min</span></div>
+            <div class="countdown-cell"><strong id="countdownSeconds">00</strong><span>sek</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="livePanel" class="panel live-panel">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">AKKURAT NÅ</p>
@@ -114,6 +132,7 @@
   </div>
 
   <script src="./date-router.js"></script>
+  <script src="./waiting-screen.js"></script>
   <script src="./app.js" type="module"></script>
   <script src="./groups.js" type="module"></script>
 </body>
