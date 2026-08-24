@@ -29,7 +29,43 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
           coverage: none
+
+      - name: Validate production environment
+        env:
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in PROD_BASE_URL DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD SFTP_HOST SFTP_USERNAME SFTP_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Production environment is missing required value: ${name}"
+              exit 1
+            fi
+          done
+          case "$PROD_BASE_URL" in
+            https://*) ;;
+            *) echo "::error::PROD_BASE_URL must be an https:// URL"; exit 1 ;;
+          esac
+          echo "Production environment configuration is present."
+
+      - name: Run production database migrations
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
 
       - name: Build production release package
         run: bash infra/deploy/build-release.sh prod
@@ -40,7 +76,7 @@ jobs:
           APP_ENV: prod
           BASE_URL: ${{ vars.PROD_BASE_URL }}
           STATIC_BASE_URL: ${{ vars.PROD_STATIC_BASE_URL }}
-          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.PROD_SCREEN_CLUB_SLUG }}
+          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.PROD_SCREEN_CLUB_SLUG || 'blindleia-dartklubb' }}
           REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
@@ -63,23 +99,28 @@ jobs:
           CHALLONGE_REDIRECT_URI: ${{ vars.PROD_CHALLONGE_REDIRECT_URI }}
 
       - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
 
-      - name: Ensure remote production directories exist
+      - name: Verify SFTP and ensure remote directories
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           REMOTE_ROOT: /www/blindleiadarts/prod
         run: |
+          set -euo pipefail
           {
             echo "-mkdir ${REMOTE_ROOT}"
             find dist/prod -type d | sed 's#^dist/prod##' | sed '/^$/d' | while read -r dir; do
               echo "-mkdir ${REMOTE_ROOT}${dir}"
             done
+            echo "ls ${REMOTE_ROOT}"
             echo "quit"
           } > sftp-batch.txt
-          sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}" || true
+          sshpass -p "$SFTP_PASSWORD" sftp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}"
 
       - name: Deploy production via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
@@ -92,3 +133,54 @@ jobs:
           remote_path: /www/blindleiadarts/prod
           sftp_only: true
           rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
+
+      - name: Publish release marker last
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'put dist/prod/release.json /www/blindleiadarts/prod/release.json' \
+            'quit' > sftp-release.txt
+          sshpass -p "$SFTP_PASSWORD" sftp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -b sftp-release.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+      - name: Verify exact production release and internal health
+        env:
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          PROD_ROOT="${PROD_BASE_URL%/}"
+
+          curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "${PROD_ROOT}/release.json?sha=${EXPECTED_SHA}" -o release.json
+          php -r '
+            $data = json_decode(file_get_contents("release.json"), true);
+            $expected = getenv("EXPECTED_SHA");
+            if (!is_array($data) || ($data["environment"] ?? null) !== "prod" || ($data["sha"] ?? null) !== $expected) {
+                fwrite(STDERR, "Production release marker does not match the deployed SHA.\n");
+                exit(1);
+            }
+          '
+
+          curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "${PROD_ROOT}/api/health.php?sha=${EXPECTED_SHA}" -o health.json
+          cat health.json
+          echo
+          php -r '
+            $data = json_decode(file_get_contents("health.json"), true);
+            $expected = getenv("EXPECTED_SHA");
+            if (!is_array($data) || !($data["ok"] ?? false) || ($data["release"]["sha"] ?? null) !== $expected) {
+                fwrite(STDERR, "Production internal health verification failed.\n");
+                exit(1);
+            }
+          '
+
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${PROD_ROOT}/admin/" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${PROD_ROOT}/kiosk/" -o /dev/null
+          echo "Production deployment verified for ${EXPECTED_SHA}."
