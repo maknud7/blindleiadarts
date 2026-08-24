@@ -6,7 +6,9 @@ namespace Blindleia\Dartkiosk\Api\Repository;
 
 use Blindleia\Dartkiosk\Api\Support\Database;
 use DateTimeImmutable;
+use InvalidArgumentException;
 use mysqli;
+use mysqli_sql_exception;
 
 final class UserAccountRepository
 {
@@ -20,14 +22,18 @@ final class UserAccountRepository
     }
 
     /**
+     * Transitional login lookup: accepts either the account e-mail or the legacy username.
+     *
      * @return array<string, mixed>|null
      */
-    public function findByUsername(string $username): ?array
+    public function findByUsername(string $login): ?array
     {
+        $login = trim($login);
         $sql = sprintf(
             'SELECT
                 ua.id,
                 ua.username,
+                ua.email,
                 ua.password_hash,
                 ua.display_name,
                 ua.role,
@@ -45,13 +51,13 @@ final class UserAccountRepository
              FROM `%1$suser_accounts` ua
              LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
              LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
-             WHERE ua.username = ?
+             WHERE LOWER(ua.username) = LOWER(?) OR LOWER(ua.email) = LOWER(?)
              LIMIT 1',
             $this->tablePrefix
         );
 
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('s', $username);
+        $statement->bind_param('ss', $login, $login);
         $statement->execute();
         $result = $statement->get_result();
         $row = $result->fetch_assoc() ?: null;
@@ -70,6 +76,7 @@ final class UserAccountRepository
             'SELECT
                 ua.id,
                 ua.username,
+                ua.email,
                 ua.display_name,
                 ua.role,
                 ua.is_active,
@@ -121,6 +128,35 @@ final class UserAccountRepository
         }
 
         return $row;
+    }
+
+    public function updateEmail(int $userAccountId, string $email): void
+    {
+        $email = mb_strtolower(trim($email), 'UTF-8');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Ugyldig e-postadresse.');
+        }
+
+        $sql = sprintf('UPDATE `%1$suser_accounts` SET email = ? WHERE id = ?', $this->tablePrefix);
+        $statement = $this->connection->prepare($sql);
+        try {
+            $statement->bind_param('si', $email, $userAccountId);
+            $statement->execute();
+        } catch (mysqli_sql_exception $error) {
+            if ((int) $error->getCode() === 1062) {
+                throw new InvalidArgumentException('E-postadressen er allerede i bruk av en annen konto.', 0, $error);
+            }
+            throw $error;
+        } finally {
+            $statement->close();
+        }
+
+        // Keep the contact profile aligned where one exists. Login still uses user_accounts.email.
+        $profileSql = sprintf('UPDATE `%1$smember_profiles` SET contact_email = ? WHERE user_account_id = ?', $this->tablePrefix);
+        $profile = $this->connection->prepare($profileSql);
+        $profile->bind_param('si', $email, $userAccountId);
+        $profile->execute();
+        $profile->close();
     }
 
     /**
