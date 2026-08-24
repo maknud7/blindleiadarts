@@ -40,7 +40,7 @@ try {
     $memberReady = $memberConnection instanceof mysqli;
 
     $release = null;
-    $releasePath = dirname(__DIR__, 2) . '/release.json';
+    $releasePath = dirname(__DIR__) . '/release.json';
     if (is_file($releasePath)) {
         $decoded = json_decode((string) file_get_contents($releasePath), true);
         if (is_array($decoded)) {
@@ -66,7 +66,7 @@ try {
         ],
     ];
     $status = $payload['ok'] ? 200 : 503;
-} catch (Throwable $error) {
+} catch (Throwable) {
     $payload['checks']['database'] = false;
     $payload['error'] = [
         'code' => 'internal_health_failed',
