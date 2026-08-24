@@ -18,14 +18,18 @@ const elements = {
   updatedLabel: document.getElementById("updatedLabel"),
   pollLabel: document.getElementById("pollLabel"),
   liveMatches: document.getElementById("liveMatches"),
-  total180: document.getElementById("total180"),
   highestCheckout: document.getElementById("highestCheckout"),
   highestCheckoutPlayer: document.getElementById("highestCheckoutPlayer"),
   bestAverage: document.getElementById("bestAverage"),
   bestAveragePlayer: document.getElementById("bestAveragePlayer"),
+  eloLeader: document.getElementById("eloLeader"),
+  eloLeaderPlayer: document.getElementById("eloLeaderPlayer"),
   nextMatches: document.getElementById("nextMatches"),
   recentResults: document.getElementById("recentResults"),
   standings: document.getElementById("standings"),
+  topVisits: document.getElementById("topVisits"),
+  eloChanges: document.getElementById("eloChanges"),
+  eloTable: document.getElementById("eloTable"),
   averages: document.getElementById("averages"),
 };
 
@@ -48,6 +52,11 @@ function formatNumber(value, decimals = 2) {
   return parsed === null ? "—" : parsed.toFixed(decimals);
 }
 
+function signed(value) {
+  const parsed = number(value, 0);
+  return parsed > 0 ? `+${parsed}` : String(parsed);
+}
+
 function initials(value) {
   return String(value || "Blindleia Dartklubb")
     .split(/\s+/)
@@ -59,7 +68,7 @@ function initials(value) {
 }
 
 function relativeUpdatedLabel() {
-  if (!state.lastSuccessAt) return "Ikke oppdatert ennå";
+  if (!state.lastSuccessAt) return "Venter på første oppdatering";
   const seconds = Math.max(0, Math.round((Date.now() - state.lastSuccessAt.getTime()) / 1000));
   if (seconds < 4) return "Oppdatert nå";
   if (seconds < 60) return `Oppdatert for ${seconds} sek siden`;
@@ -70,7 +79,9 @@ async function getJson(url) {
   const response = await fetch(url, { cache: "no-store" });
   const payload = await response.json();
   if (!response.ok || !payload.ok) {
-    throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+    const error = new Error(payload?.error?.message || `HTTP ${response.status}`);
+    error.stage = payload?.error?.stage || null;
+    throw error;
   }
   return payload.data;
 }
@@ -109,7 +120,7 @@ function renderLiveMatch(match) {
     <article class="match-card">
       <div class="match-topline">
         <span class="match-round">${escapeHtml(round)}</span>
-        <span class="match-pill">${board === null ? "DartsAtlas Live" : `DartsAtlas · Board ${board}`}</span>
+        <span class="match-pill">${board === null ? "DartsAtlas Live" : `Board ${board}`}</span>
       </div>
       ${renderPlayer(match.player_a, match.current_player_id)}
       ${renderPlayer(match.player_b, match.current_player_id)}
@@ -137,7 +148,7 @@ function renderResult(match) {
     <div class="list-row">
       <div>
         <strong>${escapeHtml(match.player_a_name)} – ${escapeHtml(match.player_b_name)}</strong>
-        <small>${escapeHtml(round)}${match.winner_name ? ` · Vinner: ${escapeHtml(match.winner_name)}` : ""}</small>
+        <small>${escapeHtml(round)}${match.winner_name ? ` · ${escapeHtml(match.winner_name)} vant` : ""}</small>
       </div>
       <span class="list-value">${escapeHtml(score)}</span>
     </div>`;
@@ -161,9 +172,50 @@ function renderAverage(entry, index) {
     <div class="list-row">
       <div>
         <strong><span class="rank">${index + 1}</span>${escapeHtml(entry.display_name)}</strong>
-        <small>${escapeHtml(entry.round_label || entry.bracket_label || "Match")}</small>
+        <small>${escapeHtml(entry.round_label || entry.bracket_label || "Kamp")}</small>
       </div>
       <span class="list-value">${formatNumber(entry.three_dart_average)}</span>
+    </div>`;
+}
+
+function renderTopVisit(entry, index) {
+  const count = Math.max(1, number(entry.count, 1));
+  return `
+    <div class="list-row">
+      <div>
+        <strong><span class="rank">${index + 1}</span>${escapeHtml(entry.display_name)}</strong>
+        <small>${escapeHtml(entry.round_label || "Kamp")}</small>
+      </div>
+      <span class="visit-value">${escapeHtml(entry.label)}${count > 1 ? `<small>× ${count}</small>` : ""}</span>
+    </div>`;
+}
+
+function renderEloChange(change) {
+  const a = change.player_a || {};
+  const b = change.player_b || {};
+  const aClass = number(a.delta, 0) >= 0 ? "positive" : "negative";
+  const bClass = number(b.delta, 0) >= 0 ? "positive" : "negative";
+  return `
+    <div class="elo-change-row">
+      <div class="elo-change-head">
+        <strong>${escapeHtml(a.display_name)} – ${escapeHtml(b.display_name)}</strong>
+        <small>${escapeHtml(change.round_label || "Kamp")}</small>
+      </div>
+      <div class="elo-change-players">
+        <span>${escapeHtml(a.display_name)} <b class="elo-delta ${aClass}">${signed(a.delta)}</b> <small>${number(a.before, 1000)} → ${number(a.after, 1000)}</small></span>
+        <span>${escapeHtml(b.display_name)} <b class="elo-delta ${bClass}">${signed(b.delta)}</b> <small>${number(b.before, 1000)} → ${number(b.after, 1000)}</small></span>
+      </div>
+    </div>`;
+}
+
+function renderEloRow(entry) {
+  return `
+    <div class="list-row">
+      <div>
+        <strong><span class="rank">${escapeHtml(entry.position)}</span>${escapeHtml(entry.display_name)}</strong>
+        <small>${number(entry.wins, 0)}–${number(entry.losses, 0)} · ${number(entry.played, 0)} kamper</small>
+      </div>
+      <span class="list-value elo-rating">${number(entry.rating, 1000)}</span>
     </div>`;
 }
 
@@ -190,7 +242,7 @@ function renderFeedStatus(hasLiveMatches) {
 
   if (status === "error") {
     elements.liveDot.classList.add("is-error");
-    elements.feedLabel.textContent = "DartsAtlas utilgjengelig";
+    elements.feedLabel.textContent = "Livefeed har en feil";
     return;
   }
 
@@ -208,20 +260,22 @@ function render() {
   const stats = live.stats && !Array.isArray(live.stats) ? live.stats : {};
   const highlights = stats.highlights || {};
   const averages = Array.isArray(stats.best_match_averages) ? stats.best_match_averages : [];
+  const topVisits = Array.isArray(stats.top_visits) ? stats.top_visits : [];
+  const liveElo = stats.live_elo && !Array.isArray(stats.live_elo) ? stats.live_elo : {};
+  const eloTable = Array.isArray(liveElo.table) ? liveElo.table : [];
+  const eloChanges = Array.isArray(liveElo.changes) ? liveElo.changes : [];
   const hasLiveMatches = liveMatches.length > 0;
 
-  if (club?.name) {
-    elements.clubMark.textContent = initials(club.name);
-  }
+  if (club?.name) elements.clubMark.textContent = initials(club.name);
 
   elements.tournamentName.textContent = tournament?.name || "Live fra DartsAtlas";
   elements.tournamentMeta.textContent = tournament
-    ? `${club?.name || "Blindleia Dartklubb"} · turneringen følges automatisk`
+    ? `${club?.name || "Blindleia Dartklubb"} · resultater og statistikk oppdateres fortløpende`
     : "Venter på at kveldens turnering dukker opp i DartsAtlas";
 
   renderFeedStatus(hasLiveMatches);
   elements.updatedLabel.textContent = relativeUpdatedLabel();
-  elements.pollLabel.textContent = hasLiveMatches ? "Live · skjermen sjekker hvert 2. sek" : "Venter · sjekker hvert 30. sek";
+  elements.pollLabel.textContent = hasLiveMatches ? "Live · oppdateres fortløpende" : "Venter · sjekker automatisk";
 
   elements.liveMatches.innerHTML = hasLiveMatches
     ? liveMatches.map(renderLiveMatch).join("")
@@ -239,11 +293,21 @@ function render() {
     ? standings.slice(0, 8).map(renderStanding).join("")
     : emptyRow("Tabellen fylles når resultatene kommer");
 
+  elements.topVisits.innerHTML = topVisits.length
+    ? topVisits.slice(0, 5).map(renderTopVisit).join("")
+    : emptyRow("Toppkast kommer når kampstatistikken kommer");
+
+  elements.eloChanges.innerHTML = eloChanges.length
+    ? eloChanges.map(renderEloChange).join("")
+    : emptyRow("ELO-endringer kommer etter første ferdige kamp");
+
+  elements.eloTable.innerHTML = eloTable.length
+    ? eloTable.slice(0, 12).map(renderEloRow).join("")
+    : emptyRow("ELO-tabellen fylles når spillerne og kampene kommer inn");
+
   elements.averages.innerHTML = averages.length
     ? averages.slice(0, 5).map(renderAverage).join("")
     : emptyRow("Matchsnitt kommer når DartsAtlas leverer statistikk");
-
-  elements.total180.textContent = String(number(highlights.total_180, 0));
 
   const checkout = highlights.highest_checkout || null;
   elements.highestCheckout.textContent = checkout && number(checkout.value) !== null ? String(number(checkout.value)) : "—";
@@ -252,6 +316,10 @@ function render() {
   const best = highlights.best_average || null;
   elements.bestAverage.textContent = best && number(best.value) !== null ? formatNumber(best.value) : "—";
   elements.bestAveragePlayer.textContent = best?.display_name || "Ingen registrert ennå";
+
+  const leader = eloTable[0] || null;
+  elements.eloLeader.textContent = leader ? String(number(leader.rating, 1000)) : "—";
+  elements.eloLeaderPlayer.textContent = leader?.display_name || "Venter på resultater";
 }
 
 function scheduleNext(delay) {
@@ -277,10 +345,10 @@ async function refresh() {
     state.lastSuccessAt = new Date();
     nextDelay = Array.isArray(matchData.live_matches) && matchData.live_matches.length > 0 ? 2000 : 30000;
     render();
-  } catch (error) {
+  } catch (_) {
     elements.liveDot.className = "live-dot is-error";
-    elements.feedLabel.textContent = "Mistet kontakt";
-    elements.updatedLabel.textContent = state.lastSuccessAt ? relativeUpdatedLabel() : error.message;
+    elements.feedLabel.textContent = "Livefeed utilgjengelig";
+    elements.updatedLabel.textContent = "Prøver igjen automatisk";
     nextDelay = 15000;
   } finally {
     state.refreshing = false;
