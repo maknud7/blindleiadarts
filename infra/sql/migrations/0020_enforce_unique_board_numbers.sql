@@ -1,2 +1,2 @@
-ALTER TABLE `{{TABLE_PREFIX}}kiosks`
-    ADD UNIQUE KEY `uniq_kiosks_club_board_number` (`club_id`, `board_number`);
+-- Replaced by 0020_enforce_unique_board_numbers.php.
+-- Kept as a no-op because the failed test run may have discovered this filename before the PHP migration existed.
