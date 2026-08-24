@@ -80,16 +80,6 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
-      - name: Finalize completed pilot onboarding
-        run: php infra/sql/finalize_first_superadmin_onboarding.php
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_TABLE_PREFIX: bd_test_
-
       - name: Verify completed pilot onboarding
         run: php infra/sql/post_onboarding_pilot_doctor.php
         env:
