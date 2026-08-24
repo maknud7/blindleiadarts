@@ -153,8 +153,6 @@ final class PublicLiveInsights
                 $names[$key] = $name;
                 $playerIds[$key] = null;
                 $played[$key] = max(0, (int) ($row['played'] ?? 0));
-                // The supplied snapshot contains rating + match count, not W/L.
-                // Keep the record unknown rather than displaying a false 0-0.
                 $wins[$key] = null;
                 $losses[$key] = null;
             }
@@ -186,7 +184,7 @@ final class PublicLiveInsights
         $scopeSql = $seasonId !== null ? 't.season_id = ?' : 't.id = ?';
         $scopeId = $seasonId ?? $tournamentId;
         $dateFilter = $usingSnapshot && $snapshotDate !== null
-            ? ' AND t.start_at IS NOT NULL AND DATE(t.start_at) >= ?'
+            ? ' AND (t.id = ? OR (t.start_at IS NOT NULL AND DATE(t.start_at) >= ?))'
             : '';
 
         $matchesSql = sprintf(
@@ -218,7 +216,7 @@ final class PublicLiveInsights
 
         $statement = $this->db->prepare($matchesSql);
         if ($usingSnapshot && $snapshotDate !== null) {
-            $statement->bind_param('is', $scopeId, $snapshotDate);
+            $statement->bind_param('iis', $scopeId, $tournamentId, $snapshotDate);
         } else {
             $statement->bind_param('i', $scopeId);
         }
