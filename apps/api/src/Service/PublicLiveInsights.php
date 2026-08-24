@@ -75,8 +75,13 @@ final class PublicLiveInsights
         }
 
         usort($items, static function (array $a, array $b): int {
-            return [$b['bucket_rank'], $b['count'], $b['match_id']]
-                <=> [$a['bucket_rank'], $a['count'], $a['match_id']];
+            if ($a['bucket_rank'] !== $b['bucket_rank']) {
+                return $b['bucket_rank'] <=> $a['bucket_rank'];
+            }
+            if ($a['count'] !== $b['count']) {
+                return $b['count'] <=> $a['count'];
+            }
+            return $b['match_id'] <=> $a['match_id'];
         });
 
         foreach ($items as &$item) {
@@ -231,8 +236,16 @@ final class PublicLiveInsights
         }
 
         usort($table, static function (array $a, array $b): int {
-            return [$b['rating'], $b['wins'], -$b['losses'], $a['display_name']]
-                <=> [$a['rating'], $a['wins'], -$a['losses'], $b['display_name']];
+            if ($a['rating'] !== $b['rating']) {
+                return $b['rating'] <=> $a['rating'];
+            }
+            if ($a['wins'] !== $b['wins']) {
+                return $b['wins'] <=> $a['wins'];
+            }
+            if ($a['losses'] !== $b['losses']) {
+                return $a['losses'] <=> $b['losses'];
+            }
+            return strcasecmp((string) $a['display_name'], (string) $b['display_name']);
         });
         foreach ($table as $index => &$row) {
             $row['position'] = $index + 1;
