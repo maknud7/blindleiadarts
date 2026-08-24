@@ -82,22 +82,30 @@ if ($tableExists($tables['players']) && $tableExists($tables['members'])) {
     );
     echo 'MEMBERS without_player=' . (int) ($db->query($sql)->fetch_assoc()['c'] ?? 0) . PHP_EOL;
 
-    // Count exact normalized name matches without printing any names.
+    // Count exact normalized name matches without printing any names. Explicit
+    // collation is required because the migrated legacy table uses general_ci.
+    $memberName = 'LOWER(TRIM(CONVERT(navn USING utf8mb4))) COLLATE utf8mb4_unicode_ci';
+    $playerName = 'LOWER(TRIM(CONVERT(p.display_name USING utf8mb4))) COLLATE utf8mb4_unicode_ci';
     $sql = sprintf(
-        'SELECT COUNT(*) AS c FROM %s p JOIN (SELECT LOWER(TRIM(navn)) n, MIN(id) id, COUNT(*) cnt FROM %s GROUP BY LOWER(TRIM(navn))) m ON m.n=LOWER(TRIM(p.display_name)) WHERE m.cnt=1',
+        'SELECT COUNT(*) AS c FROM %s p JOIN (SELECT %s n, MIN(id) id, COUNT(*) cnt FROM %s GROUP BY %s) m ON m.n=%s WHERE m.cnt=1',
         $identifier($tables['players']),
-        $identifier($tables['members'])
+        $memberName,
+        $identifier($tables['members']),
+        $memberName,
+        $playerName
     );
     echo 'MATCHING exact_unique_player_member_names=' . (int) ($db->query($sql)->fetch_assoc()['c'] ?? 0) . PHP_EOL;
 
     $sql = sprintf(
-        'SELECT COUNT(*) AS c FROM (SELECT LOWER(TRIM(navn)) n FROM %s GROUP BY LOWER(TRIM(navn)) HAVING COUNT(*)>1) x',
-        $identifier($tables['members'])
+        'SELECT COUNT(*) AS c FROM (SELECT %s n FROM %s GROUP BY %s HAVING COUNT(*)>1) x',
+        $memberName,
+        $identifier($tables['members']),
+        $memberName
     );
     echo 'MATCHING duplicate_member_name_groups=' . (int) ($db->query($sql)->fetch_assoc()['c'] ?? 0) . PHP_EOL;
 
     $sql = sprintf(
-        'SELECT COUNT(*) AS c FROM (SELECT LOWER(TRIM(display_name)) n FROM %s GROUP BY LOWER(TRIM(display_name)) HAVING COUNT(*)>1) x',
+        'SELECT COUNT(*) AS c FROM (SELECT LOWER(TRIM(display_name)) COLLATE utf8mb4_unicode_ci n FROM %s GROUP BY LOWER(TRIM(display_name)) COLLATE utf8mb4_unicode_ci HAVING COUNT(*)>1) x',
         $identifier($tables['players'])
     );
     echo 'MATCHING duplicate_player_name_groups=' . (int) ($db->query($sql)->fetch_assoc()['c'] ?? 0) . PHP_EOL;
