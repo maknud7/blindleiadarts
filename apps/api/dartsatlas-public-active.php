@@ -46,10 +46,8 @@ try {
     $matches = $prefix . 'matches';
     $references = $prefix . 'external_references';
 
-    // A started tournament can disappear from DartsAtlas' upcoming schedule.
-    // Prefer actual recent match activity over the next scheduled event. The
-    // 12-hour window deliberately keeps tonight's completed event visible for
-    // the rest of the evening, while excluding old rounds such as #1.
+    // Actual match activity always wins. For completed matches use finished_at,
+    // not updated_at: a later re-sync must never make an old round look current.
     $statement = $db->prepare(
         "SELECT
             t.id,
@@ -57,8 +55,12 @@ try {
             t.status,
             er.external_id,
             SUM(CASE WHEN m.status='in_progress' THEN 1 ELSE 0 END) AS live_match_count,
-            SUM(CASE WHEN m.status='completed' AND m.updated_at >= (NOW() - INTERVAL 12 HOUR) THEN 1 ELSE 0 END) AS recent_completed_count,
-            MAX(CASE WHEN m.status IN ('in_progress','completed') THEN m.updated_at ELSE NULL END) AS last_activity_at
+            SUM(CASE WHEN m.status='completed' AND m.finished_at >= (NOW() - INTERVAL 12 HOUR) THEN 1 ELSE 0 END) AS recent_completed_count,
+            MAX(CASE
+                WHEN m.status='in_progress' THEN m.updated_at
+                WHEN m.status='completed' THEN m.finished_at
+                ELSE NULL
+            END) AS last_activity_at
          FROM `{$tournaments}` t
          INNER JOIN `{$references}` er
            ON er.external_system='dartsatlas'
@@ -75,6 +77,7 @@ try {
          ORDER BY
              live_match_count DESC,
              CASE WHEN t.status='in_progress' THEN 0 ELSE 1 END,
+             recent_completed_count DESC,
              last_activity_at DESC,
              t.id DESC
          LIMIT 1"
@@ -84,29 +87,94 @@ try {
     $row = $statement->get_result()->fetch_assoc() ?: null;
     $statement->close();
 
-    if ($row === null) {
+    if ($row !== null) {
         $respond([
             'ok' => true,
             'generated_at' => gmdate('c'),
             'data' => [
-                'active' => false,
-                'tournament_id' => null,
+                'active' => true,
+                'selection' => 'match_activity',
+                'tournament_id' => (int) $row['id'],
+                'external_id' => (string) $row['external_id'],
+                'name' => (string) $row['name'],
+                'status' => (string) $row['status'],
+                'live_match_count' => (int) ($row['live_match_count'] ?? 0),
+                'recent_completed_count' => (int) ($row['recent_completed_count'] ?? 0),
+                'last_activity_at' => $row['last_activity_at'],
             ],
         ]);
+    }
+
+    // Transition fallback for numbered weekly rounds. The browser only sends
+    // before_tournament_id when the next scheduled event is exactly seven days
+    // away. If #4 has replaced today's #3 in DartsAtlas schedule before the
+    // first live snapshot arrives, resolve #3 by name in the same season.
+    $before = filter_input(INPUT_GET, 'before_tournament_id', FILTER_VALIDATE_INT);
+    $beforeTournamentId = is_int($before) && $before > 0 ? $before : null;
+    if ($beforeTournamentId !== null) {
+        $statement = $db->prepare(
+            "SELECT id, season_id, name
+             FROM `{$tournaments}`
+             WHERE id=? AND club_id=? AND provider_system='dartsatlas'
+             LIMIT 1"
+        );
+        $statement->bind_param('ii', $beforeTournamentId, $clubId);
+        $statement->execute();
+        $future = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+
+        if ($future !== null && preg_match('/^(.*#)\s*(\d+)\s*$/u', trim((string) $future['name']), $match)) {
+            $number = (int) $match[2];
+            if ($number > 1) {
+                $previousName = trim($match[1]) . ($number - 1);
+                $seasonId = $future['season_id'] !== null ? (int) $future['season_id'] : 0;
+                $statement = $db->prepare(
+                    "SELECT t.id, t.name, t.status, er.external_id
+                     FROM `{$tournaments}` t
+                     INNER JOIN `{$references}` er
+                       ON er.external_system='dartsatlas'
+                      AND er.external_entity_type='tournament'
+                      AND er.internal_entity_type='tournament'
+                      AND er.internal_id=t.id
+                     WHERE t.club_id=?
+                       AND t.provider_system='dartsatlas'
+                       AND t.name=?
+                       AND ((? > 0 AND t.season_id=?) OR (? = 0))
+                     ORDER BY t.id DESC
+                     LIMIT 1"
+                );
+                $statement->bind_param('isiii', $clubId, $previousName, $seasonId, $seasonId, $seasonId);
+                $statement->execute();
+                $previous = $statement->get_result()->fetch_assoc() ?: null;
+                $statement->close();
+
+                if ($previous !== null) {
+                    $respond([
+                        'ok' => true,
+                        'generated_at' => gmdate('c'),
+                        'data' => [
+                            'active' => true,
+                            'selection' => 'previous_numbered_round',
+                            'tournament_id' => (int) $previous['id'],
+                            'external_id' => (string) $previous['external_id'],
+                            'name' => (string) $previous['name'],
+                            'status' => (string) $previous['status'],
+                            'live_match_count' => 0,
+                            'recent_completed_count' => 0,
+                            'last_activity_at' => null,
+                        ],
+                    ]);
+                }
+            }
+        }
     }
 
     $respond([
         'ok' => true,
         'generated_at' => gmdate('c'),
         'data' => [
-            'active' => true,
-            'tournament_id' => (int) $row['id'],
-            'external_id' => (string) $row['external_id'],
-            'name' => (string) $row['name'],
-            'status' => (string) $row['status'],
-            'live_match_count' => (int) ($row['live_match_count'] ?? 0),
-            'recent_completed_count' => (int) ($row['recent_completed_count'] ?? 0),
-            'last_activity_at' => $row['last_activity_at'],
+            'active' => false,
+            'tournament_id' => null,
         ],
     ]);
 } catch (Throwable $error) {

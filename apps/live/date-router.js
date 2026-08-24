@@ -21,9 +21,18 @@
     return `${values.year}-${values.month}-${values.day}`;
   }
 
-  async function resolveActiveTournament() {
+  function calendarDayDistance(fromKey, toKey) {
+    const from = Date.parse(`${fromKey}T00:00:00Z`);
+    const to = Date.parse(`${toKey}T00:00:00Z`);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+    return Math.round((to - from) / 86400000);
+  }
+
+  async function resolveActiveTournament(beforeTournamentId = null) {
     try {
-      const response = await nativeFetch(`${ACTIVE_URL}?_=${Date.now()}`, { cache: "no-store" });
+      const params = new URLSearchParams({ _: String(Date.now()) });
+      if (beforeTournamentId) params.set("before_tournament_id", String(beforeTournamentId));
+      const response = await nativeFetch(`${ACTIVE_URL}?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok || !payload?.ok || !payload?.data?.active) return null;
       const id = Number(payload?.data?.tournament_id || 0);
@@ -58,8 +67,6 @@
 
     resolverPromise = (async () => {
       try {
-        // Match activity is stronger evidence than DartsAtlas' upcoming
-        // schedule. A started tournament often disappears from /schedule.
         const activeId = await resolveActiveTournament();
         if (activeId) {
           cachedTournamentId = activeId;
@@ -86,6 +93,19 @@
             cachedTournamentId = runningId;
             cacheExpiresAt = Date.now() + 5000;
             return cachedTournamentId;
+          }
+
+          // DartsAtlas can move a just-started numbered weekly round out of
+          // /schedule before our first live snapshot. If the resolver has
+          // jumped exactly seven calendar days ahead (#3 -> #4), ask the
+          // backend for the preceding numbered round in the same season.
+          if (calendarDayDistance(today, scheduledDate) === 7) {
+            const previousRoundId = await resolveActiveTournament(scheduledId);
+            if (previousRoundId && previousRoundId !== scheduledId) {
+              cachedTournamentId = previousRoundId;
+              cacheExpiresAt = Date.now() + 5000;
+              return cachedTournamentId;
+            }
           }
         }
 
@@ -116,8 +136,7 @@
         liveElo = payload?.data?.live_elo || liveElo;
       }
     } catch (_) {
-      // The public page can still wait for the next tournament even if the
-      // optional season-ELO enrichment is temporarily unavailable.
+      // Optional enrichment only.
     }
 
     const body = {
