@@ -130,3 +130,34 @@ jobs:
           test -f dist/test/onboarding/index.html
           test -f dist/test/onboarding/app.js
           test -f dist/test/api/member-onboarding.php
+
+      - name: Diagnose deployed onboarding paths
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
+        run: |
+          set -u
+          echo '--- SFTP remote paths ---'
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          printf '%s\n' \
+            'pwd' \
+            '-ls -la /www/blindleiadarts/test' \
+            '-ls -la /www/blindleiadarts/test/onboarding' \
+            '-ls -l /www/blindleiadarts/test/onboarding/index.html' \
+            '-ls -l /www/blindleiadarts/test/onboarding/app.js' \
+            '-ls -l /www/blindleiadarts/test/api/member-onboarding.php' \
+            'quit' > sftp-diagnose.txt
+          sshpass -p "$SFTP_PASSWORD" sftp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -b sftp-diagnose.txt "${SFTP_USERNAME}@${SFTP_HOST}" || true
+
+          echo '--- HTTP mapping ---'
+          ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
+          ROOT="${ROOT%/}"
+          for path in /release.json /admin/ /kiosk/ /onboarding/ /onboarding/index.html /onboarding/app.js /api/member-onboarding.php; do
+            code=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${ROOT}${path}" || true)
+            echo "${path} -> HTTP ${code}"
+          done
