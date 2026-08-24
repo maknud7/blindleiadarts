@@ -28,6 +28,26 @@ jobs:
           extensions: mysqli, mbstring, curl, dom
           coverage: none
 
+      - name: Validate test environment
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD SFTP_HOST SFTP_USERNAME SFTP_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Test environment is missing required value: ${name}"
+              exit 1
+            fi
+          done
+          echo "Test environment configuration is present."
+
       - name: Run test database migrations
         run: php infra/sql/migrate.php
         env:
@@ -71,27 +91,32 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
 
-      - name: Verify DartsAtlas database readiness
-        run: php apps/api/bin/dartsatlas_doctor.php | tee dist/test/dartsatlas-health.json
+      - name: Verify internal schema readiness
+        run: php apps/api/bin/dartsatlas_doctor.php | tee dist/test/schema-health.json
 
       - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
 
-      - name: Ensure remote test directories exist
+      - name: Verify SFTP and ensure remote directories
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           REMOTE_ROOT: /www/blindleiadarts/test
         run: |
+          set -euo pipefail
           {
             echo "-mkdir ${REMOTE_ROOT}"
             find dist/test -type d | sed 's#^dist/test##' | sed '/^$/d' | while read -r dir; do
               echo "-mkdir ${REMOTE_ROOT}${dir}"
             done
+            echo "ls ${REMOTE_ROOT}"
             echo "quit"
           } > sftp-batch.txt
-          sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}" || true
+          sshpass -p "$SFTP_PASSWORD" sftp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}"
 
       - name: Deploy test via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
@@ -105,64 +130,66 @@ jobs:
           sftp_only: true
           rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
 
-      - name: Verify deployed Blindleia app
+      - name: Publish release marker last
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'put dist/test/release.json /www/blindleiadarts/test/release.json' \
+            'quit' > sftp-release.txt
+          sshpass -p "$SFTP_PASSWORD" sftp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -b sftp-release.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+      - name: Verify exact deployed release and internal health
         env:
           TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           TEST_ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
-          ADMIN_URL="${TEST_ROOT%/}/admin/"
-          KIOSK_URL="${TEST_ROOT%/}/kiosk/"
-          ADMIN_API_URL="${TEST_ROOT%/}/api/dartsatlas-admin.php"
-          PAIRING_API_URL="${TEST_ROOT%/}/api/kiosk-pairing.php?action=admin-info&club_id=1&code=NOPE"
-          CREATE_PAIR_API_URL="${TEST_ROOT%/}/api/kiosk-pairing-create-board.php"
+          TEST_ROOT="${TEST_ROOT%/}"
 
-          echo "Verifying admin page: ${ADMIN_URL}"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "${ADMIN_URL}" -o admin.html
-          grep -q "Kiosker / boards" admin.html || {
-            echo "Admin page is missing or an old build is still served."
-            exit 1
-          }
-          grep -q "Opprett og koble" admin.html || {
-            echo "Create-and-pair board admin build is not deployed."
-            exit 1
-          }
+          echo "Verifying exact release SHA at ${TEST_ROOT}"
+          curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "${TEST_ROOT}/release.json?sha=${EXPECTED_SHA}" -o release.json
+          php -r '
+            $data = json_decode(file_get_contents("release.json"), true);
+            $expected = getenv("EXPECTED_SHA");
+            if (!is_array($data) || ($data["environment"] ?? null) !== "test" || ($data["sha"] ?? null) !== $expected) {
+                fwrite(STDERR, "Release marker does not match expected test SHA.\n");
+                exit(1);
+            }
+            echo "Release marker matches: {$expected}\n";
+          '
 
-          echo "Verifying Board Terminal: ${KIOSK_URL}"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "${KIOSK_URL}" -o kiosk.html
-          grep -q "Board Terminal" kiosk.html || {
-            echo "Board Terminal is missing or an old kiosk build is still served."
-            exit 1
-          }
-          grep -q "Scan QR-koden" kiosk.html || {
-            echo "QR claim kiosk build is not deployed."
-            exit 1
-          }
+          echo "Verifying internal API/database health"
+          curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "${TEST_ROOT}/api/health.php?sha=${EXPECTED_SHA}" -o health.json
+          cat health.json
+          echo
+          php -r '
+            $data = json_decode(file_get_contents("health.json"), true);
+            $expected = getenv("EXPECTED_SHA");
+            if (!is_array($data) || !($data["ok"] ?? false)) {
+                fwrite(STDERR, "Internal health endpoint is not healthy.\n");
+                exit(1);
+            }
+            if (($data["release"]["sha"] ?? null) !== $expected) {
+                fwrite(STDERR, "Health endpoint is running a different release SHA.\n");
+                exit(1);
+            }
+            echo "Internal health is green.\n";
+          '
 
-          echo "Verifying DartsAtlas admin endpoint exists: ${ADMIN_API_URL}"
-          STATUS=$(curl --silent --show-error --output admin-api.json --write-out "%{http_code}" --max-time 30 "${ADMIN_API_URL}")
-          if [ "$STATUS" = "404" ] || [ "$STATUS" = "000" ]; then
-            echo "DartsAtlas admin endpoint is not deployed (HTTP ${STATUS})."
-            cat admin-api.json || true
-            exit 1
-          fi
-
-          echo "Verifying kiosk pairing endpoint exists"
-          PAIR_STATUS=$(curl --silent --show-error --output pairing-api.json --write-out "%{http_code}" --max-time 30 "${PAIRING_API_URL}")
-          if [ "$PAIR_STATUS" = "404" ] || [ "$PAIR_STATUS" = "000" ]; then
-            echo "Kiosk pairing endpoint is not deployed (HTTP ${PAIR_STATUS})."
-            cat pairing-api.json || true
-            exit 1
-          fi
-
-          echo "Verifying create-and-pair endpoint exists"
-          CREATE_PAIR_STATUS=$(curl --silent --show-error --output create-pair-api.json --write-out "%{http_code}" --max-time 30 "${CREATE_PAIR_API_URL}")
-          if [ "$CREATE_PAIR_STATUS" = "404" ] || [ "$CREATE_PAIR_STATUS" = "000" ]; then
-            echo "Create-and-pair endpoint is not deployed (HTTP ${CREATE_PAIR_STATUS})."
-            cat create-pair-api.json || true
-            exit 1
-          fi
-
-          echo "Blindleia test deployment verified."
+          echo "Verifying user-facing entrypoints"
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/admin/" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/kiosk/" -o /dev/null
+          echo "Blindleia test deployment verified for ${EXPECTED_SHA}."
 
       - name: Diagnose DartsAtlas Live from test host
         env:
@@ -170,9 +197,9 @@ jobs:
         run: |
           TEST_ROOT="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
           LIVE_URL="${TEST_ROOT%/}/api/dartsatlas-live.php"
-          echo "Checking DartsAtlas through ${LIVE_URL}"
+          echo "Checking external DartsAtlas runtime through ${LIVE_URL}"
 
-          HTTP_STATUS=$(curl --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+          HTTP_STATUS=$(curl --silent --show-error --retry 3 --retry-all-errors --retry-delay 2 --max-time 90 \
             --output dartsatlas-live.json --write-out "%{http_code}" "${LIVE_URL}" || echo "000")
 
           echo "DartsAtlas Live HTTP status: ${HTTP_STATUS}"
@@ -182,7 +209,7 @@ jobs:
           echo "--- end response ---"
 
           if [ "$HTTP_STATUS" != "200" ]; then
-            echo "::warning::DartsAtlas Live returned HTTP ${HTTP_STATUS}. Deployment itself is healthy; inspect the JSON response above for the runtime cause."
+            echo "::warning::External DartsAtlas runtime returned HTTP ${HTTP_STATUS}. The Blindleia deployment itself is healthy."
             exit 0
           fi
 

@@ -9,6 +9,14 @@ fi
 ENVIRONMENT="$1"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT_DIR="$ROOT_DIR/dist/$ENVIRONMENT"
+RELEASE_SHA="${GITHUB_SHA:-}"
+
+if [[ -z "$RELEASE_SHA" ]]; then
+  RELEASE_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
+fi
+if [[ -z "$RELEASE_SHA" ]]; then
+  RELEASE_SHA="unknown"
+fi
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
@@ -43,4 +51,6 @@ if [[ -f "$ROOT_DIR/index.html" ]]; then
   cp "$ROOT_DIR/index.html" "$OUT_DIR/index.html"
 fi
 
-echo "Built release package at $OUT_DIR"
+printf '{"environment":"%s","sha":"%s"}\n' "$ENVIRONMENT" "$RELEASE_SHA" > "$OUT_DIR/release.json"
+
+echo "Built release package at $OUT_DIR (sha=$RELEASE_SHA)"
