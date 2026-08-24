@@ -50,20 +50,31 @@ final class DartsAtlasParser
         $players = [];
         $matches = [];
         $tournamentId = $this->idFromUrl($url, 'tournaments');
+        $anchors = $this->anchors($html);
 
-        foreach ($this->anchors($html) as $anchor) {
+        // DartsAtlas group pages expose the canonical tournament/player_stats links
+        // outside the match cards. Resolve the player catalogue first so match-card
+        // labels can be mapped back to stable provider player IDs.
+        foreach ($anchors as $anchor) {
             $player = $this->playerFromHref($anchor['href'], $anchor['text']);
             if ($player !== null) {
                 $players[$player['external_id']] = $player;
             }
+        }
 
-            if (preg_match('~/matches/([^/?#]+)~', $anchor['href'], $match)) {
-                $matches[$match[1]] = [
-                    'external_id' => $match[1],
-                    'url' => $this->absoluteUrl($anchor['href']),
-                    'label' => $anchor['text'],
-                ];
+        foreach ($anchors as $anchor) {
+            if (!preg_match('~/matches/([^/?#]+)~', $anchor['href'], $match)) {
+                continue;
             }
+
+            $externalId = (string) $match[1];
+            $base = [
+                'external_id' => $externalId,
+                'url' => $this->absoluteUrl($anchor['href']),
+                'label' => $anchor['text'],
+            ];
+            $fromLabel = $this->parseMatchAnchorLabel($anchor['text'], array_values($players), $externalId, $base['url']);
+            $matches[$externalId] = array_merge($base, $fromLabel ?? []);
         }
 
         foreach ($this->matchContainers($html) as $container) {
@@ -117,6 +128,117 @@ final class DartsAtlasParser
         $state = $this->extractBroadcastState($html);
         $state['external_id'] = $matchId;
         return $state;
+    }
+
+    /** @param array<int, array<string, string>> $knownPlayers @return array<string, mixed>|null */
+    private function parseMatchAnchorLabel(string $label, array $knownPlayers, string $externalId, string $url): ?array
+    {
+        $text = $this->cleanText($label);
+        if ($text === '') {
+            return null;
+        }
+
+        $located = [];
+        foreach ($knownPlayers as $player) {
+            $name = $this->cleanText((string) ($player['name'] ?? ''));
+            $playerId = trim((string) ($player['external_id'] ?? ''));
+            if ($name === '' || $playerId === '') {
+                continue;
+            }
+            $position = mb_stripos($text, $name, 0, 'UTF-8');
+            if ($position === false) {
+                continue;
+            }
+            $located[] = [
+                'position' => $position,
+                'player' => $player,
+            ];
+        }
+
+        usort($located, static fn (array $a, array $b): int => $a['position'] <=> $b['position']);
+        $selected = [];
+        foreach ($located as $entry) {
+            $player = $entry['player'];
+            $playerId = (string) $player['external_id'];
+            if (isset($selected[$playerId])) {
+                continue;
+            }
+            $selected[$playerId] = $player;
+            if (count($selected) >= 2) {
+                break;
+            }
+        }
+        $selected = array_values($selected);
+        if (count($selected) < 2) {
+            return null;
+        }
+
+        $playerA = $selected[0];
+        $playerB = $selected[1];
+        $scoreA = $this->scoreAfterPlayerName($text, (string) $playerA['name']);
+        $scoreB = $this->scoreAfterPlayerName($text, (string) $playerB['name']);
+
+        $bestOf = 3;
+        if (preg_match('/best\s+of\s+(\d+)/iu', $text, $bestMatch)) {
+            $bestOf = max(1, (int) $bestMatch[1]);
+        }
+        $legsToWin = intdiv($bestOf, 2) + 1;
+
+        $boardNumber = null;
+        if (preg_match('/(?:board|skive)\s*#?\s*(\d+)/iu', $text, $boardMatch)) {
+            $boardNumber = (int) $boardMatch[1];
+        }
+
+        $roundLabel = null;
+        if (preg_match('/\b(round\s+\d+|semi[- ]?final|quarter[- ]?final|final)\b/iu', $text, $roundMatch)) {
+            $roundLabel = $this->cleanText($roundMatch[1]);
+        }
+
+        $averages = [];
+        if (preg_match_all('/(\d{1,3}(?:[.,]\d{1,2})?)\s*avg\b/iu', $text, $avgMatches)) {
+            foreach (array_slice($avgMatches[1], 0, 2) as $value) {
+                $parsed = $this->asFloat($value);
+                if ($parsed !== null) {
+                    $averages[] = $parsed;
+                }
+            }
+        }
+
+        $status = 'assigned';
+        if ($scoreA !== null && $scoreB !== null) {
+            $status = max($scoreA, $scoreB) >= $legsToWin ? 'completed' : 'in_progress';
+        } elseif (preg_match('/\b(live|in progress|playing)\b/iu', $text)) {
+            $status = 'in_progress';
+        }
+
+        return [
+            'external_id' => $externalId,
+            'url' => $url,
+            'player_a' => $playerA,
+            'player_b' => $playerB,
+            'player_a_legs' => $scoreA,
+            'player_b_legs' => $scoreB,
+            'average_a' => $averages[0] ?? null,
+            'average_b' => $averages[1] ?? null,
+            'board_number' => $boardNumber,
+            'round_label' => $roundLabel,
+            'best_of_legs' => $bestOf,
+            'legs_to_win' => $legsToWin,
+            'status' => $status,
+            'source_text' => mb_substr($text, 0, 1200),
+        ];
+    }
+
+    private function scoreAfterPlayerName(string $text, string $name): ?int
+    {
+        $name = $this->cleanText($name);
+        if ($name === '') {
+            return null;
+        }
+        if (!preg_match('/' . preg_quote($name, '/') . '\s+([0-9]{1,2})(?=\s|$)/iu', $text, $match)) {
+            return null;
+        }
+        return (int) $match[1];
     }
 
     /** @return array<string, mixed> */
