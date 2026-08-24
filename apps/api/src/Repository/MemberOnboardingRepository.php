@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use mysqli;
 use mysqli_sql_exception;
 use RuntimeException;
+use Throwable;
 
 final class MemberOnboardingRepository
 {
@@ -116,9 +117,7 @@ final class MemberOnboardingRepository
         return ['items' => $items, 'summary' => $summary];
     }
 
-    /**
-     * @return array{token:string,expires_at:string,account:array<string,mixed>,member:array<string,mixed>}
-     */
+    /** @return array{token:string,expires_at:string,account:array<string,mixed>,member:array<string,mixed>} */
     public function createInvitation(int $clubId, int $memberId, int $createdByUserAccountId, ?string $email = null): array
     {
         if ($clubId <= 0 || $memberId <= 0 || $createdByUserAccountId <= 0) {
@@ -167,10 +166,11 @@ final class MemberOnboardingRepository
                         (username, email, password_hash, display_name, player_id, member_id, role, is_active, account_status, invited_at)
                      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, NOW())"
                 );
-                $insert->bind_param('sssiiisis', $username, $email, $displayName, $playerId, $memberId, $role, $isActive, $status);
+                $insert->bind_param('sssiisis', $username, $email, $displayName, $playerId, $memberId, $role, $isActive, $status);
                 $insert->execute();
                 $accountId = (int) $insert->insert_id;
                 $insert->close();
+                $accountEmail = $email;
             } else {
                 $accountId = (int) $account['id'];
                 if ($email !== null) {
@@ -192,6 +192,7 @@ final class MemberOnboardingRepository
                 $update->bind_param('iissi', $memberId, $playerId, $email, $status, $accountId);
                 $update->execute();
                 $update->close();
+                $accountEmail = $email ?? ($account['email'] ?? null);
             }
 
             $revoke = $this->connection->prepare(
@@ -228,7 +229,7 @@ final class MemberOnboardingRepository
                 'expires_at' => $expiresAt,
                 'account' => [
                     'id' => $accountId,
-                    'email' => $email ?? ($account['email'] ?? null),
+                    'email' => $accountEmail,
                     'status' => 'invited',
                 ],
                 'member' => [
@@ -242,7 +243,7 @@ final class MemberOnboardingRepository
                 throw new InvalidArgumentException('E-postadressen eller medlemskoblingen er allerede i bruk.', 0, $error);
             }
             throw $error;
-        } catch (\Throwable $error) {
+        } catch (Throwable $error) {
             $this->connection->rollback();
             throw $error;
         }
@@ -256,7 +257,7 @@ final class MemberOnboardingRepository
         $invitations = $this->prefix . 'user_onboarding_invitations';
 
         $stmt = $this->connection->prepare(
-            "SELECT i.id, i.expires_at, i.member_id, ua.id AS account_id, ua.email, ua.account_status, m.navn AS member_name
+            "SELECT i.expires_at, i.member_id, ua.id AS account_id, ua.email, ua.account_status, m.navn AS member_name
              FROM `{$invitations}` i
              INNER JOIN `{$users}` ua ON ua.id=i.user_account_id
              INNER JOIN `medlemmer` m ON m.id=i.member_id
@@ -326,6 +327,7 @@ final class MemberOnboardingRepository
                 throw new InvalidArgumentException('Invitasjonslenken er ugyldig eller utløpt.');
             }
 
+            $inviteId = (int) $invite['id'];
             $accountId = (int) $invite['user_account_id'];
             $memberId = (int) $invite['member_id'];
             $this->assertEmailAvailable($email, $accountId);
@@ -347,18 +349,57 @@ final class MemberOnboardingRepository
             $status = 'active';
             $update = $this->connection->prepare(
                 "UPDATE `{$users}`
-                 SET email=?, password_hash=?, member_id=?, player_id=COALESCE(player_id, ?),
-                     account_status=?, is_active=1, claimed_at=NOW()
+                 SET email=?,
+                     password_hash=?,
+                     member_id=?,
+                     player_id=COALESCE(player_id, ?),
+                     account_status=?,
+                     is_active=1,
+                     claimed_at=NOW()
                  WHERE id=?"
             );
-            $update->bind_param('ssii si', $email, $passwordHash, $memberId, $playerId, $status, $accountId);
+            $update->bind_param('ssiisi', $email, $passwordHash, $memberId, $playerId, $status, $accountId);
+            $update->execute();
             $update->close();
-        } catch (\Throwable $error) {
+
+            $used = $this->connection->prepare(
+                "UPDATE `{$invitations}` SET used_at=NOW() WHERE id=? AND used_at IS NULL"
+            );
+            $used->bind_param('i', $inviteId);
+            $used->execute();
+            $used->close();
+
+            $revokeOthers = $this->connection->prepare(
+                "UPDATE `{$invitations}` SET revoked_at=NOW()
+                 WHERE user_account_id=? AND id<>? AND used_at IS NULL AND revoked_at IS NULL"
+            );
+            $revokeOthers->bind_param('ii', $accountId, $inviteId);
+            $revokeOthers->execute();
+            $revokeOthers->close();
+
+            $this->connection->commit();
+
+            return [
+                'member' => [
+                    'id' => $memberId,
+                    'name' => (string) $invite['member_name'],
+                ],
+                'account' => [
+                    'id' => $accountId,
+                    'email' => $email,
+                    'status' => 'active',
+                ],
+            ];
+        } catch (mysqli_sql_exception $error) {
+            $this->connection->rollback();
+            if ((int) $error->getCode() === 1062) {
+                throw new InvalidArgumentException('E-postadressen er allerede i bruk av en annen konto.', 0, $error);
+            }
+            throw $error;
+        } catch (Throwable $error) {
             $this->connection->rollback();
             throw $error;
         }
-
-        throw new RuntimeException('Onboarding completion did not finish.');
     }
 
     public function disableAccount(int $memberId): void
@@ -419,7 +460,7 @@ final class MemberOnboardingRepository
             $revokeInvites->close();
 
             $this->connection->commit();
-        } catch (\Throwable $error) {
+        } catch (Throwable $error) {
             $this->connection->rollback();
             throw $error;
         }
