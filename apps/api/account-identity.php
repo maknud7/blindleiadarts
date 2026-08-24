@@ -23,7 +23,7 @@ try {
     $database = new Database($config);
     $request = Request::fromGlobals();
 
-    if ($request->method() !== 'GET') {
+    if (!in_array($request->method(), ['GET', 'PATCH'], true)) {
         $respond(['ok' => false, 'error' => ['code' => 'method_not_allowed', 'message' => 'Metoden støttes ikke.']], 405);
     }
 
@@ -36,6 +36,25 @@ try {
     $user = $users->findBySessionToken($token);
     if ($user === null) {
         $respond(['ok' => false, 'error' => ['code' => 'invalid_session', 'message' => 'Sesjonen er ugyldig eller utløpt.']], 401);
+    }
+
+    if ($request->method() === 'PATCH') {
+        $payload = $request->jsonBody();
+        $email = trim((string) ($payload['email'] ?? ''));
+        if ($email === '') {
+            $respond(['ok' => false, 'error' => ['code' => 'email_required', 'message' => 'E-postadresse må fylles ut.']], 422);
+        }
+
+        try {
+            $users->updateEmail((int) $user['id'], $email);
+        } catch (InvalidArgumentException $error) {
+            $respond(['ok' => false, 'error' => ['code' => 'invalid_email', 'message' => $error->getMessage()]], 422);
+        }
+
+        $user = $users->findBySessionToken($token);
+        if ($user === null) {
+            $respond(['ok' => false, 'error' => ['code' => 'invalid_session', 'message' => 'Sesjonen ble ugyldig.']], 401);
+        }
     }
 
     $adminClubIds = [];
@@ -59,6 +78,7 @@ try {
             'account' => [
                 'id' => (int) $user['id'],
                 'username' => (string) ($user['username'] ?? ''),
+                'email' => $user['email'] ?? null,
                 'display_name' => (string) ($user['display_name'] ?? ''),
                 'is_active' => (int) ($user['is_active'] ?? 0) === 1,
             ],
@@ -77,6 +97,7 @@ try {
             ],
             'capabilities' => [
                 'can_login' => true,
+                'has_email_login' => isset($user['email']) && is_string($user['email']) && trim($user['email']) !== '',
                 'is_player' => $playerId !== null,
                 'is_member' => $memberId !== null,
                 'can_use_player_portal' => $playerId !== null,
