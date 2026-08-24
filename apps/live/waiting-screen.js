@@ -117,17 +117,18 @@
   }
 
   function render() {
-    renderElo();
-
     const activity = hasTournamentActivity();
     document.body.classList.toggle("is-waiting", !activity);
 
     if (activity) {
+      // Once the tournament has started, app.js refreshes live ELO every few
+      // seconds. Do not overwrite it with the slower waiting-screen snapshot.
       elements.panel.hidden = true;
       elements.livePanel.hidden = false;
       return;
     }
 
+    renderElo();
     elements.panel.hidden = false;
     elements.livePanel.hidden = true;
 
