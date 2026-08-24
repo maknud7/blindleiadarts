@@ -18,6 +18,24 @@ final class PublicLiveInsights
         $this->prefix = $database->tablePrefix();
     }
 
+    /** @return array<string, mixed>|null */
+    private function mondayEloSnapshot(): ?array
+    {
+        $path = dirname(__DIR__, 2) . '/data/mandagsserien-elo-2026-08-24.php';
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $snapshot = require $path;
+        return is_array($snapshot) ? $snapshot : null;
+    }
+
+    private function playerKey(string $name): string
+    {
+        $name = preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name);
+        return mb_strtolower($name, 'UTF-8');
+    }
+
     /**
      * DartsAtlas currently exposes exact 180 counts, but only bucketed 140+ and 100+ counts.
      * Do not fabricate exact visit scores such as 177/171 when the provider did not send them.
@@ -93,15 +111,12 @@ final class PublicLiveInsights
     }
 
     /**
-     * Replays the season ELO exactly like the Monday summaries:
-     * - every player starts the season at 1000
-     * - standard Elo expected score with a 400-point divisor
-     * - K=25 when that player's pre-match count is 10 or lower
-     * - K=15 when that player's pre-match count is above 10
-     * - ratings retain full precision between matches and are rounded only for display
-     * - all completed DartsAtlas matches in the season are processed chronologically
+     * Calculates Mandagsserien ELO with the same model as the Monday summaries.
      *
-     * The calculation is intentionally non-persisted and never overwrites canonical ranking snapshots.
+     * If an authoritative snapshot exists, it is used as the starting state and
+     * only matches from tournaments scheduled on/after the snapshot date are
+     * applied. This prevents historical matches from being counted twice while
+     * preserving the exact published rating and match count as the baseline.
      *
      * @return array<string, mixed>
      */
@@ -111,36 +126,69 @@ final class PublicLiveInsights
         $divisor = 400.0;
         $ratings = [];
         $names = [];
+        $playerIds = [];
         $played = [];
         $wins = [];
         $losses = [];
         $changes = [];
 
-        $participantsSql = sprintf(
-            'SELECT p.id, p.display_name
-             FROM `%1$stournament_players` tp
-             INNER JOIN `%1$splayers` p ON p.id = tp.player_id
-             WHERE tp.tournament_id = ? AND tp.status <> "withdrawn"
-             ORDER BY p.display_name ASC',
-            $this->prefix
-        );
-        $participants = $this->db->prepare($participantsSql);
-        $participants->bind_param('i', $tournamentId);
-        $participants->execute();
-        foreach ($participants->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-            $id = (int) $row['id'];
-            $ratings[$id] = $baseline;
-            $names[$id] = (string) $row['display_name'];
-            $played[$id] = 0;
-            $wins[$id] = 0;
-            $losses[$id] = 0;
-        }
-        $participants->close();
+        $snapshot = $this->mondayEloSnapshot();
+        $snapshotDate = null;
+        $snapshotAsOf = null;
+        $usingSnapshot = is_array($snapshot) && is_array($snapshot['players'] ?? null);
 
-        $scopeSql = $seasonId !== null
-            ? 't.season_id = ?'
-            : 't.id = ?';
+        if ($usingSnapshot) {
+            $snapshotDate = trim((string) ($snapshot['effective_from_date'] ?? '')) ?: null;
+            $snapshotAsOf = trim((string) ($snapshot['as_of'] ?? '')) ?: null;
+            foreach ($snapshot['players'] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $name = trim((string) ($row['display_name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $key = $this->playerKey($name);
+                $ratings[$key] = (float) ($row['rating'] ?? $baseline);
+                $names[$key] = $name;
+                $playerIds[$key] = null;
+                $played[$key] = max(0, (int) ($row['played'] ?? 0));
+                // The supplied snapshot contains rating + match count, not W/L.
+                // Keep the record unknown rather than displaying a false 0-0.
+                $wins[$key] = null;
+                $losses[$key] = null;
+            }
+        } elseif ($tournamentId > 0) {
+            $participantsSql = sprintf(
+                'SELECT p.id, p.display_name
+                 FROM `%1$stournament_players` tp
+                 INNER JOIN `%1$splayers` p ON p.id = tp.player_id
+                 WHERE tp.tournament_id = ? AND tp.status <> "withdrawn"
+                 ORDER BY p.display_name ASC',
+                $this->prefix
+            );
+            $participants = $this->db->prepare($participantsSql);
+            $participants->bind_param('i', $tournamentId);
+            $participants->execute();
+            foreach ($participants->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $name = (string) $row['display_name'];
+                $key = $this->playerKey($name);
+                $ratings[$key] = $baseline;
+                $names[$key] = $name;
+                $playerIds[$key] = (int) $row['id'];
+                $played[$key] = 0;
+                $wins[$key] = 0;
+                $losses[$key] = 0;
+            }
+            $participants->close();
+        }
+
+        $scopeSql = $seasonId !== null ? 't.season_id = ?' : 't.id = ?';
         $scopeId = $seasonId ?? $tournamentId;
+        $dateFilter = $usingSnapshot && $snapshotDate !== null
+            ? ' AND t.start_at IS NOT NULL AND DATE(t.start_at) >= ?'
+            : '';
+
         $matchesSql = sprintf(
             'SELECT
                 m.id,
@@ -152,7 +200,7 @@ final class PublicLiveInsights
                 m.player_b_id,
                 pb.display_name AS player_b_name,
                 m.winner_player_id,
-                COALESCE(t.start_at, t.created_at) AS tournament_at,
+                t.start_at AS tournament_at,
                 COALESCE(m.finished_at, m.updated_at, m.created_at) AS completed_at
              FROM `%1$smatches` m
              INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
@@ -161,30 +209,41 @@ final class PublicLiveInsights
              WHERE %2$s
                AND t.provider_system = "dartsatlas"
                AND m.status = "completed"
-               AND m.winner_player_id IS NOT NULL
-             ORDER BY tournament_at ASC, t.id ASC, completed_at ASC, m.id ASC',
+               AND m.winner_player_id IS NOT NULL%3$s
+             ORDER BY t.start_at ASC, t.id ASC, completed_at ASC, m.id ASC',
             $this->prefix,
-            $scopeSql
+            $scopeSql,
+            $dateFilter
         );
+
         $statement = $this->db->prepare($matchesSql);
-        $statement->bind_param('i', $scopeId);
+        if ($usingSnapshot && $snapshotDate !== null) {
+            $statement->bind_param('is', $scopeId, $snapshotDate);
+        } else {
+            $statement->bind_param('i', $scopeId);
+        }
         $statement->execute();
         $matches = $statement->get_result()->fetch_all(MYSQLI_ASSOC);
         $statement->close();
 
         foreach ($matches as $match) {
-            $playerA = (int) $match['player_a_id'];
-            $playerB = (int) $match['player_b_id'];
+            $playerAId = (int) $match['player_a_id'];
+            $playerBId = (int) $match['player_b_id'];
             $winner = (int) $match['winner_player_id'];
+            $playerAName = (string) $match['player_a_name'];
+            $playerBName = (string) $match['player_b_name'];
+            $playerA = $this->playerKey($playerAName);
+            $playerB = $this->playerKey($playerBName);
 
-            foreach ([[$playerA, (string) $match['player_a_name']], [$playerB, (string) $match['player_b_name']]] as [$id, $name]) {
-                if (!isset($ratings[$id])) {
-                    $ratings[$id] = $baseline;
-                    $names[$id] = $name;
-                    $played[$id] = 0;
-                    $wins[$id] = 0;
-                    $losses[$id] = 0;
+            foreach ([[$playerA, $playerAId, $playerAName], [$playerB, $playerBId, $playerBName]] as [$key, $id, $name]) {
+                if (!array_key_exists($key, $ratings)) {
+                    $ratings[$key] = $baseline;
+                    $names[$key] = $name;
+                    $played[$key] = 0;
+                    $wins[$key] = 0;
+                    $losses[$key] = 0;
                 }
+                $playerIds[$key] = $id;
             }
 
             $beforeA = (float) $ratings[$playerA];
@@ -196,8 +255,8 @@ final class PublicLiveInsights
 
             $expectedA = 1.0 / (1.0 + pow(10.0, ($beforeB - $beforeA) / $divisor));
             $expectedB = 1.0 / (1.0 + pow(10.0, ($beforeA - $beforeB) / $divisor));
-            $scoreA = $winner === $playerA ? 1.0 : 0.0;
-            $scoreB = $winner === $playerB ? 1.0 : 0.0;
+            $scoreA = $winner === $playerAId ? 1.0 : 0.0;
+            $scoreB = $winner === $playerBId ? 1.0 : 0.0;
             $deltaA = $kA * ($scoreA - $expectedA);
             $deltaB = $kB * ($scoreB - $expectedB);
 
@@ -205,22 +264,26 @@ final class PublicLiveInsights
             $ratings[$playerB] = $beforeB + $deltaB;
             $played[$playerA]++;
             $played[$playerB]++;
-            if ($winner === $playerA) {
-                $wins[$playerA]++;
-                $losses[$playerB]++;
-            } else {
-                $wins[$playerB]++;
-                $losses[$playerA]++;
+
+            if ($wins[$playerA] !== null && $losses[$playerA] !== null
+                && $wins[$playerB] !== null && $losses[$playerB] !== null) {
+                if ($winner === $playerAId) {
+                    $wins[$playerA]++;
+                    $losses[$playerB]++;
+                } else {
+                    $wins[$playerB]++;
+                    $losses[$playerA]++;
+                }
             }
 
-            if ((int) $match['tournament_id'] === $tournamentId) {
+            if ($tournamentId > 0 && (int) $match['tournament_id'] === $tournamentId) {
                 $changes[] = [
                     'match_id' => (int) $match['id'],
                     'round_label' => (string) $match['round_label'],
                     'completed_at' => $match['completed_at'],
                     'winner_player_id' => $winner,
                     'player_a' => [
-                        'id' => $playerA,
+                        'id' => $playerAId,
                         'display_name' => $names[$playerA],
                         'before' => round($beforeA, 1),
                         'after' => round((float) $ratings[$playerA], 1),
@@ -229,7 +292,7 @@ final class PublicLiveInsights
                         'pre_match_count' => $preMatchCountA,
                     ],
                     'player_b' => [
-                        'id' => $playerB,
+                        'id' => $playerBId,
                         'display_name' => $names[$playerB],
                         'before' => round($beforeB, 1),
                         'after' => round((float) $ratings[$playerB], 1),
@@ -242,16 +305,16 @@ final class PublicLiveInsights
         }
 
         $table = [];
-        foreach ($ratings as $playerId => $rating) {
+        foreach ($ratings as $key => $rating) {
             $table[] = [
-                'player_id' => (int) $playerId,
-                'display_name' => $names[$playerId] ?? ('Spiller ' . $playerId),
+                'player_id' => $playerIds[$key] ?? null,
+                'display_name' => $names[$key] ?? 'Spiller',
                 'rating' => round((float) $rating, 1),
                 'rating_sort' => (float) $rating,
-                'played' => (int) ($played[$playerId] ?? 0),
-                'wins' => (int) ($wins[$playerId] ?? 0),
-                'losses' => (int) ($losses[$playerId] ?? 0),
-                'next_k_factor' => ((int) ($played[$playerId] ?? 0)) <= 10 ? 25 : 15,
+                'played' => (int) ($played[$key] ?? 0),
+                'wins' => $wins[$key] ?? null,
+                'losses' => $losses[$key] ?? null,
+                'next_k_factor' => ((int) ($played[$key] ?? 0)) <= 10 ? 25 : 15,
             ];
         }
 
@@ -259,14 +322,12 @@ final class PublicLiveInsights
             if (abs((float) $a['rating_sort'] - (float) $b['rating_sort']) > 0.0000001) {
                 return (float) $b['rating_sort'] <=> (float) $a['rating_sort'];
             }
-            if ($a['wins'] !== $b['wins']) {
-                return $b['wins'] <=> $a['wins'];
-            }
-            if ($a['losses'] !== $b['losses']) {
-                return $a['losses'] <=> $b['losses'];
+            if ((int) $a['played'] !== (int) $b['played']) {
+                return (int) $b['played'] <=> (int) $a['played'];
             }
             return strcasecmp((string) $a['display_name'], (string) $b['display_name']);
         });
+
         foreach ($table as $index => &$row) {
             $row['position'] = $index + 1;
             unset($row['rating_sort']);
@@ -276,6 +337,8 @@ final class PublicLiveInsights
         return [
             'baseline' => $baseline,
             'divisor' => (int) $divisor,
+            'source' => $usingSnapshot ? 'authoritative_snapshot_plus_live' : 'season_replay',
+            'snapshot_as_of' => $snapshotAsOf,
             'k_factor_model' => [
                 'pre_match_count_10_or_less' => 25,
                 'pre_match_count_above_10' => 15,

@@ -1,0 +1,118 @@
+.waiting-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr);
+  align-items: center;
+  gap: 30px;
+  margin-bottom: 14px;
+  padding: clamp(24px, 4vw, 44px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 82% 20%, rgba(255, 145, 56, .16), transparent 26rem),
+    rgba(18, 24, 32, .9);
+}
+
+.waiting-panel[hidden] { display: none; }
+
+.waiting-copy h2 {
+  margin-bottom: 10px;
+  font-size: clamp(30px, 4vw, 54px);
+  line-height: .98;
+  letter-spacing: -.045em;
+}
+
+.waiting-start {
+  margin: 0 0 8px;
+  color: #f1f4f7;
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 750;
+}
+
+.waiting-message {
+  max-width: 700px;
+  margin: 0;
+  color: #9da9b8;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.countdown-wrap {
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 20px;
+  background: rgba(5, 9, 14, .42);
+}
+
+.countdown-state {
+  margin-bottom: 10px;
+  color: #ffab5d;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.countdown-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.countdown-cell {
+  min-width: 0;
+  padding: 14px 8px 11px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.05);
+  text-align: center;
+}
+
+.countdown-cell strong,
+.countdown-cell span { display: block; }
+
+.countdown-cell strong {
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 1;
+  letter-spacing: -.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-cell span {
+  margin-top: 6px;
+  color: #82909f;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* Before the first live/result activity, keep the public page focused on the
+   upcoming event and the season ELO instead of showing a wall of empty cards. */
+body.is-waiting .summary-grid,
+body.is-waiting .content-grid > .panel:not(.elo-table-panel) {
+  display: none;
+}
+
+body.is-waiting .content-grid {
+  grid-template-columns: minmax(0, 920px);
+  justify-content: center;
+}
+
+body.is-waiting .elo-table-panel {
+  width: 100%;
+  grid-column: 1;
+}
+
+body.is-waiting .elo-table-panel .panel-heading {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .waiting-panel { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .waiting-panel { padding: 20px 16px; }
+  .countdown-wrap { padding: 12px; }
+  .countdown-grid { gap: 5px; }
+  .countdown-cell { padding: 12px 4px 9px; }
+  .countdown-cell strong { font-size: 28px; }
+}
