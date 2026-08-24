@@ -100,6 +100,7 @@ function applyGroups(groups) {
   const standingsPanel = document.querySelector(".standings-panel");
 
   if (!Array.isArray(groups) || groups.length === 0) {
+    if (grid) grid.innerHTML = "";
     panel.hidden = true;
     if (standingsPanel) standingsPanel.hidden = false;
     return;
@@ -108,26 +109,37 @@ function applyGroups(groups) {
   grid.innerHTML = groups.map(renderGroup).join("");
   panel.hidden = false;
 
-  // A single combined table is misleading during a round-robin group stage.
-  // When DartsAtlas exposes real groups, prefer those tables instead.
   if (standingsPanel) standingsPanel.hidden = true;
 }
 
 async function refreshGroups() {
+  let tournamentId = null;
   try {
     const live = await getJson(`${LIVE_URL}?groups_probe=${Date.now()}`);
-    const tournamentId = Number(live?.tournament?.id || 0);
-    if (!Number.isFinite(tournamentId) || tournamentId <= 0) {
+    const resolvedId = Number(live?.tournament?.id || 0);
+    tournamentId = Number.isFinite(resolvedId) && resolvedId > 0 ? resolvedId : null;
+
+    if (!tournamentId) {
       groupState.lastTournamentId = null;
       applyGroups([]);
       return;
     }
 
-    groupState.lastTournamentId = tournamentId;
+    // Never leave tables from a previous tournament on screen while the new
+    // tournament is loading or its groups endpoint is unavailable.
+    if (groupState.lastTournamentId !== tournamentId) {
+      applyGroups([]);
+      groupState.lastTournamentId = tournamentId;
+    }
+
     const data = await getJson(`${GROUPS_URL}?tournament_id=${encodeURIComponent(tournamentId)}&_=${Date.now()}`);
     applyGroups(data?.groups || []);
   } catch (_) {
-    // Keep the last good group tables on screen if DartsAtlas has a transient error.
+    // Keep a last good table only when it belongs to the same tournament.
+    // If tournamentId changed, it was cleared above before this request.
+    if (tournamentId && groupState.lastTournamentId !== tournamentId) {
+      applyGroups([]);
+    }
   } finally {
     if (groupState.timer) window.clearTimeout(groupState.timer);
     groupState.timer = window.setTimeout(refreshGroups, 20000);
