@@ -222,18 +222,18 @@ final class PublicLiveInsights
                     'player_a' => [
                         'id' => $playerA,
                         'display_name' => $names[$playerA],
-                        'before' => $beforeA,
-                        'after' => $ratings[$playerA],
-                        'delta' => $deltaA,
+                        'before' => round($beforeA, 1),
+                        'after' => round((float) $ratings[$playerA], 1),
+                        'delta' => round($deltaA, 1),
                         'k_factor' => (int) $kA,
                         'pre_match_count' => $preMatchCountA,
                     ],
                     'player_b' => [
                         'id' => $playerB,
                         'display_name' => $names[$playerB],
-                        'before' => $beforeB,
-                        'after' => $ratings[$playerB],
-                        'delta' => $deltaB,
+                        'before' => round($beforeB, 1),
+                        'after' => round((float) $ratings[$playerB], 1),
+                        'delta' => round($deltaB, 1),
                         'k_factor' => (int) $kB,
                         'pre_match_count' => $preMatchCountB,
                     ],
@@ -246,7 +246,8 @@ final class PublicLiveInsights
             $table[] = [
                 'player_id' => (int) $playerId,
                 'display_name' => $names[$playerId] ?? ('Spiller ' . $playerId),
-                'rating' => (float) $rating,
+                'rating' => round((float) $rating, 1),
+                'rating_sort' => (float) $rating,
                 'played' => (int) ($played[$playerId] ?? 0),
                 'wins' => (int) ($wins[$playerId] ?? 0),
                 'losses' => (int) ($losses[$playerId] ?? 0),
@@ -255,8 +256,8 @@ final class PublicLiveInsights
         }
 
         usort($table, static function (array $a, array $b): int {
-            if (abs((float) $a['rating'] - (float) $b['rating']) > 0.0000001) {
-                return (float) $b['rating'] <=> (float) $a['rating'];
+            if (abs((float) $a['rating_sort'] - (float) $b['rating_sort']) > 0.0000001) {
+                return (float) $b['rating_sort'] <=> (float) $a['rating_sort'];
             }
             if ($a['wins'] !== $b['wins']) {
                 return $b['wins'] <=> $a['wins'];
@@ -268,6 +269,7 @@ final class PublicLiveInsights
         });
         foreach ($table as $index => &$row) {
             $row['position'] = $index + 1;
+            unset($row['rating_sort']);
         }
         unset($row);
 
