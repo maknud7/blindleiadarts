@@ -93,16 +93,22 @@ final class PublicLiveInsights
     }
 
     /**
-     * Calculates a non-persisted season ELO view from completed DartsAtlas matches.
-     * Season reset baseline: 1000. K-factor: 32. This is intentionally a live audience
-     * projection and does not overwrite canonical ranking snapshots.
+     * Replays the season ELO exactly like the Monday summaries:
+     * - every player starts the season at 1000
+     * - standard Elo expected score with a 400-point divisor
+     * - K=25 when that player's pre-match count is 10 or lower
+     * - K=15 when that player's pre-match count is above 10
+     * - ratings retain full precision between matches and are rounded only for display
+     * - all completed DartsAtlas matches in the season are processed chronologically
      *
-     * @return array{baseline:int,k_factor:int,table:array<int,array<string,mixed>>,changes:array<int,array<string,mixed>>}
+     * The calculation is intentionally non-persisted and never overwrites canonical ranking snapshots.
+     *
+     * @return array<string, mixed>
      */
     public function liveElo(int $tournamentId, ?int $seasonId, int $limit = 20): array
     {
-        $baseline = 1000;
-        $kFactor = 32;
+        $baseline = 1000.0;
+        $divisor = 400.0;
         $ratings = [];
         $names = [];
         $played = [];
@@ -146,6 +152,7 @@ final class PublicLiveInsights
                 m.player_b_id,
                 pb.display_name AS player_b_name,
                 m.winner_player_id,
+                COALESCE(t.start_at, t.created_at) AS tournament_at,
                 COALESCE(m.finished_at, m.updated_at, m.created_at) AS completed_at
              FROM `%1$smatches` m
              INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
@@ -155,7 +162,7 @@ final class PublicLiveInsights
                AND t.provider_system = "dartsatlas"
                AND m.status = "completed"
                AND m.winner_player_id IS NOT NULL
-             ORDER BY completed_at ASC, m.id ASC',
+             ORDER BY tournament_at ASC, t.id ASC, completed_at ASC, m.id ASC',
             $this->prefix,
             $scopeSql
         );
@@ -180,12 +187,19 @@ final class PublicLiveInsights
                 }
             }
 
-            $beforeA = $ratings[$playerA];
-            $beforeB = $ratings[$playerB];
-            $expectedA = 1.0 / (1.0 + pow(10.0, ($beforeB - $beforeA) / 400.0));
+            $beforeA = (float) $ratings[$playerA];
+            $beforeB = (float) $ratings[$playerB];
+            $preMatchCountA = (int) $played[$playerA];
+            $preMatchCountB = (int) $played[$playerB];
+            $kA = $preMatchCountA <= 10 ? 25.0 : 15.0;
+            $kB = $preMatchCountB <= 10 ? 25.0 : 15.0;
+
+            $expectedA = 1.0 / (1.0 + pow(10.0, ($beforeB - $beforeA) / $divisor));
+            $expectedB = 1.0 / (1.0 + pow(10.0, ($beforeA - $beforeB) / $divisor));
             $scoreA = $winner === $playerA ? 1.0 : 0.0;
-            $deltaA = (int) round($kFactor * ($scoreA - $expectedA));
-            $deltaB = -$deltaA;
+            $scoreB = $winner === $playerB ? 1.0 : 0.0;
+            $deltaA = $kA * ($scoreA - $expectedA);
+            $deltaB = $kB * ($scoreB - $expectedB);
 
             $ratings[$playerA] = $beforeA + $deltaA;
             $ratings[$playerB] = $beforeB + $deltaB;
@@ -211,6 +225,8 @@ final class PublicLiveInsights
                         'before' => $beforeA,
                         'after' => $ratings[$playerA],
                         'delta' => $deltaA,
+                        'k_factor' => (int) $kA,
+                        'pre_match_count' => $preMatchCountA,
                     ],
                     'player_b' => [
                         'id' => $playerB,
@@ -218,6 +234,8 @@ final class PublicLiveInsights
                         'before' => $beforeB,
                         'after' => $ratings[$playerB],
                         'delta' => $deltaB,
+                        'k_factor' => (int) $kB,
+                        'pre_match_count' => $preMatchCountB,
                     ],
                 ];
             }
@@ -228,16 +246,17 @@ final class PublicLiveInsights
             $table[] = [
                 'player_id' => (int) $playerId,
                 'display_name' => $names[$playerId] ?? ('Spiller ' . $playerId),
-                'rating' => (int) $rating,
+                'rating' => (float) $rating,
                 'played' => (int) ($played[$playerId] ?? 0),
                 'wins' => (int) ($wins[$playerId] ?? 0),
                 'losses' => (int) ($losses[$playerId] ?? 0),
+                'next_k_factor' => ((int) ($played[$playerId] ?? 0)) <= 10 ? 25 : 15,
             ];
         }
 
         usort($table, static function (array $a, array $b): int {
-            if ($a['rating'] !== $b['rating']) {
-                return $b['rating'] <=> $a['rating'];
+            if (abs((float) $a['rating'] - (float) $b['rating']) > 0.0000001) {
+                return (float) $b['rating'] <=> (float) $a['rating'];
             }
             if ($a['wins'] !== $b['wins']) {
                 return $b['wins'] <=> $a['wins'];
@@ -254,7 +273,11 @@ final class PublicLiveInsights
 
         return [
             'baseline' => $baseline,
-            'k_factor' => $kFactor,
+            'divisor' => (int) $divisor,
+            'k_factor_model' => [
+                'pre_match_count_10_or_less' => 25,
+                'pre_match_count_above_10' => 15,
+            ],
             'table' => array_slice($table, 0, max(1, $limit)),
             'changes' => array_slice(array_reverse($changes), 0, 8),
         ];
