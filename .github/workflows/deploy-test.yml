@@ -61,6 +61,15 @@ jobs:
       - name: Build test release package
         run: bash infra/deploy/build-release.sh test
 
+      - name: Verify onboarding release contents
+        run: |
+          set -euo pipefail
+          test -f dist/test/onboarding/index.html
+          test -f dist/test/onboarding/app.js
+          test -f dist/test/onboarding/styles.css
+          test -f dist/test/api/member-onboarding.php
+          echo "Onboarding release contents are present."
+
       - name: Generate API config
         run: |
           php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
@@ -189,6 +198,17 @@ jobs:
           echo "Verifying user-facing entrypoints"
           curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/admin/" -o /dev/null
           curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/kiosk/" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/onboarding/" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/onboarding/index.html" -o /dev/null
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${TEST_ROOT}/onboarding/app.js" -o /dev/null
+
+          ONBOARDING_API_STATUS=$(curl --silent --show-error --retry 3 --retry-all-errors --max-time 30 \
+            --output /dev/null --write-out "%{http_code}" "${TEST_ROOT}/api/member-onboarding.php")
+          if [ "$ONBOARDING_API_STATUS" != "401" ]; then
+            echo "::error::Onboarding API should be reachable and require login; got HTTP ${ONBOARDING_API_STATUS}."
+            exit 1
+          fi
+          echo "Onboarding frontend and API are reachable."
           echo "Blindleia test deployment verified for ${EXPECTED_SHA}."
 
       - name: Diagnose DartsAtlas Live from test host
