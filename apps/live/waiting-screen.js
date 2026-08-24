@@ -67,6 +67,9 @@
   }
 
   function hasTournamentActivity() {
+    const providerStatus = String(current?.status || "").toLowerCase();
+    if (providerStatus === "in_progress") return true;
+
     return Boolean(
       elements.liveMatches?.querySelector(".match-card") ||
       elements.recentResults?.querySelector(".list-row")
@@ -121,8 +124,8 @@
     document.body.classList.toggle("is-waiting", !activity);
 
     if (activity) {
-      // Once the tournament has started, app.js refreshes live ELO every few
-      // seconds. Do not overwrite it with the slower waiting-screen snapshot.
+      // Provider status is enough to enter live mode. We should not hide the
+      // dashboard while waiting for the first parsed match card/result.
       elements.panel.hidden = true;
       elements.livePanel.hidden = false;
       return;
