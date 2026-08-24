@@ -8,7 +8,7 @@
 
 .claim-admin-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, .95fr);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, .95fr);
   gap: 20px;
   align-items: start;
 }
@@ -30,6 +30,58 @@
   letter-spacing: .13em;
   font-size: 19px;
   font-weight: 900;
+}
+
+.board-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0,0,0,.14);
+}
+
+.board-choice button {
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.board-choice button.active {
+  background: var(--accent);
+  color: #17120a;
+}
+
+.board-choice button:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+.claim-board-fields {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+}
+
+.claim-two-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.claim-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .claim-status {
@@ -69,4 +121,9 @@
 
 @media (max-width: 900px) {
   .claim-admin-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .claim-two-columns { grid-template-columns: 1fr; }
+  .board-choice { grid-template-columns: 1fr; }
 }
