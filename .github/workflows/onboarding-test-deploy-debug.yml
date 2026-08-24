@@ -1,0 +1,104 @@
+name: Onboarding Test Deploy Debug
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/onboarding-test-deploy-debug.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: test
+    timeout-minutes: 15
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Build current develop release
+        run: |
+          bash infra/deploy/build-release.sh test
+          test -f dist/test/onboarding/index.html
+          test -f dist/test/onboarding/app.js
+          test -f dist/test/api/member-onboarding.php
+          echo 'Build contains onboarding.'
+
+      - name: Generate API config
+        run: php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL }}
+          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.TEST_SCREEN_CLUB_SLUG || 'blindleia-dartklubb' }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          DARTSATLAS_MEMBERS_TABLE: medlemmer
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Diagnose remote before upload
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SFTP_HOST"
+          test -n "$SFTP_USERNAME"
+          test -n "$SFTP_PASSWORD"
+          printf '%s\n' \
+            'ls /www/blindleiadarts/test' \
+            '-ls /www/blindleiadarts/test/onboarding' \
+            'quit' > before.txt
+          sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b before.txt "${SFTP_USERNAME}@${SFTP_HOST}" || true
+
+      - name: Upload onboarding and API explicitly
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            '-mkdir /www/blindleiadarts/test/onboarding' \
+            'put dist/test/onboarding/index.html /www/blindleiadarts/test/onboarding/index.html' \
+            'put dist/test/onboarding/app.js /www/blindleiadarts/test/onboarding/app.js' \
+            'put dist/test/onboarding/styles.css /www/blindleiadarts/test/onboarding/styles.css' \
+            'put dist/test/api/member-onboarding.php /www/blindleiadarts/test/api/member-onboarding.php' \
+            'put dist/test/api/config.php /www/blindleiadarts/test/api/config.php' \
+            'ls /www/blindleiadarts/test/onboarding' \
+            'quit' > upload.txt
+          sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b upload.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+      - name: Verify onboarding over HTTP
+        env:
+          TEST_BASE_URL: ${{ vars.TEST_BASE_URL }}
+        run: |
+          set -euo pipefail
+          root="${TEST_BASE_URL:-https://test.blindleiadarts.ingenting.org}"
+          root="${root%/}"
+          echo "Checking ${root}/onboarding/"
+          code=$(curl -L --silent --show-error --output onboarding.html --write-out '%{http_code}' "${root}/onboarding/")
+          echo "HTTP=${code}"
+          test "$code" = '200'
+          grep -qi 'Blindleia' onboarding.html
+          echo 'ONBOARDING_HTTP_OK=yes'
