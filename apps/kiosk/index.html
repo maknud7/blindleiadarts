@@ -3,226 +3,158 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Blindleia Darts Kiosk</title>
+  <meta name="theme-color" content="#07131b">
+  <title>Blindleia Darts · Board Terminal</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="device-preview">
-    <div class="shell">
-      <header class="topbar">
-        <div class="brandline">
-          <div class="brand-badge">
-            <img id="brandLogo" class="brand-logo hidden" alt="Klubblogo">
-            <span id="brandFallback" class="brand-fallback">KL</span>
-          </div>
-          <div>
-            <p id="brandEyebrow" class="eyebrow">Board Kiosk</p>
-            <h1 id="brandTitle">Board kiosk</h1>
-            <p id="previewBadge" class="preview-badge hidden">iPad preview</p>
+  <div class="terminal-shell">
+    <header class="terminal-topbar">
+      <div class="brandline">
+        <div class="brand-badge"><img id="brandLogo" class="brand-logo hidden" alt="Klubblogo"><span id="brandFallback">BD</span></div>
+        <div><p id="brandEyebrow" class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Board Terminal</h1></div>
+      </div>
+      <div class="terminal-status">
+        <span id="connectionPill" class="status-pill neutral"><span class="status-dot"></span><span id="connectionText">Ikke paret</span></span>
+        <button id="settingsButton" class="icon-button" type="button" aria-label="Innstillinger">⚙</button>
+      </div>
+    </header>
+
+    <main class="terminal-main">
+      <section id="setupState" class="state-card setup-state">
+        <div class="setup-copy">
+          <p class="eyebrow">Førstegangsoppsett</p>
+          <h2>Gjør nettbrettet til en fast board-terminal</h2>
+          <p class="muted">Dette gjøres én gang. Deretter husker nettbrettet hvilken skive det hører til.</p>
+        </div>
+
+        <div id="clubStep" class="setup-step">
+          <div class="step-number">1</div>
+          <div class="step-body">
+            <h3>Koble til klubben</h3>
+            <p class="muted">Finn klubbkoden i Admin → Kiosker / boards.</p>
+            <div class="inline-form"><input id="clubConnectCode" autocomplete="off" autocapitalize="characters" placeholder="Klubbkode"><button id="connectClubButton" type="button">Koble til</button></div>
           </div>
         </div>
 
-        <div class="top-actions">
-          <button id="settingsButton" class="icon-button" type="button" aria-label="Åpne innstillinger" onclick="window.bdOpenSettings && window.bdOpenSettings()">&#9881;</button>
+        <div id="pairStep" class="setup-step disabled-step">
+          <div class="step-number">2</div>
+          <div class="step-body">
+            <h3>Pair mot riktig board</h3>
+            <p id="pairInstruction" class="muted">Koble til klubben først.</p>
+            <button id="startPairingButton" type="button" disabled>Start pairing</button>
+            <div id="pairingCard" class="pairing-card hidden">
+              <span>Pairingkode</span>
+              <strong id="pairingCode">—</strong>
+              <p>Åpne Admin → Kiosker / boards, velg board og trykk Godkjenn.</p>
+              <div class="waiting-line"><span class="spinner"></span>Venter på godkjenning …</div>
+            </div>
+          </div>
         </div>
-      </header>
+      </section>
 
-      <main class="layout">
-        <section id="idleState" class="panel waiting-state">
-          <div class="idle">
-            <span class="badge">Klar for neste kamp</span>
-            <div id="idleLane" class="idle-big">Board -</div>
-            <div id="idleSponsor" class="idle-sponsor"></div>
-            <div class="logos">
-              <img id="idleClubLogo" alt="Klubblogo" hidden>
-              <img id="idleSponsorLogo" alt="Sponsorlogo" hidden>
-            </div>
+      <section id="idleState" class="state-card idle-state hidden">
+        <div class="board-hero">
+          <span class="badge good">Klar</span>
+          <p id="idleClub" class="eyebrow">Blindleia Dartklubb</p>
+          <h2 id="idleBoard">Board —</h2>
+          <p id="idleMessage" class="muted">Venter på neste kamp.</p>
+          <div id="idleMode" class="mode-label">Manuell scoring</div>
+        </div>
+      </section>
+
+      <section id="assignedState" class="state-card assigned-state hidden">
+        <div class="match-meta">
+          <span id="assignedBoard" class="badge">Board —</span>
+          <span id="assignedRound" class="badge neutral">Kamp</span>
+          <span id="assignedBestOf" class="badge neutral">Best of 3</span>
+        </div>
+        <div class="versus-grid">
+          <article><span>Spiller 1</span><h2 id="assignedPlayerA">—</h2></article>
+          <div class="versus">VS</div>
+          <article><span>Spiller 2</span><h2 id="assignedPlayerB">—</h2></article>
+        </div>
+        <button id="startMatchButton" class="start-match" type="button">Start kamp</button>
+      </section>
+
+      <section id="matchState" class="match-layout hidden">
+        <section class="scoreboard">
+          <div id="playerABox" class="player-card">
+            <span id="playerATurn" class="throw-marker">Kaster</span>
+            <h2 id="playerAName">—</h2>
+            <div id="playerARemaining" class="remaining">501</div>
+            <div id="playerALegs" class="legs">0 legs</div>
+          </div>
+          <div class="match-center">
+            <span id="matchBoard" class="badge">Board</span>
+            <strong id="currentLeg">Leg 1</strong>
+            <span id="matchRound" class="muted">Kamp</span>
+            <button id="undoButton" type="button" class="ghost-button">Angre siste kast</button>
+          </div>
+          <div id="playerBBox" class="player-card">
+            <span id="playerBTurn" class="throw-marker">Kaster</span>
+            <h2 id="playerBName">—</h2>
+            <div id="playerBRemaining" class="remaining">501</div>
+            <div id="playerBLegs" class="legs">0 legs</div>
           </div>
         </section>
 
-        <section id="assignedState" class="panel assigned-state hidden">
-          <div class="assigned-layout">
-            <div class="assigned-top">
-              <span class="badge">Klar til kampstart</span>
-              <div id="assignedLane" class="idle-big">Board -</div>
-              <div id="assignedSponsor" class="assigned-sponsor"></div>
-              <img id="assignedSponsorLogo" alt="Sponsorlogo" hidden>
-            </div>
+        <section id="manualScoring" class="scoring-card">
+          <div class="scoring-head">
+            <div><p class="eyebrow">Registrer kast</p><h3 id="throwingPlayer">—</h3></div>
+            <div class="mode-switch"><button id="sumModeButton" type="button" class="active">Sum</button><button id="dartModeButton" type="button">Per pil</button></div>
+          </div>
 
-            <div class="assigned-players">
-              <div class="assigned-player">
-                <p class="player-label">Spiller A</p>
-                <h2 id="assignedPlayerAName">-</h2>
-              </div>
-              <div class="assigned-versus">VS</div>
-              <div class="assigned-player">
-                <p class="player-label">Spiller B</p>
-                <h2 id="assignedPlayerBName">-</h2>
-              </div>
+          <div id="sumMode" class="sum-mode">
+            <div class="entry-display"><strong id="sumDisplay">—</strong><span id="sumHint">Tast total score</span></div>
+            <div class="keypad">
+              <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+              <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+              <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+              <button data-key="del" class="ghost-button">⌫</button><button data-key="0">0</button><button data-key="ok" class="confirm-button">OK</button>
             </div>
+          </div>
 
-            <div class="assigned-footer">
-              <div id="assignedLegInfo" class="pill">Best of 3</div>
-              <button id="assignedStartButton" type="button">Start kamp</button>
+          <div id="dartMode" class="dart-mode hidden">
+            <div class="dart-summary"><span id="dart1">Pil 1: —</span><span id="dart2">Pil 2: —</span><span id="dart3">Pil 3: —</span><strong id="dartTotal">0</strong></div>
+            <div class="dart-controls">
+              <div class="multipliers"><button data-multiplier="S" class="active">S</button><button data-multiplier="D">D</button><button data-multiplier="T">T</button></div>
+              <div><div id="numberGrid" class="number-grid"></div><div class="special-grid"><button data-special="bull">25</button><button data-special="dbull">Bull 50</button><button data-special="miss">Miss</button></div></div>
             </div>
+            <div class="dart-actions"><button id="dartBackButton" class="ghost-button" type="button">⌫ Siste pil</button><button id="dartSubmitButton" class="confirm-button" type="button">Registrer kast</button></div>
           </div>
         </section>
 
-        <section id="matchState" class="stack hidden">
-          <section class="scorecard">
-            <div class="score-grid">
-              <article id="playerABox" class="player-box">
-                <p class="player-label">Spiller A</p>
-                <h2 id="playerAName">-</h2>
-                <div id="playerARemaining" class="remaining">501</div>
-                <p id="playerALegs" class="muted">0 legs</p>
-              </article>
-
-              <div class="center-info">
-                <div class="mode-segment">
-                  <button id="modeSumButton" type="button" class="mode active">Sum</button>
-                  <button id="modeDartButton" type="button" class="mode">Per pil</button>
-                </div>
-                <button id="undoButton" class="ghost slim" type="button">Angre siste</button>
-              </div>
-
-              <article id="playerBBox" class="player-box">
-                <p class="player-label">Spiller B</p>
-                <h2 id="playerBName">-</h2>
-                <div id="playerBRemaining" class="remaining">501</div>
-                <p id="playerBLegs" class="muted">0 legs</p>
-              </article>
-            </div>
-          </section>
-
-          <section id="manualPanel" class="panel">
-            <section id="sumPanel" class="stack">
-              <div class="sum-display-row">
-                <div id="sumDisplay" class="sum-display">-</div>
-                <div id="sumAfter" class="after-pill">Gjenstår: -</div>
-              </div>
-
-              <div class="keypad">
-                <button type="button" class="key" data-key="1">1</button>
-                <button type="button" class="key" data-key="2">2</button>
-                <button type="button" class="key" data-key="3">3</button>
-                <button type="button" class="key" data-key="4">4</button>
-                <button type="button" class="key" data-key="5">5</button>
-                <button type="button" class="key" data-key="6">6</button>
-                <button type="button" class="key" data-key="7">7</button>
-                <button type="button" class="key" data-key="8">8</button>
-                <button type="button" class="key" data-key="9">9</button>
-                <button type="button" class="key ghost" data-key="del">&#9003;</button>
-                <button type="button" class="key" data-key="0">0</button>
-                <button type="button" class="key ok" data-key="ok">OK</button>
-              </div>
-            </section>
-
-            <section id="dartPanel" class="stack hidden">
-              <div class="chips">
-                <div id="dartChip1" class="chip">Pil 1: -</div>
-                <div id="dartChip2" class="chip">Pil 2: -</div>
-                <div id="dartChip3" class="chip">Pil 3: -</div>
-                <div id="dartSumChip" class="chip">Sum: 0</div>
-                <div id="dartAfterChip" class="chip">Gjenstår: -</div>
-              </div>
-
-              <div class="dart-layout">
-                <div class="multiplier-column">
-                  <button type="button" class="multiplier active" data-multiplier="S">S</button>
-                  <button type="button" class="multiplier" data-multiplier="D">D</button>
-                  <button type="button" class="multiplier" data-multiplier="T">T</button>
-                </div>
-
-                <div class="dart-selectors">
-                  <div id="numberGrid" class="number-grid"></div>
-                  <div class="quick-row">
-                    <button type="button" class="quick" data-special="bull">Bull</button>
-                    <button type="button" class="quick" data-special="dbull">DBull</button>
-                    <button type="button" class="quick" data-special="miss">Miss</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="keypad two">
-                <button type="button" id="dartUndoButton" class="key ghost">&#9003;</button>
-                <button type="button" id="dartSubmitButton" class="key ok">OK</button>
-              </div>
-            </section>
-
-            <section id="scoliaPanel" class="scolia-panel hidden">
-              <strong>Scolia-modus er aktivert.</strong>
-              <p class="muted">Denne kiosken venter på eksterne eventer. Manuell scoring er skjult.</p>
-            </section>
-          </section>
+        <section id="scoliaScoring" class="scoring-card scolia-card hidden">
+          <div class="scolia-pulse"></div>
+          <div><p class="eyebrow">Scolia</p><h3>Venter på scoring fra skiva</h3><p class="muted">Board Terminal følger kampen. Når Scolia API kobles på, kommer kastene inn her automatisk.</p></div>
         </section>
-      </main>
-    </div>
+
+        <aside class="activity-card">
+          <div class="activity-head"><p class="eyebrow">Kampen</p><h3>Siste kast</h3></div>
+          <div id="recentVisits" class="visit-list"></div>
+        </aside>
+      </section>
+    </main>
   </div>
 
-  <div id="settingsOverlay" class="dialog-overlay hidden"></div>
-
-  <section id="settingsDialog" class="dialog hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-    <div class="stack">
-      <div class="dialog-head">
-        <div>
-          <p class="eyebrow">Innstillinger</p>
-          <h3 id="settingsTitle">Kioskoppsett</h3>
-        </div>
-        <button id="settingsCloseButton" class="ghost slim" type="button" onclick="window.bdCloseSettings && window.bdCloseSettings()">Lukk</button>
-      </div>
-
-      <p id="pairingSummary" class="muted">Nettbrettet er ikke paret ennå.</p>
-      <div id="settingsMeta" class="meta"></div>
-
-      <div id="clubConnectPanel" class="stack">
-        <p class="muted">Samme kiosk-URL brukes av alle klubber. Tast inn klubbkoden fÃ¸rst, sÃ¥ vet systemet hvilken klubb dette nettbrettet skal pares mot.</p>
-        <div id="clubConnectSummary" class="pairing-card hidden"></div>
-        <label for="clubConnectCode">Klubbkode</label>
-        <input id="clubConnectCode" placeholder="F.eks. BLI-KA1F">
-        <div class="dialog-actions">
-          <button id="connectClubButton" type="button">Koble til klubb</button>
-          <button id="clearClubButton" class="ghost hidden" type="button">Bytt klubb</button>
-        </div>
-      </div>
-
-      <div id="pairingRequestPanel" class="stack">
-        <p class="muted">Start pairing på nettbrettet og godkjenn deretter forespørselen fra admin under Boards og kiosker.</p>
-        <button id="startPairingRequestButton" type="button">Start pairing</button>
-
-        <div id="pairingRequestCard" class="pairing-card hidden">
-          <p class="eyebrow">Pairingkode</p>
-          <div id="pairingRequestCode" class="pairing-code">PAIR-000000</div>
-          <img id="pairingQrImage" class="pairing-qr" alt="QR for pairing" hidden>
-          <label for="pairingAdminUrl">Adminlenke</label>
-          <input id="pairingAdminUrl" readonly>
-          <div class="dialog-actions">
-            <button id="copyPairingLinkButton" class="ghost" type="button">Kopier lenke</button>
-            <button id="checkPairingStatusButton" class="ghost" type="button">Sjekk status</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="dialog-actions vertical">
-        <button id="refreshButton" class="ghost" type="button">Oppdater kiosk</button>
-        <button id="unpairButton" class="ghost hidden" type="button">Fjern paring</button>
-      </div>
+  <div id="settingsOverlay" class="overlay hidden"></div>
+  <section id="settingsDialog" class="settings-dialog hidden" role="dialog" aria-modal="true">
+    <div class="dialog-head"><div><p class="eyebrow">Board Terminal</p><h3>Innstillinger</h3></div><button id="settingsCloseButton" class="ghost-button" type="button">Lukk</button></div>
+    <div id="settingsMeta" class="settings-meta"></div>
+    <div class="settings-actions">
+      <button id="refreshButton" type="button" class="ghost-button">Oppdater nå</button>
+      <button id="unpairButton" type="button" class="danger-button hidden">Fjern pairing</button>
+      <button id="changeClubButton" type="button" class="danger-button hidden">Bytt klubb / nullstill</button>
     </div>
   </section>
 
-  <dialog id="checkoutDialog" class="dialog">
-    <form method="dialog" class="stack">
-      <h3>Hvor mange piler ble brukt?</h3>
-      <div class="dialog-actions">
-        <button type="button" data-darts-used="1">1 pil</button>
-        <button type="button" data-darts-used="2">2 piler</button>
-        <button type="button" data-darts-used="3">3 piler</button>
-      </div>
-    </form>
+  <dialog id="checkoutDialog" class="checkout-dialog">
+    <div><p class="eyebrow">Checkout</p><h3>Hvor mange piler brukte du?</h3></div>
+    <div class="checkout-actions"><button data-darts-used="1">1 pil</button><button data-darts-used="2">2 piler</button><button data-darts-used="3">3 piler</button></div>
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-
   <script src="./app.js"></script>
 </body>
 </html>
