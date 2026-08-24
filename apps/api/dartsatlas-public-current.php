@@ -22,10 +22,13 @@ $respond = static function (array $payload, int $status = 200): never {
 };
 
 $timezone = new DateTimeZone('Europe/Oslo');
+$cleanText = static function (string $value): string {
+    $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return trim((string) preg_replace('/\s+/u', ' ', $value));
+};
 
-$parseVisibleDate = static function (string $raw) use ($timezone): ?DateTimeImmutable {
-    $raw = html_entity_decode($raw, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $raw = preg_replace('/\s+/u', ' ', trim($raw)) ?? trim($raw);
+$parseVisibleDate = static function (string $raw) use ($timezone, $cleanText): ?DateTimeImmutable {
+    $raw = $cleanText($raw);
     if ($raw === '') {
         return null;
     }
@@ -34,74 +37,116 @@ $parseVisibleDate = static function (string $raw) use ($timezone): ?DateTimeImmu
         try {
             return (new DateTimeImmutable($iso[1], $timezone))->setTimezone($timezone);
         } catch (Throwable) {
-            // Continue with DartsAtlas' visible schedule formats below.
+            // Continue with visible DartsAtlas formats.
         }
     }
 
-    // Actual DartsAtlas season schedule format observed in production, e.g.
-    // "2026 Aug 24 Monday 6:15pm CEST". DartsAtlas expresses the wall-clock
-    // time in the season's local timezone, which for Blindleia is Europe/Oslo.
     if (preg_match(
         '/\b(20\d{2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday))?\s+(\d{1,2}:\d{2})\s*(am|pm)(?:\s+(?:CEST|CET|UTC|GMT|BST|[+\-]\d{2}:?\d{2}))?/iu',
         $raw,
-        $scheduleMatch
+        $match
     )) {
         $dateText = sprintf(
             '%04d %s %02d %s%s',
-            (int) $scheduleMatch[1],
-            ucfirst(strtolower($scheduleMatch[2])),
-            (int) $scheduleMatch[3],
-            strtolower($scheduleMatch[4]),
-            strtolower($scheduleMatch[5])
+            (int) $match[1],
+            ucfirst(strtolower($match[2])),
+            (int) $match[3],
+            strtolower($match[4]),
+            strtolower($match[5])
         );
-        $parsed = DateTimeImmutable::createFromFormat('!Y M d g:ia', $dateText, $timezone);
-        if ($parsed instanceof DateTimeImmutable) {
-            return $parsed;
-        }
-
-        // Full month names are accepted by F even when M did not match.
-        $parsed = DateTimeImmutable::createFromFormat('!Y F d g:ia', $dateText, $timezone);
-        if ($parsed instanceof DateTimeImmutable) {
-            return $parsed;
+        foreach (['!Y M d g:ia', '!Y F d g:ia'] as $format) {
+            $parsed = DateTimeImmutable::createFromFormat($format, $dateText, $timezone);
+            if ($parsed instanceof DateTimeImmutable) {
+                return $parsed;
+            }
         }
     }
 
-    if (!preg_match(
+    if (preg_match(
         '/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December),?\s+(20\d{2})(?:\s*(?:·|,|\-|at)?\s*(\d{1,2}:\d{2})\s*(am|pm)?(?:\s+([A-Z]{2,5}|[+\-]\d{2}:?\d{2}))?)?/iu',
         $raw,
         $match
     )) {
-        return null;
-    }
+        $dateText = sprintf('%02d %s %04d', (int) $match[1], ucfirst(strtolower($match[2])), (int) $match[3]);
+        $clock = trim((string) ($match[4] ?? ''));
+        $ampm = strtolower(trim((string) ($match[5] ?? '')));
+        $zoneToken = strtoupper(trim((string) ($match[6] ?? '')));
+        $sourceTimezone = $timezone;
+        if ($zoneToken !== '') {
+            try {
+                $sourceTimezone = new DateTimeZone($zoneToken);
+            } catch (Throwable) {
+                $sourceTimezone = $timezone;
+            }
+        }
 
-    $dateText = sprintf('%02d %s %04d', (int) $match[1], ucfirst(strtolower($match[2])), (int) $match[3]);
-    $clock = trim((string) ($match[4] ?? ''));
-    $ampm = strtolower(trim((string) ($match[5] ?? '')));
-    $zoneToken = strtoupper(trim((string) ($match[6] ?? '')));
-    $sourceTimezone = $timezone;
-
-    if ($zoneToken !== '') {
-        try {
-            $sourceTimezone = new DateTimeZone($zoneToken);
-        } catch (Throwable) {
-            $sourceTimezone = $timezone;
+        if ($clock === '') {
+            $parsed = DateTimeImmutable::createFromFormat('!d F Y', $dateText, $sourceTimezone);
+        } elseif ($ampm !== '') {
+            $parsed = DateTimeImmutable::createFromFormat('!d F Y g:ia', $dateText . ' ' . strtolower($clock . $ampm), $sourceTimezone);
+        } else {
+            $parsed = DateTimeImmutable::createFromFormat('!d F Y H:i', $dateText . ' ' . $clock, $sourceTimezone);
+        }
+        if ($parsed instanceof DateTimeImmutable) {
+            return $parsed->setTimezone($timezone);
         }
     }
 
-    if ($clock === '') {
-        $parsed = DateTimeImmutable::createFromFormat('!d F Y', $dateText, $sourceTimezone);
-    } elseif ($ampm !== '') {
-        $parsed = DateTimeImmutable::createFromFormat('!d F Y g:ia', $dateText . ' ' . strtolower($clock . $ampm), $sourceTimezone);
-    } else {
-        $parsed = DateTimeImmutable::createFromFormat('!d F Y H:i', $dateText . ' ' . $clock, $sourceTimezone);
+    return null;
+};
+
+$loadDocument = static function (string $html): ?array {
+    if (!class_exists(DOMDocument::class)) {
+        return null;
+    }
+    $document = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $document->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded) {
+        return null;
+    }
+    return [$document, new DOMXPath($document)];
+};
+
+$externalIdFromAnchor = static function (DOMElement $anchor): ?string {
+    $href = html_entity_decode($anchor->getAttribute('href'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if (!preg_match('~/tournaments/([^/?#]+)~', $href, $match)) {
+        return null;
+    }
+    $externalId = trim($match[1]);
+    if ($externalId === '' || in_array($externalId, ['schedule', 'calendar', 'results', 'search'], true)) {
+        return null;
+    }
+    return $externalId;
+};
+
+$extractName = static function (DOMXPath $xpath, DOMElement $anchor, string $externalId) use ($cleanText): string {
+    $name = $cleanText($anchor->textContent);
+    if ($name !== '' && !preg_match('/^(full details|details|view|open)$/iu', $name)) {
+        return $name;
     }
 
-    return $parsed instanceof DateTimeImmutable ? $parsed->setTimezone($timezone) : null;
+    $node = $anchor;
+    for ($depth = 0; $depth < 5 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
+        $headings = $xpath->query('.//h1|.//h2|.//h3|.//h4|.//strong', $node);
+        if ($headings === false) {
+            continue;
+        }
+        foreach ($headings as $heading) {
+            $candidate = $cleanText($heading->textContent);
+            if ($candidate !== '' && !preg_match('/^in\s+progress$/iu', $candidate)) {
+                return $candidate;
+            }
+        }
+    }
+    return $externalId;
 };
 
 $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use ($timezone, $parseVisibleDate): ?DateTimeImmutable {
     $node = $anchor;
-    for ($depth = 0; $depth < 10 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
+    for ($depth = 0; $depth < 8 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
         $timeNodes = $xpath->query('.//time', $node);
         if ($timeNodes !== false) {
             foreach ($timeNodes as $timeNode) {
@@ -110,15 +155,14 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use 
                 }
                 foreach (['datetime', 'data-datetime', 'data-start-at', 'data-start'] as $attribute) {
                     $raw = trim($timeNode->getAttribute($attribute));
-                    if ($raw === '') {
-                        continue;
-                    }
-                    try {
-                        return (new DateTimeImmutable($raw, $timezone))->setTimezone($timezone);
-                    } catch (Throwable) {
-                        $parsed = $parseVisibleDate($raw);
-                        if ($parsed !== null) {
-                            return $parsed;
+                    if ($raw !== '') {
+                        try {
+                            return (new DateTimeImmutable($raw, $timezone))->setTimezone($timezone);
+                        } catch (Throwable) {
+                            $parsed = $parseVisibleDate($raw);
+                            if ($parsed !== null) {
+                                return $parsed;
+                            }
                         }
                     }
                 }
@@ -131,12 +175,7 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use 
 
         foreach (['data-start-at', 'data-start', 'data-date', 'datetime'] as $attribute) {
             $raw = trim($node->getAttribute($attribute));
-            if ($raw === '') {
-                continue;
-            }
-            try {
-                return (new DateTimeImmutable($raw, $timezone))->setTimezone($timezone);
-            } catch (Throwable) {
+            if ($raw !== '') {
                 $parsed = $parseVisibleDate($raw);
                 if ($parsed !== null) {
                     return $parsed;
@@ -151,7 +190,7 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use 
 
         $sibling = $node->previousSibling;
         $checked = 0;
-        while ($sibling !== null && $checked < 6) {
+        while ($sibling !== null && $checked < 5) {
             if ($sibling instanceof DOMElement) {
                 $parsed = $parseVisibleDate($sibling->textContent);
                 if ($parsed !== null) {
@@ -162,31 +201,104 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use 
             $sibling = $sibling->previousSibling;
         }
     }
-
     return null;
 };
 
-$extractName = static function (DOMXPath $xpath, DOMElement $anchor, string $externalId): string {
-    $name = trim(preg_replace('/\s+/u', ' ', $anchor->textContent) ?? '');
-    if ($name !== '' && !preg_match('/^(full details|details|view|open)$/iu', $name)) {
-        return $name;
+$findInProgressTournament = static function (string $html) use ($loadDocument, $externalIdFromAnchor, $extractName, $cleanText): ?array {
+    $loaded = $loadDocument($html);
+    if ($loaded === null) {
+        return null;
+    }
+    [$document, $xpath] = $loaded;
+
+    $statusNodes = $xpath->query('//*[contains(translate(normalize-space(.), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "in progress")]');
+    if ($statusNodes === false) {
+        return null;
     }
 
-    $node = $anchor;
-    for ($depth = 0; $depth < 6 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
-        $headings = $xpath->query('.//h1|.//h2|.//h3|.//h4|.//strong', $node);
-        if ($headings === false) {
+    foreach ($statusNodes as $statusNode) {
+        if (!$statusNode instanceof DOMElement) {
             continue;
         }
-        foreach ($headings as $heading) {
-            $candidate = trim(preg_replace('/\s+/u', ' ', $heading->textContent) ?? '');
-            if ($candidate !== '') {
-                return $candidate;
+        $ownText = $cleanText($statusNode->textContent);
+        if ($ownText === '' || mb_strlen($ownText) > 500) {
+            continue;
+        }
+
+        $node = $statusNode;
+        for ($depth = 0; $depth < 5 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
+            $tag = strtolower($node->tagName);
+            if (in_array($tag, ['body', 'html'], true)) {
+                break;
+            }
+            $contextText = $cleanText($node->textContent);
+            if (!preg_match('/\bin\s+progress\b/iu', $contextText) || mb_strlen($contextText) > 1600) {
+                continue;
+            }
+
+            $anchors = $xpath->query('.//a[contains(@href,"/tournaments/")]', $node);
+            if ($anchors === false || $anchors->length === 0) {
+                continue;
+            }
+            foreach ($anchors as $anchor) {
+                if (!$anchor instanceof DOMElement) {
+                    continue;
+                }
+                $externalId = $externalIdFromAnchor($anchor);
+                if ($externalId === null) {
+                    continue;
+                }
+                return [
+                    'external_id' => $externalId,
+                    'name' => $extractName($xpath, $anchor, $externalId),
+                ];
             }
         }
     }
 
-    return $externalId;
+    return null;
+};
+
+$parseSchedule = static function (string $html, DateTimeImmutable $today) use (
+    $loadDocument,
+    $externalIdFromAnchor,
+    $extractName,
+    $extractScheduledAt
+): array {
+    $loaded = $loadDocument($html);
+    if ($loaded === null) {
+        return [];
+    }
+    [$document, $xpath] = $loaded;
+    $anchors = $xpath->query('//a[contains(@href,"/tournaments/")]');
+    if ($anchors === false) {
+        return [];
+    }
+
+    $candidates = [];
+    foreach ($anchors as $anchor) {
+        if (!$anchor instanceof DOMElement) {
+            continue;
+        }
+        $externalId = $externalIdFromAnchor($anchor);
+        if ($externalId === null) {
+            continue;
+        }
+        $scheduledAt = $extractScheduledAt($xpath, $anchor);
+        if ($scheduledAt === null || $scheduledAt->setTime(0, 0) < $today) {
+            continue;
+        }
+        $candidate = [
+            'external_id' => $externalId,
+            'name' => $extractName($xpath, $anchor, $externalId),
+            'scheduled_at' => $scheduledAt,
+        ];
+        if (!isset($candidates[$externalId]) || $scheduledAt < $candidates[$externalId]['scheduled_at']) {
+            $candidates[$externalId] = $candidate;
+        }
+    }
+    uasort($candidates, static fn(array $a, array $b): int => $a['scheduled_at'] <=> $b['scheduled_at']);
+    return array_values($candidates);
 };
 
 try {
@@ -196,107 +308,54 @@ try {
     $prefix = $database->tablePrefix();
     $dartsAtlas = $config->dartsAtlas();
     $seasonExternalId = trim($dartsAtlas->seasonId());
-
     if ($seasonExternalId === '') {
         throw new RuntimeException('DartsAtlas season id is not configured.');
     }
 
-    $seasonBaseUrl = 'https://www.dartsatlas.com/seasons/' . rawurlencode($seasonExternalId);
-    $sourceUrls = [
-        $seasonBaseUrl . '/tournaments/schedule',
-        $seasonBaseUrl,
-    ];
-    $attemptedUrls = [];
-    $selectedSourceUrl = null;
-    $candidates = [];
-    $today = new DateTimeImmutable('today', $timezone);
+    $clubId = $dartsAtlas->clubId();
+    if ($clubId <= 0) {
+        $slug = trim($config->screenDefaultClubSlug());
+        if ($slug !== '') {
+            $statement = $db->prepare("SELECT id FROM `{$prefix}clubs` WHERE slug=? LIMIT 1");
+            $statement->bind_param('s', $slug);
+            $statement->execute();
+            $row = $statement->get_result()->fetch_assoc() ?: null;
+            $statement->close();
+            if ($row !== null) {
+                $clubId = (int) $row['id'];
+                $dartsAtlas = $dartsAtlas->withClubId($clubId);
+            }
+        }
+    }
+    if ($clubId <= 0) {
+        throw new RuntimeException('Could not resolve DartsAtlas club.');
+    }
+
+    if ($dartsAtlas->localSeasonId() === null) {
+        $statement = $db->prepare("SELECT id FROM `{$prefix}seasons` WHERE club_id=? ORDER BY is_active DESC, id DESC LIMIT 1");
+        $statement->bind_param('i', $clubId);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+        if ($row !== null) {
+            $dartsAtlas = $dartsAtlas->withLocalSeasonId((int) $row['id']);
+        }
+    }
+
+    $membership = new MembershipDatabase($config, $database, $dartsAtlas->membersTable());
+    $membership->prepareRepositoryBridge();
+    $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
+    $service = new DartsAtlasSyncService(
+        new DartsAtlasHttpClient($dartsAtlas->userAgent()),
+        new DartsAtlasParser(),
+        $repository,
+        $dartsAtlas,
+    );
     $http = new DartsAtlasHttpClient($dartsAtlas->userAgent(), 8, 20);
-
-    foreach ($sourceUrls as $sourceUrl) {
-        try {
-            $response = $http->get($sourceUrl);
-            $attemptedUrls[] = ['url' => $sourceUrl, 'status' => $response->status];
-            $html = $response->body;
-        } catch (Throwable $error) {
-            $attemptedUrls[] = ['url' => $sourceUrl, 'status' => 'failed'];
-            continue;
-        }
-
-        $document = new DOMDocument();
-        $previous = libxml_use_internal_errors(true);
-        $loaded = $document->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
-        libxml_clear_errors();
-        libxml_use_internal_errors($previous);
-        if (!$loaded) {
-            continue;
-        }
-
-        $xpath = new DOMXPath($document);
-        $anchors = $xpath->query('//a[contains(@href,"/tournaments/")]');
-        if ($anchors === false) {
-            continue;
-        }
-
-        foreach ($anchors as $anchor) {
-            if (!$anchor instanceof DOMElement) {
-                continue;
-            }
-            $href = html_entity_decode($anchor->getAttribute('href'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            if (!preg_match('~/tournaments/([^/?#]+)~', $href, $match)) {
-                continue;
-            }
-
-            $externalId = trim($match[1]);
-            if ($externalId === '' || in_array($externalId, ['schedule', 'calendar', 'results', 'search'], true)) {
-                continue;
-            }
-
-            $scheduledAt = $extractScheduledAt($xpath, $anchor);
-            if ($scheduledAt === null || $scheduledAt->setTime(0, 0) < $today) {
-                continue;
-            }
-
-            $candidate = [
-                'external_id' => $externalId,
-                'name' => $extractName($xpath, $anchor, $externalId),
-                'scheduled_at' => $scheduledAt,
-            ];
-
-            if (!isset($candidates[$externalId]) || $scheduledAt < $candidates[$externalId]['scheduled_at']) {
-                $candidates[$externalId] = $candidate;
-            }
-        }
-
-        if ($candidates !== []) {
-            $selectedSourceUrl = $sourceUrl;
-            break;
-        }
-    }
-
-    uasort($candidates, static fn(array $a, array $b): int => $a['scheduled_at'] <=> $b['scheduled_at']);
-    $selected = $candidates !== [] ? reset($candidates) : null;
-
-    if (!is_array($selected)) {
-        $respond([
-            'ok' => true,
-            'generated_at' => gmdate('c'),
-            'data' => [
-                'tournament_id' => null,
-                'external_id' => null,
-                'scheduled_at' => null,
-                'status' => 'no_today_or_future_tournament',
-                'source' => [
-                    'attempted_urls' => $attemptedUrls,
-                    'selected_url' => null,
-                    'candidate_count' => 0,
-                ],
-            ],
-        ]);
-    }
-
-    $externalId = (string) $selected['external_id'];
     $references = $prefix . 'external_references';
-    $resolveLocalId = static function () use ($db, $references, $externalId): ?int {
+    $tournaments = $prefix . 'tournaments';
+
+    $resolveLocalId = static function (string $externalId) use ($db, $references): ?int {
         $statement = $db->prepare(
             "SELECT internal_id FROM `{$references}`
              WHERE external_system='dartsatlas'
@@ -312,65 +371,189 @@ try {
         return $row !== null ? (int) $row['internal_id'] : null;
     };
 
-    $localId = $resolveLocalId();
-    if ($localId === null) {
-        $clubId = $dartsAtlas->clubId();
-        if ($clubId <= 0) {
-            $slug = trim($config->screenDefaultClubSlug());
-            if ($slug !== '') {
-                $statement = $db->prepare("SELECT id FROM `{$prefix}clubs` WHERE slug=? LIMIT 1");
-                $statement->bind_param('s', $slug);
-                $statement->execute();
-                $row = $statement->get_result()->fetch_assoc() ?: null;
-                $statement->close();
-                if ($row !== null) {
-                    $clubId = (int) $row['id'];
-                    $dartsAtlas = $dartsAtlas->withClubId($clubId);
-                }
+    $syncTournament = static function (string $externalId) use ($service, $seasonExternalId, $resolveLocalId): ?int {
+        $service->syncSeason($seasonExternalId, $externalId);
+        return $resolveLocalId($externalId);
+    };
+
+    $persistSchedule = static function (int $localId, DateTimeImmutable $scheduledAt) use ($db, $tournaments): void {
+        $start = $scheduledAt->format('Y-m-d H:i:s');
+        $statement = $db->prepare(
+            "UPDATE `{$tournaments}`
+             SET start_at=?
+             WHERE id=? AND status <> 'archived'"
+        );
+        $statement->bind_param('si', $start, $localId);
+        $statement->execute();
+        $statement->close();
+    };
+
+    $localTournament = static function (int $localId) use ($db, $tournaments): ?array {
+        $statement = $db->prepare("SELECT id, name, status, start_at FROM `{$tournaments}` WHERE id=? LIMIT 1");
+        $statement->bind_param('i', $localId);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc() ?: null;
+        $statement->close();
+        return $row;
+    };
+
+    $today = new DateTimeImmutable('today', $timezone);
+    $tomorrow = $today->modify('+1 day');
+    $seasonUrl = 'https://www.dartsatlas.com/seasons/' . rawurlencode($seasonExternalId);
+    $scheduleUrl = $seasonUrl . '/tournaments/schedule';
+    $attempted = [];
+
+    // 1) The season page is the strongest provider signal while a tournament is running.
+    try {
+        $seasonResponse = $http->get($seasonUrl);
+        $attempted[] = ['url' => $seasonUrl, 'status' => $seasonResponse->status];
+        $inProgress = $findInProgressTournament($seasonResponse->body);
+        if (is_array($inProgress)) {
+            $externalId = (string) $inProgress['external_id'];
+            $localId = $resolveLocalId($externalId) ?? $syncTournament($externalId);
+            if ($localId !== null) {
+                $local = $localTournament($localId);
+                $scheduledAt = isset($local['start_at']) && $local['start_at'] !== null
+                    ? new DateTimeImmutable((string) $local['start_at'], $timezone)
+                    : null;
+                $respond([
+                    'ok' => true,
+                    'generated_at' => gmdate('c'),
+                    'data' => [
+                        'tournament_id' => $localId,
+                        'external_id' => $externalId,
+                        'name' => (string) ($local['name'] ?? $inProgress['name']),
+                        'scheduled_at' => $scheduledAt?->format(DateTimeInterface::ATOM),
+                        'scheduled_date' => $scheduledAt?->format('Y-m-d') ?? $today->format('Y-m-d'),
+                        'is_today' => true,
+                        'status' => 'in_progress',
+                        'source' => [
+                            'mode' => 'season_in_progress',
+                            'attempted_urls' => $attempted,
+                            'selected_url' => $seasonUrl,
+                        ],
+                    ],
+                ]);
             }
         }
-
-        if ($clubId > 0 && $dartsAtlas->localSeasonId() === null) {
-            $statement = $db->prepare("SELECT id FROM `{$prefix}seasons` WHERE club_id=? ORDER BY is_active DESC, id DESC LIMIT 1");
-            $statement->bind_param('i', $clubId);
-            $statement->execute();
-            $row = $statement->get_result()->fetch_assoc() ?: null;
-            $statement->close();
-            if ($row !== null) {
-                $dartsAtlas = $dartsAtlas->withLocalSeasonId((int) $row['id']);
-            }
-        }
-
-        if ($clubId > 0) {
-            $membership = new MembershipDatabase($config, $database, $dartsAtlas->membersTable());
-            $membership->prepareRepositoryBridge();
-            $repository = new DartsAtlasRepository($database, $dartsAtlas->membersTable());
-            $service = new DartsAtlasSyncService(
-                new DartsAtlasHttpClient($dartsAtlas->userAgent()),
-                new DartsAtlasParser(),
-                $repository,
-                $dartsAtlas,
-            );
-            $service->syncSeason($seasonExternalId, $externalId);
-            $localId = $resolveLocalId();
-        }
+    } catch (Throwable) {
+        $attempted[] = ['url' => $seasonUrl, 'status' => 'failed'];
     }
 
+    // 2) If this tournament was seen in schedule before start, keep it for the
+    // whole local calendar day and refresh its own tournament page directly.
+    $todayStart = $today->format('Y-m-d H:i:s');
+    $tomorrowStart = $tomorrow->format('Y-m-d H:i:s');
+    $statement = $db->prepare(
+        "SELECT t.id, t.name, t.status, t.start_at, er.external_id
+         FROM `{$tournaments}` t
+         INNER JOIN `{$references}` er
+           ON er.external_system='dartsatlas'
+          AND er.external_entity_type='tournament'
+          AND er.internal_entity_type='tournament'
+          AND er.internal_id=t.id
+         WHERE t.club_id=?
+           AND t.provider_system='dartsatlas'
+           AND t.start_at>=?
+           AND t.start_at<?
+         ORDER BY t.start_at ASC, t.id DESC
+         LIMIT 1"
+    );
+    $statement->bind_param('iss', $clubId, $todayStart, $tomorrowStart);
+    $statement->execute();
+    $todayLocal = $statement->get_result()->fetch_assoc() ?: null;
+    $statement->close();
+
+    if ($todayLocal !== null) {
+        $externalId = (string) $todayLocal['external_id'];
+        try {
+            $syncTournament($externalId); // Scrape the tournament page after it leaves schedule.
+        } catch (Throwable) {
+            // Keep the known scheduled tournament even through a transient provider error.
+        }
+        $local = $localTournament((int) $todayLocal['id']) ?? $todayLocal;
+        $scheduledAt = new DateTimeImmutable((string) $todayLocal['start_at'], $timezone);
+        $respond([
+            'ok' => true,
+            'generated_at' => gmdate('c'),
+            'data' => [
+                'tournament_id' => (int) $todayLocal['id'],
+                'external_id' => $externalId,
+                'name' => (string) ($local['name'] ?? $todayLocal['name']),
+                'scheduled_at' => $scheduledAt->format(DateTimeInterface::ATOM),
+                'scheduled_date' => $scheduledAt->format('Y-m-d'),
+                'is_today' => true,
+                'status' => (string) ($local['status'] ?? $todayLocal['status']),
+                'source' => [
+                    'mode' => 'scheduled_today_tournament_page',
+                    'attempted_urls' => $attempted,
+                    'selected_url' => 'https://www.dartsatlas.com/tournaments/' . rawurlencode($externalId),
+                ],
+            ],
+        ]);
+    }
+
+    // 3) No current/today tournament: use schedule only for the next event.
+    $scheduleCandidates = [];
+    try {
+        $scheduleResponse = $http->get($scheduleUrl);
+        $attempted[] = ['url' => $scheduleUrl, 'status' => $scheduleResponse->status];
+        $scheduleCandidates = $parseSchedule($scheduleResponse->body, $today);
+    } catch (Throwable) {
+        $attempted[] = ['url' => $scheduleUrl, 'status' => 'failed'];
+    }
+
+    if ($scheduleCandidates === []) {
+        $respond([
+            'ok' => true,
+            'generated_at' => gmdate('c'),
+            'data' => [
+                'tournament_id' => null,
+                'external_id' => null,
+                'scheduled_at' => null,
+                'scheduled_date' => null,
+                'is_today' => false,
+                'status' => 'no_today_or_future_tournament',
+                'source' => [
+                    'mode' => 'none',
+                    'attempted_urls' => $attempted,
+                    'selected_url' => null,
+                    'candidate_count' => 0,
+                ],
+            ],
+        ]);
+    }
+
+    $selected = $scheduleCandidates[0];
+    $externalId = (string) $selected['external_id'];
+    $scheduledAt = $selected['scheduled_at'];
+    $localId = $resolveLocalId($externalId);
+    if ($localId === null) {
+        // Pre-sync the tournament shell/page before start so it remains locally
+        // identifiable after DartsAtlas removes it from the schedule.
+        $localId = $syncTournament($externalId);
+    }
+    if ($localId !== null) {
+        $persistSchedule($localId, $scheduledAt);
+    }
+
+    $local = $localId !== null ? $localTournament($localId) : null;
     $respond([
         'ok' => true,
         'generated_at' => gmdate('c'),
         'data' => [
             'tournament_id' => $localId,
             'external_id' => $externalId,
-            'name' => (string) $selected['name'],
-            'scheduled_at' => $selected['scheduled_at']->format(DateTimeInterface::ATOM),
-            'scheduled_date' => $selected['scheduled_at']->format('Y-m-d'),
-            'is_today' => $selected['scheduled_at']->format('Y-m-d') === $today->format('Y-m-d'),
-            'status' => $localId !== null ? 'resolved' : 'scheduled_not_synced',
+            'name' => (string) ($local['name'] ?? $selected['name']),
+            'scheduled_at' => $scheduledAt->format(DateTimeInterface::ATOM),
+            'scheduled_date' => $scheduledAt->format('Y-m-d'),
+            'is_today' => $scheduledAt->format('Y-m-d') === $today->format('Y-m-d'),
+            'status' => $localId !== null ? 'scheduled' : 'scheduled_not_synced',
             'source' => [
-                'attempted_urls' => $attemptedUrls,
-                'selected_url' => $selectedSourceUrl,
-                'candidate_count' => count($candidates),
+                'mode' => 'schedule_next',
+                'attempted_urls' => $attempted,
+                'selected_url' => $scheduleUrl,
+                'candidate_count' => count($scheduleCandidates),
             ],
         ],
     ]);
