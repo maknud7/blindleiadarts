@@ -21,9 +21,53 @@ $respond = static function (array $payload, int $status = 200): never {
     exit;
 };
 
-$extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor): ?DateTimeImmutable {
+$timezone = new DateTimeZone('Europe/Oslo');
+
+$parseVisibleDate = static function (string $raw) use ($timezone): ?DateTimeImmutable {
+    $raw = preg_replace('/\s+/u', ' ', trim($raw)) ?? trim($raw);
+    if ($raw === '') {
+        return null;
+    }
+
+    if (!preg_match(
+        '/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December),?\s+(20\d{2})(?:\s*[·,\-]?\s*(\d{1,2}:\d{2})\s*(am|pm)?(?:\s+([A-Z]{2,5}|[+\-]\d{2}:?\d{2}))?)?/iu',
+        $raw,
+        $match
+    )) {
+        return null;
+    }
+
+    $day = (int) $match[1];
+    $month = ucfirst(strtolower($match[2]));
+    $year = (int) $match[3];
+    $clock = trim((string) ($match[4] ?? ''));
+    $ampm = strtolower(trim((string) ($match[5] ?? '')));
+    $zoneToken = trim((string) ($match[6] ?? ''));
+
+    $dateText = sprintf('%02d %s %04d', $day, $month, $year);
+    $sourceTimezone = $timezone;
+    if ($zoneToken !== '') {
+        try {
+            $sourceTimezone = new DateTimeZone($zoneToken);
+        } catch (Throwable) {
+            $sourceTimezone = $timezone;
+        }
+    }
+
+    if ($clock === '') {
+        $parsed = DateTimeImmutable::createFromFormat('!d F Y', $dateText, $sourceTimezone);
+    } elseif ($ampm !== '') {
+        $parsed = DateTimeImmutable::createFromFormat('!d F Y g:ia', $dateText . ' ' . strtolower($clock . $ampm), $sourceTimezone);
+    } else {
+        $parsed = DateTimeImmutable::createFromFormat('!d F Y H:i', $dateText . ' ' . $clock, $sourceTimezone);
+    }
+
+    return $parsed instanceof DateTimeImmutable ? $parsed->setTimezone($timezone) : null;
+};
+
+$extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor) use ($timezone, $parseVisibleDate): ?DateTimeImmutable {
     $node = $anchor;
-    for ($depth = 0; $depth < 7 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
+    for ($depth = 0; $depth < 10 && $node instanceof DOMElement; $depth++, $node = $node->parentNode) {
         $timeNodes = $xpath->query('.//time', $node);
         if ($timeNodes !== false) {
             foreach ($timeNodes as $timeNode) {
@@ -36,17 +80,17 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor): ?Da
                         continue;
                     }
                     try {
-                        return new DateTimeImmutable($raw);
+                        return (new DateTimeImmutable($raw))->setTimezone($timezone);
                     } catch (Throwable) {
-                        // Fall through to visible text parsing.
+                        $parsed = $parseVisibleDate($raw);
+                        if ($parsed !== null) {
+                            return $parsed;
+                        }
                     }
                 }
-                $raw = trim($timeNode->textContent);
-                if ($raw !== '') {
-                    $timestamp = strtotime($raw);
-                    if ($timestamp !== false) {
-                        return (new DateTimeImmutable('@' . $timestamp));
-                    }
+                $parsed = $parseVisibleDate($timeNode->textContent);
+                if ($parsed !== null) {
+                    return $parsed;
                 }
             }
         }
@@ -57,26 +101,26 @@ $extractScheduledAt = static function (DOMXPath $xpath, DOMElement $anchor): ?Da
                 continue;
             }
             try {
-                return new DateTimeImmutable($raw);
+                return (new DateTimeImmutable($raw))->setTimezone($timezone);
             } catch (Throwable) {
-                // Continue with text parsing.
+                $parsed = $parseVisibleDate($raw);
+                if ($parsed !== null) {
+                    return $parsed;
+                }
             }
         }
 
+        $parsed = $parseVisibleDate($node->textContent);
+        if ($parsed !== null) {
+            return $parsed;
+        }
+
         $text = preg_replace('/\s+/u', ' ', trim($node->textContent)) ?? '';
-        if ($text !== '') {
-            if (preg_match('/\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December),?\s+20\d{2}(?:\s*[·,-]?\s*\d{1,2}:\d{2}\s*(?:am|pm)?)?)/iu', $text, $match)) {
-                $timestamp = strtotime($match[1]);
-                if ($timestamp !== false) {
-                    return new DateTimeImmutable('@' . $timestamp);
-                }
-            }
-            if (preg_match('/\b(20\d{2}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?)/u', $text, $match)) {
-                try {
-                    return new DateTimeImmutable($match[1]);
-                } catch (Throwable) {
-                    // No usable date in this container.
-                }
+        if (preg_match('/\b(20\d{2}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+\-]\d{2}:?\d{2})?)?)/u', $text, $match)) {
+            try {
+                return (new DateTimeImmutable($match[1], $timezone))->setTimezone($timezone);
+            } catch (Throwable) {
+                // Continue walking towards the tournament card container.
             }
         }
     }
@@ -96,10 +140,12 @@ try {
         throw new RuntimeException('DartsAtlas season id is not configured.');
     }
 
-    $calendarUrl = 'https://www.dartsatlas.com/seasons/' . rawurlencode($seasonExternalId) . '/tournaments/calendar';
-    $curl = curl_init($calendarUrl);
+    // The canonical public season page is the source of truth for the next
+    // scheduled tournament. Do not invent a /tournaments/calendar sub-route.
+    $seasonUrl = 'https://www.dartsatlas.com/seasons/' . rawurlencode($seasonExternalId);
+    $curl = curl_init($seasonUrl);
     if ($curl === false) {
-        throw new RuntimeException('Could not initialise DartsAtlas calendar request.');
+        throw new RuntimeException('Could not initialise DartsAtlas season request.');
     }
     curl_setopt_array($curl, [
         CURLOPT_RETURNTRANSFER => true,
@@ -112,10 +158,11 @@ try {
     $html = curl_exec($curl);
     $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
     $error = curl_error($curl);
+    $effectiveUrl = (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
     curl_close($curl);
 
     if (!is_string($html) || $html === '' || $status < 200 || $status >= 400) {
-        throw new RuntimeException('DartsAtlas calendar request failed' . ($error !== '' ? ': ' . $error : '.'));
+        throw new RuntimeException('DartsAtlas season request failed' . ($error !== '' ? ': ' . $error : '.'));
     }
 
     $document = new DOMDocument();
@@ -124,12 +171,11 @@ try {
     libxml_clear_errors();
     libxml_use_internal_errors($previous);
     if (!$loaded) {
-        throw new RuntimeException('Could not parse DartsAtlas calendar.');
+        throw new RuntimeException('Could not parse DartsAtlas season page.');
     }
 
     $xpath = new DOMXPath($document);
     $anchors = $xpath->query('//a[contains(@href,"/tournaments/")]');
-    $timezone = new DateTimeZone('Europe/Oslo');
     $today = new DateTimeImmutable('today', $timezone);
     $candidates = [];
 
@@ -146,18 +192,24 @@ try {
             if ($externalId === '' || isset($candidates[$externalId])) {
                 continue;
             }
+
             $scheduledAt = $extractScheduledAt($xpath, $anchor);
             if ($scheduledAt === null) {
                 continue;
             }
             $scheduledAt = $scheduledAt->setTimezone($timezone);
-            $scheduledDay = $scheduledAt->setTime(0, 0);
-            if ($scheduledDay < $today) {
+            if ($scheduledAt->setTime(0, 0) < $today) {
                 continue;
             }
+
+            $name = trim(preg_replace('/\s+/u', ' ', $anchor->textContent) ?? '');
+            if ($name === '') {
+                $name = $externalId;
+            }
+
             $candidates[$externalId] = [
                 'external_id' => $externalId,
-                'name' => trim(preg_replace('/\s+/u', ' ', $anchor->textContent) ?? ''),
+                'name' => $name,
                 'scheduled_at' => $scheduledAt,
             ];
         }
@@ -177,6 +229,10 @@ try {
                 'external_id' => null,
                 'scheduled_at' => null,
                 'status' => 'no_today_or_future_tournament',
+                'source' => [
+                    'season_url' => $seasonUrl,
+                    'effective_url' => $effectiveUrl,
+                ],
             ],
         ]);
     }
@@ -251,20 +307,27 @@ try {
         'data' => [
             'tournament_id' => $localId,
             'external_id' => $externalId,
-            'name' => $selected['name'] !== '' ? $selected['name'] : $externalId,
+            'name' => (string) $selected['name'],
             'scheduled_at' => $selected['scheduled_at']->format(DateTimeInterface::ATOM),
             'scheduled_date' => $selected['scheduled_at']->format('Y-m-d'),
             'is_today' => $selected['scheduled_at']->format('Y-m-d') === $today->format('Y-m-d'),
             'status' => $localId !== null ? 'resolved' : 'scheduled_not_synced',
+            'source' => [
+                'season_url' => $seasonUrl,
+                'effective_url' => $effectiveUrl,
+            ],
         ],
     ]);
 } catch (Throwable $error) {
-    $respond([
+    $payload = [
         'ok' => false,
         'error' => [
             'code' => 'dartsatlas_current_tournament_unavailable',
             'message' => 'Could not resolve the current DartsAtlas tournament.',
-            'detail' => $config->appEnv() === 'prod' ? null : $error->getMessage(),
         ],
-    ], 503);
+    ];
+    if (isset($config) && $config instanceof Config && $config->appEnv() !== 'prod') {
+        $payload['error']['detail'] = $error->getMessage();
+    }
+    $respond($payload, 503);
 }
