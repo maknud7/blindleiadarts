@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: deploy-dartsatlas-screen-production
@@ -17,6 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Mark deploy pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d '{"state":"pending","context":"prod/dartsatlas-screen","description":"Deploying standalone DartsAtlas screen"}'
+
       - name: Checkout release branch
         uses: actions/checkout@v4
 
@@ -80,3 +93,24 @@ jobs:
             exit 1
           fi
           php -r '$d=json_decode(file_get_contents("dartsatlas-screen.json"),true); if (!is_array($d) || !($d["ok"] ?? false) || empty($d["tournament"])) { fwrite(STDERR,"Production DartsAtlas screen payload is not ready.\n"); exit(1); } echo "Production screen ready: ".($d["tournament"]["name"] ?? "unknown")."\n";'
+
+      - name: Publish deploy result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            STATE="success"
+            DESCRIPTION="Standalone DartsAtlas screen is live in production"
+          else
+            STATE="failure"
+            DESCRIPTION="Production DartsAtlas screen deploy failed"
+          fi
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/dartsatlas-screen\",\"description\":\"${DESCRIPTION}\"}"
