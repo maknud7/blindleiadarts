@@ -1,5 +1,8 @@
 (() => {
-  const CURRENT_URL = "./api/dartsatlas-public-current.php";
+  const isolatedProd = window.location.hostname === "dart.ingenting.org" && window.location.pathname.startsWith("/live");
+  const apiBase = isolatedProd ? "./api" : "../api";
+  const CURRENT_URL = `${apiBase}/dartsatlas-public-current.php`;
+  const SEASON_ELO_URL = `${apiBase}/dartsatlas-public-season-elo.php`;
   const REFRESH_MS = 30000;
 
   const elements = {
@@ -16,12 +19,27 @@
     hours: document.getElementById("countdownHours"),
     minutes: document.getElementById("countdownMinutes"),
     seconds: document.getElementById("countdownSeconds"),
+    eloTable: document.getElementById("eloTable"),
+    eloLeader: document.getElementById("eloLeader"),
+    eloLeaderPlayer: document.getElementById("eloLeaderPlayer"),
+    liveMatches: document.getElementById("liveMatches"),
+    recentResults: document.getElementById("recentResults"),
   };
 
   if (!elements.panel || !elements.livePanel || !elements.liveDot) return;
 
   let current = null;
+  let liveElo = null;
   let refreshTimer = null;
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
 
   function pad(value) {
     return String(Math.max(0, value)).padStart(2, "0");
@@ -34,6 +52,11 @@
   }
 
   function formatStart(date) {
+    const now = new Date();
+    const sameDay = date.toLocaleDateString("nb-NO") === now.toLocaleDateString("nb-NO");
+    if (sameDay) {
+      return `i kveld kl. ${date.toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}`;
+    }
     return new Intl.DateTimeFormat("nb-NO", {
       weekday: "long",
       day: "numeric",
@@ -41,6 +64,13 @@
       hour: "2-digit",
       minute: "2-digit",
     }).format(date);
+  }
+
+  function hasTournamentActivity() {
+    return Boolean(
+      elements.liveMatches?.querySelector(".match-card") ||
+      elements.recentResults?.querySelector(".list-row")
+    );
   }
 
   function setCountdown(totalSeconds) {
@@ -63,9 +93,36 @@
     elements.seconds.textContent = "—";
   }
 
+  function renderElo() {
+    const table = Array.isArray(liveElo?.table) ? liveElo.table : [];
+    if (!elements.eloTable || table.length === 0) return;
+
+    elements.eloTable.innerHTML = table.map((entry) => {
+      const rating = Number(entry.rating ?? 1000).toFixed(1).replace(".", ",");
+      return `
+        <div class="list-row">
+          <div>
+            <strong><span class="rank">${escapeHtml(entry.position)}</span>${escapeHtml(entry.display_name)}</strong>
+            <small>${Number(entry.played || 0)} kamper</small>
+          </div>
+          <span class="list-value elo-rating">${rating}</span>
+        </div>`;
+    }).join("");
+
+    const leader = table[0];
+    if (leader && elements.eloLeader && elements.eloLeaderPlayer) {
+      elements.eloLeader.textContent = Number(leader.rating ?? 1000).toFixed(1).replace(".", ",");
+      elements.eloLeaderPlayer.textContent = leader.display_name || "";
+    }
+  }
+
   function render() {
-    const isLive = elements.liveDot.classList.contains("is-live");
-    if (isLive) {
+    renderElo();
+
+    const activity = hasTournamentActivity();
+    document.body.classList.toggle("is-waiting", !activity);
+
+    if (activity) {
       elements.panel.hidden = true;
       elements.livePanel.hidden = false;
       return;
@@ -103,35 +160,47 @@
 
     if (remainingMs > 0) {
       elements.countdownState.textContent = "Starter om";
-      elements.message.textContent = "ELO-tabellen under viser stillingen inn mot turneringsstart.";
+      elements.message.textContent = current.is_today
+        ? "Vi teller ned til avkast. Livekamper og statistikk dukker opp automatisk når turneringen starter."
+        : "ELO-tabellen under viser stillingen inn mot neste mandagsrunde.";
       setCountdown(remainingMs / 1000);
       return;
     }
 
     elements.countdownState.textContent = "Starter snart";
-    elements.message.textContent = "Planlagt starttid er passert. Vi venter på at første kamp blir markert live i DartsAtlas.";
+    elements.message.textContent = "Planlagt starttid er passert. Vi venter på at første kamp blir registrert i DartsAtlas.";
     setCountdown(0);
   }
 
+  async function getJson(url) {
+    const response = await fetch(`${url}?_=${Date.now()}`, { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok || !payload?.ok) throw new Error(`HTTP ${response.status}`);
+    return payload.data || {};
+  }
+
   async function refreshCurrent() {
-    try {
-      const response = await fetch(`${CURRENT_URL}?_=${Date.now()}`, { cache: "no-store" });
-      const payload = await response.json();
-      if (response.ok && payload?.ok) {
-        current = payload.data || null;
-      }
-    } catch (_) {
-      // Keep the last known upcoming tournament on screen if one request fails.
-    } finally {
-      render();
-      if (refreshTimer) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(refreshCurrent, REFRESH_MS);
-    }
+    const [currentResult, eloResult] = await Promise.allSettled([
+      getJson(CURRENT_URL),
+      getJson(SEASON_ELO_URL),
+    ]);
+
+    if (currentResult.status === "fulfilled") current = currentResult.value;
+    if (eloResult.status === "fulfilled") liveElo = eloResult.value?.live_elo || null;
+
+    render();
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(refreshCurrent, REFRESH_MS);
   }
 
   const observer = new MutationObserver(render);
   observer.observe(elements.liveDot, { attributes: true, attributeFilter: ["class"] });
+  if (elements.liveMatches) observer.observe(elements.liveMatches, { childList: true, subtree: true });
+  if (elements.recentResults) observer.observe(elements.recentResults, { childList: true, subtree: true });
 
   window.setInterval(render, 1000);
+  window.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshCurrent().catch(() => undefined);
+  });
   refreshCurrent().catch(() => undefined);
 })();
