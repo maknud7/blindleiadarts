@@ -26,8 +26,18 @@ final class MembershipDatabase
         }
 
         $this->resolved = true;
-        $sqlconnect = $this->loadSqlconnectConnection();
 
+        // Etter databasekonsolideringen er medlemsregisteret en permanent tabell
+        // i samme fysiske database som BlindleiaDarts. Dette er alltid foretrukket.
+        $primary = $this->primaryDatabase->connection();
+        if ($this->tableExists($primary, $this->membersTable)) {
+            $this->connection = $primary;
+            $this->source = 'local_primary_database';
+            return $this->connection;
+        }
+
+        // Overgangsfallback før cutover eller ved rollback.
+        $sqlconnect = $this->loadSqlconnectConnection();
         if ($sqlconnect instanceof mysqli) {
             $this->connection = $sqlconnect;
             $this->source = 'shared_admin_sqlconnect';
@@ -99,9 +109,9 @@ final class MembershipDatabase
     }
 
     /**
-     * DartsAtlasRepository reads member names through the primary mysqli session.
-     * The authoritative registry remains the existing admin database opened by the
-     * shared sqlconnect.php. Only id+navn are mirrored into a TEMPORARY session table.
+     * DartsAtlasRepository bruker samme mysqli-session som BlindleiaDarts.
+     * Etter cutover finnes `medlemmer` permanent lokalt og ingen temp-bro trengs.
+     * Før cutover beholdes gammel sqlconnect-bro som rollback/fallback.
      */
     public function prepareRepositoryBridge(): string
     {
@@ -111,8 +121,15 @@ final class MembershipDatabase
             return 'unavailable';
         }
 
-        $source = $this->connection();
         $table = $this->membersTable;
+        if ($this->tableExists($primary, $table)) {
+            $this->connection = $primary;
+            $this->resolved = true;
+            $this->source = 'local_primary_database';
+            return $this->source;
+        }
+
+        $source = $this->connection();
 
         $primary->query(
             "CREATE TEMPORARY TABLE IF NOT EXISTS `{$table}` (
@@ -156,6 +173,9 @@ final class MembershipDatabase
 
     public function configured(): bool
     {
+        if ($this->tableExists($this->primaryDatabase->connection(), $this->membersTable)) {
+            return true;
+        }
         return is_file($this->config->membersSqlconnectPath());
     }
 
