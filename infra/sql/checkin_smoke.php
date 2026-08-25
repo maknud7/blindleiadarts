@@ -22,7 +22,7 @@ $ids = ['club'=>0,'t1'=>0,'t2'=>0,'a'=>0,'b'=>0,'c'=>0,'d'=>0];
 try {
     $name='Checkin Smoke '.$suffix; $slug='checkin-smoke-'.$suffix;
     $s=$db->prepare(sprintf('INSERT INTO `%1$sclubs` (name,slug) VALUES (?,?)',$p)); $s->bind_param('ss',$name,$slug); $s->execute(); $ids['club']=(int)$s->insert_id; $s->close();
-    foreach (['Code A','GPS B','Early C','Admin D'] as $i=>$player) {
+    foreach (['Code A','Wrong B','Early C','Admin D'] as $i=>$player) {
         $s=$db->prepare(sprintf('INSERT INTO `%1$splayers` (club_id,display_name) VALUES (?,?)',$p)); $s->bind_param('is',$ids['club'],$player); $s->execute(); $ids[['a','b','c','d'][$i]]=(int)$s->insert_id; $s->close();
     }
     $start1=date('Y-m-d H:i:s',time()+1800); $tn1='Venue Code '.$suffix; $ts1='venue-code-'.$suffix;
@@ -32,41 +32,43 @@ try {
     foreach ([[$ids['t1'],$ids['a']],[$ids['t1'],$ids['b']],[$ids['t2'],$ids['c']],[$ids['t1'],$ids['d']]] as [$t,$player]) {
         $status='registered'; $s=$db->prepare(sprintf('INSERT INTO `%1$stournament_players` (tournament_id,player_id,status) VALUES (?,?,?)',$p)); $s->bind_param('iis',$t,$player,$status); $s->execute(); $s->close();
     }
-    $db->query(sprintf('INSERT INTO `%1$sclub_checkin_settings` (club_id,default_method,venue_latitude,venue_longitude,onsite_radius_meters,opens_minutes_before_start,closes_minutes_after_start,require_geolocation,gps_fallback_enabled,max_location_accuracy_meters) VALUES (%2$d,"admin_or_code",58.0000000,8.0000000,150,60,10,1,1,250)',$p,$ids['club']));
+    $db->query(sprintf('INSERT INTO `%1$sclub_checkin_settings` (club_id,default_method,opens_minutes_before_start,closes_minutes_after_start) VALUES (%2$d,"admin_or_code",60,10)',$p,$ids['club']));
 
     $repo=new TournamentCheckinRepository($database);
     $settings=$repo->updateTournamentSettings($ids['t1'],['checkin_method'=>'admin_or_code']);
     $code=(string)($settings['checkin_code']??'');
     $assert(strlen($code)===6,'Tournament check-in code was not generated.');
 
-    $byCode=$repo->checkInPlayer($ids['t1'],$ids['a'],null,null,null,false,$code,false);
+    $byCode=$repo->checkInPlayer($ids['t1'],$ids['a'],false,$code,false);
     $assert(($byCode['status']??'')==='checked_in','Correct venue code did not check player in.');
     $assert(($byCode['checkin_source']??'')==='player_code','Venue code source was not audited.');
 
     $wrong=false;
-    try { $repo->checkInPlayer($ids['t1'],$ids['b'],null,null,null,false,'WRONG1',false); }
+    try { $repo->checkInPlayer($ids['t1'],$ids['b'],false,'WRONG1',false); }
     catch (ValidationException $e) { $wrong=$e->errorCode()==='checkin_code_invalid'; }
     $assert($wrong,'Wrong venue code was not rejected.');
 
-    $gps=$repo->checkInPlayer($ids['t1'],$ids['b'],58.0001,8.0001,12.0,false,null,false);
-    $assert(($gps['checkin_source']??'')==='player_geolocation','GPS fallback did not work.');
+    $missing=false;
+    try { $repo->checkInPlayer($ids['t1'],$ids['b'],false,null,false); }
+    catch (ValidationException $e) { $missing=$e->errorCode()==='checkin_code_required'; }
+    $assert($missing,'Missing venue code was not rejected.');
 
     $repo->updateTournamentSettings($ids['t2'],['checkin_method'=>'admin_or_code']);
     $earlyCode=$repo->getTournamentSettings($ids['t2'])['checkin_code']??'';
     $early=false;
-    try { $repo->checkInPlayer($ids['t2'],$ids['c'],null,null,null,false,(string)$earlyCode,false); }
+    try { $repo->checkInPlayer($ids['t2'],$ids['c'],false,(string)$earlyCode,false); }
     catch (ValidationException $e) { $early=$e->errorCode()==='checkin_not_open'; }
     $assert($early,'Early code check-in was not rejected.');
 
     $adminEarly=false;
-    try { $repo->checkInPlayer($ids['t2'],$ids['c'],null,null,null,true,null,false); }
+    try { $repo->checkInPlayer($ids['t2'],$ids['c'],true,null,false); }
     catch (ValidationException $e) { $adminEarly=$e->errorCode()==='checkin_not_open'; }
     $assert($adminEarly,'Normal admin check-in did not respect time window.');
 
-    $forced=$repo->checkInPlayer($ids['t2'],$ids['c'],null,null,null,true,null,true);
+    $forced=$repo->checkInPlayer($ids['t2'],$ids['c'],true,null,true);
     $assert(($forced['checkin_source']??'')==='admin_override','Forced admin check-in was not audited.');
 
-    $admin=$repo->checkInPlayer($ids['t1'],$ids['d'],null,null,null,true,null,false);
+    $admin=$repo->checkInPlayer($ids['t1'],$ids['d'],true,null,false);
     $assert(($admin['checkin_source']??'')==='admin_override','Tournament leader check-in failed inside window.');
 
     $display=$repo->publicDisplayForClub($ids['club']);
@@ -79,7 +81,7 @@ try {
     $assert($plan['group_draw_mode']==='elo_pots','Wizard draw mode not persisted.');
     $assert((int)$plan['playoff_best_of_legs']===5,'Wizard playoff plan not persisted.');
 
-    echo "Code/admin/GPS fallback check-in and tournament wizard smoke OK\n";
+    echo "Code/admin check-in and tournament wizard smoke OK\n";
 } finally {
     foreach (['t1','t2'] as $key) if ($ids[$key]) { $db->query(sprintf('DELETE FROM `%1$stournament_players` WHERE tournament_id=%2$d',$p,$ids[$key])); $db->query(sprintf('DELETE FROM `%1$stournaments` WHERE id=%2$d',$p,$ids[$key])); }
     if ($ids['club']) $db->query(sprintf('DELETE FROM `%1$sclub_checkin_settings` WHERE club_id=%2$d',$p,$ids['club']));
