@@ -12,6 +12,7 @@ use Blindleia\Dartkiosk\Api\TournamentCheckinApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
 use Blindleia\Dartkiosk\Api\TournamentOperationsApplication;
 use Blindleia\Dartkiosk\Api\TournamentPlayoffApplication;
+use Blindleia\Dartkiosk\Api\TournamentWizardApplication;
 
 require __DIR__ . '/bootstrap.php';
 
@@ -22,6 +23,11 @@ if ($scolia->run()) {
 
 $checkin = new TournamentCheckinApplication(__DIR__);
 if ($checkin->run()) {
+    return;
+}
+
+$wizard = new TournamentWizardApplication(__DIR__);
+if ($wizard->run()) {
     return;
 }
 
