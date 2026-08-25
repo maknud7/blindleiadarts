@@ -91,9 +91,44 @@ try {
 
     if ($request->method() === 'POST' && $action === 'invite') {
         $payload = $request->jsonBody();
+        $memberId = (int) ($payload['member_id'] ?? 0);
+        if ($memberId <= 0) {
+            throw new InvalidArgumentException('Ugyldig spiller.');
+        }
+
+        // A durable club person is both member, player profile and account identity.
+        // Guest players may still exist in historical tournament data, but are not
+        // promoted into the member register unless they actually become members.
+        $db = $database->connection();
+        $prefix = $database->tablePrefix();
+        $playersTable = $prefix . 'players';
+        $memberStmt = $db->prepare('SELECT id, navn FROM `medlemmer` WHERE id=? LIMIT 1');
+        $memberStmt->bind_param('i', $memberId);
+        $memberStmt->execute();
+        $member = $memberStmt->get_result()->fetch_assoc() ?: null;
+        $memberStmt->close();
+        if ($member === null) {
+            throw new InvalidArgumentException('Spilleren finnes ikke i medlemsregisteret.');
+        }
+
+        $playerStmt = $db->prepare("SELECT id FROM `{$playersTable}` WHERE club_id=? AND member_id=? ORDER BY id ASC LIMIT 1");
+        $playerStmt->bind_param('ii', $clubId, $memberId);
+        $playerStmt->execute();
+        $player = $playerStmt->get_result()->fetch_assoc() ?: null;
+        $playerStmt->close();
+        if ($player === null) {
+            $displayName = trim((string) $member['navn']);
+            $insertPlayer = $db->prepare(
+                "INSERT INTO `{$playersTable}` (club_id, display_name, is_active, member_id) VALUES (?, ?, 1, ?)"
+            );
+            $insertPlayer->bind_param('isi', $clubId, $displayName, $memberId);
+            $insertPlayer->execute();
+            $insertPlayer->close();
+        }
+
         $result = $repository->createInvitation(
             $clubId,
-            (int) ($payload['member_id'] ?? 0),
+            $memberId,
             (int) $admin['id'],
             isset($payload['email']) ? (string) $payload['email'] : null
         );
