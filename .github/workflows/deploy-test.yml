@@ -30,7 +30,7 @@ jobs:
 
       - name: Validate deployment configuration
         env:
-          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_NAME: ${{ secrets.DB_NAME }}
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
@@ -62,8 +62,8 @@ jobs:
         run: php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
         env:
           APP_ENV: test
-          BASE_URL: ${{ vars.TEST_BASE_URL }}
-          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL }}
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
           REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
@@ -79,7 +79,7 @@ jobs:
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
-          CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
+          CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI || 'https://test.blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback' }}
 
       - name: Package sanity check
         run: |
@@ -107,7 +107,7 @@ jobs:
 
       - name: Verify deployed test environment
         env:
-          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
