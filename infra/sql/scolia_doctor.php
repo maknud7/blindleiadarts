@@ -11,8 +11,32 @@ function env_req(string $key): string
     return $value;
 }
 
-$db = new mysqli(env_req('DB_HOST'), env_req('DB_USERNAME'), env_req('DB_PASSWORD'), env_req('DB_NAME'), (int) env_req('DB_PORT'));
-$db->set_charset('utf8mb4');
+function connect_db(): mysqli
+{
+    $lastError = null;
+    for ($attempt = 1; $attempt <= 3; $attempt++) {
+        try {
+            $db = mysqli_init();
+            if ($db === false) throw new RuntimeException('Could not initialize mysqli.');
+            $db->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
+            $db->real_connect(
+                env_req('DB_HOST'),
+                env_req('DB_USERNAME'),
+                env_req('DB_PASSWORD'),
+                env_req('DB_NAME'),
+                (int) env_req('DB_PORT')
+            );
+            $db->set_charset('utf8mb4');
+            return $db;
+        } catch (Throwable $error) {
+            $lastError = $error;
+            if ($attempt < 3) sleep(2 * $attempt);
+        }
+    }
+    throw new RuntimeException('Database connection failed after retries.', 0, $lastError);
+}
+
+$db = connect_db();
 $p = env_req('DB_TABLE_PREFIX');
 
 $tables = ['scolia_club_settings','scolia_board_settings','scolia_board_runtime','scolia_events','scolia_visit_buffers','scolia_shadow_visits','scolia_commands','scolia_incidents','club_checkin_settings'];
