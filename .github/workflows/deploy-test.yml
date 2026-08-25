@@ -194,7 +194,7 @@ jobs:
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'viewport-fit=cover'
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
           curl -fsS --max-time 15 "$base/packages/ui-assets/portal-menu.js" | grep -Fq 'portal-brand.css'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Member navigation'
+          curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Mobile navigation must expose every destination'
           curl -fsS --max-time 15 "$base/live/" | grep -Fq 'blindleia-dartklubb-logo.png'
           curl -fsS --max-time 15 "$base/live/" | grep -Fq 'viewport-fit=cover'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'screen-ux.css'
