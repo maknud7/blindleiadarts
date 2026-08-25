@@ -65,6 +65,22 @@ jobs:
             exit 1
           fi
 
+      - name: UX information architecture check
+        run: |
+          set -Eeuo pipefail
+          grep -Fq '>Personer</a>' apps/admin/index.html
+          grep -Fq '>Utstyr</a>' apps/admin/index.html
+          grep -Fq '>Innstillinger</a>' apps/admin/index.html
+          if grep -Fq 'href="#screens"' apps/admin/index.html; then
+            echo 'Live screens must live under Utstyr, not as a separate admin menu.'
+            exit 1
+          fi
+          grep -Fq '>Min profil</a>' apps/player/index.html
+          grep -Fq '>Ranking</a>' apps/player/index.html
+          grep -Fq 'data-tr-view="matches"' apps/admin/admin-ux.js
+          grep -Fq 'Neste anbefalte steg' apps/admin/admin-ux.js
+          grep -Fq 'Akkurat nå' apps/player/player-ux.js
+
       - name: Release package smoke test
         run: |
           bash infra/deploy/build-release.sh test
@@ -73,6 +89,10 @@ jobs:
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/admin/season-admin.js
+          test -f dist/test/admin/admin-ux.js
+          test -f dist/test/admin/admin-ux.css
+          test -f dist/test/player/player-ux.js
+          test -f dist/test/player/player-ux.css
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js

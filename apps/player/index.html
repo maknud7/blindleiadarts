@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blindleia Darts</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./player-ux.css">
+  <script>if(new URLSearchParams(window.location.search).has('reset_token')){window.location.hash='#profile';}</script>
 </head>
 <body data-portal-default="home">
   <div class="shell">
@@ -16,7 +18,7 @@
         </div>
         <div><p class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Din dartportal</h1></div>
       </div>
-      <p id="clubIntro" class="muted">Velg klubb og logg inn. Menyene tilpasses tilgangen din.</p>
+      <p id="clubIntro" class="muted">Det viktigste for deg akkurat nå ligger først. Resten finner du i menyen.</p>
     </header>
 
     <section class="card portal-context"><label for="clubSelect">Klubb</label><select id="clubSelect"></select><button id="refreshButton" class="ghost">Oppdater</button></section>
@@ -24,20 +26,20 @@
     <nav class="portal-nav portal-menu card" aria-label="Portalmeny">
       <a href="#home" data-portal-nav>Hjem</a>
       <a href="#tournaments" data-portal-nav>Turneringer</a>
-      <a href="#tables" data-portal-nav>Tabeller</a>
+      <a href="#tables" data-portal-nav>Ranking</a>
       <a href="#players" data-portal-nav>Spillere</a>
-      <a href="#summaries" data-portal-nav>Oppsummeringer</a>
+      <a href="#profile" data-portal-nav>Min profil</a>
       <a id="adminPortalLink" class="hidden admin-nav-link" href="../admin/#overview">Administrasjon</a>
     </nav>
 
-    <section data-portal-section="home" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Konto</p><h2>Min side</h2></div></div>
+    <section data-portal-section="profile" class="card stack">
+      <div class="section-head"><div><p class="eyebrow">Konto</p><h2>Min profil</h2></div></div>
       <form id="loginForm" class="stack"><input id="loginUsername" type="email" placeholder="E-postadresse" autocomplete="email" inputmode="email"><input id="loginPassword" type="password" placeholder="Passord" autocomplete="current-password"><button type="submit">Logg inn</button></form>
       <div id="authSummary" class="mini-card hidden"></div><button id="logoutButton" class="ghost hidden">Logg ut</button><div id="statusArea" class="stack"></div>
     </section>
 
-    <section id="memberAccountSection" data-portal-section="home" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Min spillerprofil</p><h2>Kontingent og kastestatistikk</h2></div></div>
+    <section id="memberAccountSection" data-portal-section="profile" class="card stack">
+      <div class="section-head"><div><p class="eyebrow">Medlemskap og dart</p><h2>Kontingent og kastestatistikk</h2></div></div>
       <div id="memberAccountCard" class="stack"><p class="muted">Logg inn for å se medlemskap, kontingent og egne tall.</p></div>
     </section>
 
@@ -46,12 +48,14 @@
     <section data-portal-section="home" class="card stack"><div class="section-head"><div><p class="eyebrow">Mine tall</p><h2>Statistikk og ranking</h2></div></div><div id="statsGrid" class="stats-grid"></div><div id="rankingList" class="stack"></div></section>
 
     <section id="signup" data-portal-section="tournaments" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmeldinger og check-in</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmelding og check-in</h2></div></div>
       <div class="mini-card"><strong>Check-in i lokalet</strong><p class="muted">Turneringsleder kan checke deg inn, eller du kan taste koden som vises på Live-skjermen når check-in åpner.</p></div>
       <div id="registrationList" class="stack"></div>
     </section>
 
     <section data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Turneringer</p><h2>Åpne turneringer</h2></div></div><div id="tournamentList" class="stack"></div></section>
+
+    <section id="summaries" data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><p class="muted">Resultater og høydepunkter fra klubbkveldene.</p><div id="summaryList" class="stack"></div></section>
 
     <section id="tables" data-portal-section="tables" class="card stack">
       <div class="section-head"><div><p class="eyebrow">Ranking</p><h2>ELO-tabell</h2></div></div><div id="eloTable" class="table-card"></div>
@@ -59,9 +63,7 @@
       <div class="section-head content-subhead"><div><p class="eyebrow">Turnering</p><h2>Sluttspill</h2></div></div><div id="portalPlayoff"></div>
     </section>
 
-    <section id="players" data-portal-section="players" class="card stack"><div class="section-head"><div><p class="eyebrow">Klubben</p><h2>Spillere og statistikk</h2></div></div><div id="playerDirectory" class="player-directory"></div><article id="playerProfile" class="profile-card hidden"></article></section>
-
-    <section id="summaries" data-portal-section="summaries" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><p class="muted">Turneringsoppsummeringer, resultater og høydepunkter fra klubbkveldene.</p><div id="summaryList" class="stack"></div></section>
+    <section id="players" data-portal-section="players" class="card stack"><div class="section-head"><div><p class="eyebrow">Klubben</p><h2>Spillere</h2></div></div><div id="playerDirectory" class="player-directory"></div><article id="playerProfile" class="profile-card hidden"></article></section>
   </div>
 
   <script src="./checkin-runtime.js" type="module"></script>
@@ -70,6 +72,7 @@
   <script src="./portal-content.js" type="module"></script>
   <script src="./portal-playoffs.js" type="module"></script>
   <script src="./player-breaks.js" type="module"></script>
+  <script src="./player-ux.js" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js" type="module"></script>
 </body>
 </html>

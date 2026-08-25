@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="./tournament-operations-admin.css">
   <link rel="stylesheet" href="./tournament-playoff-admin.css">
   <link rel="stylesheet" href="./member-onboarding-admin.css">
+  <link rel="stylesheet" href="./admin-ux.css">
 </head>
 <body data-portal-default="overview">
   <section id="authGate" class="auth-shell">
@@ -18,7 +19,7 @@
       <div>
         <p class="eyebrow">Blindleia Darts</p>
         <h1>Logg inn</h1>
-        <p class="muted">Samme konto brukes i spillerportalen og administrasjonen. Tilgangen avgjør hvilke menyer du ser.</p>
+        <p class="muted">Administrasjonen er adskilt fra spillerflyten. Du ser bare adminfunksjonene du har tilgang til.</p>
       </div>
       <form id="loginForm" class="login-form">
         <label><span>E-postadresse</span><input id="loginUsername" type="email" autocomplete="email" inputmode="email" required></label>
@@ -33,7 +34,7 @@
     <header class="topbar">
       <div class="topbar-brand">
         <div class="brand-mark small">BD</div>
-        <div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Portal</strong></div>
+        <div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Administrasjon</strong></div>
       </div>
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
@@ -45,35 +46,35 @@
     </header>
 
     <main class="main">
-      <nav class="section-nav portal-menu" aria-label="Portalmeny">
+      <nav class="section-nav portal-menu" aria-label="Administrasjonsmeny">
+        <span class="admin-menu-label">Administrasjon</span>
         <a href="#overview" data-portal-nav>Oversikt</a>
         <a href="#tournaments" data-portal-nav>Turneringer</a>
-        <a href="#kiosks" data-portal-nav>Boards</a>
-        <a href="#players" data-portal-nav>Spillere</a>
-        <a href="#screens" data-portal-nav>Live-skjermer</a>
-        <a href="#integrations" data-portal-nav>Scolia / innstillinger</a>
+        <a href="#players" data-portal-nav>Personer</a>
+        <a href="#kiosks" data-portal-nav>Utstyr</a>
+        <a href="#integrations" data-portal-nav>Innstillinger</a>
       </nav>
 
       <section id="overview" data-portal-section="overview" class="portal-view">
         <div class="hero">
           <div>
-            <p class="eyebrow">Klubbportal</p>
-            <h1>Blindleia Darts</h1>
-            <p class="muted">Én portal for spillere og drift. Administratortilgang gir ekstra menyer, men kampene, spillerprofilene og turneringene er de samme canonical dataene.</p>
+            <p class="eyebrow">Klubbdrift</p>
+            <h1>Administrasjon</h1>
+            <p class="muted">Start med det som krever handling nå. Turneringer kjøres i et eget turneringsrom; personer, sesonger, utstyr og innstillinger har egne menyvalg.</p>
           </div>
           <div id="globalMessage" class="message hidden"></div>
         </div>
         <div id="metrics" class="metrics"></div>
         <div class="portal-shortcuts">
-          <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Opprett, check-in, puljer, kamper og sluttspill</span></a>
-          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Boards</strong><span>Terminaler, pairing, scoringtype og Scolia-ID</span></a>
-          <a class="shortcut-card" href="#players" data-portal-nav><strong>Spillere</strong><span>Medlemskap, tilgang og dartstatistikk samlet</span></a>
+          <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Gjennomfør kvelden i riktig rekkefølge</span></a>
+          <a class="shortcut-card" href="#players" data-portal-nav><strong>Personer</strong><span>Medlemskap, tilgang, kontingent og dartprofil</span></a>
+          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Utstyr</strong><span>Boards, nettbrett, Scolia og venue-skjermer</span></a>
         </div>
       </section>
 
       <section id="tournaments" data-portal-section="tournaments" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Turneringsplattform</p><h2>Turneringer</h2><p class="muted">Opprett turneringer med veiviseren, administrer påmelding og check-in, trekk grupper og følg hele turneringsløpet her.</p></div>
+          <div><p class="eyebrow">Turneringsledelse</p><h2>Turneringer</h2><p class="muted">Velg turnering én gang og jobb videre i samme turneringsrom fra check-in til resultat.</p></div>
         </div>
         <div class="subsection-head"><h3>Turneringsoversikt</h3><span id="tournamentCount" class="pill">0</span></div>
         <div id="tournamentList" class="list"></div>
@@ -82,9 +83,9 @@
       <section id="kiosks" data-portal-section="kiosks" class="panel">
         <div class="panel-head">
           <div>
-            <p class="eyebrow">Board Terminal</p>
-            <h2>Boards</h2>
-            <p class="muted">Alt som gjelder selve skiva ligger her. Velger du Scolia som scoringtype, må skiva kobles til en unik Scolia-ID.</p>
+            <p class="eyebrow">Klubbutstyr</p>
+            <h2>Utstyr</h2>
+            <p class="muted">Boards, nettbrett og Scolia administreres her. Velger du Scolia som scoringtype, må skiva kobles til en unik Scolia-ID.</p>
           </div>
           <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne terminal</a>
         </div>
@@ -148,16 +149,16 @@
 
       <section id="players" data-portal-section="players" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Klubben</p><h2>Spillere</h2><p class="muted">Én person, én spillerprofil og én tilgang. Medlemskap, konto, kontingent og dartstatistikk samles her.</p></div>
+          <div><p class="eyebrow">Klubben</p><h2>Personer</h2><p class="muted">Én person med medlemskap, spillerprofil, kontingent og tilgang samlet.</p></div>
           <span id="playerCount" class="pill">0</span>
         </div>
-        <div id="memberRegistryStatus" class="muted">Laster spillerregister …</div>
+        <div id="memberRegistryStatus" class="muted">Laster personregister …</div>
         <div class="hidden" aria-hidden="true"><table><tbody id="playerRows"></tbody></table></div>
       </section>
 
-      <section id="screens" data-portal-section="screens" class="panel">
+      <section id="screens" data-portal-section="kiosks" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Live</p><h2>Live-skjermer</h2><p class="muted">Par TV-er og venue-skjermer. Check-in-koden vises på paret Live-skjerm mens check-in-vinduet er åpent.</p></div>
+          <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Par TV-er og venue-skjermer. Check-in-koden vises på paret Live-skjerm mens check-in-vinduet er åpent.</p></div>
           <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne Live</a>
         </div>
         <div class="screen-layout">
