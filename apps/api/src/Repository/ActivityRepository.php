@@ -13,6 +13,8 @@ final class ActivityRepository
     private mysqli $connection;
     private string $dataPrefix;
     private string $identityPrefix;
+    /** @var array<string,int|null> */
+    private array $clubSlugCache = [];
 
     public function __construct(Database $database)
     {
@@ -45,6 +47,12 @@ final class ActivityRepository
         foreach (array_slice($events, 0, 50) as $event) {
             $occurredAt = $this->dateTimeOrNull($event['occurred_at'] ?? null);
             $clubId = $this->positiveIntOrNull($event['club_id'] ?? null);
+            if ($clubId === null) {
+                $clubSlug = $this->nullableText($event['club_slug'] ?? null, 120);
+                if ($clubSlug !== null) {
+                    $clubId = $this->resolveClubIdBySlug($clubSlug);
+                }
+            }
             $tournamentId = $this->positiveIntOrNull($event['tournament_id'] ?? null);
             $surface = $this->shortText($event['surface'] ?? 'unknown', 32, 'unknown');
             $eventName = $this->shortText($event['event_name'] ?? 'event', 64, 'event');
@@ -156,6 +164,22 @@ final class ActivityRepository
             'top_paths' => $paths,
             'recent' => $recent,
         ];
+    }
+
+    private function resolveClubIdBySlug(string $slug): ?int
+    {
+        $slug = trim(mb_strtolower($slug, 'UTF-8'));
+        if ($slug === '') return null;
+        if (array_key_exists($slug, $this->clubSlugCache)) return $this->clubSlugCache[$slug];
+
+        $clubs = $this->dataPrefix . 'clubs';
+        $statement = $this->connection->prepare("SELECT id FROM `{$clubs}` WHERE slug=? LIMIT 1");
+        $statement->bind_param('s', $slug);
+        $statement->execute();
+        $id = (int) ($statement->get_result()->fetch_assoc()['id'] ?? 0);
+        $statement->close();
+        $this->clubSlugCache[$slug] = $id > 0 ? $id : null;
+        return $this->clubSlugCache[$slug];
     }
 
     private function positiveIntOrNull(mixed $value): ?int
