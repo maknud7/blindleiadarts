@@ -22,7 +22,7 @@ final class EloReconciliationService
 
     public function reconcileKiosk(int $kioskId): void
     {
-        foreach ($this->completedMatchesMissingLedger($kioskId) as $matchId) {
+        foreach ($this->completedMatchesNeedingLedger($kioskId) as $matchId) {
             $this->ledger->applyCompletedMatch($matchId);
         }
         foreach ($this->appliedEventsForReopenedMatches($kioskId) as $matchId) {
@@ -31,7 +31,7 @@ final class EloReconciliationService
     }
 
     /** @return array<int,int> */
-    private function completedMatchesMissingLedger(int $kioskId): array
+    private function completedMatchesNeedingLedger(int $kioskId): array
     {
         $sql = sprintf(
             'SELECT m.id
@@ -39,7 +39,7 @@ final class EloReconciliationService
              INNER JOIN `%1$stournaments` t ON t.id=m.tournament_id
              LEFT JOIN `%1$selo_match_events` e ON e.match_id=m.id AND e.status="applied"
              WHERE m.kiosk_id=? AND m.status="completed" AND t.elo_enabled=1 AND t.season_id IS NOT NULL
-               AND e.id IS NULL
+               AND (e.id IS NULL OR NOT (e.winner_player_id <=> m.winner_player_id))
              ORDER BY COALESCE(m.finished_at, m.updated_at) ASC, m.id ASC',
             $this->tablePrefix
         );
