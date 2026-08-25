@@ -65,6 +65,16 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
+      - name: Verify ELO ledger schema
+        run: php infra/sql/elo_ledger_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
       - name: Verify account-player-member identity
         run: php infra/sql/identity_doctor.php
         env:
@@ -127,6 +137,9 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
 
+      - name: Exercise ELO ledger apply and replay
+        run: php infra/sql/elo_ledger_smoke.php
+
       - name: Exercise canonical match scoring
         run: php infra/sql/match_scoring_smoke.php
 
@@ -151,6 +164,13 @@ jobs:
           test -f dist/test/api/member-onboarding.php
           test -f dist/test/player/portal-content.js
           test -f dist/test/admin/tournament-summary-admin.js
+          test -f dist/test/admin/tournament-elo-admin.js
           test -f dist/test/api/src/MatchScoringApplication.php
           test -f dist/test/api/src/Repository/MatchScoringRepository.php
           test -f dist/test/api/src/Service/Dart501Rules.php
+          test -f dist/test/api/src/EloApplication.php
+          test -f dist/test/api/src/Repository/EloLedgerRepository.php
+          test -f dist/test/api/src/Repository/EloReadRepository.php
+          test -f dist/test/api/src/Service/EloCalculator.php
+          test -f dist/test/api/src/Service/EloLedgerService.php
+          test -f dist/test/api/src/Service/EloReconciliationService.php
