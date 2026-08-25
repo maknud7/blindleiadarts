@@ -7,13 +7,14 @@
   <title>Blindleia Darts · Board Terminal</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./pairing.css">
+  <link rel="stylesheet" href="./kiosk-polish.css">
 </head>
 <body>
   <div class="terminal-shell">
     <header class="terminal-topbar">
       <div class="brandline">
         <div class="brand-badge"><img id="brandLogo" class="brand-logo hidden" alt="Klubblogo"><span id="brandFallback">BD</span></div>
-        <div><p id="brandEyebrow" class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Board Terminal</h1></div>
+        <div class="brand-copy"><p id="brandEyebrow" class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Board Terminal</h1><p id="brandSponsor" class="brand-sponsor hidden"></p></div>
       </div>
       <div class="terminal-status">
         <span id="connectionPill" class="status-pill neutral"><span class="status-dot"></span><span id="connectionText">Ikke paret</span></span>
@@ -103,12 +104,12 @@
           </div>
 
           <div id="sumMode" class="sum-mode">
-            <div class="entry-display"><strong id="sumDisplay">—</strong><span id="sumHint">Tast total score</span></div>
+            <div class="entry-display"><strong id="sumDisplay">—</strong><span id="sumHint">Trykk Lagre kast for 0</span></div>
             <div class="keypad">
               <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
               <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
               <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
-              <button data-key="del" class="ghost-button">⌫</button><button data-key="0">0</button><button data-key="ok" class="confirm-button">OK</button>
+              <button data-key="del" class="ghost-button">⌫</button><button data-key="0">0</button><button data-key="ok" class="confirm-button">Lagre kast</button>
             </div>
           </div>
 
@@ -118,7 +119,7 @@
               <div class="multipliers"><button data-multiplier="S" class="active">S</button><button data-multiplier="D">D</button><button data-multiplier="T">T</button></div>
               <div><div id="numberGrid" class="number-grid"></div><div class="special-grid"><button data-special="bull">25</button><button data-special="dbull">Bull 50</button><button data-special="miss">Miss</button></div></div>
             </div>
-            <div class="dart-actions"><button id="dartBackButton" class="ghost-button" type="button">⌫ Siste pil</button><button id="dartSubmitButton" class="confirm-button" type="button">Registrer kast</button></div>
+            <div class="dart-actions"><button id="dartBackButton" class="ghost-button" type="button">⌫ Siste pil</button><button id="dartSubmitButton" class="confirm-button" type="button">Lagre kast · 0</button></div>
           </div>
         </section>
 

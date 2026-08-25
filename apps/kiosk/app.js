@@ -16,10 +16,11 @@ const state = {
   multiplier: "S",
   mutating: false,
   toastHandle: null,
+  renderedView: "",
 };
 
 const el = {
-  brandLogo: document.getElementById("brandLogo"), brandFallback: document.getElementById("brandFallback"), brandEyebrow: document.getElementById("brandEyebrow"), brandTitle: document.getElementById("brandTitle"),
+  brandLogo: document.getElementById("brandLogo"), brandFallback: document.getElementById("brandFallback"), brandEyebrow: document.getElementById("brandEyebrow"), brandTitle: document.getElementById("brandTitle"), brandSponsor: document.getElementById("brandSponsor"),
   connectionPill: document.getElementById("connectionPill"), connectionText: document.getElementById("connectionText"), settingsButton: document.getElementById("settingsButton"),
   setupState: document.getElementById("setupState"), pairingQr: document.getElementById("pairingQr"), qrLoading: document.getElementById("qrLoading"), pairingCode: document.getElementById("pairingCode"), pairingExpires: document.getElementById("pairingExpires"), pairingMessage: document.getElementById("pairingMessage"), newPairingButton: document.getElementById("newPairingButton"),
   idleState: document.getElementById("idleState"), idleClub: document.getElementById("idleClub"), idleBoard: document.getElementById("idleBoard"), idleMessage: document.getElementById("idleMessage"), idleMode: document.getElementById("idleMode"),
@@ -81,6 +82,7 @@ function persistPairing(code) {
 function clearLocalPairing({ newToken = true } = {}) {
   state.kioskCode = "";
   state.snapshot = null;
+  state.renderedView = "";
   localStorage.removeItem("bd:kioskCode");
   localStorage.removeItem("bd:kioskClub");
   persistRequest("");
@@ -98,15 +100,24 @@ function isManual() { return (currentKiosk()?.scoring_mode || "manual") === "man
 function roundLabel(match) { return match?.round_label || match?.bracket_label || "Kamp"; }
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 
-function setConnection(text, tone = "neutral") { el.connectionText.textContent = text; el.connectionPill.className = `status-pill ${tone}`; }
+function setConnection(text, tone = "neutral") {
+  if (el.connectionText.textContent !== text) el.connectionText.textContent = text;
+  const nextClass = `status-pill ${tone}`;
+  if (el.connectionPill.className !== nextClass) el.connectionPill.className = nextClass;
+}
 function applyBranding() {
   const kiosk = currentKiosk(), club = kiosk?.club || null;
   const initials = String(club?.name || "BD").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   el.brandFallback.textContent = initials || "BD";
   el.brandEyebrow.textContent = club?.name || "Blindleia Darts";
   el.brandTitle.textContent = kiosk ? (kiosk.name || `Board ${kiosk.board_number}`) : "Board Terminal";
+  const sponsor = String(kiosk?.sponsor_label || "").trim();
+  if (el.brandSponsor) {
+    el.brandSponsor.textContent = sponsor ? `Presentert av ${sponsor}` : "";
+    el.brandSponsor.classList.toggle("hidden", !sponsor);
+  }
   if (club?.logo_url) {
-    el.brandLogo.src = club.logo_url;
+    if (el.brandLogo.getAttribute("src") !== club.logo_url) el.brandLogo.src = club.logo_url;
     el.brandLogo.classList.remove("hidden");
     el.brandFallback.classList.add("hidden");
     el.brandLogo.onerror = () => { el.brandLogo.classList.add("hidden"); el.brandFallback.classList.remove("hidden"); };
@@ -115,7 +126,12 @@ function applyBranding() {
     el.brandFallback.classList.remove("hidden");
   }
 }
-function hideStates() { [el.setupState, el.idleState, el.assignedState, el.matchState].forEach((node) => node.classList.add("hidden")); }
+function showState(view, node) {
+  if (state.renderedView === view) return;
+  [el.setupState, el.idleState, el.assignedState, el.matchState].forEach((candidate) => candidate.classList.add("hidden"));
+  node.classList.remove("hidden");
+  state.renderedView = view;
+}
 
 function adminPairingUrl(code) {
   const url = new URL("../admin/", window.location.href);
@@ -133,8 +149,7 @@ function formatExpiry(value) {
   return `Koden utløper ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date)}.`;
 }
 function renderSetup() {
-  hideStates();
-  el.setupState.classList.remove("hidden");
+  showState("setup", el.setupState);
   applyBranding();
   setConnection(state.pairingRequestCode ? "Venter på admin" : "Ikke satt opp", "neutral");
   el.pairingCode.textContent = state.pairingRequestCode || "—";
@@ -152,11 +167,11 @@ function renderSetup() {
   renderSettings();
 }
 function renderIdle() {
-  const kiosk = currentKiosk(); hideStates(); el.idleState.classList.remove("hidden"); applyBranding(); setConnection(`Board ${kiosk.board_number} · klar`, "good");
+  const kiosk = currentKiosk(); showState("idle", el.idleState); applyBranding(); setConnection(`Board ${kiosk.board_number} · klar`, "good");
   el.idleClub.textContent = kiosk.club?.name || "Blindleia Dartklubb"; el.idleBoard.textContent = kiosk.name || `Board ${kiosk.board_number}`; el.idleMessage.textContent = "Venter på neste kamp på dette boardet."; el.idleMode.textContent = kiosk.scoring_mode === "scolia" ? "Scolia scoring" : "Manuell scoring"; renderSettings();
 }
 function renderAssigned() {
-  const kiosk = currentKiosk(), match = currentMatch(); hideStates(); el.assignedState.classList.remove("hidden"); applyBranding(); setConnection(`Board ${kiosk.board_number} · kamp klar`, "good");
+  const kiosk = currentKiosk(), match = currentMatch(); showState("assigned", el.assignedState); applyBranding(); setConnection(`Board ${kiosk.board_number} · kamp klar`, "good");
   el.assignedBoard.textContent = `Board ${kiosk.board_number}`; el.assignedRound.textContent = roundLabel(match); el.assignedBestOf.textContent = `Best of ${match.best_of_legs}`; el.assignedPlayerA.textContent = match.player_a.display_name; el.assignedPlayerB.textContent = match.player_b.display_name; el.startMatchButton.disabled = state.mutating; renderSettings();
 }
 function renderVisits() {
@@ -164,7 +179,7 @@ function renderVisits() {
   el.recentVisits.innerHTML = visits.length ? visits.map((visit) => `<div class="visit-row"><div><strong>${escapeHtml(visit.player_name)}</strong><span>#${Number(visit.visit_number || 0)}</span></div><div><strong class="visit-score">${Number(visit.score || 0)}</strong><span>${Number(visit.is_bust) === 1 ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</span></div></div>`).join("") : `<div class="empty-visits">Ingen kast registrert ennå.</div>`;
 }
 function renderMatch() {
-  const kiosk = currentKiosk(), match = currentMatch(), player = currentPlayer(); hideStates(); el.matchState.classList.remove("hidden"); applyBranding(); setConnection(`Board ${kiosk.board_number} · live`, "good");
+  const kiosk = currentKiosk(), match = currentMatch(), player = currentPlayer(); showState("match", el.matchState); applyBranding(); setConnection(`Board ${kiosk.board_number} · live`, "good");
   el.playerAName.textContent = match.player_a.display_name; el.playerBName.textContent = match.player_b.display_name; el.playerARemaining.textContent = match.player_a.remaining; el.playerBRemaining.textContent = match.player_b.remaining; el.playerALegs.textContent = `${match.player_a.legs_won} legs`; el.playerBLegs.textContent = `${match.player_b.legs_won} legs`;
   const aTurn = match.current_player_id === match.player_a.id; el.playerABox.classList.toggle("active", aTurn); el.playerBBox.classList.toggle("active", !aTurn); el.playerATurn.classList.toggle("hidden", !aTurn); el.playerBTurn.classList.toggle("hidden", aTurn);
   el.matchBoard.textContent = `Board ${kiosk.board_number}`; el.currentLeg.textContent = `Leg ${match.current_leg?.leg_number || 1}`; el.matchRound.textContent = roundLabel(match); el.throwingPlayer.textContent = player?.display_name || "—"; el.undoButton.disabled = state.mutating;
@@ -193,12 +208,13 @@ function isDoubleOut() { const last = [...state.darts].reverse().find((dart) => 
 function renderInput() {
   el.sumModeButton.classList.toggle("active", state.inputMode === "sum"); el.dartModeButton.classList.toggle("active", state.inputMode === "per_dart"); el.sumMode.classList.toggle("hidden", state.inputMode !== "sum"); el.dartMode.classList.toggle("hidden", state.inputMode !== "per_dart");
   const score = Number(state.sumValue || 0), after = currentRemaining() - score; el.sumDisplay.textContent = state.sumValue || "—";
-  if (!state.sumValue) el.sumHint.textContent = "Tast total score";
+  if (!state.sumValue) el.sumHint.textContent = "Trykk Lagre kast for 0";
   else if (!POSSIBLE.has(score)) el.sumHint.textContent = "Ugyldig sum med tre piler";
   else if (after === 0 && isCheckoutNumber(currentRemaining())) el.sumHint.textContent = "Checkout";
   else if (score > 180 || after < 0 || after === 1 || after === 0) el.sumHint.textContent = "Bust";
   else el.sumHint.textContent = `Gjenstår ${after}`;
   el.dart1.textContent = `Pil 1: ${dartLabel(state.darts[0])}`; el.dart2.textContent = `Pil 2: ${dartLabel(state.darts[1])}`; el.dart3.textContent = `Pil 3: ${dartLabel(state.darts[2])}`; el.dartTotal.textContent = String(totalDarts());
+  el.dartSubmitButton.textContent = state.darts.length ? "Lagre kast" : "Lagre kast · 0";
   document.querySelectorAll("[data-multiplier]").forEach((button) => button.classList.toggle("active", button.dataset.multiplier === state.multiplier));
 }
 function resetInput() { state.sumValue = ""; state.darts = []; state.multiplier = "S"; renderInput(); }
@@ -227,6 +243,7 @@ async function checkPairing() {
     if (data.status === "approved" && data.kiosk?.code) {
       persistPairing(data.kiosk.code);
       state.snapshot = data.snapshot || null;
+      state.renderedView = "";
       render();
       await startLive();
       showToast(`Terminalen er koblet til ${data.kiosk.name || data.kiosk.code}.`);
@@ -276,8 +293,8 @@ async function submitSum() {
   finally { state.mutating = false; }
 }
 async function submitDarts() {
-  if (!isManual() || !state.darts.length || state.mutating) return;
-  const score = totalDarts(), checkout = currentRemaining() - score === 0 && isDoubleOut();
+  if (!isManual() || state.mutating) return;
+  const score = totalDarts(), checkout = state.darts.length > 0 && currentRemaining() - score === 0 && isDoubleOut();
   const darts = state.darts.slice();
   while (!checkout && darts.length < 3) darts.push({ multiplier: "S", value: 0 });
   state.mutating = true;

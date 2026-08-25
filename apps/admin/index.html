@@ -50,7 +50,6 @@
         <a href="#tournaments" data-portal-nav>Turneringer</a>
         <a href="#kiosks" data-portal-nav>Boards</a>
         <a href="#players" data-portal-nav>Spillere</a>
-        <a href="#members" data-portal-nav>Medlemmer</a>
         <a href="#screens" data-portal-nav>Live-skjermer</a>
         <a href="#integrations" data-portal-nav>Scolia / innstillinger</a>
       </nav>
@@ -67,8 +66,8 @@
         <div id="metrics" class="metrics"></div>
         <div class="portal-shortcuts">
           <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Opprett, check-in, puljer, kamper og sluttspill</span></a>
-          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Boards</strong><span>Terminaler, pairing og scoringkilde</span></a>
-          <a class="shortcut-card" href="#integrations" data-portal-nav><strong>Scolia</strong><span>Status, kø, fallback og feil</span></a>
+          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Boards</strong><span>Terminaler, pairing, scoringtype og Scolia-ID</span></a>
+          <a class="shortcut-card" href="#players" data-portal-nav><strong>Spillere</strong><span>Medlemskap, tilgang og dartstatistikk samlet</span></a>
         </div>
       </section>
 
@@ -85,7 +84,7 @@
           <div>
             <p class="eyebrow">Board Terminal</p>
             <h2>Boards</h2>
-            <p class="muted">Boardene tilhører Blindleia. Nummer, navn, sponsor, scoringmodus, Scolia og nettbrett styres mot samme lokale board-ID.</p>
+            <p class="muted">Alt som gjelder selve skiva ligger her. Velger du Scolia som scoringtype, må skiva kobles til en unik Scolia-ID.</p>
           </div>
           <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne terminal</a>
         </div>
@@ -97,8 +96,8 @@
               <h3>Scan QR-koden på terminalen</h3>
               <p class="muted">Ved førstegangsoppsett oppretter du normalt boardet her. Ved bytte av nettbrett velger du det eksisterende boardet.</p>
               <div class="claim-tip"><span>1</span><p class="muted">Åpne <strong>/kiosk/</strong> på nettbrettet og scan QR-koden.</p></div>
-              <div class="claim-tip"><span>2</span><p class="muted">Velg <strong>Nytt board</strong> og gi skiva nummer, navn og eventuell sponsor.</p></div>
-              <div class="claim-tip"><span>3</span><p class="muted">Trykk <strong>Opprett og koble</strong>. Neste gang huskes boardet automatisk.</p></div>
+              <div class="claim-tip"><span>2</span><p class="muted">Velg <strong>Nytt board</strong> og gi skiva nummer, navn, scoringtype og eventuell sponsor.</p></div>
+              <div class="claim-tip"><span>3</span><p class="muted">Er scoringtypen Scolia, fyller du også inn Scolia-ID-en før boardet kan lagres.</p></div>
             </div>
             <form id="claimKioskForm" class="claim-form">
               <label><span>Pairingkode</span><input id="claimKioskCode" class="claim-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="B7K4P2" required></label>
@@ -111,6 +110,7 @@
                   <label><span>Boardnummer</span><input id="claimBoardNumber" type="number" min="1" inputmode="numeric" required></label>
                   <label><span>Scoring</span><select id="claimScoringMode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
                 </div>
+                <label id="claimScoliaSerialRow" class="hidden"><span>Scolia-ID / serienummer</span><input id="claimScoliaSerial" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"></label>
                 <label><span>Navn på skiva</span><input id="claimBoardName" maxlength="120" placeholder="F.eks. Sjøbua Arena"></label>
                 <label><span>Sponsor / presentert av</span><input id="claimSponsorLabel" maxlength="150" placeholder="F.eks. Sjøbua"></label>
                 <label><span>Sponsorlogo (URL)</span><input id="claimSponsorLogoUrl" type="url" maxlength="255" placeholder="https://..."></label>
@@ -135,7 +135,8 @@
             <p class="muted">Avansert bruk. Normalflyten er å opprette boardet når nettbrettet pares.</p>
             <label><span>Boardnummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
             <label><span>Navn</span><input name="name" placeholder="Board 1"></label>
-            <label><span>Scoring</span><select name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
+            <label><span>Scoring</span><select id="kioskScoringMode" name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
+            <label id="kioskScoliaSerialRow" class="hidden"><span>Scolia-ID / serienummer</span><input id="kioskScoliaSerial" name="scolia_serial_number" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"></label>
             <button type="submit" class="button">Opprett board</button>
           </form>
           <div>
@@ -147,17 +148,11 @@
 
       <section id="players" data-portal-section="players" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Spillerbase</p><h2>Spillere</h2><p class="muted">Klubbens canonical spillerprofiler, statistikkkobling og tilgang.</p></div>
+          <div><p class="eyebrow">Klubben</p><h2>Spillere</h2><p class="muted">Én person, én spillerprofil og én tilgang. Medlemskap, konto, kontingent og dartstatistikk samles her.</p></div>
           <span id="playerCount" class="pill">0</span>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Spiller</th><th>Status</th><th>Konto / kontakt</th><th>Rolle</th></tr></thead><tbody id="playerRows"></tbody></table></div>
-      </section>
-
-      <section id="members" data-portal-section="members" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Tilgang</p><h2>Medlemmer og kontoer</h2><p class="muted">Medlemskap, spillerprofil og brukerkonto er separate identiteter. Her administreres invitasjon og tilgang uten å endre turneringshistorikk.</p></div>
-        </div>
-        <div id="memberRegistryStatus" class="muted">Laster medlemsregister …</div>
+        <div id="memberRegistryStatus" class="muted">Laster spillerregister …</div>
+        <div class="hidden" aria-hidden="true"><table><tbody id="playerRows"></tbody></table></div>
       </section>
 
       <section id="screens" data-portal-section="screens" class="panel">
