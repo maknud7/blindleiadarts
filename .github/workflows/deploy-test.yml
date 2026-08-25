@@ -201,7 +201,21 @@ jobs:
         run: |
           set -Eeuo pipefail
           base="${BASE_URL%/}"
-          response="$(curl -fsS --max-time 30 --get --data-urlencode "key=$OWNER_RESET_KEY" "$base/api/ops-owner-onboarding-reset-20260825.php")"
-          printf '%s' "$response" | grep -Fq '"ok":true'
-          printf '%s' "$response" | grep -Fq '"status":"reset"'
-          printf '%s' "$response" | grep -Fq '"email_sent":true'
+          http_code="$(curl -sS --max-time 30 --get --data-urlencode "key=$OWNER_RESET_KEY" -o /tmp/owner-reset-response.json -w '%{http_code}' "$base/api/ops-owner-onboarding-reset-20260825.php")"
+          php -r '
+            $payload = json_decode(file_get_contents($argv[1]), true);
+            if (!is_array($payload)) { echo "OWNER_RESET_RESPONSE=invalid_json\n"; exit; }
+            if (($payload["ok"] ?? false) === true) {
+                echo "OWNER_RESET_RESPONSE=ok\n";
+                echo "OWNER_RESET_STATUS=" . ($payload["data"]["status"] ?? "unknown") . "\n";
+                echo "OWNER_RESET_EMAIL_SENT=" . (!empty($payload["data"]["email_sent"]) ? "yes" : "no") . "\n";
+                exit;
+            }
+            echo "OWNER_RESET_RESPONSE=error\n";
+            echo "OWNER_RESET_ERROR_CODE=" . ($payload["error"]["code"] ?? "unknown") . "\n";
+            echo "OWNER_RESET_ERROR_MESSAGE=" . ($payload["error"]["message"] ?? "unknown") . "\n";
+          ' /tmp/owner-reset-response.json
+          test "$http_code" = "200"
+          grep -Fq '"ok":true' /tmp/owner-reset-response.json
+          grep -Fq '"status":"reset"' /tmp/owner-reset-response.json
+          grep -Fq '"email_sent":true' /tmp/owner-reset-response.json
