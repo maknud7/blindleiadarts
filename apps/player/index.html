@@ -30,7 +30,7 @@
 
     <nav class="portal-nav card" aria-label="Spillerportal">
       <a href="#signup">Påmelding</a>
-      <a href="#tables">Tabeller</a>
+      <a href="#tables">Tabeller / sluttspill</a>
       <a href="#players">Spillere</a>
       <a href="#summaries">Oppsummeringer</a>
     </nav>
@@ -110,6 +110,13 @@
       </div>
       <select id="tableTournamentSelect" aria-label="Velg turnering"></select>
       <div id="groupTables" class="stack"></div>
+      <div class="section-head content-subhead">
+        <div>
+          <p class="eyebrow">Turnering</p>
+          <h2>Sluttspill</h2>
+        </div>
+      </div>
+      <div id="portalPlayoff"></div>
     </section>
 
     <section id="players" class="card stack">
@@ -137,6 +144,7 @@
 
   <script src="./app.js" type="module"></script>
   <script src="./portal-content.js" type="module"></script>
+  <script src="./portal-playoffs.js" type="module"></script>
   <script src="./player-breaks.js" type="module"></script>
 </body>
 </html>
