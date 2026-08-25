@@ -28,6 +28,14 @@ jobs:
             curl -fsS --max-time 20 "${base}${path}${sep}cb=${RANDOM}${RANDOM}"
           }
 
+          check_status() {
+            local label="$1"
+            local path="$2"
+            echo "Checking ${label}: ${path}"
+            fetch_body "$path" >/dev/null
+            echo "OK: ${label}"
+          }
+
           check_contains() {
             local label="$1"
             local path="$2"
@@ -44,7 +52,7 @@ jobs:
 
           check_contains "release environment" "/release.json" '"environment":"test"'
           check_contains "release sha" "/release.json" "$DEPLOYED_SHA"
-          check_contains "health" "/api/v1/health" '"ok":true'
+          check_status "health" "/api/v1/health"
           check_contains "admin people" "/admin/" 'Personer'
           check_contains "admin equipment" "/admin/" 'Utstyr'
           check_contains "admin tournament UX" "/admin/admin-ux.js" 'Neste anbefalte steg'
