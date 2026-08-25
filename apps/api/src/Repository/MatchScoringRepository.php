@@ -49,7 +49,23 @@ final class MatchScoringRepository
     /** @param array<string, mixed> $payload */
     public function recordVisit(int $kioskId, array $payload): void
     {
-        $this->transaction(function () use ($kioskId, $payload): void {
+        $requestKey = trim((string) ($payload['request_id'] ?? ''));
+        if ($requestKey !== '') {
+            if (strlen($requestKey) > 80) {
+                throw new ValidationException('request_id_too_long', 'request_id er for lang.');
+            }
+            // A retry may arrive after a checkout has already completed the match.
+            if ($this->visitRequestAlreadyExists($requestKey)) {
+                return;
+            }
+        }
+
+        $this->transaction(function () use ($kioskId, $payload, $requestKey): void {
+            // Re-check inside the transaction to cover concurrent retries.
+            if ($requestKey !== '' && $this->visitRequestAlreadyExists($requestKey)) {
+                return;
+            }
+
             $match = $this->findActiveMatchForKiosk($kioskId, false, true);
             if ($match === null) {
                 throw new ValidationException('match_not_available', 'Det finnes ingen kamp klar på denne skiven.', 409);
@@ -74,18 +90,7 @@ final class MatchScoringRepository
             $remainingBefore = $remaining[$currentPlayerId] ?? (int) $leg['start_score'];
             $visit = $this->rules->evaluateVisit($remainingBefore, $payload);
 
-            $requestKey = trim((string) ($payload['request_id'] ?? ''));
-            if ($requestKey !== '') {
-                if (strlen($requestKey) > 80) {
-                    throw new ValidationException('request_id_too_long', 'request_id er for lang.');
-                }
-                if ($this->visitRequestAlreadyExists($requestKey)) {
-                    return;
-                }
-            } else {
-                $requestKey = null;
-            }
-
+            $storedRequestKey = $requestKey !== '' ? $requestKey : null;
             $visitNumber = $this->nextVisitNumberForPlayer((int) $leg['id'], $currentPlayerId);
             $dartsJson = $visit['darts'] !== []
                 ? json_encode($visit['darts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
@@ -117,7 +122,7 @@ final class MatchScoringRepository
                 $dartsJson,
                 $bust,
                 $remainingAfter,
-                $requestKey
+                $storedRequestKey
             );
             $stmt->execute();
             $stmt->close();
@@ -196,7 +201,10 @@ final class MatchScoringRepository
                     player_a_id, player_b_id, winner_player_id, starts_at, finished_at
              FROM `%1$smatches`
              WHERE kiosk_id=? AND status IN %2$s
-             ORDER BY FIELD(status,"in_progress","assigned","completed"), id ASC
+             ORDER BY
+                FIELD(status,"in_progress","assigned","completed"),
+                CASE WHEN status="completed" THEN id END DESC,
+                CASE WHEN status<>"completed" THEN id END ASC
              LIMIT 1%3$s',
             $this->tablePrefix,
             $statuses,
