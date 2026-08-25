@@ -1,0 +1,7 @@
+.post-match-panel{margin-top:24px;display:grid;gap:16px;max-width:760px;width:min(100%,760px)}
+.post-match-result{padding:18px 20px;border:1px solid rgba(255,255,255,.1);border-radius:18px;background:rgba(255,255,255,.035);text-align:left}
+.post-match-result h3{margin:4px 0 6px;font-size:clamp(1.35rem,3vw,2rem)}
+.post-match-result p{margin:0}.post-match-hint{margin-top:10px!important;opacity:.76}
+.post-match-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}.post-match-actions .start-match{min-width:260px}
+.post-match-status{min-height:1.4em;text-align:center;margin:0}
+@media(max-width:640px){.post-match-actions{flex-direction:column}.post-match-actions button{width:100%}}
