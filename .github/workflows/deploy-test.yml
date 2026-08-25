@@ -100,6 +100,8 @@ jobs:
           test -f dist/test/release.json
           test -f dist/test/api/src/EmailAuthApplication.php
           test -f dist/test/api/src/PasswordResetApplication.php
+          test -f dist/test/api/src/ActivityApplication.php
+          test -f dist/test/api/src/Repository/ActivityRepository.php
           test -f dist/test/api/src/ScoliaApplication.php
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
@@ -110,6 +112,7 @@ jobs:
           test -f dist/test/admin/tournament-wizard-v2.js
           test -f dist/test/admin/admin-ux.js
           test -f dist/test/admin/admin-ux.css
+          test -f dist/test/admin/activity-admin.js
           test -f dist/test/player/checkin-runtime.js
           test -f dist/test/player/player-ux.js
           test -f dist/test/player/player-ux.css
@@ -122,6 +125,7 @@ jobs:
           test -f dist/test/screen/screen-ux.css
           test -f dist/test/packages/ui-assets/mobile-portal.css
           test -f dist/test/packages/ui-assets/portal-brand.css
+          test -f dist/test/packages/ui-assets/activity.js
           test -f dist/test/screen/checkin-display.js
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
@@ -133,6 +137,13 @@ jobs:
           grep -Fq 'data-toggle-password' dist/test/onboarding/index.html
           grep -Fq 'portal-brand.css' dist/test/packages/ui-assets/portal-menu.js
           grep -Fq 'mobile-portal.css' dist/test/packages/ui-assets/portal-menu.js
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/admin/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/player/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/live/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/screen/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/kiosk/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/onboarding/index.html
           grep -Fq 'viewport-fit=cover' dist/test/live/index.html
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/live/index.html
           grep -Fq 'screen-ux.css' dist/test/screen/index.html
@@ -152,6 +163,7 @@ jobs:
           grep -Fq '>Min profil</a>' dist/test/player/index.html
           grep -Fq 'Neste anbefalte steg' dist/test/admin/admin-ux.js
           grep -Fq 'Akkurat nå' dist/test/player/player-ux.js
+          grep -Fq 'DEFAULT_CLUB_SLUG = "blindleia-dartklubb"' dist/test/packages/ui-assets/activity.js
           grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
           grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/test/api/config.php
@@ -189,13 +201,16 @@ jobs:
           curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Personer'
           curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Utstyr'
           curl -fsS --max-time 15 "$base/admin/admin-ux.js" | grep -Fq 'Neste anbefalte steg'
+          curl -fsS --max-time 15 "$base/admin/activity-admin.js" | grep -Fq 'Aktivitet'
           curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Min profil'
           curl -fsS --max-time 15 "$base/player/player-ux.js" | grep -Fq 'Akkurat nå'
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'viewport-fit=cover'
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
           curl -fsS --max-time 15 "$base/packages/ui-assets/portal-menu.js" | grep -Fq 'portal-brand.css'
           curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Mobile navigation must expose every destination'
+          curl -fsS --max-time 15 "$base/packages/ui-assets/activity.js" | grep -Fq 'page_view'
           curl -fsS --max-time 15 "$base/live/" | grep -Fq 'blindleia-dartklubb-logo.png'
+          curl -fsS --max-time 15 "$base/live/" | grep -Fq '/packages/ui-assets/activity.js'
           curl -fsS --max-time 15 "$base/live/" | grep -Fq 'viewport-fit=cover'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'screen-ux.css'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Kamper på skivene'
@@ -205,3 +220,7 @@ jobs:
           curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq '"orientation": "portrait"'
           curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'height: 100dvh'
           curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'overflow: hidden'
+          activity="$(curl -fsS --max-time 15 -X POST -H 'Content-Type: application/json' \
+            --data '{"events":[{"surface":"deploy","event_name":"deployment_verify","path":"/","club_slug":"blindleia-dartklubb","metadata":{"source":"deploy_test"}}]}' \
+            "$base/api/v1/activity")"
+          printf '%s' "$activity" | grep -Fq '"ok":true'
