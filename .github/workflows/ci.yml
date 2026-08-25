@@ -40,6 +40,9 @@ jobs:
       - name: Tournament group engine checks
         run: php infra/tests/tournament_group_service_test.php
 
+      - name: Single elimination bracket checks
+        run: php infra/tests/single_elimination_service_test.php
+
       - name: Canonical 501 scoring rules
         run: php apps/api/tests/dart501_rules_test.php
 

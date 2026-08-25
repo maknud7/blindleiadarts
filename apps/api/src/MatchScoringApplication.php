@@ -11,6 +11,7 @@ use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\MatchScoringRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Service\EloReconciliationService;
+use Blindleia\Dartkiosk\Api\Service\PlayoffReconciliationService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use mysqli_sql_exception;
@@ -86,6 +87,11 @@ final class MatchScoringApplication
         }
 
         $scoring = new MatchScoringRepository($database);
+        $playoffReconciliation = new PlayoffReconciliationService($database);
+        $targetMatchId = $action === 'undo'
+            ? $playoffReconciliation->assertUndoAllowed($kioskId)
+            : $playoffReconciliation->targetMatchIdForKiosk($kioskId, false);
+
         if ($action === 'start-match') {
             $scoring->startMatch($kioskId);
         } elseif ($action === 'visit') {
@@ -94,9 +100,10 @@ final class MatchScoringApplication
             $scoring->undoLastVisit($kioskId);
         }
 
-        // ELO is derived from canonical match state. Reconciliation makes the
-        // ledger idempotent and also repairs a prior interrupted ELO update.
+        // ELO and playoff progression are both derived from canonical match state.
+        // Reconciliation keeps both projections idempotent and repairable.
         (new EloReconciliationService($database))->reconcileKiosk($kioskId);
+        $playoffReconciliation->afterMutation($targetMatchId, $action === 'undo');
 
         $state = $kiosks->findKioskStateByCode($kioskCode, $pairingToken);
         if ($state === null) {
