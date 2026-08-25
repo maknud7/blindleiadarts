@@ -63,3 +63,6 @@ jobs:
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
+          test -f dist/test/kiosk/admin-mode.js
+          grep -Fq '2201' dist/test/kiosk/admin-mode.js
+          grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
