@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 return [
     // Authoritative Mandagsserien Høst 2026 snapshot supplied before the
-    // 24 August tournament. Matches from tournaments scheduled on/after this
-    // date are applied live on top of these ratings and match counts.
+    // 24 August tournament. Matches from tournaments scheduled in the rest
+    // of the autumn 2026 series are applied live on top of these ratings.
     'as_of' => '2026-08-24T16:52:00+02:00',
     'effective_from_date' => '2026-08-24',
+    'effective_until_date' => '2026-12-31',
     'players' => [
         ['display_name' => 'Andre Kendrick', 'rating' => 1077.3, 'played' => 18],
         ['display_name' => 'Jon-Henning Næss', 'rating' => 1067.3, 'played' => 17],
