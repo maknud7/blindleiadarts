@@ -50,10 +50,11 @@ try {
     $roles = $identityPrefix . 'global_user_roles';
     $sessions = $identityPrefix . 'auth_sessions';
     $invitations = $identityPrefix . 'user_onboarding_invitations';
+    $legacyUsers = $dataPrefix . 'user_accounts';
     $displayName = 'Magnus Knudsen';
 
     $stmt = $db->prepare(
-        "SELECT ua.id, ua.member_id, ua.email, ua.display_name
+        "SELECT ua.id, ua.member_id, ua.email, ua.username, ua.display_name
            FROM `{$users}` ua
            INNER JOIN `{$roles}` gur ON gur.user_account_id=ua.id AND gur.role='super_admin'
           WHERE ua.display_name=?
@@ -72,9 +73,39 @@ try {
 
     $accountId = (int) $accounts[0]['id'];
     $memberId = (int) ($accounts[0]['member_id'] ?? 0);
-    $email = mb_strtolower(trim((string) ($accounts[0]['email'] ?? '')), 'UTF-8');
     if ($memberId <= 0) throw new RuntimeException('Kontoen mangler medlemskobling.');
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Kontoen mangler gyldig e-postadresse.');
+
+    // Email is now the canonical login identity. The production row predates that
+    // decision, so recover an existing email value conservatively before onboarding:
+    // canonical email/legacy username plus the old isolated test account for the exact
+    // same member_id. We only proceed when all valid candidates collapse to one address.
+    $emailCandidates = [];
+    $addEmailCandidate = static function (array &$items, mixed $value): void {
+        $candidate = mb_strtolower(trim((string) ($value ?? '')), 'UTF-8');
+        if (filter_var($candidate, FILTER_VALIDATE_EMAIL)) $items[$candidate] = true;
+    };
+    $addEmailCandidate($emailCandidates, $accounts[0]['email'] ?? null);
+    $addEmailCandidate($emailCandidates, $accounts[0]['username'] ?? null);
+
+    if ($dataPrefix !== $identityPrefix) {
+        $legacy = $db->prepare("SELECT email, username FROM `{$legacyUsers}` WHERE member_id=? LIMIT 2");
+        $legacy->bind_param('i', $memberId);
+        $legacy->execute();
+        $legacyResult = $legacy->get_result();
+        while ($row = $legacyResult->fetch_assoc()) {
+            $addEmailCandidate($emailCandidates, $row['email'] ?? null);
+            $addEmailCandidate($emailCandidates, $row['username'] ?? null);
+        }
+        $legacy->close();
+    }
+
+    $emails = array_keys($emailCandidates);
+    if (count($emails) !== 1) {
+        throw new RuntimeException(count($emails) === 0
+            ? 'Fant ingen eksisterende gyldig e-postadresse for medlemmet.'
+            : 'Fant flere ulike e-postadresser for medlemmet; reset stoppet for sikkerhets skyld.');
+    }
+    $email = $emails[0];
 
     $member = $db->prepare('SELECT id, navn FROM `medlemmer` WHERE id=? LIMIT 1');
     $member->bind_param('i', $memberId);
@@ -90,12 +121,12 @@ try {
 
     $db->begin_transaction();
     try {
-        $lock = $db->prepare("SELECT id, member_id, email FROM `{$users}` WHERE id=? FOR UPDATE");
+        $lock = $db->prepare("SELECT id, member_id FROM `{$users}` WHERE id=? FOR UPDATE");
         $lock->bind_param('i', $accountId);
         $lock->execute();
         $locked = $lock->get_result()->fetch_assoc() ?: null;
         $lock->close();
-        if ($locked === null || (int) ($locked['member_id'] ?? 0) !== $memberId || mb_strtolower(trim((string) ($locked['email'] ?? '')), 'UTF-8') !== $email) {
+        if ($locked === null || (int) ($locked['member_id'] ?? 0) !== $memberId) {
             throw new RuntimeException('Kontoen endret seg under reset.');
         }
 
@@ -133,14 +164,16 @@ try {
         $status = 'invited';
         $update = $db->prepare(
             "UPDATE `{$users}`
-                SET password_hash=NULL,
+                SET email=?,
+                    username=?,
+                    password_hash=NULL,
                     account_status=?,
                     is_active=0,
                     invited_at=NOW(),
                     claimed_at=NULL
               WHERE id=?"
         );
-        $update->bind_param('si', $status, $accountId);
+        $update->bind_param('sssi', $email, $email, $status, $accountId);
         $update->execute();
         $update->close();
 
@@ -158,7 +191,7 @@ try {
         $message = "Hei {$name},\n\n"
             . "Kontoen din i Blindleia Darts er nullstilt slik at du kan kjøre onboarding på nytt.\n\n"
             . "Åpne denne lenken innen 14 dager:\n{$activationUrl}\n\n"
-            . "Der velger du e-postadresse og nytt passord.\n\n"
+            . "Der bekrefter du e-postadressen og velger nytt passord.\n\n"
             . "Blindleia Dartklubb\n";
         $headers = [
             'From: Blindleia Dartklubb <blindleiadartklubb@ingenting.org>',
