@@ -16,6 +16,7 @@ use Blindleia\Dartkiosk\Api\TournamentCheckinApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
 use Blindleia\Dartkiosk\Api\TournamentOperationsApplication;
 use Blindleia\Dartkiosk\Api\TournamentPlayoffApplication;
+use Blindleia\Dartkiosk\Api\TournamentPolicyApplication;
 use Blindleia\Dartkiosk\Api\TournamentWizardApplication;
 
 require __DIR__ . '/bootstrap.php';
@@ -46,6 +47,14 @@ if ($passwordReset->run()) {
 
 $emailAuth = new EmailAuthApplication(__DIR__);
 if ($emailAuth->run()) {
+    return;
+}
+
+// Canonical tournament policy intercepts creation/timing/start/billing before
+// the older generic handlers. This keeps legacy routes compatible while the UI
+// exposes only the simplified product model.
+$tournamentPolicy = new TournamentPolicyApplication(__DIR__);
+if ($tournamentPolicy->run()) {
     return;
 }
 
