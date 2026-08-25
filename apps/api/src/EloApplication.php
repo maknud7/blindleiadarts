@@ -65,9 +65,16 @@ final class EloApplication
         $method = $request->method();
 
         if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/elo$#', $path, $m) === 1) {
+            $items = $elo->listClubElo((int) $m[1]);
+            foreach ($items as &$item) {
+                // Compatibility with the existing player portal renderer.
+                $item['matches_played'] = (int) ($item['elo_matches_played'] ?? 0);
+                $item['baseline_played'] = (int) ($item['elo_matches_played'] ?? 0);
+            }
+            unset($item);
             return JsonResponse::ok([
                 'club_id' => (int) $m[1],
-                'items' => $elo->listClubElo((int) $m[1]),
+                'items' => $items,
             ]);
         }
 
