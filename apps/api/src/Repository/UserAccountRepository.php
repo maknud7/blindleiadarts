@@ -31,20 +31,30 @@ final class UserAccountRepository
     }
 
     /** @return array<string, mixed>|null */
-    public function findByUsername(string $login): ?array
+    public function findByEmail(string $email): ?array
     {
-        $login = trim($login);
+        $email = mb_strtolower(trim($email), 'UTF-8');
         $sql = $this->identitySelectSql(
-            'WHERE LOWER(ua.username) = LOWER(?) OR LOWER(ua.email) = LOWER(?) LIMIT 1',
+            'WHERE LOWER(ua.email) = LOWER(?) LIMIT 1',
             false
         );
 
         $statement = $this->connection->prepare($sql);
-        $statement->bind_param('ss', $login, $login);
+        $statement->bind_param('s', $email);
         $statement->execute();
         $row = $statement->get_result()->fetch_assoc() ?: null;
         $statement->close();
         return $row;
+    }
+
+    /**
+     * Legacy code compatibility only. Login semantics are email-only; this method
+     * deliberately never searches the technical username column.
+     * @return array<string, mixed>|null
+     */
+    public function findByUsername(string $email): ?array
+    {
+        return $this->findByEmail($email);
     }
 
     /** @return array<string, mixed>|null */

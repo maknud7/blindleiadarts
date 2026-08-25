@@ -51,12 +51,25 @@ jobs:
 
       - name: JavaScript syntax check
         run: |
-          find apps -type f -name '*.js' -print0 \
+          find apps packages/ui-assets -type f -name '*.js' -print0 \
             | xargs -0 -n1 node --check
+
+      - name: Email-only auth surface check
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'type="email" placeholder="E-postadresse"' apps/player/index.html
+          grep -Fq '<span>E-postadresse</span>' apps/admin/index.html
+          grep -Fq 'id="passwordResetEmail" type="email"' packages/ui-assets/password-reset.js
+          if grep -Fq 'Brukernavn eller e-post' packages/ui-assets/password-reset.js; then
+            echo 'Password reset still exposes username as a login concept.'
+            exit 1
+          fi
 
       - name: Release package smoke test
         run: |
           bash infra/deploy/build-release.sh test
+          test -f dist/test/api/src/EmailAuthApplication.php
+          test -f dist/test/api/src/PasswordResetApplication.php
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/admin/season-admin.js

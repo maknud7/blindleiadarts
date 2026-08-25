@@ -98,6 +98,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -f dist/test/release.json
+          test -f dist/test/api/src/EmailAuthApplication.php
+          test -f dist/test/api/src/PasswordResetApplication.php
           test -f dist/test/api/src/ScoliaApplication.php
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
@@ -114,6 +116,8 @@ jobs:
           test -f dist/test/kiosk/admin-mode.js
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
+          grep -Fq 'type="email" placeholder="E-postadresse"' dist/test/player/index.html
+          grep -Fq '<span>E-postadresse</span>' dist/test/admin/index.html
           grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
           grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/test/api/config.php
@@ -148,8 +152,8 @@ jobs:
           printf '%s' "$release" | grep -Fq '"environment":"test"'
           printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"
           curl -fsS --max-time 15 "$base/api/v1/health" >/dev/null
-          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Blindleia Darts'
-          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Din dartportal'
+          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'E-postadresse'
+          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'E-postadresse'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
           curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'
           curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'

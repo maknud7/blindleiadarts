@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\EloApplication;
+use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\MatchScoringApplication;
 use Blindleia\Dartkiosk\Api\PasswordResetApplication;
 use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
@@ -34,6 +35,11 @@ if ($origin === 'https://dart.ingenting.org') {
 
 $passwordReset = new PasswordResetApplication(__DIR__);
 if ($passwordReset->run()) {
+    return;
+}
+
+$emailAuth = new EmailAuthApplication(__DIR__);
+if ($emailAuth->run()) {
     return;
 }
 
