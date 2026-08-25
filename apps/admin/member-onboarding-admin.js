@@ -22,7 +22,7 @@ if (panel) {
     <div id="memberInviteResult" class="member-invite-result hidden"></div>
     <div class="table-wrap member-access-table-wrap">
       <table>
-        <thead><tr><th>Spiller</th><th>Tilgang</th><th>E-post</th><th>ELO</th><th>Kamper</th><th>Snitt</th><th>180</th><th></th></tr></thead>
+        <thead><tr><th>Spiller</th><th>Tilgang</th><th>Kontingent</th><th>E-post</th><th>ELO</th><th>Kamper</th><th>Snitt</th><th>180</th><th></th></tr></thead>
         <tbody id="memberAccessRows"></tbody>
       </table>
     </div>`;
@@ -84,6 +84,28 @@ if (panel) {
     return Number.isFinite(number) ? number.toFixed(digits) : "—";
   }
 
+  function formatMoney(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? new Intl.NumberFormat("nb-NO", { style: "currency", currency: "NOK", maximumFractionDigits: 0 }).format(number) : "—";
+  }
+
+  function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(String(value).replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+  }
+
+  function duesCell(membership) {
+    if (!membership) return `<span class="muted">Ikke registrert</span>`;
+    const override = String(membership.status_override || "").trim();
+    const latest = membership.latest_payment || null;
+    const monthly = membership.monthly_amount !== null && membership.monthly_amount !== undefined ? `${formatMoney(membership.monthly_amount)}/mnd` : "Beløp ikke satt";
+    if (override) return `<strong>${escapeHtml(override)}</strong><small>${escapeHtml(monthly)}</small>`;
+    if (latest) return `<strong>${escapeHtml(latest.period || formatDate(latest.date))}</strong><small>${formatMoney(latest.amount)} · ${escapeHtml(formatDate(latest.date))} · ${escapeHtml(monthly)}</small>`;
+    return `<strong>Ingen betaling registrert</strong><small>${escapeHtml(monthly)}</small>`;
+  }
+
   function render(data) {
     state.items = data.items || [];
     const summary = data.summary || {};
@@ -109,6 +131,7 @@ if (panel) {
       return `<tr data-member-id="${Number(item.member_id)}">
         <td><strong>${escapeHtml(playerName)}</strong>${playerId ? `<small>ELO ${formatNumber(stats.elo_rating || 1000, 1)}</small>` : `<small>Spillerprofil opprettes automatisk</small>`}</td>
         <td><span class="badge ${tone}">${escapeHtml(label)}</span>${account?.invite_expires_at ? `<small>Lenke utløper ${escapeHtml(formatDate(account.invite_expires_at))}</small>` : ""}</td>
+        <td>${duesCell(item.membership)}</td>
         <td><input class="member-email-input" type="email" value="${escapeHtml(email)}" placeholder="E-post" ${isActive ? "readonly" : ""}></td>
         <td>${playerId ? formatNumber(stats.elo_rating || 1000, 1) : "—"}</td>
         <td>${playerId ? Number(stats.matches_played || 0) : "—"}</td>
@@ -119,13 +142,6 @@ if (panel) {
           : `<button type="button" class="button secondary member-invite">${escapeHtml(actionLabel)}</button>`}</td>
       </tr>`;
     }).join("");
-  }
-
-  function formatDate(value) {
-    if (!value) return "—";
-    const date = new Date(String(value).replace(" ", "T"));
-    if (Number.isNaN(date.getTime())) return String(value);
-    return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
   }
 
   async function load(force = false) {
@@ -140,7 +156,7 @@ if (panel) {
       render(members);
     } catch (error) {
       state.key = "";
-      el.rows.innerHTML = `<tr><td colspan="8"><div class="empty">${escapeHtml(error.message)}</div></td></tr>`;
+      el.rows.innerHTML = `<tr><td colspan="9"><div class="empty">${escapeHtml(error.message)}</div></td></tr>`;
     } finally { state.loading = false; }
   }
 
