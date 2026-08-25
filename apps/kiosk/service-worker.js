@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v3";
+const SHELL_CACHE = "bd-kiosk-shell-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const SHELL = [
   "./pairing.css",
   "./kiosk-polish.css",
   "./brand-light.css",
+  "./tablet-portrait.css",
   "./app.js",
   "./pairing-runtime.js",
   "./operations-runtime.js",
