@@ -76,6 +76,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
           IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
@@ -98,14 +99,21 @@ jobs:
           set -Eeuo pipefail
           test -f dist/test/release.json
           test -f dist/test/api/src/ScoliaApplication.php
+          test -f dist/test/api/src/SeasonApplication.php
+          test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
           test -f dist/test/admin/scolia-admin.js
+          test -f dist/test/admin/season-admin.js
           test -f dist/test/admin/checkin-admin-v2.js
           test -f dist/test/admin/tournament-wizard-v2.js
           test -f dist/test/player/checkin-runtime.js
           test -f dist/test/screen/checkin-display.js
+          test -f dist/test/kiosk/manifest.webmanifest
+          test -f dist/test/kiosk/service-worker.js
+          test -f dist/test/kiosk/install.js
           grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
+          grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/test/api/config.php
 
       - name: Deploy test via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
@@ -141,3 +149,4 @@ jobs:
           curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Din dartportal'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
           curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'
+          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq 'Blindleia Board'
