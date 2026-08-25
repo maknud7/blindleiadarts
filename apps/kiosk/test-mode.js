@@ -36,22 +36,27 @@ function styles() {
   `;
   document.head.appendChild(style);
 }
-function ensureSettingsToggle() {
+function ensureAdminTestControl() {
   if (document.body?.dataset?.appEnv !== "test") return;
   const actions = document.querySelector("#settingsDialog .settings-actions");
-  if (!actions || document.getElementById("kioskTestModeToggle")) return;
-  const button = document.createElement("button");
-  button.id = "kioskTestModeToggle";
-  button.type = "button";
-  button.className = "ghost-button";
-  button.textContent = active() ? "Avslutt testmodus" : "Aktiver testmodus";
-  button.addEventListener("click", () => {
-    setActive(!active());
-    const url = new URL(window.location.href);
-    url.searchParams.delete("testmode");
-    window.location.replace(url.toString());
-  });
-  actions.prepend(button);
+  if (!actions) return;
+  let button = document.getElementById("kioskTestModeToggle");
+  if (!button) {
+    button = document.createElement("button");
+    button.id = "kioskTestModeToggle";
+    button.type = "button";
+    button.className = "ghost-button";
+    button.dataset.kioskAdminControl = "1";
+    actions.prepend(button);
+    button.addEventListener("click", () => {
+      setActive(!active());
+      const url = new URL(window.location.href);
+      url.searchParams.delete("testmode");
+      window.location.replace(url.toString());
+    });
+  }
+  const label = active() ? "Avslutt testmodus" : "Aktiver testmodus";
+  if (button.textContent !== label) button.textContent = label;
 }
 async function activateTestBoard(kioskId, button) {
   const token = ensureTestToken();
@@ -82,15 +87,21 @@ function buildPanel(items, message = "") {
     ? items.map((item) => `<option value="${Number(item.id)}">${escapeHtml(item.club_name)} · Board ${Number(item.board_number)} · ${escapeHtml(item.name)}${item.scoring_mode === "scolia" ? " · Scolia" : ""}</option>`).join("")
     : `<option value="">Ingen fysiske boards funnet</option>`;
   panel.innerHTML = `
-    <span class="test-mode-badge">Eksplisitt testmodus</span>
-    <strong>Bruk et fysisk board mot test-runtime</strong>
-    <small class="muted">${escapeHtml(message || "Boardlisten kommer fra det fysiske/canonical registeret. Test oppretter kun en intern runtime-binding. Et Scolia-board starter manuelt i test slik at live Scolia ikke flyttes ved et uhell.")}</small>
-    <div class="test-mode-row"><select aria-label="Velg fysisk board" ${hasItems ? "" : "disabled"}>${options}</select><button type="button" class="ghost-button" ${hasItems ? "" : "disabled"}>Bruk valgt board</button></div>
-    <button type="button" class="ghost-button test-mode-exit">Avslutt testmodus</button>`;
+    <span class="test-mode-badge">Testmodus aktiv</span>
+    <strong>Terminalen bruker isolert test-runtime</strong>
+    <small class="muted">${escapeHtml(message || "Testkamper og scoring lagres isolert. Det fysiske boardregisteret er felles, og Scolia flyttes ikke automatisk til test.")}</small>
+    <div class="test-mode-row" data-kiosk-admin-control><select aria-label="Velg fysisk board" ${hasItems ? "" : "disabled"}>${options}</select><button type="button" class="ghost-button" ${hasItems ? "" : "disabled"}>Bruk valgt board</button></div>
+    <button type="button" class="ghost-button test-mode-exit" data-kiosk-admin-control>Avslutt testmodus</button>`;
   const select = panel.querySelector("select");
   const use = panel.querySelector(".test-mode-row button");
   if (hasItems) use.addEventListener("click", () => activateTestBoard(select.value, use));
-  panel.querySelector(".test-mode-exit").addEventListener("click", () => { setActive(false); localStorage.removeItem("bd:kioskTestPhysicalBoardId"); window.location.reload(); });
+  panel.querySelector(".test-mode-exit").addEventListener("click", () => {
+    setActive(false);
+    localStorage.removeItem("bd:kioskTestPhysicalBoardId");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("testmode");
+    window.location.replace(url.toString());
+  });
   return panel;
 }
 function replacePanel(items, message = "") {
@@ -107,8 +118,8 @@ async function bootTestMode() {
   if (query === "1") setActive(true);
   if (query === "0") setActive(false);
   styles();
-  ensureSettingsToggle();
-  const observer = new MutationObserver(ensureSettingsToggle);
+  ensureAdminTestControl();
+  const observer = new MutationObserver(ensureAdminTestControl);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   if (!active()) return;
 
@@ -117,7 +128,7 @@ async function bootTestMode() {
   try {
     const data = await jsonRequest(TEST_MODE_API);
     replacePanel(data.items || [], (data.items || []).length
-      ? "Velg en ekte skive. Testdata for kamper og scoring er fortsatt isolert. Scolia flyttes ikke automatisk til test."
+      ? "Velg fysisk skive fra admin-modus. Testdata for kamp og scoring er fortsatt isolert."
       : "Det fysiske boardregisteret har ingen aktive skiver.");
   } catch (error) {
     replacePanel([], `Kunne ikke laste fysisk boardregister: ${error.message || "ukjent feil"}`);
