@@ -1,18 +1,15 @@
-const passwordResetCssHref = new URL("./password-reset.css", import.meta.url).href;
-if (![...document.styleSheets].some((sheet) => sheet.href === passwordResetCssHref)) {
-  const resetStyles = document.createElement("link");
-  resetStyles.rel = "stylesheet";
-  resetStyles.href = passwordResetCssHref;
-  document.head.appendChild(resetStyles);
+function ensureStylesheet(url) {
+  const href = new URL(url, import.meta.url).href;
+  if ([...document.styleSheets].some((sheet) => sheet.href === href)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  document.head.appendChild(link);
 }
 
-const mobilePortalCssHref = new URL("./mobile-portal.css", import.meta.url).href;
-if (![...document.styleSheets].some((sheet) => sheet.href === mobilePortalCssHref)) {
-  const mobileStyles = document.createElement("link");
-  mobileStyles.rel = "stylesheet";
-  mobileStyles.href = mobilePortalCssHref;
-  document.head.appendChild(mobileStyles);
-}
+ensureStylesheet("./portal-brand.css");
+ensureStylesheet("./password-reset.css");
+ensureStylesheet("./mobile-portal.css");
 
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
