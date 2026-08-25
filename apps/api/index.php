@@ -17,13 +17,13 @@ if ($tournamentFeatures->run()) {
     return;
 }
 
-$operations = new TournamentOperationsApplication(__DIR__);
-if ($operations->run()) {
+$playerBreaks = new PlayerBreakApplication(__DIR__);
+if ($playerBreaks->run()) {
     return;
 }
 
-$playerBreaks = new PlayerBreakApplication(__DIR__);
-if ($playerBreaks->run()) {
+$operations = new TournamentOperationsApplication(__DIR__);
+if ($operations->run()) {
     return;
 }
 
