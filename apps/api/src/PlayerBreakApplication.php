@@ -25,8 +25,12 @@ final class PlayerBreakApplication
     {
         $request = Request::fromGlobals();
         $path = trim($request->path(), '/');
-        if (!in_array($request->method(), ['GET', 'POST'], true)
-            || preg_match('#^v1/tournaments/(\d+)/me/break$#', $path) !== 1) {
+        $method = $request->method();
+        $isBreakRoute = in_array($method, ['GET', 'POST'], true)
+            && preg_match('#^v1/tournaments/(\d+)/me/break$#', $path) === 1;
+        $isAssignmentRoute = $this->isAssignmentRoute($method, $path);
+
+        if (!$isBreakRoute && !$isAssignmentRoute) {
             return false;
         }
 
@@ -34,6 +38,15 @@ final class PlayerBreakApplication
         try {
             $config = Config::load($this->rootPath);
             $database = new Database($config);
+            $breaks = new PlayerBreakRepository($database);
+
+            if ($isAssignmentRoute) {
+                // Bring scheduled/expired breaks up to date before the existing
+                // assignment engine checks tournament_players.status.
+                $breaks->normalizeAll();
+                return false;
+            }
+
             $response = $this->dispatch($request, $path, $database);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
@@ -54,6 +67,21 @@ final class PlayerBreakApplication
         }
         $response->send();
         return true;
+    }
+
+    private function isAssignmentRoute(string $method, string $path): bool
+    {
+        if ($method === 'GET' && preg_match('#^v1/tournaments/\d+/operations$#', $path) === 1) {
+            return true;
+        }
+        if ($method !== 'POST') {
+            return false;
+        }
+        return preg_match('#^v1/tournaments/\d+/operations/reconcile$#', $path) === 1
+            || preg_match('#^v1/tournaments/\d+/auto-assign$#', $path) === 1
+            || preg_match('#^v1/kiosks/[^/]+/next-match$#', $path) === 1
+            || preg_match('#^v1/matches/\d+/assign-kiosk$#', $path) === 1
+            || preg_match('#^v1/tournaments/\d+/matches$#', $path) === 1;
     }
 
     private function dispatch(Request $request, string $path, Database $database): JsonResponse
