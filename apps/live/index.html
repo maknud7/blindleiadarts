@@ -2,25 +2,30 @@
 <html lang="no">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#08131b">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f3f8fb">
+  <meta name="color-scheme" content="light">
   <title>Blindleia Darts · Live</title>
+  <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.png" type="image/png">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="live-shell">
     <header class="hero">
-      <div>
-        <p id="clubName" class="eyebrow">Blindleia Dartklubb</p>
-        <h1 id="tournamentName">Live</h1>
-        <p id="tournamentMeta" class="muted">Henter turnering …</p>
+      <div class="live-brand">
+        <img src="../static/club-logos/blindleia-dartklubb-logo.png" alt="Blindleia Dartklubb" class="live-logo">
+        <div>
+          <p id="clubName" class="eyebrow">Blindleia Dartklubb</p>
+          <h1 id="tournamentName">Live</h1>
+          <p id="tournamentMeta" class="muted">Henter turnering …</p>
+        </div>
       </div>
       <div class="live-status"><span class="pulse"></span><span id="connectionLabel">Kobler til …</span></div>
     </header>
 
-    <section id="progressCards" class="stats-grid"></section>
+    <section id="progressCards" class="stats-grid" aria-label="Turneringsstatus"></section>
 
-    <section class="section">
+    <section class="section priority-section">
       <div class="section-head"><div><p class="eyebrow">På skivene</p><h2>Kamper live</h2></div><span id="updatedAt" class="muted"></span></div>
       <div id="boards" class="boards-grid"></div>
     </section>
@@ -42,7 +47,7 @@
     </section>
 
     <section id="playoffSection" class="section hidden">
-      <div class="section-head"><div><p class="eyebrow">Sluttspill</p><h2>Bracket</h2></div><span id="playoffChampion" class="badge"></span></div>
+      <div class="section-head"><div><p class="eyebrow">Sluttspill</p><h2>Sluttspill</h2></div><span id="playoffChampion" class="badge"></span></div>
       <div id="playoff" class="live-bracket"></div>
     </section>
 
@@ -52,7 +57,7 @@
         <div id="elo" class="list ranking-list"></div>
       </section>
       <section class="section panel">
-        <div class="section-head"><div><p class="eyebrow">Kveldens tall</p><h2>Highlights</h2></div></div>
+        <div class="section-head"><div><p class="eyebrow">Kveldens tall</p><h2>Høydepunkter</h2></div></div>
         <div id="highlights" class="highlight-grid"></div>
       </section>
     </div>
