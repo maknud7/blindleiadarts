@@ -42,16 +42,14 @@ Guidelines:
 
 ## Shared member registry
 
-DartsAtlas player linking uses the exact same physical database connection file as the existing Blindleia member admin:
+The API uses the exact same physical member registry connection file as the existing Blindleia member admin:
 
 `/home/1/i/ingenting/dart/sqlconnect.php`
 
-- this file is the only supported source for the member registry
+- this file is the supported source for the member registry
 - there is no `MEMBERS_DB_*` credential fallback and no separate copy of `sqlconnect.php`
 - the loader accepts the existing admin convention where `sqlconnect.php` creates a `mysqli` connection in `$conn`
 - any output produced while loading the file is suppressed for API/CLI use
-- only `medlemmer.id` and `medlemmer.navn` are mirrored into a temporary in-session bridge table during DartsAtlas sync; the member registry is never persisted in the dart database
-- if the shared file is unavailable, DartsAtlas Live continues but automatic member linking is disabled and doctor reports the failure
 
 ## Notes
 
