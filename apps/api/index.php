@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
@@ -31,6 +32,11 @@ if ($origin === 'https://dart.ingenting.org') {
         http_response_code(204);
         return;
     }
+}
+
+$activity = new ActivityApplication(__DIR__);
+if ($activity->run()) {
+    return;
 }
 
 $passwordReset = new PasswordResetApplication(__DIR__);
