@@ -4,7 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Blindleia Board">
   <title>Blindleia Darts · Board Terminal</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./pairing.css">
   <link rel="stylesheet" href="./kiosk-polish.css">
@@ -125,7 +130,7 @@
 
         <section id="scoliaScoring" class="scoring-card scolia-card hidden">
           <div class="scolia-pulse"></div>
-          <div><p class="eyebrow">Scolia</p><h3>Venter på scoring fra skiva</h3><p class="muted">Board Terminal følger kampen. Når Scolia API kobles på, kommer kastene inn her automatisk.</p></div>
+          <div><p class="eyebrow">Scolia</p><h3>Venter på scoring fra skiva</h3><p class="muted">Board Terminal følger kampen. Kast fra Scolia registreres automatisk når integrasjonen er aktiv.</p></div>
         </section>
 
         <aside class="activity-card">
@@ -156,6 +161,7 @@
   <script src="./app.js"></script>
   <script src="./pairing-runtime.js"></script>
   <script src="./operations-runtime.js"></script>
-  <script src="./test-mode.js?v=2"></script>
+  <script src="./install.js"></script>
+  <script src="./test-mode.js?v=3"></script>
 </body>
 </html>
