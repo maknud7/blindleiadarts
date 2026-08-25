@@ -30,36 +30,60 @@ const elements = {
 
 async function api(path, { method = "GET", body, auth = false } = {}) {
   const headers = {};
-
-  if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  if (auth && state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (auth && state.token) headers.Authorization = `Bearer ${state.token}`;
 
   const response = await fetch(`${API_ROOT}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    cache: "no-store",
   });
-
   const payload = await response.json();
-
   if (!response.ok || !payload.ok) {
     throw new Error(payload?.error?.message || `Request failed with ${response.status}`);
   }
-
   return payload.data;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDate(value) {
+  if (!value) return "Ikke satt";
+  const date = new Date(String(value).replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("nb-NO", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function registrationLabel(status) {
+  return {
+    registered: "Påmeldt",
+    waitlisted: "Venteliste",
+    checked_in: "Checket inn",
+    withdrawn: "Meldt av",
+    no_show: "Ikke møtt",
+    eliminated: "Ute",
+  }[status] || status || "Ukjent";
 }
 
 function setStatus(message, tone = "info") {
   const item = document.createElement("div");
   item.className = "mini-card";
-  item.innerHTML = `<strong>${tone === "error" ? "Feil" : tone === "success" ? "OK" : "Info"}</strong><p class="muted">${message}</p>`;
+  item.innerHTML = `<strong>${tone === "error" ? "Feil" : tone === "success" ? "OK" : "Info"}</strong><p class="muted">${escapeHtml(message)}</p>`;
   elements.statusArea.prepend(item);
-
   while (elements.statusArea.children.length > 4) {
     elements.statusArea.removeChild(elements.statusArea.lastChild);
   }
@@ -67,35 +91,26 @@ function setStatus(message, tone = "info") {
 
 function persistToken(token) {
   state.token = token;
-
-  if (token) {
-    localStorage.setItem("bd:token", token);
-  } else {
-    localStorage.removeItem("bd:token");
-  }
+  if (token) localStorage.setItem("bd:token", token);
+  else localStorage.removeItem("bd:token");
 }
 
 async function loadClubs() {
   const data = await api("/clubs");
-  state.clubs = data.items;
-
+  state.clubs = data.items || [];
   if (!state.selectedClubId && state.clubs[0]) {
     state.selectedClubId = Number(state.clubs[0].id);
   }
-
   localStorage.setItem("bd:playerClubId", String(state.selectedClubId || ""));
   elements.clubSelect.innerHTML = state.clubs
-    .map((club) => `<option value="${club.id}" ${Number(club.id) === state.selectedClubId ? "selected" : ""}>${club.name}</option>`)
+    .map((club) => `<option value="${club.id}" ${Number(club.id) === state.selectedClubId ? "selected" : ""}>${escapeHtml(club.name)}</option>`)
     .join("");
 }
 
 async function loadClubTournaments() {
-  if (!state.selectedClubId) {
-    return;
-  }
-
-  const data = await api(`/clubs/${state.selectedClubId}/tournaments`);
-  state.tournaments = data.items;
+  if (!state.selectedClubId) return;
+  const data = await api(`/clubs/${state.selectedClubId}/registration-tournaments`);
+  state.tournaments = data.items || [];
   renderTournaments();
 }
 
@@ -105,6 +120,7 @@ async function loadCurrentUser() {
     state.dashboard = null;
     renderAuth();
     renderDashboard();
+    renderTournaments();
     return;
   }
 
@@ -113,17 +129,18 @@ async function loadCurrentUser() {
       api("/auth/me", { auth: true }),
       api("/me/dashboard", { auth: true }),
     ]);
-
     state.me = meData.user;
     state.dashboard = dashboardData.dashboard;
     renderAuth();
     renderDashboard();
+    renderTournaments();
   } catch (error) {
     persistToken("");
     state.me = null;
     state.dashboard = null;
     renderAuth();
     renderDashboard();
+    renderTournaments();
     setStatus(error.message, "error");
   }
 }
@@ -161,9 +178,9 @@ function renderAuth() {
     elements.authSummary.classList.remove("hidden");
     elements.logoutButton.classList.remove("hidden");
     elements.authSummary.innerHTML = `
-      <strong>${state.me.display_name}</strong>
-      <p class="muted">${state.me.username}</p>
-      <p class="muted">${state.me.player?.display_name || "Ingen spillerprofil koblet"}</p>
+      <strong>${escapeHtml(state.me.display_name)}</strong>
+      <p class="muted">${escapeHtml(state.me.username)}</p>
+      <p class="muted">${escapeHtml(state.me.player?.display_name || "Ingen spillerprofil koblet")}</p>
     `;
   } else {
     elements.authSummary.classList.add("hidden");
@@ -199,74 +216,99 @@ function renderDashboard() {
   elements.rankingList.innerHTML = rankings.length
     ? rankings.map((ranking) => `
         <div class="list-item">
-          <div class="pill">${ranking.ranking_type}</div>
-          <p class="muted">${ranking.scope_type} · ${ranking.points} poeng${ranking.position ? ` · plass ${ranking.position}` : ""}</p>
+          <div class="pill">${escapeHtml(ranking.ranking_type)}</div>
+          <p class="muted">${escapeHtml(ranking.scope_type)} · ${escapeHtml(ranking.points)} poeng${ranking.position ? ` · plass ${escapeHtml(ranking.position)}` : ""}</p>
         </div>
       `).join("")
     : `<div class="mini-card"><p class="muted">Ingen ranking snapshots ennå.</p></div>`;
 
   elements.registrationList.innerHTML = registrations.length
-    ? registrations.map((registration) => `
-        <div class="list-item">
-          <div class="section-head">
-            <div>
-              <strong>${registration.tournament_name}</strong>
-              <p class="muted">${registration.club_name} · ${registration.tournament_status}</p>
+    ? registrations.map((registration) => {
+        const status = String(registration.status || "");
+        const tournamentId = Number(registration.tournament_id);
+        const actions = status === "registered"
+          ? `<div class="stack"><button data-checkin="${tournamentId}">Check inn på arena</button><button class="ghost" data-withdraw="${tournamentId}">Meld av</button></div>`
+          : status === "waitlisted"
+            ? `<div class="stack"><p class="muted">Du står på venteliste og får automatisk plass når noen melder av.</p><button class="ghost" data-withdraw="${tournamentId}">Fjern meg fra ventelisten</button></div>`
+            : status === "checked_in"
+              ? `<p class="muted">Du er klar for board-tildeling når arrangøren kaller opp kampen.</p>`
+              : "";
+        return `
+          <div class="list-item">
+            <div class="section-head">
+              <div>
+                <strong>${escapeHtml(registration.tournament_name)}</strong>
+                <p class="muted">${escapeHtml(registration.club_name)} · ${escapeHtml(registration.tournament_status)}</p>
+              </div>
+              <span class="pill">${escapeHtml(registrationLabel(status))}</span>
             </div>
-            <span class="pill">${registration.status === "checked_in" ? "Checket inn" : registration.status}</span>
+            ${actions}
           </div>
-          ${registration.status === "registered"
-            ? `<button data-checkin="${registration.tournament_id}">Check inn på arena</button>`
-            : `<p class="muted">Klar for board-tildeling når arrangøren kaller opp kampen.</p>`
-          }
-        </div>
-      `).join("")
+        `;
+      }).join("")
     : `<div class="mini-card"><p class="muted">Ingen påmeldinger ennå.</p></div>`;
 }
 
 function renderTournaments() {
   applyBranding();
-
   const registrations = Array.isArray(state.dashboard?.registrations) ? state.dashboard.registrations : [];
   const registrationsByTournament = new Map(
     registrations.map((registration) => [Number(registration.tournament_id), registration])
   );
 
   elements.tournamentList.innerHTML = state.tournaments.length
-    ? state.tournaments.map((tournament) => `
-        ${(() => {
-          const registration = registrationsByTournament.get(Number(tournament.id)) || null;
-          const isRegistered = registration !== null && registration.status !== "withdrawn";
-          const isCheckedIn = registration?.status === "checked_in";
+    ? state.tournaments.map((tournament) => {
+        const registration = registrationsByTournament.get(Number(tournament.id)) || null;
+        const status = String(registration?.status || "");
+        const activeRegistration = ["registered", "waitlisted", "checked_in"].includes(status);
+        const registrationState = String(tournament.registration_state || "open");
+        const maxPlayers = tournament.max_players ? Number(tournament.max_players) : null;
+        const confirmed = Number(tournament.registration_count || 0);
+        const waitlist = Number(tournament.waitlist_count || 0);
+        const capacity = maxPlayers ? `${confirmed}/${maxPlayers} plasser` : `${confirmed} påmeldte`;
+        const waitlistText = waitlist > 0 ? ` · ${waitlist} på venteliste` : "";
+        const windowText = registrationState === "not_open"
+          ? `Påmelding åpner ${formatDate(tournament.registration_opens_at)}`
+          : registrationState === "closed"
+            ? "Påmelding stengt"
+            : tournament.registration_closes_at
+              ? `Påmelding til ${formatDate(tournament.registration_closes_at)}`
+              : "Påmelding åpen";
 
-          return `
-        <div class="list-item">
-          <div class="section-head">
-            <div>
-              <strong>${tournament.name}</strong>
-              <p class="muted">${tournament.provider_system} · ${tournament.status}</p>
+        let action = "";
+        if (status === "checked_in") {
+          action = `<p class="muted">Du er påmeldt og checket inn på arena.</p>`;
+        } else if (status === "waitlisted") {
+          action = `<div class="stack"><p class="muted">Du står på venteliste.</p><button class="ghost" data-withdraw="${tournament.id}">Fjern meg fra ventelisten</button></div>`;
+        } else if (status === "registered") {
+          action = `<div class="stack"><p class="muted">Du har plass i turneringen.</p><button data-checkin="${tournament.id}">Check inn på arena</button><button class="ghost" data-withdraw="${tournament.id}">Meld av</button></div>`;
+        } else if (!state.me) {
+          action = `<button disabled>Logg inn for å melde deg på</button>`;
+        } else if (registrationState === "open") {
+          action = `<button data-register="${tournament.id}">Meld meg på</button>`;
+        } else {
+          action = `<button disabled>${registrationState === "not_open" ? "Påmelding ikke åpnet" : "Påmelding stengt"}</button>`;
+        }
+
+        return `
+          <div class="list-item">
+            <div class="section-head">
+              <div>
+                <strong>${escapeHtml(tournament.name)}</strong>
+                <p class="muted">${escapeHtml(formatDate(tournament.start_at))} · ${escapeHtml(windowText)}</p>
+              </div>
+              <span class="pill">${escapeHtml(capacity + waitlistText)}</span>
             </div>
-            <span class="pill">${tournament.registration_count} påmeldte</span>
+            ${activeRegistration ? `<p class="muted">Status: ${escapeHtml(registrationLabel(status))}</p>` : ""}
+            ${action}
           </div>
-          ${isCheckedIn
-            ? `<p class="muted">Du er påmeldt og checket inn på arena.</p>`
-            : isRegistered
-              ? `<div class="stack">
-                  <p class="muted">Du er påmeldt. Når du er i lokalet, trykker du arena-checkin.</p>
-                  <button data-checkin="${tournament.id}" ${state.me ? "" : "disabled"}>Check inn på arena</button>
-                </div>`
-              : `<button data-register="${tournament.id}" ${state.me ? "" : "disabled"}>Meld meg på</button>`
-          }
-        </div>
-          `;
-        })()}
-      `).join("")
+        `;
+      }).join("")
     : `<div class="mini-card"><p class="muted">Ingen turneringer tilgjengelig akkurat nå.</p></div>`;
 }
 
 async function handleLogin(event) {
   event.preventDefault();
-
   try {
     const data = await api("/auth/login", {
       method: "POST",
@@ -275,7 +317,6 @@ async function handleLogin(event) {
         password: elements.loginPassword.value,
       },
     });
-
     persistToken(data.access_token);
     await loadCurrentUser();
     setStatus("Innlogging lykkes.", "success");
@@ -287,12 +328,25 @@ async function handleLogin(event) {
 
 async function registerForTournament(tournamentId) {
   try {
-    await api(`/tournaments/${tournamentId}/register`, {
+    const data = await api(`/tournaments/${tournamentId}/register`, {
       method: "POST",
       auth: true,
     });
+    const status = data.registration?.status;
+    setStatus(status === "waitlisted" ? "Turneringen er full. Du står nå på venteliste." : "Du er meldt på turneringen.", "success");
+    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
 
-    setStatus("Du er meldt på turneringen.", "success");
+async function withdrawFromTournament(tournamentId) {
+  try {
+    await api(`/tournaments/${tournamentId}/register`, {
+      method: "DELETE",
+      auth: true,
+    });
+    setStatus("Du er meldt av turneringen.", "success");
     await Promise.all([loadClubTournaments(), loadCurrentUser()]);
   } catch (error) {
     setStatus(error.message, "error");
@@ -305,11 +359,27 @@ async function checkInForTournament(tournamentId) {
       method: "POST",
       auth: true,
     });
-
     setStatus("Du er nå checket inn på arenaen.", "success");
     await Promise.all([loadClubTournaments(), loadCurrentUser()]);
   } catch (error) {
     setStatus(error.message, "error");
+  }
+}
+
+async function handleRegistrationClick(event) {
+  const registerButton = event.target.closest("[data-register]");
+  if (registerButton) {
+    await registerForTournament(Number(registerButton.dataset.register));
+    return;
+  }
+  const withdrawButton = event.target.closest("[data-withdraw]");
+  if (withdrawButton) {
+    await withdrawFromTournament(Number(withdrawButton.dataset.withdraw));
+    return;
+  }
+  const checkInButton = event.target.closest("[data-checkin]");
+  if (checkInButton) {
+    await checkInForTournament(Number(checkInButton.dataset.checkin));
   }
 }
 
@@ -326,7 +396,6 @@ function bindEvents() {
   });
 
   elements.loginForm.addEventListener("submit", handleLogin);
-
   elements.logoutButton.addEventListener("click", () => {
     persistToken("");
     state.me = null;
@@ -337,35 +406,12 @@ function bindEvents() {
     setStatus("Logget ut.", "success");
   });
 
-  elements.tournamentList.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-register]");
-
-    if (button) {
-      await registerForTournament(Number(button.dataset.register));
-      return;
-    }
-
-    const checkInButton = event.target.closest("[data-checkin]");
-
-    if (checkInButton) {
-      await checkInForTournament(Number(checkInButton.dataset.checkin));
-    }
-  });
-
-  elements.registrationList.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-checkin]");
-
-    if (!button) {
-      return;
-    }
-
-    await checkInForTournament(Number(button.dataset.checkin));
-  });
+  elements.tournamentList.addEventListener("click", handleRegistrationClick);
+  elements.registrationList.addEventListener("click", handleRegistrationClick);
 }
 
 async function bootstrap() {
   bindEvents();
-
   try {
     await loadClubs();
     await Promise.all([loadClubTournaments(), loadCurrentUser()]);
