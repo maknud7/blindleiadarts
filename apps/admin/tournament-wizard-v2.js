@@ -3,12 +3,13 @@ const host = document.getElementById("tournaments");
 
 if (host) {
   const state = { step: 0, checkinDefaults: null, creating: false };
+
   function token() { return localStorage.getItem("bd:token") || ""; }
   function clubId() { return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:selectedClubId") || 0); }
   function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
   function localInput(date) { if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ""; const pad=(v)=>String(v).padStart(2,"0"); return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; }
   function parseLocal(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date; }
-  function methodLabel(value) { return ({admin_or_code:"Turneringsleder + kode",admin_only:"Kun turneringsleder",code:"Kode",gps:"GPS"})[value] || value; }
+  function methodLabel(value) { return ({admin_or_code:"Turneringsleder + kode",admin_only:"Kun turneringsleder",code:"Kun kode"})[value] || value; }
 
   async function api(path, { method = "GET", body, auth = true } = {}) {
     const headers = {};
@@ -30,34 +31,201 @@ if (host) {
     if (document.getElementById("twOpen")) return;
     installStyles();
     const head = host.querySelector(":scope > .panel-head");
-    const openButton = document.createElement("button"); openButton.id="twOpen"; openButton.type="button"; openButton.className="button"; openButton.textContent="+ Ny turnering – veiviser"; head?.appendChild(openButton);
-    const root = document.createElement("div"); root.id="twBackdrop"; root.className="tw-backdrop hidden";
-    root.innerHTML = `<section class="tw-dialog" role="dialog" aria-modal="true"><div class="tw-head"><div><p class="eyebrow">Turneringsveiviser</p><h2>Ny turnering</h2><p class="muted">Grunnlag, påmelding, check-in og format.</p></div><button id="twClose" class="tw-close" type="button">×</button></div><div id="twProgress" class="tw-progress"><span>1 · Grunnlag</span><span>2 · Påmelding</span><span>3 · Check-in</span><span>4 · Format</span></div><form id="twForm"><div class="tw-body">
-      <section class="tw-step" data-step="0"><div class="tw-grid"><label class="wide"><span>Navn</span><input id="twName" required maxlength="180" placeholder="Mandagsserien"></label><label><span>Start</span><input id="twStart" type="datetime-local" required></label><label><span>Planlagt slutt</span><input id="twEnd" type="datetime-local"></label></div><div class="tw-help"><strong>Canonical Blindleia-turnering</strong><p class="muted">Ingen ekstern turneringsplattform eier kampene.</p></div></section>
-      <section class="tw-step" data-step="1"><div class="tw-grid"><label><span>Påmelding åpner</span><input id="twRegOpen" type="datetime-local"></label><label><span>Påmelding stenger</span><input id="twRegClose" type="datetime-local"></label><label><span>Maks spillere</span><input id="twMax" type="number" min="2" placeholder="Ingen grense"></label></div><div class="tw-help"><strong>Automatisk venteliste</strong><p class="muted">Når maks antall er nådd går nye påmeldinger på venteliste.</p></div></section>
-      <section class="tw-step" data-step="2"><div class="tw-grid"><label class="tw-check wide"><input id="twUseCheckinDefaults" type="checkbox" checked><span>Bruk klubbens standard for check-in</span></label><label class="wide"><span>Metode</span><select id="twCheckinMethod"><option value="admin_or_code">Turneringsleder + kode (anbefalt)</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kode</option><option value="gps">GPS</option></select></label><label><span>Check-in åpner</span><input id="twCheckinOpen" type="datetime-local"></label><label><span>Check-in stenger</span><input id="twCheckinClose" type="datetime-local"></label><label class="tw-check wide"><input id="twGpsFallback" type="checkbox"><span>Tillat GPS som fallback</span></label><label><span>GPS-radius (meter)</span><input id="twRadius" type="number" min="20" max="5000" value="150"></label></div><div id="twCheckinInfo" class="tw-help"></div></section>
-      <section class="tw-step" data-step="3"><div class="tw-grid"><label><span>Planlagte grupper</span><input id="twGroups" type="number" min="1" max="32" value="4"></label><label><span>Trekkemetode</span><select id="twDrawMode"><option value="elo_snake">ELO-seedet snake</option><option value="elo_pots">ELO-potter + tilfeldig</option><option value="random">Helt tilfeldig</option></select></label><label><span>Gruppespill · best of</span><input id="twGroupBestOf" type="number" min="1" max="21" step="2" value="3"></label><label><span>Videre per gruppe</span><input id="twQualifiers" type="number" min="1" max="16" value="2"></label><label><span>Sluttspill · best of</span><input id="twPlayoffBestOf" type="number" min="1" max="21" step="2" value="3"></label></div><div class="tw-help"><strong>Gruppene trekkes senere</strong><p class="muted">Formatplanen lagres nå. Gruppene trekkes først når deltakerne/check-in er klare.</p></div><div id="twSummary" class="tw-summary"></div></section>
-      </div><div id="twMessage" class="tw-message hidden"></div><div class="tw-actions"><button id="twPrev" type="button" class="button secondary">Tilbake</button><div><button id="twCancel" type="button" class="button quiet">Avbryt</button><button id="twNext" type="button" class="button">Neste</button><button id="twCreate" type="submit" class="button hidden">Opprett turnering</button></div></div></form></section>`;
+    const openButton = document.createElement("button");
+    openButton.id = "twOpen";
+    openButton.type = "button";
+    openButton.className = "button";
+    openButton.textContent = "+ Ny turnering – veiviser";
+    head?.appendChild(openButton);
+
+    const root = document.createElement("div");
+    root.id = "twBackdrop";
+    root.className = "tw-backdrop hidden";
+    root.innerHTML = `<section class="tw-dialog" role="dialog" aria-modal="true">
+      <div class="tw-head"><div><p class="eyebrow">Turneringsveiviser</p><h2>Ny turnering</h2><p class="muted">Grunnlag, påmelding, check-in og format.</p></div><button id="twClose" class="tw-close" type="button">×</button></div>
+      <div id="twProgress" class="tw-progress"><span>1 · Grunnlag</span><span>2 · Påmelding</span><span>3 · Check-in</span><span>4 · Format</span></div>
+      <form id="twForm"><div class="tw-body">
+        <section class="tw-step" data-step="0"><div class="tw-grid"><label class="wide"><span>Navn</span><input id="twName" required maxlength="180" placeholder="Mandagsserien"></label><label><span>Start</span><input id="twStart" type="datetime-local" required></label><label><span>Planlagt slutt</span><input id="twEnd" type="datetime-local"></label></div><div class="tw-help"><strong>Canonical Blindleia-turnering</strong><p class="muted">Ingen ekstern turneringsplattform eier kampene.</p></div></section>
+        <section class="tw-step" data-step="1"><div class="tw-grid"><label><span>Påmelding åpner</span><input id="twRegOpen" type="datetime-local"></label><label><span>Påmelding stenger</span><input id="twRegClose" type="datetime-local"></label><label><span>Maks spillere</span><input id="twMax" type="number" min="2" placeholder="Ingen grense"></label></div><div class="tw-help"><strong>Automatisk venteliste</strong><p class="muted">Når maks antall er nådd går nye påmeldinger på venteliste.</p></div></section>
+        <section class="tw-step" data-step="2"><div class="tw-grid"><label class="tw-check wide"><input id="twUseCheckinDefaults" type="checkbox" checked><span>Bruk klubbens standard for check-in</span></label><label class="wide"><span>Metode</span><select id="twCheckinMethod"><option value="admin_or_code">Turneringsleder + kode (anbefalt)</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label><label><span>Check-in åpner</span><input id="twCheckinOpen" type="datetime-local"></label><label><span>Check-in stenger</span><input id="twCheckinClose" type="datetime-local"></label></div><div id="twCheckinInfo" class="tw-help"></div></section>
+        <section class="tw-step" data-step="3"><div class="tw-grid"><label><span>Planlagte grupper</span><input id="twGroups" type="number" min="1" max="32" value="4"></label><label><span>Trekkemetode</span><select id="twDrawMode"><option value="elo_snake">ELO-seedet snake</option><option value="elo_pots">ELO-potter + tilfeldig</option><option value="random">Helt tilfeldig</option></select></label><label><span>Gruppespill · best of</span><input id="twGroupBestOf" type="number" min="1" max="21" step="2" value="3"></label><label><span>Videre per gruppe</span><input id="twQualifiers" type="number" min="1" max="16" value="2"></label><label><span>Sluttspill · best of</span><input id="twPlayoffBestOf" type="number" min="1" max="21" step="2" value="3"></label></div><div class="tw-help"><strong>Gruppene trekkes senere</strong><p class="muted">Formatplanen lagres nå. Gruppene trekkes først når deltakerne/check-in er klare.</p></div><div id="twSummary" class="tw-summary"></div></section>
+      </div><div id="twMessage" class="tw-message hidden"></div><div class="tw-actions"><button id="twPrev" type="button" class="button secondary">Tilbake</button><div><button id="twCancel" type="button" class="button quiet">Avbryt</button><button id="twNext" type="button" class="button">Neste</button><button id="twCreate" type="submit" class="button hidden">Opprett turnering</button></div></div></form>
+    </section>`;
     document.body.appendChild(root);
+
     openButton.addEventListener("click", open);
-    document.getElementById("twClose").addEventListener("click", close); document.getElementById("twCancel").addEventListener("click", close);
-    document.getElementById("twPrev").addEventListener("click",()=>go(state.step-1)); document.getElementById("twNext").addEventListener("click",()=>{if(validateStep())go(state.step+1);});
-    document.getElementById("twForm").addEventListener("submit", createTournament); document.getElementById("twStart").addEventListener("change", seedWindows);
-    document.getElementById("twUseCheckinDefaults").addEventListener("change", renderCheckin); document.getElementById("twCheckinMethod").addEventListener("change", renderCheckin);
+    document.getElementById("twClose").addEventListener("click", close);
+    document.getElementById("twCancel").addEventListener("click", close);
+    document.getElementById("twPrev").addEventListener("click", () => go(state.step - 1));
+    document.getElementById("twNext").addEventListener("click", () => { if (validateStep()) go(state.step + 1); });
+    document.getElementById("twForm").addEventListener("submit", createTournament);
+    document.getElementById("twStart").addEventListener("change", seedWindows);
+    document.getElementById("twUseCheckinDefaults").addEventListener("change", renderCheckin);
+    document.getElementById("twCheckinMethod").addEventListener("change", renderCheckin);
   }
 
-  function show(text,tone="bad"){const el=document.getElementById("twMessage");el.textContent=text;el.className=`tw-message ${tone}`;} function hide(){const el=document.getElementById("twMessage");el.textContent="";el.className="tw-message hidden";}
-  async function open(){state.step=0;state.creating=false;document.getElementById("twForm").reset();document.getElementById("twUseCheckinDefaults").checked=true;const next=new Date();next.setSeconds(0,0);next.setDate(next.getDate()+((8-next.getDay())%7||7));next.setHours(18,30,0,0);document.getElementById("twStart").value=localInput(next);document.getElementById("twGroups").value="4";document.getElementById("twGroupBestOf").value="3";document.getElementById("twQualifiers").value="2";document.getElementById("twPlayoffBestOf").value="3";try{const d=await api(`/clubs/${clubId()}/checkin-settings`);state.checkinDefaults=d.settings||null;}catch{state.checkinDefaults=null;}seedWindows();applyDefaults();go(0);document.getElementById("twBackdrop").classList.remove("hidden");}
-  function close(){if(!state.creating)document.getElementById("twBackdrop").classList.add("hidden");}
-  function seedWindows(){const start=parseLocal(document.getElementById("twStart").value);if(!start)return;document.getElementById("twRegOpen").value=localInput(new Date(Math.min(Date.now(),start.getTime()-14*86400000)));document.getElementById("twRegClose").value=localInput(new Date(start.getTime()-30*60000));const before=Number(state.checkinDefaults?.opens_minutes_before_start??60),after=Number(state.checkinDefaults?.closes_minutes_after_start??10);document.getElementById("twCheckinOpen").value=localInput(new Date(start.getTime()-before*60000));document.getElementById("twCheckinClose").value=localInput(new Date(start.getTime()+after*60000));}
-  function applyDefaults(){const s=state.checkinDefaults||{};document.getElementById("twCheckinMethod").value=s.default_method||"admin_or_code";document.getElementById("twGpsFallback").checked=Number(s.gps_fallback_enabled??1)===1;document.getElementById("twRadius").value=Number(s.onsite_radius_meters||150);renderCheckin();}
-  function renderCheckin(){const inherit=document.getElementById("twUseCheckinDefaults").checked;["twCheckinMethod","twCheckinOpen","twCheckinClose","twGpsFallback","twRadius"].forEach(id=>document.getElementById(id).disabled=inherit);const method=inherit?(state.checkinDefaults?.default_method||"admin_or_code"):document.getElementById("twCheckinMethod").value;document.getElementById("twCheckinInfo").innerHTML=`<strong>${inherit?"Klubbstandard":"Egen regel"}: ${esc(methodLabel(method))}</strong><p class="muted">${["admin_or_code","code"].includes(method)?"En unik kode lages automatisk og vises på Live-skjermen i check-in-vinduet. ":""}Turneringsleder kan administrere check-in fra admin.${(inherit?Number(state.checkinDefaults?.gps_fallback_enabled??1)===1:document.getElementById("twGpsFallback").checked)?" GPS er tilgjengelig som fallback.":""}</p>`;}
-  function go(step){state.step=Math.max(0,Math.min(3,step));document.querySelectorAll(".tw-step").forEach(n=>n.classList.toggle("active",Number(n.dataset.step)===state.step));document.querySelectorAll("#twProgress span").forEach((n,i)=>n.classList.toggle("active",i===state.step));document.getElementById("twPrev").disabled=state.step===0;document.getElementById("twNext").classList.toggle("hidden",state.step===3);document.getElementById("twCreate").classList.toggle("hidden",state.step!==3);hide();if(state.step===3)renderSummary();}
-  function odd(v){const n=Number(v);return Number.isInteger(n)&&n>=1&&n<=21&&n%2===1;}
-  function validateStep(){if(state.step===0){const start=parseLocal(document.getElementById("twStart").value),end=parseLocal(document.getElementById("twEnd").value);if(!document.getElementById("twName").value.trim()){show("Gi turneringen et navn.");return false;}if(!start){show("Sett starttid.");return false;}if(end&&end<=start){show("Planlagt slutt må være etter start.");return false;}}if(state.step===1){const a=parseLocal(document.getElementById("twRegOpen").value),b=parseLocal(document.getElementById("twRegClose").value);if(a&&b&&a>=b){show("Påmelding må stenge etter at den åpner.");return false;}}if(state.step===2&&!document.getElementById("twUseCheckinDefaults").checked){const a=parseLocal(document.getElementById("twCheckinOpen").value),b=parseLocal(document.getElementById("twCheckinClose").value);if(!a||!b||a>=b){show("Sett gyldig check-in-vindu.");return false;}}if(state.step===3&&(!odd(document.getElementById("twGroupBestOf").value)||!odd(document.getElementById("twPlayoffBestOf").value))){show("Best of må være oddetall mellom 1 og 21.");return false;}return true;}
-  function renderSummary(){const method=document.getElementById("twUseCheckinDefaults").checked?(state.checkinDefaults?.default_method||"admin_or_code"):document.getElementById("twCheckinMethod").value;document.getElementById("twSummary").innerHTML=`<div><span>Turnering</span><strong>${esc(document.getElementById("twName").value.trim())}</strong></div><div><span>Check-in</span><strong>${esc(methodLabel(method))}</strong></div><div><span>Gruppespill</span><strong>${Number(document.getElementById("twGroups").value)} grupper · Bo${Number(document.getElementById("twGroupBestOf").value)}</strong></div><div><span>Sluttspill</span><strong>Topp ${Number(document.getElementById("twQualifiers").value)} · Bo${Number(document.getElementById("twPlayoffBestOf").value)}</strong></div>`;}
+  function show(text, tone = "bad") { const el = document.getElementById("twMessage"); el.textContent = text; el.className = `tw-message ${tone}`; }
+  function hide() { const el = document.getElementById("twMessage"); el.textContent = ""; el.className = "tw-message hidden"; }
 
-  async function createTournament(event){event.preventDefault();if(!validateStep()||state.creating)return;state.creating=true;const button=document.getElementById("twCreate");button.disabled=true;button.textContent="Oppretter …";let id=0;try{const base=await api(`/clubs/${clubId()}/tournaments`,{method:"POST",body:{name:document.getElementById("twName").value.trim(),start_at:document.getElementById("twStart").value||null,end_at:document.getElementById("twEnd").value||null,provider_system:"local",status:"draft"}});id=Number(base.tournament?.id||0);if(!id)throw new Error("Mangler turnerings-ID.");await api(`/tournaments/${id}/registration-settings`,{method:"PUT",body:{registration_opens_at:document.getElementById("twRegOpen").value||null,registration_closes_at:document.getElementById("twRegClose").value||null,max_players:document.getElementById("twMax").value?Number(document.getElementById("twMax").value):null}});const inherit=document.getElementById("twUseCheckinDefaults").checked;await api(`/tournaments/${id}/checkin-settings`,{method:"PUT",body:inherit?{checkin_method:"inherit",rotate_checkin_code:true}:{checkin_method:document.getElementById("twCheckinMethod").value,checkin_opens_at:document.getElementById("twCheckinOpen").value||null,checkin_closes_at:document.getElementById("twCheckinClose").value||null,checkin_gps_fallback_enabled:document.getElementById("twGpsFallback").checked,checkin_require_onsite:true,checkin_radius_meters:Number(document.getElementById("twRadius").value||150),rotate_checkin_code:true}});await api(`/tournaments/${id}/wizard-plan`,{method:"PUT",body:{group_count:Number(document.getElementById("twGroups").value||1),group_draw_mode:document.getElementById("twDrawMode").value,group_best_of_legs:Number(document.getElementById("twGroupBestOf").value||3),qualifiers_per_group:Number(document.getElementById("twQualifiers").value||2),playoff_best_of_legs:Number(document.getElementById("twPlayoffBestOf").value||3)}});show("Turneringen er opprettet. Check-in og formatplan er klare.","good");window.setTimeout(()=>{state.creating=false;document.getElementById("twBackdrop").classList.add("hidden");document.getElementById("refreshAllButton")?.click();document.getElementById("tcRefresh")?.click();},700);}catch(error){show(error.message+(id?` Turnering ID ${id} ble opprettet og kan repareres i admin.`:""));state.creating=false;}finally{button.disabled=false;button.textContent="Opprett turnering";}}
+  async function open() {
+    state.step = 0;
+    state.creating = false;
+    document.getElementById("twForm").reset();
+    document.getElementById("twUseCheckinDefaults").checked = true;
+    const next = new Date();
+    next.setSeconds(0, 0);
+    next.setDate(next.getDate() + ((8 - next.getDay()) % 7 || 7));
+    next.setHours(18, 30, 0, 0);
+    document.getElementById("twStart").value = localInput(next);
+    document.getElementById("twGroups").value = "4";
+    document.getElementById("twGroupBestOf").value = "3";
+    document.getElementById("twQualifiers").value = "2";
+    document.getElementById("twPlayoffBestOf").value = "3";
+    try {
+      const data = await api(`/clubs/${clubId()}/checkin-settings`);
+      state.checkinDefaults = data.settings || null;
+    } catch {
+      state.checkinDefaults = null;
+    }
+    seedWindows();
+    applyDefaults();
+    go(0);
+    document.getElementById("twBackdrop").classList.remove("hidden");
+  }
+
+  function close() { if (!state.creating) document.getElementById("twBackdrop").classList.add("hidden"); }
+
+  function seedWindows() {
+    const start = parseLocal(document.getElementById("twStart").value);
+    if (!start) return;
+    document.getElementById("twRegOpen").value = localInput(new Date(Math.min(Date.now(), start.getTime() - 14 * 86400000)));
+    document.getElementById("twRegClose").value = localInput(new Date(start.getTime() - 30 * 60000));
+    const before = Number(state.checkinDefaults?.opens_minutes_before_start ?? 60);
+    const after = Number(state.checkinDefaults?.closes_minutes_after_start ?? 10);
+    document.getElementById("twCheckinOpen").value = localInput(new Date(start.getTime() - before * 60000));
+    document.getElementById("twCheckinClose").value = localInput(new Date(start.getTime() + after * 60000));
+  }
+
+  function applyDefaults() {
+    const settings = state.checkinDefaults || {};
+    document.getElementById("twCheckinMethod").value = settings.default_method || "admin_or_code";
+    renderCheckin();
+  }
+
+  function renderCheckin() {
+    const inherit = document.getElementById("twUseCheckinDefaults").checked;
+    ["twCheckinMethod", "twCheckinOpen", "twCheckinClose"].forEach((id) => { document.getElementById(id).disabled = inherit; });
+    const method = inherit ? (state.checkinDefaults?.default_method || "admin_or_code") : document.getElementById("twCheckinMethod").value;
+    const codeText = ["admin_or_code", "code"].includes(method)
+      ? "En unik kode lages automatisk og vises på Live-skjermen i check-in-vinduet. "
+      : "";
+    document.getElementById("twCheckinInfo").innerHTML = `<strong>${inherit ? "Klubbstandard" : "Egen regel"}: ${esc(methodLabel(method))}</strong><p class="muted">${codeText}Turneringsleder administrerer check-in fra admin.</p>`;
+  }
+
+  function go(step) {
+    state.step = Math.max(0, Math.min(3, step));
+    document.querySelectorAll(".tw-step").forEach((node) => node.classList.toggle("active", Number(node.dataset.step) === state.step));
+    document.querySelectorAll("#twProgress span").forEach((node, i) => node.classList.toggle("active", i === state.step));
+    document.getElementById("twPrev").disabled = state.step === 0;
+    document.getElementById("twNext").classList.toggle("hidden", state.step === 3);
+    document.getElementById("twCreate").classList.toggle("hidden", state.step !== 3);
+    hide();
+    if (state.step === 3) renderSummary();
+  }
+
+  function odd(value) { const n = Number(value); return Number.isInteger(n) && n >= 1 && n <= 21 && n % 2 === 1; }
+
+  function validateStep() {
+    if (state.step === 0) {
+      const start = parseLocal(document.getElementById("twStart").value);
+      const end = parseLocal(document.getElementById("twEnd").value);
+      if (!document.getElementById("twName").value.trim()) { show("Gi turneringen et navn."); return false; }
+      if (!start) { show("Sett starttid."); return false; }
+      if (end && end <= start) { show("Planlagt slutt må være etter start."); return false; }
+    }
+    if (state.step === 1) {
+      const openTime = parseLocal(document.getElementById("twRegOpen").value);
+      const closeTime = parseLocal(document.getElementById("twRegClose").value);
+      if (openTime && closeTime && openTime >= closeTime) { show("Påmelding må stenge etter at den åpner."); return false; }
+    }
+    if (state.step === 2 && !document.getElementById("twUseCheckinDefaults").checked) {
+      const openTime = parseLocal(document.getElementById("twCheckinOpen").value);
+      const closeTime = parseLocal(document.getElementById("twCheckinClose").value);
+      if (!openTime || !closeTime || openTime >= closeTime) { show("Sett gyldig check-in-vindu."); return false; }
+    }
+    if (state.step === 3 && (!odd(document.getElementById("twGroupBestOf").value) || !odd(document.getElementById("twPlayoffBestOf").value))) {
+      show("Best of må være oddetall mellom 1 og 21.");
+      return false;
+    }
+    return true;
+  }
+
+  function renderSummary() {
+    const method = document.getElementById("twUseCheckinDefaults").checked
+      ? (state.checkinDefaults?.default_method || "admin_or_code")
+      : document.getElementById("twCheckinMethod").value;
+    document.getElementById("twSummary").innerHTML = `<div><span>Turnering</span><strong>${esc(document.getElementById("twName").value.trim())}</strong></div><div><span>Check-in</span><strong>${esc(methodLabel(method))}</strong></div><div><span>Gruppespill</span><strong>${Number(document.getElementById("twGroups").value)} grupper · Bo${Number(document.getElementById("twGroupBestOf").value)}</strong></div><div><span>Sluttspill</span><strong>Topp ${Number(document.getElementById("twQualifiers").value)} · Bo${Number(document.getElementById("twPlayoffBestOf").value)}</strong></div>`;
+  }
+
+  async function createTournament(event) {
+    event.preventDefault();
+    if (!validateStep() || state.creating) return;
+    state.creating = true;
+    const button = document.getElementById("twCreate");
+    button.disabled = true;
+    button.textContent = "Oppretter …";
+    let id = 0;
+    try {
+      const base = await api(`/clubs/${clubId()}/tournaments`, { method: "POST", body: {
+        name: document.getElementById("twName").value.trim(),
+        start_at: document.getElementById("twStart").value || null,
+        end_at: document.getElementById("twEnd").value || null,
+        provider_system: "local",
+        status: "draft",
+      }});
+      id = Number(base.tournament?.id || 0);
+      if (!id) throw new Error("Mangler turnerings-ID.");
+
+      await api(`/tournaments/${id}/registration-settings`, { method: "PUT", body: {
+        registration_opens_at: document.getElementById("twRegOpen").value || null,
+        registration_closes_at: document.getElementById("twRegClose").value || null,
+        max_players: document.getElementById("twMax").value ? Number(document.getElementById("twMax").value) : null,
+      }});
+
+      const inherit = document.getElementById("twUseCheckinDefaults").checked;
+      await api(`/tournaments/${id}/checkin-settings`, { method: "PUT", body: inherit ? {
+        checkin_method: "inherit",
+        rotate_checkin_code: true,
+      } : {
+        checkin_method: document.getElementById("twCheckinMethod").value,
+        checkin_opens_at: document.getElementById("twCheckinOpen").value || null,
+        checkin_closes_at: document.getElementById("twCheckinClose").value || null,
+        rotate_checkin_code: true,
+      }});
+
+      await api(`/tournaments/${id}/wizard-plan`, { method: "PUT", body: {
+        group_count: Number(document.getElementById("twGroups").value || 1),
+        group_draw_mode: document.getElementById("twDrawMode").value,
+        group_best_of_legs: Number(document.getElementById("twGroupBestOf").value || 3),
+        qualifiers_per_group: Number(document.getElementById("twQualifiers").value || 2),
+        playoff_best_of_legs: Number(document.getElementById("twPlayoffBestOf").value || 3),
+      }});
+
+      show("Turneringen er opprettet. Check-in og formatplan er klare.", "good");
+      window.setTimeout(() => {
+        state.creating = false;
+        document.getElementById("twBackdrop").classList.add("hidden");
+        document.getElementById("refreshAllButton")?.click();
+        document.getElementById("tcRefresh")?.click();
+      }, 700);
+    } catch (error) {
+      show(error.message + (id ? ` Turnering ID ${id} ble opprettet og kan repareres i admin.` : ""));
+      state.creating = false;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Opprett turnering";
+    }
+  }
 
   install();
 }
