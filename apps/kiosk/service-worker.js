@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v1";
+const SHELL_CACHE = "bd-kiosk-shell-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,10 +9,11 @@ const SHELL = [
   "./pairing-runtime.js",
   "./operations-runtime.js",
   "./scolia-runtime.js",
+  "./admin-mode.js",
   "./test-mode.js",
   "./install.js",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "../static/club-logos/blindleia-dartklubb-logo.png"
 ];
 
 self.addEventListener("install", (event) => {
