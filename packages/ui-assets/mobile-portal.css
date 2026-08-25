@@ -20,48 +20,33 @@
     padding-bottom: max(18px, env(safe-area-inset-bottom));
   }
 
-  /* Member navigation should stay available without consuming 2–3 rows. */
-  .portal-nav.portal-menu {
-    position: sticky;
-    top: 0;
+  /* Mobile navigation must expose every destination without hidden horizontal scrolling. */
+  .portal-nav.portal-menu,
+  .section-nav.portal-menu {
+    position: static;
     z-index: 30;
-    display: grid;
-    grid-template-columns: none !important;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(112px, max-content);
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-auto-flow: row !important;
     gap: 7px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    overflow: visible !important;
+    overscroll-behavior: auto;
     padding: 8px;
-  }
-
-  .portal-nav.portal-menu::-webkit-scrollbar,
-  .section-nav.portal-menu::-webkit-scrollbar {
-    display: none;
+    margin: 0 0 16px;
+    background: rgba(255,255,255,.96);
   }
 
   .portal-nav.portal-menu a,
   .section-nav.portal-menu a {
+    min-width: 0;
     min-height: 44px;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
-    white-space: nowrap;
-  }
-
-  /* Admin keeps one compact horizontal task menu on phones. */
-  .section-nav.portal-menu {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    margin: 0 0 16px;
-    padding: 8px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    -webkit-overflow-scrolling: touch;
-    background: rgba(255,255,255,.96);
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+    padding: 8px 6px;
   }
 
   .auth-shell {
@@ -115,7 +100,7 @@
   .panel,
   .card,
   .hero.card {
-    scroll-margin-top: 68px;
+    scroll-margin-top: 12px;
   }
 
   .panel-head,
@@ -140,7 +125,8 @@
     grid-column: auto;
   }
 
-  .portal-nav.portal-menu {
-    grid-auto-columns: minmax(104px, max-content);
+  .portal-nav.portal-menu,
+  .section-nav.portal-menu {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
