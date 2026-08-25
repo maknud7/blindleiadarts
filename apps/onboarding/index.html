@@ -2,40 +2,71 @@
 <html lang="no">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f8fb">
+  <meta name="color-scheme" content="light">
   <title>Aktiver medlemskonto · Blindleia Darts</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="shell">
-    <section class="card">
-      <div class="brand">BD</div>
-      <p class="eyebrow">Blindleia Dartklubb</p>
-      <h1 id="title">Aktiver medlemskonto</h1>
-      <p id="intro" class="muted">Kontrollerer invitasjonslenken …</p>
+    <section class="card" aria-labelledby="title">
+      <header class="brandline">
+        <div class="brand-badge" aria-hidden="true">
+          <img src="../static/club-logos/blindleia-dartklubb-logo.png" alt="">
+        </div>
+        <div class="brand-copy">
+          <p class="eyebrow">Blindleia Darts</p>
+          <strong>Medlemskonto</strong>
+        </div>
+      </header>
 
-      <div id="message" class="message hidden"></div>
+      <div class="intro-block">
+        <span class="step-pill">Kom i gang</span>
+        <h1 id="title">Aktiver kontoen din</h1>
+        <p id="intro" class="muted" aria-live="polite">Kontrollerer aktiveringslenken …</p>
+      </div>
 
-      <form id="onboardingForm" class="form hidden">
-        <label>
-          <span>E-post</span>
-          <input id="email" type="email" autocomplete="email" required>
-        </label>
-        <label>
-          <span>Velg passord</span>
-          <input id="password" type="password" autocomplete="new-password" minlength="10" required>
-          <small>Minst 10 tegn.</small>
-        </label>
-        <label>
-          <span>Gjenta passord</span>
-          <input id="passwordConfirm" type="password" autocomplete="new-password" minlength="10" required>
-        </label>
-        <button id="submitButton" type="submit">Aktiver konto</button>
+      <div id="message" class="message hidden" role="alert" aria-live="assertive"></div>
+
+      <form id="onboardingForm" class="form hidden" novalidate>
+        <div class="field-group">
+          <label for="email">E-postadresse</label>
+          <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
+          <small>Dette blir e-postadressen du logger inn med.</small>
+        </div>
+
+        <div class="field-group">
+          <label for="password">Velg passord</label>
+          <div class="password-field">
+            <input id="password" type="password" autocomplete="new-password" minlength="10" required aria-describedby="passwordHelp">
+            <button class="visibility-toggle" type="button" data-toggle-password="password" aria-label="Vis passord" aria-pressed="false">Vis</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="passwordConfirm">Gjenta passord</label>
+          <div class="password-field">
+            <input id="passwordConfirm" type="password" autocomplete="new-password" minlength="10" required>
+            <button class="visibility-toggle" type="button" data-toggle-password="passwordConfirm" aria-label="Vis gjentatt passord" aria-pressed="false">Vis</button>
+          </div>
+        </div>
+
+        <div id="passwordHelp" class="requirements" aria-live="polite">
+          <span id="passwordLengthCheck">Minst 10 tegn</span>
+          <span id="passwordMatchCheck">Passordene er like</span>
+        </div>
+
+        <button id="submitButton" class="primary-action" type="submit">Aktiver konto</button>
+        <p class="form-note">Når du aktiverer kontoen, kobles innloggingen til medlemskapet ditt i Blindleia Dartklubb.</p>
       </form>
 
-      <div id="success" class="success hidden">
+      <div id="success" class="success hidden" tabindex="-1">
+        <div class="success-mark" aria-hidden="true">✓</div>
+        <p class="eyebrow">Ferdig</p>
         <h2>Kontoen er aktivert</h2>
-        <p>Medlemskapet ditt er nå koblet til innloggingen. Du trenger ikke gjøre noe mer nå.</p>
+        <p>Du kan nå logge inn og bruke medlemsprofilen din.</p>
+        <a class="primary-action" href="../player/#profile">Gå til Min side</a>
       </div>
     </section>
   </main>

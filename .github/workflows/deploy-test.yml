@@ -83,28 +83,6 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI || 'https://test.blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback' }}
 
-      - name: Prepare one-time owner onboarding reset
-        run: |
-          set -Eeuo pipefail
-          reset_key="$(openssl rand -hex 32)"
-          echo "::add-mask::$reset_key"
-          reset_hash="$(printf '%s' "$reset_key" | sha256sum | awk '{print $1}')"
-          php -r '
-            $path = $argv[1];
-            $hash = $argv[2];
-            $source = file_get_contents($path);
-            if ($source === false || !str_contains($source, "__OWNER_RESET_KEY_HASH__")) {
-                fwrite(STDERR, "Owner reset placeholder missing.\n");
-                exit(1);
-            }
-            $source = str_replace("__OWNER_RESET_KEY_HASH__", $hash, $source, $count);
-            if ($count !== 1 || file_put_contents($path, $source) === false) {
-                fwrite(STDERR, "Could not prepare one-time owner reset endpoint.\n");
-                exit(1);
-            }
-          ' dist/test/api/ops-owner-onboarding-reset-20260825.php "$reset_hash"
-          echo "OWNER_RESET_KEY=$reset_key" >> "$GITHUB_ENV"
-
       - name: Verify shared production identity boundary
         run: php infra/sql/shared_identity_doctor.php
         env:
@@ -126,8 +104,6 @@ jobs:
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
-          test -f dist/test/api/ops-owner-onboarding-reset-20260825.php
-          ! grep -Fq '__OWNER_RESET_KEY_HASH__' dist/test/api/ops-owner-onboarding-reset-20260825.php
           test -f dist/test/admin/scolia-admin.js
           test -f dist/test/admin/season-admin.js
           test -f dist/test/admin/checkin-admin-v2.js
@@ -137,13 +113,38 @@ jobs:
           test -f dist/test/player/checkin-runtime.js
           test -f dist/test/player/player-ux.js
           test -f dist/test/player/player-ux.css
+          test -f dist/test/onboarding/index.html
+          test -f dist/test/onboarding/styles.css
+          test -f dist/test/onboarding/app.js
+          test -f dist/test/live/index.html
+          test -f dist/test/live/styles.css
+          test -f dist/test/screen/index.html
+          test -f dist/test/screen/screen-ux.css
+          test -f dist/test/packages/ui-assets/mobile-portal.css
+          test -f dist/test/packages/ui-assets/portal-brand.css
           test -f dist/test/screen/checkin-display.js
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
           test -f dist/test/kiosk/admin-mode.js
+          test -f dist/test/kiosk/brand-light.css
+          test -f dist/test/kiosk/tablet-portrait.css
+          grep -Fq 'viewport-fit=cover' dist/test/onboarding/index.html
+          grep -Fq 'data-toggle-password' dist/test/onboarding/index.html
+          grep -Fq 'portal-brand.css' dist/test/packages/ui-assets/portal-menu.js
+          grep -Fq 'mobile-portal.css' dist/test/packages/ui-assets/portal-menu.js
+          grep -Fq 'viewport-fit=cover' dist/test/live/index.html
+          grep -Fq 'blindleia-dartklubb-logo.png' dist/test/live/index.html
+          grep -Fq 'screen-ux.css' dist/test/screen/index.html
+          ! grep -Fq 'Skive = kiosk' dist/test/screen/index.html
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
+          grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
+          grep -Fq './brand-light.css' dist/test/kiosk/index.html
+          grep -Fq './tablet-portrait.css' dist/test/kiosk/index.html
+          grep -Fq 'height: 100dvh' dist/test/kiosk/tablet-portrait.css
+          grep -Fq 'overflow: hidden' dist/test/kiosk/tablet-portrait.css
+          grep -Fq 'tablet-portrait.css' dist/test/kiosk/service-worker.js
           grep -Fq 'type="email" placeholder="E-postadresse"' dist/test/player/index.html
           grep -Fq '<span>E-postadresse</span>' dist/test/admin/index.html
           grep -Fq '>Personer</a>' dist/test/admin/index.html
@@ -190,32 +191,17 @@ jobs:
           curl -fsS --max-time 15 "$base/admin/admin-ux.js" | grep -Fq 'Neste anbefalte steg'
           curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Min profil'
           curl -fsS --max-time 15 "$base/player/player-ux.js" | grep -Fq 'Akkurat nå'
-          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
-          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'
+          curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'viewport-fit=cover'
+          curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
+          curl -fsS --max-time 15 "$base/packages/ui-assets/portal-menu.js" | grep -Fq 'portal-brand.css'
+          curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Member navigation'
+          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'blindleia-dartklubb-logo.png'
+          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'viewport-fit=cover'
+          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'screen-ux.css'
+          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Kamper på skivene'
+          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'tablet-portrait.css'
+          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'brand-light.css'
           curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'
-          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq 'blindleia-dartklubb-logo.png'
-
-      - name: Execute one-time owner onboarding reset
-        env:
-          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
-        run: |
-          set -Eeuo pipefail
-          base="${BASE_URL%/}"
-          http_code="$(curl -sS --max-time 30 --get --data-urlencode "key=$OWNER_RESET_KEY" -o /tmp/owner-reset-response.json -w '%{http_code}' "$base/api/ops-owner-onboarding-reset-20260825.php")"
-          php -r '
-            $payload = json_decode(file_get_contents($argv[1]), true);
-            if (!is_array($payload)) { echo "OWNER_RESET_RESPONSE=invalid_json\n"; exit; }
-            if (($payload["ok"] ?? false) === true) {
-                echo "OWNER_RESET_RESPONSE=ok\n";
-                echo "OWNER_RESET_STATUS=" . ($payload["data"]["status"] ?? "unknown") . "\n";
-                echo "OWNER_RESET_EMAIL_SENT=" . (!empty($payload["data"]["email_sent"]) ? "yes" : "no") . "\n";
-                exit;
-            }
-            echo "OWNER_RESET_RESPONSE=error\n";
-            echo "OWNER_RESET_ERROR_CODE=" . ($payload["error"]["code"] ?? "unknown") . "\n";
-            echo "OWNER_RESET_ERROR_MESSAGE=" . ($payload["error"]["message"] ?? "unknown") . "\n";
-          ' /tmp/owner-reset-response.json
-          test "$http_code" = "200"
-          grep -Fq '"ok":true' /tmp/owner-reset-response.json
-          grep -Fq '"status":"reset"' /tmp/owner-reset-response.json
-          grep -Fq '"email_sent":true' /tmp/owner-reset-response.json
+          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq '"orientation": "portrait"'
+          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'height: 100dvh'
+          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'overflow: hidden'
