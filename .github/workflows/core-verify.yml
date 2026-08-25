@@ -1,0 +1,128 @@
+name: Verify Core Test DB
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/**'
+      - 'apps/onboarding/**'
+      - 'packages/**'
+      - 'infra/sql/**'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/core-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          find apps packages infra -type f -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: Run test migrations
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Verify account-player-member identity
+        run: php infra/sql/identity_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Verify member onboarding model
+        run: php infra/sql/onboarding_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Seed pilot superadmin onboarding invite
+        run: php infra/sql/seed_first_superadmin_onboarding.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Verify completed pilot onboarding
+        run: php infra/sql/post_onboarding_pilot_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Generate test API config
+        run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
+          CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
+          CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
+          CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
+
+      - name: Exercise full onboarding lifecycle
+        run: php infra/sql/onboarding_flow_smoke.php
+
+      - name: Re-verify onboarding state after smoke cleanup
+        run: php infra/sql/onboarding_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Release package smoke test
+        run: |
+          bash infra/deploy/build-release.sh test
+          test -f dist/test/onboarding/index.html
+          test -f dist/test/onboarding/app.js
+          test -f dist/test/api/member-onboarding.php
