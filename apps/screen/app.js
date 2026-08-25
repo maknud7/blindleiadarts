@@ -1,5 +1,4 @@
 const API_ROOT = "../api/v1";
-const DARTSATLAS_LIVE_URL = "../api/dartsatlas-live.php";
 const STORAGE_TOKEN_KEY = "bd:screenToken";
 
 const state = {
@@ -11,7 +10,7 @@ const state = {
   reconnectHandle: null,
   realtimeConfig: null,
   refreshing: false,
-  providerCounters: new Map(),
+  eventCounters: new Map(),
   eventTimer: null,
 };
 
@@ -78,16 +77,6 @@ async function api(path, { method = "GET", body } = {}) {
   return payload.data;
 }
 
-async function loadDartsAtlasLive(tournamentId) {
-  const query = tournamentId ? `?tournament_id=${encodeURIComponent(tournamentId)}` : "";
-  const response = await fetch(`${DARTSATLAS_LIVE_URL}${query}`, { cache: "no-store" });
-  const payload = await response.json();
-  if (!response.ok || !payload.ok) {
-    throw new Error(payload?.error?.message || "DartsAtlas live feed is unavailable.");
-  }
-  return payload.data;
-}
-
 async function loadRealtimeConfig() {
   if (state.realtimeConfig !== null) return state.realtimeConfig;
   try {
@@ -148,35 +137,10 @@ function showScreenView() {
   elements.screenView.classList.remove("hidden");
 }
 
-function isDartsAtlasScreen(screen = state.screen) {
-  return screen?.tournament?.provider_system === "dartsatlas";
-}
-
-async function providerPayload(baseScreen) {
-  if (!baseScreen?.tournament || baseScreen.tournament.provider_system !== "dartsatlas") return baseScreen;
-  try {
-    const live = await loadDartsAtlasLive(baseScreen.tournament.id);
-    return {
-      ...live,
-      screen_device: baseScreen.screen_device || state.screen?.screen_device || null,
-      fallback: live.tournament ? null : baseScreen.fallback || null,
-    };
-  } catch (error) {
-    return {
-      ...baseScreen,
-      feed: {
-        provider: "dartsatlas",
-        status: "stale",
-        message: error.message,
-      },
-    };
-  }
-}
-
 async function connectScreen(code) {
   const payload = await api("/public/screen/connect", { method: "POST", body: { code } });
   persistScreenToken(payload.access_token || "");
-  applyLivePayload(await providerPayload(payload.screen || null));
+  applyLivePayload(payload.screen || null);
   showScreenView();
   setConnectStatus("");
   return payload;
@@ -191,26 +155,8 @@ async function loadScreen() {
   state.refreshing = true;
   try {
     const payload = await api(`/public/screen?screen_token=${encodeURIComponent(state.screenToken)}`);
-    applyLivePayload(await providerPayload(payload));
+    applyLivePayload(payload);
     showScreenView();
-  } finally {
-    state.refreshing = false;
-  }
-}
-
-async function refreshDartsAtlas() {
-  if (!isDartsAtlasScreen() || state.refreshing) return;
-  state.refreshing = true;
-  try {
-    const current = state.screen;
-    const live = await loadDartsAtlasLive(current.tournament.id);
-    applyLivePayload({
-      ...live,
-      screen_device: current.screen_device || null,
-      fallback: live.tournament ? null : current.fallback || null,
-    });
-  } catch {
-    // Keep the last good snapshot on screen. Feed freshness in the API tells us when data is stale.
   } finally {
     state.refreshing = false;
   }
@@ -232,7 +178,7 @@ function closeLiveUpdates() {
 }
 
 function scheduleReconnect() {
-  if (state.reconnectHandle || !state.clubId || !state.screenToken || isDartsAtlasScreen()) return;
+  if (state.reconnectHandle || !state.clubId || !state.screenToken) return;
   state.reconnectHandle = window.setTimeout(() => {
     state.reconnectHandle = null;
     startLiveUpdates().catch(() => undefined);
@@ -242,7 +188,7 @@ function scheduleReconnect() {
 function applyLivePayload(payload) {
   if (!payload) return;
   if (!payload.screen_device && state.screen?.screen_device) payload.screen_device = state.screen.screen_device;
-  detectProviderEvents(payload);
+  detectLiveEvents(payload);
   state.screen = payload;
   state.clubId = Number(payload.club?.id || 0);
   render();
@@ -251,12 +197,6 @@ function applyLivePayload(payload) {
 async function startLiveUpdates() {
   closeLiveUpdates();
   if (!state.clubId || !state.screenToken) return;
-
-  if (isDartsAtlasScreen()) {
-    state.pollHandle = window.setInterval(() => refreshDartsAtlas().catch(() => undefined), 2000);
-    await refreshDartsAtlas();
-    return;
-  }
 
   const realtime = await loadRealtimeConfig();
   if (realtime?.enabled && realtime.websocket_url) {
@@ -267,7 +207,7 @@ async function startLiveUpdates() {
       try {
         const message = JSON.parse(event.data);
         if (message?.type !== "event" || message?.event !== "snapshot") return;
-        if (message.payload?.screen) applyLivePayload(await providerPayload(message.payload.screen));
+        if (message.payload?.screen) applyLivePayload(message.payload.screen);
         else await loadScreen();
       } catch { /* ignore malformed events */ }
     });
@@ -286,7 +226,7 @@ async function startLiveUpdates() {
     source.addEventListener("snapshot", async (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload?.screen) applyLivePayload(await providerPayload(payload.screen));
+        if (payload?.screen) applyLivePayload(payload.screen);
         else await loadScreen();
       } catch { /* ignore malformed payload */ }
     });
@@ -331,12 +271,11 @@ function formatBoard(board) {
   const playerBActive = Number(match.current_player_id || 0) === Number(match.player_b.id);
   const visits = Array.isArray(match.recent_visits) ? match.recent_visits : [];
   const latestVisit = visits[0] || null;
-  const dartsAtlas = board.provider === "dartsatlas";
   const remainingA = match.player_a.remaining === null || match.player_a.remaining === undefined ? "—" : match.player_a.remaining;
   const remainingB = match.player_b.remaining === null || match.player_b.remaining === undefined ? "—" : match.player_b.remaining;
-  const footer = dartsAtlas
-    ? `${playerStatLine(match.player_a)} | ${playerStatLine(match.player_b)}`
-    : (latestVisit ? `Siste: ${latestVisit.player_name} ${latestVisit.score}` : "Venter på første visit");
+  const footer = latestVisit
+    ? `Siste: ${latestVisit.player_name} ${latestVisit.score}`
+    : `${playerStatLine(match.player_a)} | ${playerStatLine(match.player_b)}`;
 
   return `
     <article class="board-card ${board.state === "in_progress" ? "is-live" : "is-assigned"}">
@@ -363,7 +302,7 @@ function renderStanding(entry, index) {
 }
 
 function renderRanking(entry, index) {
-  return `<article class="table-row"><span class="table-rank">${entry.position || index + 1}</span><div class="table-name"><strong>${escapeHtml(entry.display_name)}</strong><small>${entry.scope_type === "tournament" ? "Turnering" : "Sesong"}</small></div><span class="table-value">${escapeHtml(entry.points ?? "—")}</span></article>`;
+  return `<article class="table-row"><span class="table-rank">${entry.position || index + 1}</span><div class="table-name"><strong>${escapeHtml(entry.display_name)}</strong><small>${entry.scope_type === "tournament" ? "Turnering" : "Sesong"}</small></div><span class="table-value">${escapeHtml(entry.points ?? entry.rating ?? "—")}</span></article>`;
 }
 
 function renderVisit(entry, index) {
@@ -372,7 +311,7 @@ function renderVisit(entry, index) {
 }
 
 function renderAverage(entry, index) {
-  return `<article class="table-row"><span class="table-rank">${index + 1}</span><div class="table-name"><strong>${escapeHtml(entry.display_name)}</strong><small>${escapeHtml(entry.round_label || entry.bracket_label || "Kamp")} · ${num(entry.visits_logged, 0)} visits</small></div><span class="table-value">${formatNumber(entry.three_dart_average)}</span></article>`;
+  return `<article class="table-row"><span class="table-rank">${index + 1}</span><div class="table-name"><strong>${escapeHtml(entry.display_name)}</strong><small>${escapeHtml(entry.round_label || entry.bracket_label || "Kamp")} · ${num(entry.visits_logged, 0)} visits</small></div><span class="table-value">${formatNumber(entry.three_dart_average ?? entry.average)}</span></article>`;
 }
 
 function highlightRows(highlights) {
@@ -388,14 +327,9 @@ function renderHighlight(entry, index) {
 }
 
 function renderList(target, items, renderer, emptyText) {
-  target.innerHTML = Array.isArray(items) && items.length ? items.map(renderer).join("") : `<article class="list-item"><p class="muted">${escapeHtml(emptyText)}</p></article>`;
-}
-
-function feedChip(feed) {
-  if (!feed || feed.provider !== "dartsatlas") return "";
-  const status = feed.status || "idle";
-  const label = status === "live" ? "DartsAtlas LIVE" : status === "delayed" ? "DartsAtlas forsinket" : status === "stale" ? "DartsAtlas gammel feed" : "DartsAtlas venter";
-  return `<span class="pill">${label}</span>`;
+  target.innerHTML = Array.isArray(items) && items.length
+    ? items.map(renderer).join("")
+    : `<article class="list-item"><p class="muted">${escapeHtml(emptyText)}</p></article>`;
 }
 
 function render() {
@@ -417,7 +351,7 @@ function render() {
   elements.screenDeviceLabel.textContent = screen.screen_device?.label || "Venue Screen";
 
   elements.headerMeta.innerHTML = tournament
-    ? `<span class="pill">${escapeHtml(tournament.status)}</span><span class="pill">${boards.filter((board) => board.state === "in_progress").length} live</span>${feedChip(screen.feed)}`
+    ? `<span class="pill">${escapeHtml(tournament.status)}</span><span class="pill">${boards.filter((board) => board.state === "in_progress").length} live</span>`
     : `<span class="pill">Venter</span>`;
 
   renderList(elements.boardsGrid, boards, formatBoard, "Ingen boards med aktiv eller tildelt kamp akkurat nå.");
@@ -426,11 +360,9 @@ function render() {
   renderList(elements.eloList, stats.elo || [], renderRanking, "Ingen ELO-data enda.");
   renderList(elements.oomList, stats.order_of_merit || [], renderRanking, "Ingen Order of Merit-data enda.");
 
-  if (isDartsAtlasScreen(screen)) {
-    renderList(elements.topVisitsList, highlightRows(stats.highlights || {}), renderHighlight, "Ingen DartsAtlas-høydepunkter enda.");
-  } else {
-    renderList(elements.topVisitsList, stats.top_visits || [], renderVisit, "Ingen top visits enda.");
-  }
+  const highlights = highlightRows(stats.highlights || {});
+  if (highlights.length) renderList(elements.topVisitsList, highlights, renderHighlight, "Ingen høydepunkter enda.");
+  else renderList(elements.topVisitsList, stats.top_visits || [], renderVisit, "Ingen toppkast enda.");
   renderList(elements.bestAverageList, stats.best_match_averages || [], renderAverage, "Ingen matchsnitt enda.");
 
   const shouldShowFallback = !tournament || (boards.every((board) => board.state === "idle") && nextMatches.length === 0);
@@ -440,33 +372,32 @@ function render() {
 }
 
 function ensureEventOverlay() {
-  let overlay = document.getElementById("providerEventOverlay");
+  let overlay = document.getElementById("liveEventOverlay");
   if (overlay) return overlay;
   const style = document.createElement("style");
-  style.textContent = `#providerEventOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(4,10,18,.94);opacity:0;pointer-events:none;transition:opacity .2s ease}#providerEventOverlay.show{opacity:1}.provider-event-card{text-align:center;padding:4vw 6vw}.provider-event-title{font-size:clamp(4rem,12vw,11rem);font-weight:900;line-height:.9;margin:0}.provider-event-player{font-size:clamp(1.8rem,4vw,4rem);font-weight:800;margin-top:2rem}.provider-event-detail{font-size:clamp(1.2rem,2vw,2rem);margin-top:1rem;opacity:.8}`;
+  style.textContent = `#liveEventOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(4,10,18,.94);opacity:0;pointer-events:none;transition:opacity .2s ease}#liveEventOverlay.show{opacity:1}.live-event-card{text-align:center;padding:4vw 6vw}.live-event-title{font-size:clamp(4rem,12vw,11rem);font-weight:900;line-height:.9;margin:0}.live-event-player{font-size:clamp(1.8rem,4vw,4rem);font-weight:800;margin-top:2rem}.live-event-detail{font-size:clamp(1.2rem,2vw,2rem);margin-top:1rem;opacity:.8}`;
   document.head.appendChild(style);
   overlay = document.createElement("div");
-  overlay.id = "providerEventOverlay";
-  overlay.innerHTML = `<div class="provider-event-card"><div class="provider-event-title"></div><div class="provider-event-player"></div><div class="provider-event-detail"></div></div>`;
+  overlay.id = "liveEventOverlay";
+  overlay.innerHTML = `<div class="live-event-card"><div class="live-event-title"></div><div class="live-event-player"></div><div class="live-event-detail"></div></div>`;
   document.body.appendChild(overlay);
   return overlay;
 }
 
-function showProviderEvent(title, player, detail) {
+function showLiveEvent(title, player, detail) {
   const overlay = ensureEventOverlay();
-  overlay.querySelector(".provider-event-title").textContent = title;
-  overlay.querySelector(".provider-event-player").textContent = player || "";
-  overlay.querySelector(".provider-event-detail").textContent = detail || "";
+  overlay.querySelector(".live-event-title").textContent = title;
+  overlay.querySelector(".live-event-player").textContent = player || "";
+  overlay.querySelector(".live-event-detail").textContent = detail || "";
   overlay.classList.add("show");
   if (state.eventTimer) window.clearTimeout(state.eventTimer);
   state.eventTimer = window.setTimeout(() => overlay.classList.remove("show"), 3500);
 }
 
-function detectProviderEvents(payload) {
-  if (!isDartsAtlasScreen(payload)) return;
+function detectLiveEvents(payload) {
   const boards = Array.isArray(payload.live_boards) ? payload.live_boards : [];
-  const initialized = state.providerCounters.size > 0;
-  const nextCounters = new Map(state.providerCounters);
+  const initialized = state.eventCounters.size > 0;
+  const nextCounters = new Map(state.eventCounters);
 
   for (const board of boards) {
     const match = board.match;
@@ -475,18 +406,18 @@ function detectProviderEvents(payload) {
       if (!player?.id) continue;
       const key = `${match.id}:${player.id}`;
       const current = { score180: num(player.score_180, 0), checkout: num(player.highest_checkout, 0) };
-      const previous = state.providerCounters.get(key);
+      const previous = state.eventCounters.get(key);
       if (initialized && previous) {
         if (current.score180 > previous.score180) {
-          showProviderEvent("180!", player.display_name, `Skive ${board.kiosk?.board_number || ""}`.trim());
+          showLiveEvent("180!", player.display_name, `Skive ${board.kiosk?.board_number || ""}`.trim());
         } else if (current.checkout > previous.checkout && current.checkout > 0) {
-          showProviderEvent(`${current.checkout} CHECKOUT`, player.display_name, `Skive ${board.kiosk?.board_number || ""}`.trim());
+          showLiveEvent(`${current.checkout} CHECKOUT`, player.display_name, `Skive ${board.kiosk?.board_number || ""}`.trim());
         }
       }
       nextCounters.set(key, current);
     }
   }
-  state.providerCounters = nextCounters;
+  state.eventCounters = nextCounters;
 }
 
 async function handleConnectSubmit(event) {
@@ -509,7 +440,7 @@ async function handleConnectSubmit(event) {
 
 function handleChangeClub() {
   persistScreenToken("");
-  state.providerCounters.clear();
+  state.eventCounters.clear();
   elements.connectCode.value = "";
   setConnectStatus("");
   showConnectView();
@@ -517,10 +448,7 @@ function handleChangeClub() {
 
 function bindEvents() {
   elements.connectForm.addEventListener("submit", handleConnectSubmit);
-  elements.refreshButton.addEventListener("click", async () => {
-    if (isDartsAtlasScreen()) await refreshDartsAtlas();
-    else await loadScreen();
-  });
+  elements.refreshButton.addEventListener("click", () => loadScreen().catch(() => undefined));
   elements.changeClubButton.addEventListener("click", handleChangeClub);
 }
 

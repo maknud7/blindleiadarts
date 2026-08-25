@@ -109,7 +109,7 @@ final class MembershipDatabase
     }
 
     /**
-     * DartsAtlasRepository bruker samme mysqli-session som BlindleiaDarts.
+     * Repositoryer som trenger medlemsregisteret bruker samme mysqli-session som BlindleiaDarts.
      * Etter cutover finnes `medlemmer` permanent lokalt og ingen temp-bro trengs.
      * Før cutover beholdes gammel sqlconnect-bro som rollback/fallback.
      */

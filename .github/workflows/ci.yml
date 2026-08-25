@@ -17,6 +17,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Reject removed provider references
+        run: |
+          removed_provider="$(printf '%s%s' 'darts' 'atlas')"
+          if git grep -n -i -E "${removed_provider}(\.com)?" -- .; then
+            echo "Removed provider reference found in repository."
+            exit 1
+          fi
+
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
