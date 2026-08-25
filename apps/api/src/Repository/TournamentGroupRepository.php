@@ -50,7 +50,7 @@ final class TournamentGroupRepository
             'SELECT t.id, t.club_id, t.season_id, t.name, t.slug, t.status, t.start_at, t.end_at,
                     t.registration_opens_at, t.registration_closes_at, t.max_players,
                     t.group_count, t.group_draw_mode, t.group_drawn_at,
-                    COUNT(DISTINCT CASE WHEN tp.status IN ("registered","checked_in") THEN tp.id END) AS registration_count,
+                    COUNT(DISTINCT CASE WHEN tp.status IN ("registered","checked_in","paused") THEN tp.id END) AS registration_count,
                     COUNT(DISTINCT CASE WHEN tp.status = "waitlisted" THEN tp.id END) AS waitlist_count
              FROM `%1$stournaments` t
              LEFT JOIN `%1$stournament_players` tp ON tp.tournament_id=t.id
@@ -549,7 +549,7 @@ final class TournamentGroupRepository
     {
         $sql = sprintf(
             'SELECT COUNT(*) AS cnt FROM `%1$stournament_players`
-             WHERE tournament_id=? AND status IN ("registered","checked_in") AND (?=0 OR player_id<>?)',
+             WHERE tournament_id=? AND status IN ("registered","checked_in","paused") AND (?=0 OR player_id<>?)',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
