@@ -1,0 +1,128 @@
+name: Deploy Test
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Validate deployment configuration
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$BASE_URL"
+          test -n "$DB_HOST"
+          test -n "$DB_NAME"
+          test -n "$SFTP_HOST"
+          test -n "$SFTP_USERNAME"
+          test -n "$SFTP_PASSWORD"
+
+      - name: Migrate test database
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Build test release package
+        run: bash infra/deploy/build-release.sh test
+
+      - name: Generate API config
+        run: php infra/deploy/generate_api_config.php --output=dist/test/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL }}
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
+          CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
+          CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
+          CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
+
+      - name: Package sanity check
+        run: |
+          set -Eeuo pipefail
+          test -f dist/test/release.json
+          test -f dist/test/api/src/ScoliaApplication.php
+          test -f dist/test/api/src/TournamentCheckinApplication.php
+          test -f dist/test/admin/scolia-admin.js
+          test -f dist/test/admin/checkin-admin-v2.js
+          test -f dist/test/admin/tournament-wizard-v2.js
+          test -f dist/test/player/checkin-runtime.js
+          test -f dist/test/screen/checkin-display.js
+
+      - name: Deploy test via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./dist/test/*
+          remote_path: /www/blindleiadarts/test
+          sftp_only: true
+          rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
+
+      - name: Verify deployed test environment
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in 1 2 3 4 5; do
+            release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"; then
+              break
+            fi
+            sleep 3
+          done
+          release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM")"
+          printf '%s' "$release" | grep -Fq '"environment":"test"'
+          printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"
+          curl -fsS --max-time 15 "$base/api/v1/health" >/dev/null
+          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Blindleia Darts'
+          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Spillerportal'
+          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
+          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'
