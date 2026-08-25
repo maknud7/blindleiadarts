@@ -37,6 +37,9 @@ jobs:
           find apps packages infra -type f -name '*.php' -print0 \
             | xargs -0 -n1 php -l
 
+      - name: Tournament group engine checks
+        run: php infra/tests/tournament_group_service_test.php
+
       - name: JavaScript syntax check
         run: |
           find apps -type f -name '*.js' -print0 \
