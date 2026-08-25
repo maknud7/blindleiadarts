@@ -124,6 +124,6 @@ jobs:
           printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"
           curl -fsS --max-time 15 "$base/api/v1/health" >/dev/null
           curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Blindleia Darts'
-          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Spillerportal'
+          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Din dartportal'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
           curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'

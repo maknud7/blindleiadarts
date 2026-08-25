@@ -7,6 +7,11 @@ on:
         description: Git ref to deploy
         required: true
         default: main
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/prod-deploy-trigger-20260825'
 
 permissions:
   contents: read
@@ -22,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -79,6 +84,7 @@ jobs:
           REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
