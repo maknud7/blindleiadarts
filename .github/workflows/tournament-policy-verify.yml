@@ -1,0 +1,67 @@
+name: Verify Tournament Policy
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/src/TournamentPolicyApplication.php'
+      - 'apps/api/src/Repository/TournamentPolicyRepository.php'
+      - 'apps/admin/tournament-wizard-v2.js'
+      - 'apps/admin/tournament-policy-admin.js'
+      - 'apps/admin/superadmin-clubs.js'
+      - 'infra/sql/migrations/0044_tournament_windows_and_club_billing.php'
+      - 'infra/sql/tournament_policy_smoke.php'
+      - '.github/workflows/tournament-policy-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+      - name: PHP syntax
+        run: |
+          php -l apps/api/src/TournamentPolicyApplication.php
+          php -l apps/api/src/Repository/TournamentPolicyRepository.php
+          php -l infra/sql/migrations/0044_tournament_windows_and_club_billing.php
+          php -l infra/sql/tournament_policy_smoke.php
+      - name: JavaScript syntax
+        run: |
+          node --check apps/admin/tournament-wizard-v2.js
+          node --check apps/admin/tournament-policy-admin.js
+          node --check apps/admin/superadmin-clubs.js
+      - name: Migrate policy schema
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+      - name: Generate isolated test config
+        run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: https://test.blindleiadarts.ingenting.org
+          STATIC_BASE_URL: https://test.blindleiadarts.ingenting.org
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+      - name: Let hosted DB release short-lived sessions
+        run: sleep 15
+      - name: Exercise fixed timing season and billing
+        run: php infra/sql/tournament_policy_smoke.php
