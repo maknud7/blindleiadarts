@@ -127,6 +127,9 @@ jobs:
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI }}
 
+      - name: Exercise canonical match scoring
+        run: php infra/sql/match_scoring_smoke.php
+
       - name: Exercise full onboarding lifecycle
         run: php infra/sql/onboarding_flow_smoke.php
 
@@ -148,3 +151,6 @@ jobs:
           test -f dist/test/api/member-onboarding.php
           test -f dist/test/player/portal-content.js
           test -f dist/test/admin/tournament-summary-admin.js
+          test -f dist/test/api/src/MatchScoringApplication.php
+          test -f dist/test/api/src/Repository/MatchScoringRepository.php
+          test -f dist/test/api/src/Service/Dart501Rules.php
