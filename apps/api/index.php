@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\MatchScoringApplication;
 use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\ScoliaApplication;
+use Blindleia\Dartkiosk\Api\SeasonApplication;
 use Blindleia\Dartkiosk\Api\TournamentCheckinApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
 use Blindleia\Dartkiosk\Api\TournamentOperationsApplication;
@@ -15,6 +16,20 @@ use Blindleia\Dartkiosk\Api\TournamentPlayoffApplication;
 use Blindleia\Dartkiosk\Api\TournamentWizardApplication;
 
 require __DIR__ . '/bootstrap.php';
+
+// A production-installed board terminal may opt into the isolated test runtime.
+// Only the canonical production kiosk origin is allowed to call the test API cross-origin.
+$origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+if ($origin === 'https://dart.ingenting.org') {
+    header('Access-Control-Allow-Origin: https://dart.ingenting.org');
+    header('Vary: Origin');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Kiosk-Pairing-Token, X-Scolia-Bridge-Secret');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+        http_response_code(204);
+        return;
+    }
+}
 
 $scolia = new ScoliaApplication(__DIR__);
 if ($scolia->run()) {
@@ -48,6 +63,11 @@ if ($playerBreaks->run()) {
 
 $operations = new TournamentOperationsApplication(__DIR__);
 if ($operations->run()) {
+    return;
+}
+
+$seasons = new SeasonApplication(__DIR__);
+if ($seasons->run()) {
     return;
 }
 

@@ -14,11 +14,15 @@ function env_req(string $key): string
 function connect_db(): mysqli
 {
     $lastError = null;
-    for ($attempt = 1; $attempt <= 3; $attempt++) {
+    // The hosted database may briefly throttle new sessions when the core workflow
+    // runs several independent schema doctors back-to-back. This doctor is later in
+    // that sequence, so use a longer bounded backoff rather than turning a transient
+    // connection throttle into a false schema failure.
+    for ($attempt = 1; $attempt <= 6; $attempt++) {
         try {
             $db = mysqli_init();
             if ($db === false) throw new RuntimeException('Could not initialize mysqli.');
-            $db->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
+            $db->options(MYSQLI_OPT_CONNECT_TIMEOUT, 8);
             $db->real_connect(
                 env_req('DB_HOST'),
                 env_req('DB_USERNAME'),
@@ -30,10 +34,10 @@ function connect_db(): mysqli
             return $db;
         } catch (Throwable $error) {
             $lastError = $error;
-            if ($attempt < 3) sleep(2 * $attempt);
+            if ($attempt < 6) sleep(min(20, 5 * $attempt));
         }
     }
-    throw new RuntimeException('Database connection failed after retries.', 0, $lastError);
+    throw new RuntimeException('Database connection failed after extended retries.', 0, $lastError);
 }
 
 $db = connect_db();
@@ -78,7 +82,7 @@ foreach ($forbidden as $table => $names) {
         $stmt = $db->prepare('SELECT COUNT(*) c FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?');
         $stmt->bind_param('ss', $full, $column);
         $stmt->execute();
-        if ((int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0) !== 0) throw new RuntimeException("Legacy GPS column still exists: {$full}.{$column}");
+        if ((int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0) !== 0) throw new RuntimeException("Forbidden GPS column still present: {$full}.{$column}");
         $stmt->close();
     }
 }
@@ -89,14 +93,14 @@ $enumChecks = [
     [$p . 'tournament_players', 'checkin_source'],
 ];
 foreach ($enumChecks as [$table, $column]) {
-    $stmt = $db->prepare('SELECT column_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=? LIMIT 1');
+    $stmt = $db->prepare('SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=? LIMIT 1');
     $stmt->bind_param('ss', $table, $column);
     $stmt->execute();
-    $type = strtolower((string) ($stmt->get_result()->fetch_assoc()['column_type'] ?? ''));
+    $type = strtolower((string) ($stmt->get_result()->fetch_assoc()['COLUMN_TYPE'] ?? ''));
     $stmt->close();
     if (str_contains($type, 'gps') || str_contains($type, 'geolocation')) {
-        throw new RuntimeException("Legacy GPS enum value still exists: {$table}.{$column}");
+        throw new RuntimeException("GPS enum value still present: {$table}.{$column}");
     }
 }
 
-echo "Scolia/code-admin check-in schema doctor OK\n";
+echo "Scolia and code/admin check-in schema OK\n";

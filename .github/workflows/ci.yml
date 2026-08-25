@@ -55,4 +55,14 @@ jobs:
             | xargs -0 -n1 node --check
 
       - name: Release package smoke test
-        run: bash infra/deploy/build-release.sh test
+        run: |
+          bash infra/deploy/build-release.sh test
+          test -f dist/test/api/src/SeasonApplication.php
+          test -f dist/test/api/src/Repository/SeasonRepository.php
+          test -f dist/test/admin/season-admin.js
+          test -f dist/test/kiosk/manifest.webmanifest
+          test -f dist/test/kiosk/service-worker.js
+          test -f dist/test/kiosk/install.js
+          test -f dist/test/kiosk/admin-mode.js
+          grep -Fq '2201' dist/test/kiosk/admin-mode.js
+          grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
