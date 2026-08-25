@@ -5,8 +5,15 @@ declare(strict_types=1);
 return static function (mysqli $mysqli, string $prefix): void {
     $table = $prefix . 'tournament_player_breaks';
     $tournaments = $prefix . 'tournaments';
+    $tournamentPlayers = $prefix . 'tournament_players';
     $players = $prefix . 'players';
     $matches = $prefix . 'matches';
+
+    $mysqli->query(
+        "ALTER TABLE `{$tournamentPlayers}` MODIFY COLUMN `status`
+         ENUM('registered','waitlisted','checked_in','paused','withdrawn','no_show','eliminated')
+         NOT NULL DEFAULT 'registered'"
+    );
 
     $mysqli->query(
         "CREATE TABLE IF NOT EXISTS `{$table}` (
