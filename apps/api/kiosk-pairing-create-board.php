@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
+use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
@@ -26,6 +27,10 @@ $normalizeCode = static function (mixed $value): string {
 $nullable = static function (mixed $value, int $maxLength): ?string {
     $value = trim((string) $value);
     return $value === '' ? null : mb_substr($value, 0, $maxLength);
+};
+
+$validScoliaSerial = static function (string $value): bool {
+    return preg_match('/^[A-Za-z0-9._:-]{3,120}$/', $value) === 1;
 };
 
 try {
@@ -76,6 +81,7 @@ try {
     $requestsTable = $prefix . 'kiosk_pairing_requests';
     $kiosksTable = $prefix . 'kiosks';
     $clubs = new ClubRepository($database);
+    $scolia = new ScoliaRepository($database);
 
     $db->begin_transaction();
     try {
@@ -85,15 +91,9 @@ try {
         $pairing = $pairingStatement->get_result()->fetch_assoc() ?: null;
         $pairingStatement->close();
 
-        if ($pairing === null) {
-            throw new RuntimeException('pairing_not_found');
-        }
-        if ((string) $pairing['status'] !== 'pending' || strtotime((string) $pairing['expires_at']) <= time()) {
-            throw new RuntimeException('pairing_expired');
-        }
-        if ($pairing['club_id'] !== null && (int) $pairing['club_id'] !== $clubId) {
-            throw new RuntimeException('pairing_other_club');
-        }
+        if ($pairing === null) throw new RuntimeException('pairing_not_found');
+        if ((string) $pairing['status'] !== 'pending' || strtotime((string) $pairing['expires_at']) <= time()) throw new RuntimeException('pairing_expired');
+        if ($pairing['club_id'] !== null && (int) $pairing['club_id'] !== $clubId) throw new RuntimeException('pairing_other_club');
 
         $boardNumber = (int) ($board['board_number'] ?? 0);
         if ($boardNumber <= 0) {
@@ -110,20 +110,18 @@ try {
         $duplicate->execute();
         $boardExists = $duplicate->get_result()->fetch_assoc() !== null;
         $duplicate->close();
-        if ($boardExists) {
-            throw new RuntimeException('board_number_exists');
-        }
+        if ($boardExists) throw new RuntimeException('board_number_exists');
 
         $name = trim((string) ($board['name'] ?? ''));
-        if ($name === '') {
-            $name = 'Board ' . $boardNumber;
-        }
+        if ($name === '') $name = 'Board ' . $boardNumber;
         $name = mb_substr($name, 0, 120);
         $sponsorLabel = $nullable($board['sponsor_label'] ?? null, 150);
         $sponsorLogoUrl = $nullable($board['sponsor_logo_url'] ?? null, 255);
         $scoringMode = (string) ($board['scoring_mode'] ?? 'manual');
-        if (!in_array($scoringMode, ['manual', 'scolia'], true)) {
-            $scoringMode = 'manual';
+        if (!in_array($scoringMode, ['manual', 'scolia'], true)) $scoringMode = 'manual';
+        $scoliaSerial = trim((string) ($board['scolia_serial_number'] ?? ''));
+        if ($scoringMode === 'scolia' && !$validScoliaSerial($scoliaSerial)) {
+            throw new RuntimeException('scolia_serial_required');
         }
 
         $created = $clubs->createKiosk($clubId, [
@@ -134,8 +132,15 @@ try {
             'scoring_mode' => $scoringMode,
         ]);
         $kioskId = (int) ($created['id'] ?? 0);
-        if ($kioskId <= 0) {
-            throw new RuntimeException('board_create_failed');
+        if ($kioskId <= 0) throw new RuntimeException('board_create_failed');
+
+        $userId = (int) $user['id'];
+        if ($scoringMode === 'scolia') {
+            $scolia->updateBoardSettings($clubId, $kioskId, [
+                'serial_number' => $scoliaSerial,
+                'mode' => 'live',
+                'auto_fallback_to_manual' => true,
+            ], $userId);
         }
 
         $deviceName = (string) $pairing['device_name'];
@@ -145,7 +150,6 @@ try {
         $pairKiosk->execute();
         $pairKiosk->close();
 
-        $userId = (int) $user['id'];
         $pairingId = (int) $pairing['id'];
         $approve = $db->prepare("UPDATE `{$requestsTable}` SET club_id = ?, status = 'approved', approved_kiosk_id = ?, approved_by_user_account_id = ?, approved_at = NOW(), consumed_at = NOW() WHERE id = ?");
         $approve->bind_param('iiii', $clubId, $kioskId, $userId, $pairingId);
@@ -166,11 +170,12 @@ try {
                     'sponsor_label' => $sponsorLabel,
                     'sponsor_logo_url' => $sponsorLogoUrl,
                     'scoring_mode' => $scoringMode,
+                    'scolia_serial_number' => $scoringMode === 'scolia' ? $scoliaSerial : null,
                     'device_name' => $deviceName,
                 ],
             ],
         ], 201);
-    } catch (RuntimeException $error) {
+    } catch (RuntimeException|InvalidArgumentException $error) {
         $db->rollback();
         $map = [
             'pairing_not_found' => [404, 'Pairingkoden finnes ikke.'],
@@ -178,8 +183,10 @@ try {
             'pairing_other_club' => [403, 'Pairingforespørselen tilhører allerede en annen klubb.'],
             'board_number_exists' => [409, 'Dette boardnummeret finnes allerede. Velg eksisterende board eller bruk et annet nummer.'],
             'board_create_failed' => [500, 'Boardet kunne ikke opprettes.'],
+            'scolia_serial_required' => [422, 'Scolia-board må ha en gyldig Scolia-ID / serienummer.'],
+            'scolia_serial_in_use' => [409, 'Denne Scolia-ID-en er allerede knyttet til et annet board.'],
         ];
-        [$status, $message] = $map[$error->getMessage()] ?? [422, 'Kunne ikke opprette og koble boardet.'];
+        [$status, $message] = $map[$error->getMessage()] ?? [422, $error instanceof InvalidArgumentException ? $error->getMessage() : 'Kunne ikke opprette og koble boardet.'];
         $respond(['ok' => false, 'error' => ['code' => $error->getMessage(), 'message' => $message]], $status);
     }
 } catch (Throwable $error) {
