@@ -187,40 +187,82 @@ jobs:
         run: |
           set -Eeuo pipefail
           base="${BASE_URL%/}"
-          for attempt in 1 2 3 4 5; do
-            release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
-            if printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"; then
+
+          fetch_contains() {
+            local label="$1"
+            local url="$2"
+            local needle="$3"
+            local body=""
+            local request_url=""
+            for attempt in 1 2 3 4; do
+              request_url="${url}$([[ "$url" == *\?* ]] && printf '&' || printf '?')cb=$RANDOM"
+              body="$(curl -fsS --max-time 20 "$request_url" || true)"
+              if printf '%s' "$body" | grep -Fq "$needle"; then
+                echo "VERIFY_OK=$label"
+                return 0
+              fi
+              echo "Retrying $label ($attempt/4)"
+              sleep $((attempt * 2))
+            done
+            echo "::error::Deployment verification failed: $label"
+            return 1
+          }
+
+          fetch_ok() {
+            local label="$1"
+            local url="$2"
+            for attempt in 1 2 3 4; do
+              if curl -fsS --max-time 20 "${url}?cb=$RANDOM" >/dev/null; then
+                echo "VERIFY_OK=$label"
+                return 0
+              fi
+              echo "Retrying $label ($attempt/4)"
+              sleep $((attempt * 2))
+            done
+            echo "::error::Deployment verification failed: $label"
+            return 1
+          }
+
+          fetch_contains "release environment" "$base/release.json" '"environment":"test"'
+          fetch_contains "release sha" "$base/release.json" "$EXPECTED_SHA"
+          fetch_ok "health" "$base/api/v1/health"
+          fetch_contains "admin people" "$base/admin/" 'Personer'
+          fetch_contains "admin equipment" "$base/admin/" 'Utstyr'
+          fetch_contains "admin tournament room" "$base/admin/admin-ux.js" 'Neste anbefalte steg'
+          fetch_contains "admin activity" "$base/admin/activity-admin.js" 'Aktivitet'
+          fetch_contains "player profile" "$base/player/" 'Min profil'
+          fetch_contains "player current state" "$base/player/player-ux.js" 'Akkurat nå'
+          fetch_contains "onboarding viewport" "$base/onboarding/" 'viewport-fit=cover'
+          fetch_contains "onboarding password toggle" "$base/onboarding/" 'data-toggle-password'
+          fetch_contains "portal brand" "$base/packages/ui-assets/portal-menu.js" 'portal-brand.css'
+          fetch_contains "mobile portal" "$base/packages/ui-assets/mobile-portal.css" 'Mobile navigation must expose every destination'
+          fetch_contains "activity client" "$base/packages/ui-assets/activity.js" 'page_view'
+          fetch_contains "public live logo" "$base/live/" 'blindleia-dartklubb-logo.png'
+          fetch_contains "public live activity" "$base/live/" '/packages/ui-assets/activity.js'
+          fetch_contains "public live viewport" "$base/live/" 'viewport-fit=cover'
+          fetch_contains "screen ux" "$base/screen/" 'screen-ux.css'
+          fetch_contains "screen matches" "$base/screen/" 'Kamper på skivene'
+          fetch_contains "kiosk portrait css" "$base/kiosk/" 'tablet-portrait.css'
+          fetch_contains "kiosk brand css" "$base/kiosk/" 'brand-light.css'
+          fetch_contains "kiosk admin code" "$base/kiosk/admin-mode.js" '2201'
+          fetch_contains "kiosk portrait manifest" "$base/kiosk/manifest.webmanifest" '"orientation": "portrait"'
+          fetch_contains "kiosk viewport height" "$base/kiosk/tablet-portrait.css" 'height: 100dvh'
+          fetch_contains "kiosk overflow" "$base/kiosk/tablet-portrait.css" 'overflow: hidden'
+
+          activity_ok=no
+          for attempt in 1 2 3 4 5 6; do
+            activity="$(curl -fsS --max-time 20 -X POST -H 'Content-Type: application/json' \
+              --data '{"events":[{"surface":"deploy","event_name":"deployment_verify","path":"/","club_slug":"blindleia-dartklubb","metadata":{"source":"deploy_test"}}]}' \
+              "$base/api/v1/activity" || true)"
+            if printf '%s' "$activity" | grep -Fq '"ok":true'; then
+              activity_ok=yes
+              echo "VERIFY_OK=activity write"
               break
             fi
-            sleep 3
+            echo "Retrying activity write ($attempt/6)"
+            sleep $((attempt * 4))
           done
-          release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM")"
-          printf '%s' "$release" | grep -Fq '"environment":"test"'
-          printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"
-          curl -fsS --max-time 15 "$base/api/v1/health" >/dev/null
-          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Personer'
-          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Utstyr'
-          curl -fsS --max-time 15 "$base/admin/admin-ux.js" | grep -Fq 'Neste anbefalte steg'
-          curl -fsS --max-time 15 "$base/admin/activity-admin.js" | grep -Fq 'Aktivitet'
-          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Min profil'
-          curl -fsS --max-time 15 "$base/player/player-ux.js" | grep -Fq 'Akkurat nå'
-          curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'viewport-fit=cover'
-          curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/portal-menu.js" | grep -Fq 'portal-brand.css'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Mobile navigation must expose every destination'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/activity.js" | grep -Fq 'page_view'
-          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'blindleia-dartklubb-logo.png'
-          curl -fsS --max-time 15 "$base/live/" | grep -Fq '/packages/ui-assets/activity.js'
-          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'viewport-fit=cover'
-          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'screen-ux.css'
-          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Kamper på skivene'
-          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'tablet-portrait.css'
-          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'brand-light.css'
-          curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'
-          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq '"orientation": "portrait"'
-          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'height: 100dvh'
-          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'overflow: hidden'
-          activity="$(curl -fsS --max-time 15 -X POST -H 'Content-Type: application/json' \
-            --data '{"events":[{"surface":"deploy","event_name":"deployment_verify","path":"/","club_slug":"blindleia-dartklubb","metadata":{"source":"deploy_test"}}]}' \
-            "$base/api/v1/activity")"
-          printf '%s' "$activity" | grep -Fq '"ok":true'
+          if [[ "$activity_ok" != yes ]]; then
+            echo "::error::Deployment verification failed: activity write"
+            exit 1
+          fi
