@@ -23,11 +23,15 @@ return [
         'database' => 'dart_database_name',
         'username' => 'dart_database_user',
         'password' => 'dart_database_password',
+        // Tournament/scoring/runtime data stays environment-specific.
         'table_prefix' => 'bd_test_',
+        // Accounts, sessions and permissions are shared with production in the
+        // deployed test environment. CI can omit/override this to remain isolated.
+        'identity_table_prefix' => 'bd_prod_',
     ],
     'members_db' => [
-        // The member registry must use the exact same physical file as Blindleia admin.
-        // No alternate credentials or local copy are used.
+        // The member registry is shared for test and production and uses the same
+        // physical source as Blindleia admin. There is no copied test member base.
         'sqlconnect_path' => '/home/1/i/ingenting/dart/sqlconnect.php',
     ],
     'challonge' => [
