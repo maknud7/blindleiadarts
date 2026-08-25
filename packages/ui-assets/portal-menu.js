@@ -1,3 +1,12 @@
+const passwordResetCssHref = new URL("./password-reset.css", import.meta.url).href;
+if (![...document.styleSheets].some((sheet) => sheet.href === passwordResetCssHref)) {
+  const resetStyles = document.createElement("link");
+  resetStyles.rel = "stylesheet";
+  resetStyles.href = passwordResetCssHref;
+  document.head.appendChild(resetStyles);
+}
+import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
+
 const NAV_SELECTOR = "[data-portal-nav], .section-nav a[href^='#'], .portal-nav a[href^='#']";
 const SECTION_SELECTOR = "[data-portal-section], main > section[id], .shell > section[id]";
 
