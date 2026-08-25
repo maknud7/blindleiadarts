@@ -3,12 +3,19 @@
 declare(strict_types=1);
 
 return static function (mysqli $mysqli, string $prefix): void {
+    // Only the deployed test domain points at a different identity prefix.
+    // Production uses bd_prod_ for both domain and identity, so its referential
+    // integrity must remain intact.
+    if ($prefix !== 'bd_test_') {
+        return;
+    }
+
     $users = $prefix . 'user_accounts';
 
-    // Authentication and permission tables remain a strongly constrained identity
-    // aggregate. Environment-specific domain tables, however, may be written by an
-    // account from the shared production identity store while the domain row itself
-    // lives in bd_test_. Those actor/audit references must therefore be soft IDs.
+    // Authentication and permission tables in bd_test_ remain internally constrained
+    // for isolated CI smoke tests. Runtime test authentication does not use them.
+    // Environment-specific domain rows may be written by a shared bd_prod_ account,
+    // so their actor/audit references must be soft numeric IDs.
     $identityTables = [
         $prefix . 'auth_sessions',
         $prefix . 'club_user_roles',
