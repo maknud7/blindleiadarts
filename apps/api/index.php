@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\MatchScoringApplication;
+use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
 use Blindleia\Dartkiosk\Api\TournamentOperationsApplication;
@@ -18,6 +19,11 @@ if ($tournamentFeatures->run()) {
 
 $operations = new TournamentOperationsApplication(__DIR__);
 if ($operations->run()) {
+    return;
+}
+
+$playerBreaks = new PlayerBreakApplication(__DIR__);
+if ($playerBreaks->run()) {
     return;
 }
 
