@@ -14,132 +14,42 @@
           <img id="brandLogo" class="brand-logo hidden" alt="Klubblogo">
           <span id="brandFallback" class="brand-fallback">KL</span>
         </div>
-        <div>
-          <p class="eyebrow">Spillerportal</p>
-          <h1 id="brandTitle">Din dartdag på mobilen</h1>
-        </div>
+        <div><p class="eyebrow">Spillerportal</p><h1 id="brandTitle">Din dartdag på mobilen</h1></div>
       </div>
       <p id="clubIntro" class="muted">Velg klubb og logg inn for å melde deg på turneringer og følge egen statistikk.</p>
     </header>
 
-    <section class="card stack">
-      <label for="clubSelect">Klubb</label>
-      <select id="clubSelect"></select>
-      <button id="refreshButton" class="ghost">Oppdater</button>
-    </section>
+    <section class="card stack"><label for="clubSelect">Klubb</label><select id="clubSelect"></select><button id="refreshButton" class="ghost">Oppdater</button></section>
 
-    <nav class="portal-nav card" aria-label="Spillerportal">
-      <a href="#signup">Påmelding</a>
-      <a href="#tables">Tabeller / sluttspill</a>
-      <a href="#players">Spillere</a>
-      <a href="#summaries">Oppsummeringer</a>
-    </nav>
+    <nav class="portal-nav card" aria-label="Spillerportal"><a href="#signup">Påmelding</a><a href="#tables">Tabeller / sluttspill</a><a href="#players">Spillere</a><a href="#summaries">Oppsummeringer</a></nav>
 
     <section class="card stack">
       <h2>Logg inn</h2>
-      <form id="loginForm" class="stack">
-        <input id="loginUsername" type="text" placeholder="Brukernavn" autocomplete="username">
-        <input id="loginPassword" type="password" placeholder="Passord" autocomplete="current-password">
-        <button type="submit">Logg inn</button>
-      </form>
-      <div id="authSummary" class="mini-card hidden"></div>
-      <button id="logoutButton" class="ghost hidden">Logg ut</button>
-      <div id="statusArea" class="stack"></div>
+      <form id="loginForm" class="stack"><input id="loginUsername" type="text" placeholder="Brukernavn" autocomplete="username"><input id="loginPassword" type="password" placeholder="Passord" autocomplete="current-password"><button type="submit">Logg inn</button></form>
+      <div id="authSummary" class="mini-card hidden"></div><button id="logoutButton" class="ghost hidden">Logg ut</button><div id="statusArea" class="stack"></div>
     </section>
 
-    <section id="playerBreakSection" class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Under turneringen</p>
-          <h2>Trenger du 7 minutter?</h2>
-        </div>
-      </div>
-      <div id="playerBreakCard" class="mini-card">
-        <p class="muted">Logg inn og check inn i en aktiv turnering for å bruke spillerpause.</p>
-      </div>
-    </section>
+    <section id="playerBreakSection" class="card stack"><div class="section-head"><div><p class="eyebrow">Under turneringen</p><h2>Trenger du 7 minutter?</h2></div></div><div id="playerBreakCard" class="mini-card"><p class="muted">Logg inn og check inn i en aktiv turnering for å bruke spillerpause.</p></div></section>
 
-    <section class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Mine tall</p>
-          <h2>Statistikk og ranking</h2>
-        </div>
-      </div>
-      <div id="statsGrid" class="stats-grid"></div>
-      <div id="rankingList" class="stack"></div>
-    </section>
+    <section class="card stack"><div class="section-head"><div><p class="eyebrow">Mine tall</p><h2>Statistikk og ranking</h2></div></div><div id="statsGrid" class="stats-grid"></div><div id="rankingList" class="stack"></div></section>
 
     <section id="signup" class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Mine turneringer</p>
-          <h2>Påmeldinger</h2>
-        </div>
-      </div>
-      <div class="mini-card">
-        <strong>Arena-checkin</strong>
-        <p class="muted">Meld deg først på turneringen. Check-in åpner først nær turneringsstart, og klubben kan kreve at telefonen din er fysisk ved arenaen.</p>
-      </div>
+      <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmeldinger</h2></div></div>
+      <div class="mini-card"><strong>Check-in i lokalet</strong><p class="muted">Turneringsleder kan checke deg inn, eller du kan taste koden som vises på Live-skjermen når check-in åpner. GPS brukes bare som valgfri fallback dersom klubben har aktivert det.</p></div>
       <div id="registrationList" class="stack"></div>
     </section>
 
-    <section class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Turneringer</p>
-          <h2>Åpne turneringer i klubben</h2>
-        </div>
-      </div>
-      <div id="tournamentList" class="stack"></div>
-    </section>
+    <section class="card stack"><div class="section-head"><div><p class="eyebrow">Turneringer</p><h2>Åpne turneringer i klubben</h2></div></div><div id="tournamentList" class="stack"></div></section>
 
     <section id="tables" class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Ranking</p>
-          <h2>ELO-tabell</h2>
-        </div>
-      </div>
-      <div id="eloTable" class="table-card"></div>
-      <div class="section-head content-subhead">
-        <div>
-          <p class="eyebrow">Turnering</p>
-          <h2>Gruppetabeller</h2>
-        </div>
-      </div>
-      <select id="tableTournamentSelect" aria-label="Velg turnering"></select>
-      <div id="groupTables" class="stack"></div>
-      <div class="section-head content-subhead">
-        <div>
-          <p class="eyebrow">Turnering</p>
-          <h2>Sluttspill</h2>
-        </div>
-      </div>
-      <div id="portalPlayoff"></div>
+      <div class="section-head"><div><p class="eyebrow">Ranking</p><h2>ELO-tabell</h2></div></div><div id="eloTable" class="table-card"></div>
+      <div class="section-head content-subhead"><div><p class="eyebrow">Turnering</p><h2>Gruppetabeller</h2></div></div><select id="tableTournamentSelect" aria-label="Velg turnering"></select><div id="groupTables" class="stack"></div>
+      <div class="section-head content-subhead"><div><p class="eyebrow">Turnering</p><h2>Sluttspill</h2></div></div><div id="portalPlayoff"></div>
     </section>
 
-    <section id="players" class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Klubben</p>
-          <h2>Spillere og statistikk</h2>
-        </div>
-      </div>
-      <div id="playerDirectory" class="player-directory"></div>
-      <article id="playerProfile" class="profile-card hidden"></article>
-    </section>
+    <section id="players" class="card stack"><div class="section-head"><div><p class="eyebrow">Klubben</p><h2>Spillere og statistikk</h2></div></div><div id="playerDirectory" class="player-directory"></div><article id="playerProfile" class="profile-card hidden"></article></section>
 
-    <section id="summaries" class="card stack">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Etter kampen</p>
-          <h2>Oppsummeringer</h2>
-        </div>
-      </div>
-      <p class="muted">Turneringsoppsummeringer, resultater og høydepunkter fra klubbkveldene.</p>
-      <div id="summaryList" class="stack"></div>
-    </section>
+    <section id="summaries" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><p class="muted">Turneringsoppsummeringer, resultater og høydepunkter fra klubbkveldene.</p><div id="summaryList" class="stack"></div></section>
   </div>
 
   <script src="./checkin-runtime.js" type="module"></script>
