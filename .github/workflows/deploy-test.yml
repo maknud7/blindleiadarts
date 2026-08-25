@@ -223,4 +223,4 @@ jobs:
           activity="$(curl -fsS --max-time 15 -X POST -H 'Content-Type: application/json' \
             --data '{"events":[{"surface":"deploy","event_name":"deployment_verify","path":"/","club_slug":"blindleia-dartklubb","metadata":{"source":"deploy_test"}}]}' \
             "$base/api/v1/activity")"
-          printf '%s' "$activity" | grep -Fq '"ok":true'
+          printf '%s' "$activity" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
