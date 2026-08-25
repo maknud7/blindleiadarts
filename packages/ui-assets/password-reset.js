@@ -20,9 +20,9 @@ function installPasswordReset() {
     : `
       <button id="passwordResetOpen" type="button" class="password-reset-link">Glemt passord?</button>
       <div id="passwordResetBody" class="password-reset-body hidden">
-        <div class="password-reset-copy"><strong>Få en lenke på e-post</strong><span>Skriv inn brukernavnet eller e-postadressen som er knyttet til kontoen.</span></div>
+        <div class="password-reset-copy"><strong>Få en lenke på e-post</strong><span>Skriv inn e-postadressen du bruker til Blindleia Darts.</span></div>
         <form id="passwordResetRequestForm" class="password-reset-form">
-          <input id="passwordResetLogin" autocomplete="username email" placeholder="Brukernavn eller e-post" required>
+          <input id="passwordResetEmail" type="email" autocomplete="email" inputmode="email" placeholder="E-postadresse" required>
           <button type="submit">Send lenke</button>
         </form>
         <div id="passwordResetMessage" class="password-reset-message hidden"></div>
@@ -56,9 +56,9 @@ function bindRequest(panel) {
     setMessage(message, "Sender …");
     try {
       const payload = await jsonRequest("/auth/password-reset/request", {
-        login: panel.querySelector("#passwordResetLogin")?.value || "",
+        email: panel.querySelector("#passwordResetEmail")?.value.trim() || "",
       });
-      setMessage(message, payload.message || "Hvis kontoen finnes, er en e-post sendt.", "success");
+      setMessage(message, payload.message || "Hvis e-postadressen er registrert, er en e-post sendt.", "success");
     } catch (error) {
       setMessage(message, error.message || "Kunne ikke sende lenke.", "error");
     } finally {
