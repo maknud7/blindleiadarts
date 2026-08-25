@@ -9,11 +9,17 @@ use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
 use Blindleia\Dartkiosk\Api\TournamentOperationsApplication;
+use Blindleia\Dartkiosk\Api\TournamentPlayoffApplication;
 
 require __DIR__ . '/bootstrap.php';
 
 $tournamentFeatures = new TournamentFeatureApplication(__DIR__);
 if ($tournamentFeatures->run()) {
+    return;
+}
+
+$playoffs = new TournamentPlayoffApplication(__DIR__);
+if ($playoffs->run()) {
     return;
 }
 
