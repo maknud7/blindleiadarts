@@ -90,13 +90,13 @@ function renderElo() {
   el.eloTable.innerHTML = `
     <div class="table-scroll">
       <table class="portal-table">
-        <thead><tr><th>#</th><th>Spiller</th><th>ELO</th><th>Kamper</th><th>Seire</th></tr></thead>
+        <thead><tr><th>#</th><th>Spiller</th><th>ELO</th><th>ELO-kamper</th><th>Lokale seire</th></tr></thead>
         <tbody>${state.elo.map((row) => `
           <tr data-player-profile="${Number(row.id)}">
             <td>${Number(row.position)}</td>
             <td><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td>
             <td>${Number(row.elo_rating || 1000).toFixed(1)}</td>
-            <td>${Number(row.matches_played || row.baseline_played || 0)}</td>
+            <td>${Number(row.baseline_played ?? row.matches_played ?? 0)}</td>
             <td>${Number(row.matches_won || 0)}</td>
           </tr>`).join("")}</tbody>
       </table>
@@ -113,7 +113,7 @@ function renderPlayers() {
   el.playerDirectory.innerHTML = sorted.map((player) => `
     <button type="button" class="player-card" data-player-profile="${Number(player.id)}">
       <span class="player-card-name">${esc(player.display_name)}</span>
-      <span class="player-card-meta">ELO ${Number(player.elo_rating || 1000).toFixed(1)} · ${Number(player.matches_played || 0)} kamper</span>
+      <span class="player-card-meta">ELO ${Number(player.elo_rating || 1000).toFixed(1)} · ${Number(player.matches_played || 0)} lokale kamper</span>
     </button>`).join("");
   bindProfileLinks(el.playerDirectory);
 }
@@ -150,8 +150,10 @@ async function loadPlayerProfile(playerId) {
       <div class="stat-card"><small>Seiersprosent</small><strong>${Number(stats.win_percentage || 0).toFixed(1)}%</strong></div>
       <div class="stat-card"><small>Snitt</small><strong>${Number(stats.recorded_average || stats.visit_average || 0).toFixed(2)}</strong></div>
       <div class="stat-card"><small>Høy checkout</small><strong>${Number(stats.highest_checkout || 0)}</strong></div>
+      <div class="stat-card"><small>Checkout %</small><strong>${stats.checkout_percentage === null || stats.checkout_percentage === undefined ? "—" : `${Number(stats.checkout_percentage).toFixed(1)}%`}</strong></div>
       <div class="stat-card"><small>180</small><strong>${Number(stats.visits_180 || 0)}</strong></div>
       <div class="stat-card"><small>140+</small><strong>${Number(stats.visits_140_plus || 0)}</strong></div>
+      <div class="stat-card"><small>100+</small><strong>${Number(stats.visits_100_plus || 0)}</strong></div>
     </div>
     <div class="profile-section">
       <h3>Siste kamper</h3>
