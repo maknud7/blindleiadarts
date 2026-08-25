@@ -11,3 +11,4 @@ import "./season-admin.js";
 import "./scolia-admin.js";
 import "./checkin-admin-v2.js";
 import "./tournament-wizard-v2.js";
+import "./admin-ux-bootstrap.js";
