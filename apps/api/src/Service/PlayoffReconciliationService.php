@@ -60,7 +60,52 @@ final class PlayoffReconciliationService
         }
         if ($wasUndo) {
             $this->playoffs->rewindAfterUndo($matchId);
+            $this->restoreReopenedMatchParticipants($matchId);
         }
         $this->playoffs->reconcileByMatchId($matchId);
+    }
+
+    private function restoreReopenedMatchParticipants(int $matchId): void
+    {
+        $sql = sprintf(
+            'SELECT m.tournament_id, m.player_a_id, m.player_b_id,
+                    EXISTS(
+                        SELECT 1 FROM `%1$stournament_playoff_nodes` n WHERE n.match_id=m.id
+                    ) AS is_playoff
+             FROM `%1$smatches` m WHERE m.id=? LIMIT 1',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $matchId);
+        $stmt->execute();
+        $match = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($match === null || (int) ($match['is_playoff'] ?? 0) !== 1) {
+            return;
+        }
+
+        $tournamentId = (int) $match['tournament_id'];
+        foreach ([(int) $match['player_a_id'], (int) $match['player_b_id']] as $playerId) {
+            $breakSql = sprintf(
+                'SELECT 1 FROM `%1$stournament_player_breaks`
+                 WHERE tournament_id=? AND player_id=? AND status IN ("scheduled","active")
+                 ORDER BY id DESC LIMIT 1',
+                $this->tablePrefix
+            );
+            $breakStmt = $this->connection->prepare($breakSql);
+            $breakStmt->bind_param('ii', $tournamentId, $playerId);
+            $breakStmt->execute();
+            $hasBreak = $breakStmt->get_result()->fetch_assoc() !== null;
+            $breakStmt->close();
+
+            $status = $hasBreak ? 'paused' : 'checked_in';
+            $update = $this->connection->prepare(sprintf(
+                'UPDATE `%1$stournament_players` SET status=? WHERE tournament_id=? AND player_id=?',
+                $this->tablePrefix
+            ));
+            $update->bind_param('sii', $status, $tournamentId, $playerId);
+            $update->execute();
+            $update->close();
+        }
     }
 }
