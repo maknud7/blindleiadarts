@@ -49,9 +49,7 @@ function activate(target, { updateHash = true } = {}) {
   });
 
   document.body.dataset.portalActive = next;
-  if (updateHash && window.location.hash !== `#${next}`) {
-    history.replaceState(null, "", `#${next}`);
-  }
+  if (updateHash && window.location.hash !== `#${next}`) history.replaceState(null, "", `#${next}`);
   window.dispatchEvent(new CustomEvent("bd:portal-view", { detail: { target: next } }));
 }
 
@@ -82,10 +80,7 @@ async function syncRoleAccess() {
   }
   if (lastRoleToken === token && gated.every((node) => node.dataset.roleResolved === "1")) return;
   try {
-    const response = await fetch("../api/v1/auth/me", {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
+    const response = await fetch("../api/v1/auth/me", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
     const payload = await response.json().catch(() => null);
     const role = payload?.data?.user?.role || "";
     const allowed = ["club_admin", "super_admin"].includes(role);
@@ -112,11 +107,12 @@ style.textContent = `
 .portal-view-hidden{display:none!important}
 .section-nav a.active,.portal-nav a.active{border-color:var(--accent,#11435d)!important;background:var(--accent,#11435d)!important;color:#fff!important}
 .portal-menu{position:sticky;top:84px;z-index:12;padding:10px;border-radius:16px;backdrop-filter:blur(16px)}
+.portal-nav.portal-menu{grid-template-columns:repeat(auto-fit,minmax(105px,1fr))}
 .portal-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
 .shortcut-card{display:grid;gap:6px;min-height:104px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel-2,rgba(255,255,255,.78));color:inherit;text-decoration:none}
 .shortcut-card strong{font-size:17px}.shortcut-card span{color:var(--muted);font-size:13px;line-height:1.45}
 [data-portal-section]{animation:portalViewIn .14s ease-out}@keyframes portalViewIn{from{opacity:.45;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media(max-width:760px){.portal-menu{top:0}.portal-shortcuts{grid-template-columns:1fr}}
+@media(max-width:760px){.portal-menu{top:0}.portal-nav.portal-menu{grid-template-columns:repeat(2,minmax(0,1fr))}.portal-shortcuts{grid-template-columns:1fr}}
 `;
 document.head.appendChild(style);
 
