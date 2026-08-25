@@ -128,3 +128,5 @@
   window.setInterval(() => refreshPostMatch().catch(() => undefined), 1500);
   refreshPostMatch().catch(() => undefined);
 })();
+
+import("./scolia-runtime.js").catch((error) => console.warn("Scolia runtime kunne ikke lastes:", error));

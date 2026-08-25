@@ -68,6 +68,7 @@ final class Config
     public function realtimePublishSecret(): string { return (string) (($this->config['realtime']['publish_secret'] ?? '') ?: ''); }
     public function realtimeEnabled(): bool { return $this->realtimeWebsocketUrl() !== ''; }
     public function realtimePublishEnabled(): bool { return $this->realtimePublishUrl() !== '' && $this->realtimePublishSecret() !== ''; }
+    public function scoliaBridgeSecret(): string { return (string) (($this->config['scolia']['bridge_secret'] ?? '') ?: ''); }
 
     public function challonge(): ChallongeConfig
     {

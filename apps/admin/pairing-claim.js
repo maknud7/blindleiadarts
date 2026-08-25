@@ -6,3 +6,7 @@ import "./tournament-playoff-admin.js";
 import "./tournament-operations-admin.js";
 import "./tournament-elo-admin.js";
 import "./tournament-summary-admin.js";
+import "./tournament-checkin-admin.js";
+import "./scolia-admin.js";
+import "./checkin-admin-v2.js";
+import "./tournament-wizard-v2.js";
