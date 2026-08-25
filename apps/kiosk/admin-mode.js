@@ -43,9 +43,10 @@ function statusNode() {
     node.className = "kiosk-admin-status";
     meta.appendChild(node);
   }
-  node.innerHTML = isUnlocked()
+  const html = isUnlocked()
     ? `<strong>Admin-modus er aktiv</strong>Avanserte terminalvalg er låst opp for denne økten.`
     : `<strong>Vanlig modus</strong>Avanserte terminalvalg krever admin-kode.`;
+  if (node.innerHTML !== html) node.innerHTML = html;
   return node;
 }
 function unlock() {
@@ -53,7 +54,8 @@ function unlock() {
   if (code === null) return;
   if (String(code).trim() !== KIOSK_ADMIN_PIN) {
     const node = statusNode();
-    if (node) node.innerHTML = `<strong>Feil kode</strong>Admin-modus ble ikke aktivert.`;
+    const html = `<strong>Feil kode</strong>Admin-modus ble ikke aktivert.`;
+    if (node && node.innerHTML !== html) node.innerHTML = html;
     return;
   }
   setUnlocked(true);
@@ -75,7 +77,8 @@ function ensureButton() {
     actions.appendChild(button);
     button.addEventListener("click", () => isUnlocked() ? lock() : unlock());
   }
-  button.textContent = isUnlocked() ? "Lås admin-modus" : "Admin-modus";
+  const label = isUnlocked() ? "Lås admin-modus" : "Admin-modus";
+  if (button.textContent !== label) button.textContent = label;
   return button;
 }
 function render() {
