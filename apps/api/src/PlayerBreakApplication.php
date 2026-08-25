@@ -26,8 +26,9 @@ final class PlayerBreakApplication
         $request = Request::fromGlobals();
         $path = trim($request->path(), '/');
         $method = $request->method();
-        $isBreakRoute = in_array($method, ['GET', 'POST'], true)
-            && preg_match('#^v1/tournaments/(\d+)/me/break$#', $path) === 1;
+        $isBreakRoute = (in_array($method, ['GET', 'POST'], true)
+                && preg_match('#^v1/tournaments/(\d+)/me/break$#', $path) === 1)
+            || ($method === 'GET' && $path === 'v1/me/break-context');
         $isAssignmentRoute = $this->isAssignmentRoute($method, $path);
 
         if (!$isBreakRoute && !$isAssignmentRoute) {
@@ -41,13 +42,11 @@ final class PlayerBreakApplication
             $breaks = new PlayerBreakRepository($database);
 
             if ($isAssignmentRoute) {
-                // Bring scheduled/expired breaks up to date before the existing
-                // assignment engine checks tournament_players.status.
                 $breaks->normalizeAll();
                 return false;
             }
 
-            $response = $this->dispatch($request, $path, $database);
+            $response = $this->dispatch($request, $path, $database, $breaks);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception $error) {
@@ -84,10 +83,12 @@ final class PlayerBreakApplication
             || preg_match('#^v1/tournaments/\d+/matches$#', $path) === 1;
     }
 
-    private function dispatch(Request $request, string $path, Database $database): JsonResponse
-    {
-        preg_match('#^v1/tournaments/(\d+)/me/break$#', $path, $matches);
-        $tournamentId = (int) ($matches[1] ?? 0);
+    private function dispatch(
+        Request $request,
+        string $path,
+        Database $database,
+        PlayerBreakRepository $breaks
+    ): JsonResponse {
         $users = new UserAccountRepository($database);
         $token = $request->bearerToken();
         if ($token === null) {
@@ -102,7 +103,15 @@ final class PlayerBreakApplication
             return JsonResponse::error(422, 'player_profile_missing', 'Kontoen er ikke koblet til en spillerprofil.');
         }
 
-        $breaks = new PlayerBreakRepository($database);
+        if ($path === 'v1/me/break-context') {
+            return JsonResponse::ok([
+                'context' => $breaks->findContext($playerId),
+                'break_minutes' => PlayerBreakRepository::BREAK_MINUTES,
+            ]);
+        }
+
+        preg_match('#^v1/tournaments/(\d+)/me/break$#', $path, $matches);
+        $tournamentId = (int) ($matches[1] ?? 0);
         if ($request->method() === 'POST') {
             return JsonResponse::ok(['break' => $breaks->requestBreak($tournamentId, $playerId)], 201);
         }
