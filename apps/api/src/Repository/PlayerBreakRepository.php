@@ -23,14 +23,13 @@ final class PlayerBreakRepository
     /** @return array<string,mixed> */
     public function requestBreak(int $tournamentId, int $playerId): array
     {
-        $this->assertEligible($tournamentId, $playerId);
         $this->normalizeTournament($tournamentId);
-
         $existing = $this->currentBreak($tournamentId, $playerId);
         if ($existing !== null && in_array((string) $existing['status'], ['scheduled', 'active'], true)) {
             return $existing;
         }
 
+        $this->assertEligible($tournamentId, $playerId);
         $match = $this->activeMatch($tournamentId, $playerId);
         if ($match !== null) {
             $status = 'scheduled';
@@ -60,6 +59,7 @@ final class PlayerBreakRepository
             $stmt->close();
         }
 
+        $this->setRegistrationPaused($tournamentId, $playerId);
         return $this->currentBreak($tournamentId, $playerId) ?? [];
     }
 
@@ -70,22 +70,19 @@ final class PlayerBreakRepository
         return $this->currentBreak($tournamentId, $playerId);
     }
 
-    /** @return array<int,int> */
-    public function listUnavailablePlayerIds(int $tournamentId): array
+    public function normalizeAll(): void
     {
-        $this->normalizeTournament($tournamentId);
         $sql = sprintf(
-            'SELECT DISTINCT player_id
+            'SELECT DISTINCT tournament_id
              FROM `%1$stournament_player_breaks`
-             WHERE tournament_id=? AND status="active" AND starts_at<=NOW() AND ends_at>NOW()',
+             WHERE status IN ("scheduled","active")',
             $this->tablePrefix
         );
-        $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('i', $tournamentId);
-        $stmt->execute();
-        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmt->close();
-        return array_values(array_map(static fn (array $row): int => (int) $row['player_id'], $rows));
+        $result = $this->connection->query($sql);
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        foreach ($rows as $row) {
+            $this->normalizeTournament((int) $row['tournament_id']);
+        }
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -119,11 +116,14 @@ final class PlayerBreakRepository
         $activateSql = sprintf(
             'UPDATE `%1$stournament_player_breaks` pb
              INNER JOIN `%1$smatches` m ON m.id=pb.after_match_id
-             SET pb.starts_at=m.finished_at,
-                 pb.ends_at=DATE_ADD(m.finished_at, INTERVAL %2$d MINUTE),
-                 pb.status=CASE WHEN DATE_ADD(m.finished_at, INTERVAL %2$d MINUTE)<=NOW() THEN "completed" ELSE "active" END
+             SET pb.starts_at=COALESCE(m.finished_at,NOW()),
+                 pb.ends_at=DATE_ADD(COALESCE(m.finished_at,NOW()), INTERVAL %2$d MINUTE),
+                 pb.status=CASE
+                    WHEN DATE_ADD(COALESCE(m.finished_at,NOW()), INTERVAL %2$d MINUTE)<=NOW() THEN "completed"
+                    ELSE "active"
+                 END
              WHERE pb.tournament_id=? AND pb.status="scheduled"
-               AND m.status="completed" AND m.finished_at IS NOT NULL',
+               AND m.status IN ("completed","cancelled")',
             $this->tablePrefix,
             self::BREAK_MINUTES
         );
@@ -142,6 +142,51 @@ final class PlayerBreakRepository
         $expire->bind_param('i', $tournamentId);
         $expire->execute();
         $expire->close();
+
+        // A break always wins over a manual re-check-in while it is still active/scheduled.
+        $pauseSql = sprintf(
+            'UPDATE `%1$stournament_players` tp
+             INNER JOIN `%1$stournament_player_breaks` pb
+                ON pb.tournament_id=tp.tournament_id AND pb.player_id=tp.player_id
+             SET tp.status="paused"
+             WHERE tp.tournament_id=? AND pb.status IN ("scheduled","active")
+               AND tp.status IN ("registered","checked_in","paused")',
+            $this->tablePrefix
+        );
+        $pause = $this->connection->prepare($pauseSql);
+        $pause->bind_param('i', $tournamentId);
+        $pause->execute();
+        $pause->close();
+
+        // Once all current breaks for a player are over, the player is available again automatically.
+        $restoreSql = sprintf(
+            'UPDATE `%1$stournament_players` tp
+             SET tp.status="checked_in"
+             WHERE tp.tournament_id=? AND tp.status="paused"
+               AND NOT EXISTS (
+                    SELECT 1 FROM `%1$stournament_player_breaks` pb
+                    WHERE pb.tournament_id=tp.tournament_id AND pb.player_id=tp.player_id
+                      AND pb.status IN ("scheduled","active")
+               )',
+            $this->tablePrefix
+        );
+        $restore = $this->connection->prepare($restoreSql);
+        $restore->bind_param('i', $tournamentId);
+        $restore->execute();
+        $restore->close();
+    }
+
+    private function setRegistrationPaused(int $tournamentId, int $playerId): void
+    {
+        $sql = sprintf(
+            'UPDATE `%1$stournament_players` SET status="paused"
+             WHERE tournament_id=? AND player_id=? AND status="checked_in"',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('ii', $tournamentId, $playerId);
+        $stmt->execute();
+        $stmt->close();
     }
 
     private function assertEligible(int $tournamentId, int $playerId): void
