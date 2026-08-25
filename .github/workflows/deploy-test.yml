@@ -111,6 +111,9 @@ jobs:
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
+          test -f dist/test/kiosk/admin-mode.js
+          grep -Fq '2201' dist/test/kiosk/admin-mode.js
+          grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
           grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
           grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/test/api/config.php
@@ -149,4 +152,5 @@ jobs:
           curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Din dartportal'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
           curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'
-          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq 'Blindleia Board'
+          curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'
+          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq 'blindleia-dartklubb-logo.png'
