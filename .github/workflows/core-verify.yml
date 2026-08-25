@@ -15,6 +15,7 @@ on:
       - 'infra/sql/**'
       - 'infra/deploy/**'
       - '.github/workflows/core-verify.yml'
+
   workflow_dispatch:
 
 permissions:
@@ -99,6 +100,16 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
+      - name: Verify tournament playoff schema
+        run: php infra/sql/tournament_playoffs_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
       - name: Verify account-player-member identity
         run: php infra/sql/identity_doctor.php
         env:
@@ -170,6 +181,9 @@ jobs:
       - name: Exercise seven minute player breaks
         run: php infra/sql/player_breaks_smoke.php
 
+      - name: Exercise single elimination playoff lifecycle
+        run: php infra/sql/tournament_playoffs_smoke.php
+
       - name: Exercise canonical match scoring
         run: php infra/sql/match_scoring_smoke.php
 
@@ -194,11 +208,13 @@ jobs:
           test -f dist/test/api/member-onboarding.php
           test -f dist/test/player/portal-content.js
           test -f dist/test/player/player-breaks.js
+          test -f dist/test/player/portal-playoffs.js
           test -f dist/test/live/index.html
           test -f dist/test/live/app.js
           test -f dist/test/admin/tournament-summary-admin.js
           test -f dist/test/admin/tournament-elo-admin.js
           test -f dist/test/admin/tournament-operations-admin.js
+          test -f dist/test/admin/tournament-playoff-admin.js
           test -f dist/test/kiosk/operations-runtime.js
           test -f dist/test/api/src/MatchScoringApplication.php
           test -f dist/test/api/src/Repository/MatchScoringRepository.php
@@ -214,3 +230,7 @@ jobs:
           test -f dist/test/api/src/Repository/TournamentLiveRepository.php
           test -f dist/test/api/src/PlayerBreakApplication.php
           test -f dist/test/api/src/Repository/PlayerBreakRepository.php
+          test -f dist/test/api/src/TournamentPlayoffApplication.php
+          test -f dist/test/api/src/Repository/TournamentPlayoffRepository.php
+          test -f dist/test/api/src/Service/SingleEliminationService.php
+          test -f dist/test/api/src/Service/PlayoffReconciliationService.php
