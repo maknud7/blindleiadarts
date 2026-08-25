@@ -45,4 +45,9 @@ final class Database
     {
         return $this->config->dbTablePrefix();
     }
+
+    public function identityTablePrefix(): string
+    {
+        return $this->config->identityTablePrefix();
+    }
 }
