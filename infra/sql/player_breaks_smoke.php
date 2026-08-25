@@ -55,20 +55,20 @@ try {
     $matchSql=sprintf('INSERT INTO `%1$smatches` (tournament_id,round_label,round_number,status,best_of_legs,legs_to_win,player_a_id,player_b_id) VALUES (?,?,? ,"pending",1,1,?,?)',$prefix);
     $round='Runde 1'; $roundNo=1;
     $stmt=$db->prepare($matchSql); $stmt->bind_param('isiii',$ids['tournament'],$round,$roundNo,$ids['player_a'],$ids['player_b']); $stmt->execute(); $ids['match_1']=(int)$stmt->insert_id; $stmt->close();
-    $round='Runde 2'; $roundNo=2;
-    $stmt=$db->prepare($matchSql); $stmt->bind_param('isiii',$ids['tournament'],$round,$roundNo,$ids['player_b'],$ids['player_c']); $stmt->execute(); $ids['match_2']=(int)$stmt->insert_id; $stmt->close();
 
     $breaks=new PlayerBreakRepository($database);
     $ops=new TournamentOperationsRepository($database);
 
-    // Immediate break: player A is removed from assignment for exactly the break window.
+    // Immediate break: A's match must remain pending, while unrelated matches would still be allowed.
     $immediate=$breaks->requestBreak($ids['tournament'],$ids['player_a']);
     $assert(($immediate['status'] ?? '')==='active','Immediate break did not become active.');
     $assert((int)($immediate['remaining_seconds'] ?? 0) > 400,'Immediate break was not approximately seven minutes.');
     $reg=$db->query(sprintf('SELECT status FROM `%1$stournament_players` WHERE tournament_id=%2$d AND player_id=%3$d',$prefix,$ids['tournament'],$ids['player_a']))->fetch_assoc();
     $assert(($reg['status'] ?? '')==='paused','Player A registration was not paused.');
     $blocked=$ops->reconcileTournament($ids['tournament']);
-    $assert((int)($blocked['assignment']['assigned_count'] ?? 0)===0,'A match was assigned while player A was paused.');
+    $assert((int)($blocked['assignment']['assigned_count'] ?? 0)===0,'Player A match was assigned while player A was paused.');
+    $match1State=$db->query(sprintf('SELECT status,kiosk_id FROM `%1$smatches` WHERE id=%2$d',$prefix,$ids['match_1']))->fetch_assoc();
+    $assert(($match1State['status'] ?? '')==='pending' && $match1State['kiosk_id']===null,'Paused player match did not remain pending.');
 
     $db->query(sprintf('UPDATE `%1$stournament_player_breaks` SET ends_at=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE tournament_id=%2$d AND player_id=%3$d AND status="active"',$prefix,$ids['tournament'],$ids['player_a']));
     $breaks->normalizeTournament($ids['tournament']);
@@ -78,6 +78,11 @@ try {
     $assert((int)($assigned['assignment']['assigned_count'] ?? 0)===1,'First match was not assigned after break expiry.');
 
     $db->query(sprintf('UPDATE `%1$smatches` SET status="in_progress", starts_at=NOW() WHERE id=%2$d',$prefix,$ids['match_1']));
+
+    // Add B's next match only after the first match is active, so this section isolates scheduled-after-match behavior.
+    $round='Runde 2'; $roundNo=2;
+    $stmt=$db->prepare($matchSql); $stmt->bind_param('isiii',$ids['tournament'],$round,$roundNo,$ids['player_b'],$ids['player_c']); $stmt->execute(); $ids['match_2']=(int)$stmt->insert_id; $stmt->close();
+
     $scheduled=$breaks->requestBreak($ids['tournament'],$ids['player_b']);
     $assert(($scheduled['status'] ?? '')==='scheduled','Break during a match was not scheduled.');
     $assert((int)($scheduled['after_match_id'] ?? 0)===$ids['match_1'],'Scheduled break was not tied to the active match.');
@@ -90,6 +95,8 @@ try {
     $assert($remaining >= 340 && $remaining <= 370,'Scheduled break did not start from match finished_at.');
     $blockedNext=$ops->assignNextToKiosk($ids['board']);
     $assert(($blockedNext['assigned'] ?? true)===false,'Next match was assigned while player B was on break.');
+    $match2State=$db->query(sprintf('SELECT status,kiosk_id FROM `%1$smatches` WHERE id=%2$d',$prefix,$ids['match_2']))->fetch_assoc();
+    $assert(($match2State['status'] ?? '')==='pending' && $match2State['kiosk_id']===null,'Player B next match did not remain pending during break.');
 
     $db->query(sprintf('UPDATE `%1$stournament_player_breaks` SET ends_at=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE tournament_id=%2$d AND player_id=%3$d AND status="active"',$prefix,$ids['tournament'],$ids['player_b']));
     $breaks->normalizeTournament($ids['tournament']);
