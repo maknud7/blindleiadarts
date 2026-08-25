@@ -91,11 +91,18 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_prod_
+          IDENTITY_TABLE_PREFIX: bd_prod_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
           CHALLONGE_REDIRECT_URI: ${{ vars.PROD_CHALLONGE_REDIRECT_URI }}
+
+      - name: Validate production identity config
+        run: |
+          set -euo pipefail
+          grep -Fq "'table_prefix' => 'bd_prod_'" dist/prod/api/config.php
+          grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/prod/api/config.php
 
       - name: Install sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
