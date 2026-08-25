@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",
-  "background_color": "#07131b",
-  "theme_color": "#07131b",
+  "background_color": "#ffffff",
+  "theme_color": "#0b3145",
   "icons": [
     {
       "src": "../static/club-logos/blindleia-dartklubb-logo.png",
