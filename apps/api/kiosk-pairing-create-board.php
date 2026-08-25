@@ -6,8 +6,10 @@ use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
+use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use mysqli_sql_exception;
 
 require __DIR__ . '/bootstrap.php';
 
@@ -120,8 +122,9 @@ try {
         $scoringMode = (string) ($board['scoring_mode'] ?? 'manual');
         if (!in_array($scoringMode, ['manual', 'scolia'], true)) $scoringMode = 'manual';
         $scoliaSerial = trim((string) ($board['scolia_serial_number'] ?? ''));
-        if ($scoringMode === 'scolia' && !$validScoliaSerial($scoliaSerial)) {
-            throw new RuntimeException('scolia_serial_required');
+        if ($scoringMode === 'scolia') {
+            if (!$validScoliaSerial($scoliaSerial)) throw new RuntimeException('scolia_serial_required');
+            if ($scolia->findBoardBySerial($scoliaSerial) !== null) throw new RuntimeException('scolia_serial_in_use');
         }
 
         $created = $clubs->createKiosk($clubId, [
@@ -158,25 +161,26 @@ try {
 
         $db->commit();
 
-        $respond([
-            'ok' => true,
-            'data' => [
-                'created' => true,
-                'kiosk' => [
-                    'id' => $kioskId,
-                    'code' => (string) ($created['code'] ?? ''),
-                    'name' => $name,
-                    'board_number' => $boardNumber,
-                    'sponsor_label' => $sponsorLabel,
-                    'sponsor_logo_url' => $sponsorLogoUrl,
-                    'scoring_mode' => $scoringMode,
-                    'scolia_serial_number' => $scoringMode === 'scolia' ? $scoliaSerial : null,
-                    'device_name' => $deviceName,
-                ],
-            ],
-        ], 201);
-    } catch (RuntimeException|InvalidArgumentException $error) {
+        $respond(['ok' => true, 'data' => ['created' => true, 'kiosk' => [
+            'id' => $kioskId,
+            'code' => (string) ($created['code'] ?? ''),
+            'name' => $name,
+            'board_number' => $boardNumber,
+            'sponsor_label' => $sponsorLabel,
+            'sponsor_logo_url' => $sponsorLogoUrl,
+            'scoring_mode' => $scoringMode,
+            'scolia_serial_number' => $scoringMode === 'scolia' ? $scoliaSerial : null,
+            'device_name' => $deviceName,
+        ]]], 201);
+    } catch (Throwable $error) {
         $db->rollback();
+        if ($error instanceof ValidationException) {
+            $respond(['ok' => false, 'error' => ['code' => $error->errorCode(), 'message' => $error->getMessage()]], $error->statusCode());
+        }
+        if ($error instanceof mysqli_sql_exception && (int) $error->getCode() === 1062) {
+            $respond(['ok' => false, 'error' => ['code' => 'scolia_serial_in_use', 'message' => 'Denne Scolia-ID-en er allerede knyttet til et annet board.']], 409);
+        }
+        if (!$error instanceof RuntimeException && !$error instanceof InvalidArgumentException) throw $error;
         $map = [
             'pairing_not_found' => [404, 'Pairingkoden finnes ikke.'],
             'pairing_expired' => [409, 'Pairingkoden er utløpt eller allerede brukt. Nettbrettet lager automatisk en ny kode.'],
@@ -193,12 +197,9 @@ try {
     if (isset($db)) {
         try { $db->rollback(); } catch (Throwable) {}
     }
-    $respond([
-        'ok' => false,
-        'error' => [
-            'code' => 'kiosk_create_and_pair_unavailable',
-            'message' => 'Kunne ikke opprette og koble boardet.',
-            'detail' => isset($config) && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
-        ],
-    ], 500);
+    $respond(['ok' => false, 'error' => [
+        'code' => 'kiosk_create_and_pair_unavailable',
+        'message' => 'Kunne ikke opprette og koble boardet.',
+        'detail' => isset($config) && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
+    ]], 500);
 }
