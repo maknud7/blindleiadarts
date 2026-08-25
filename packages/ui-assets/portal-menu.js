@@ -5,6 +5,15 @@ if (![...document.styleSheets].some((sheet) => sheet.href === passwordResetCssHr
   resetStyles.href = passwordResetCssHref;
   document.head.appendChild(resetStyles);
 }
+
+const mobilePortalCssHref = new URL("./mobile-portal.css", import.meta.url).href;
+if (![...document.styleSheets].some((sheet) => sheet.href === mobilePortalCssHref)) {
+  const mobileStyles = document.createElement("link");
+  mobileStyles.rel = "stylesheet";
+  mobileStyles.href = mobilePortalCssHref;
+  document.head.appendChild(mobileStyles);
+}
+
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
 const NAV_SELECTOR = "[data-portal-nav], .section-nav a[href^='#'], .portal-nav a[href^='#']";
@@ -121,7 +130,7 @@ style.textContent = `
 .shortcut-card{display:grid;gap:6px;min-height:104px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel-2,rgba(255,255,255,.78));color:inherit;text-decoration:none}
 .shortcut-card strong{font-size:17px}.shortcut-card span{color:var(--muted);font-size:13px;line-height:1.45}
 [data-portal-section]{animation:portalViewIn .14s ease-out}@keyframes portalViewIn{from{opacity:.45;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media(max-width:760px){.portal-menu{top:0}.portal-nav.portal-menu{grid-template-columns:repeat(2,minmax(0,1fr))}.portal-shortcuts{grid-template-columns:1fr}}
+@media(max-width:760px){.portal-menu{top:0}.portal-shortcuts{grid-template-columns:1fr}}
 `;
 document.head.appendChild(style);
 
