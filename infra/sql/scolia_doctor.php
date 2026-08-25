@@ -14,10 +14,18 @@ function env_req(string $key): string
 function connect_db(): mysqli
 {
     $lastError = null;
-    // The hosted database may briefly throttle new sessions when the core workflow
-    // runs several independent schema doctors back-to-back. This doctor is later in
-    // that sequence, so use a longer bounded backoff rather than turning a transient
-    // connection throttle into a false schema failure.
+
+    // GitHub Core verification opens several short-lived database sessions in rapid
+    // succession before this late schema doctor. The hosted database can throttle the
+    // next connection for a short window even though the database itself is healthy.
+    // Give that rate window time to clear once in CI; interactive/manual doctor runs
+    // are not delayed.
+    if (strtolower((string) getenv('CI')) === 'true') {
+        sleep(45);
+    }
+
+    // Keep bounded retries as a second line of defence against transient hosting
+    // connection throttles. A real schema error still fails immediately after connect.
     for ($attempt = 1; $attempt <= 6; $attempt++) {
         try {
             $db = mysqli_init();
