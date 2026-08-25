@@ -3,6 +3,9 @@ kioskBrandStyles.rel = "stylesheet";
 kioskBrandStyles.href = "./brand-light.css";
 document.head.appendChild(kioskBrandStyles);
 
+document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#0b3145");
+document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute("content", "default");
+
 let deferredInstallPrompt = null;
 
 const isStandalone = () => window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
