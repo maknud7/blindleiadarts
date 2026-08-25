@@ -11,6 +11,7 @@ on:
       - 'apps/live/**'
       - 'apps/player/**'
       - 'apps/onboarding/**'
+      - 'apps/scolia-bridge/**'
       - 'packages/**'
       - 'infra/sql/**'
       - 'infra/deploy/**'
@@ -110,6 +111,16 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
+      - name: Verify Scolia check-in and wizard schema
+        run: php infra/sql/scolia_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
       - name: Verify account-player-member identity
         run: php infra/sql/identity_doctor.php
         env:
@@ -160,6 +171,7 @@ jobs:
           REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          SCOLIA_BRIDGE_SECRET: test-scolia-bridge-secret
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -187,6 +199,15 @@ jobs:
       - name: Exercise canonical match scoring
         run: php infra/sql/match_scoring_smoke.php
 
+      - name: Exercise Scolia sector mapping
+        run: php apps/api/tests/scolia_sector_mapper_test.php
+
+      - name: Exercise Scolia queue shadow live and manual fallback
+        run: php infra/sql/scolia_smoke.php
+
+      - name: Exercise onsite check-in and tournament wizard plan
+        run: php infra/sql/checkin_smoke.php
+
       - name: Exercise full onboarding lifecycle
         run: php infra/sql/onboarding_flow_smoke.php
 
@@ -209,13 +230,26 @@ jobs:
           test -f dist/test/player/portal-content.js
           test -f dist/test/player/player-breaks.js
           test -f dist/test/player/portal-playoffs.js
+          test -f dist/test/player/checkin-runtime.js
           test -f dist/test/live/index.html
           test -f dist/test/live/app.js
           test -f dist/test/admin/tournament-summary-admin.js
           test -f dist/test/admin/tournament-elo-admin.js
           test -f dist/test/admin/tournament-operations-admin.js
           test -f dist/test/admin/tournament-playoff-admin.js
+          test -f dist/test/admin/tournament-checkin-admin.js
+          test -f dist/test/admin/tournament-wizard.js
+          test -f dist/test/admin/scolia-admin.js
           test -f dist/test/kiosk/operations-runtime.js
+          test -f dist/test/kiosk/scolia-runtime.js
+          test -f dist/test/api/src/ScoliaApplication.php
+          test -f dist/test/api/src/TournamentCheckinApplication.php
+          test -f dist/test/api/src/TournamentWizardApplication.php
+          test -f dist/test/api/src/Repository/ScoliaRepository.php
+          test -f dist/test/api/src/Repository/TournamentCheckinRepository.php
+          test -f dist/test/api/src/Repository/TournamentWizardRepository.php
+          test -f dist/test/api/src/Service/ScoliaScoringService.php
+          test -f dist/test/api/src/Service/ScoliaSectorMapper.php
           test -f dist/test/api/src/MatchScoringApplication.php
           test -f dist/test/api/src/Repository/MatchScoringRepository.php
           test -f dist/test/api/src/Service/Dart501Rules.php
