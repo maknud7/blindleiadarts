@@ -10,10 +10,10 @@
   "theme_color": "#07131b",
   "icons": [
     {
-      "src": "./icon.svg",
+      "src": "../static/club-logos/blindleia-dartklubb-logo.png",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
