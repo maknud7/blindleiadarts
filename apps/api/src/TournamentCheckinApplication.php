@@ -40,7 +40,7 @@ final class TournamentCheckinApplication
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception) {
             $response = JsonResponse::error(500, 'database_error', 'Database query failed.');
-        } catch (Throwable $error) {
+        } catch (Throwable) {
             $response = JsonResponse::error(500, 'internal_server_error', 'Unexpected server error.');
         }
 
@@ -82,9 +82,6 @@ final class TournamentCheckinApplication
                 'registration' => $repo->checkInPlayer(
                     (int) $m[1],
                     $playerId,
-                    $this->nullableFloat($payload['latitude'] ?? null),
-                    $this->nullableFloat($payload['longitude'] ?? null),
-                    $this->nullableFloat($payload['accuracy_meters'] ?? null),
                     false,
                     isset($payload['code']) ? (string) $payload['code'] : null,
                     false
@@ -183,9 +180,6 @@ final class TournamentCheckinApplication
                 'registration' => $repo->checkInPlayer(
                     $tournamentId,
                     $playerId,
-                    null,
-                    null,
-                    null,
                     true,
                     null,
                     $force
@@ -228,16 +222,5 @@ final class TournamentCheckinApplication
             return JsonResponse::error(403, 'club_access_denied', 'Du kan ikke administrere denne klubben.');
         }
         return $user;
-    }
-
-    private function nullableFloat(mixed $value): ?float
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        if (!is_numeric($value)) {
-            throw new ValidationException('invalid_location', 'Posisjonsdata må være numeriske.');
-        }
-        return (float) $value;
     }
 }
