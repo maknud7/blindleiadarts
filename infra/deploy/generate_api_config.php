@@ -30,6 +30,9 @@ if ($output === null || $output === '') {
     exit(1);
 }
 
+$dataPrefix = env_required('DB_TABLE_PREFIX');
+$identityPrefix = env_optional('IDENTITY_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
+
 $config = [
     'app_env' => env_required('APP_ENV'),
     'base_url' => getenv('BASE_URL') ?: '',
@@ -51,7 +54,8 @@ $config = [
         'database' => env_required('DB_NAME'),
         'username' => env_required('DB_USERNAME'),
         'password' => env_required('DB_PASSWORD'),
-        'table_prefix' => env_required('DB_TABLE_PREFIX'),
+        'table_prefix' => $dataPrefix,
+        'identity_table_prefix' => $identityPrefix,
     ],
     'members_db' => [
         'sqlconnect_path' => env_optional(

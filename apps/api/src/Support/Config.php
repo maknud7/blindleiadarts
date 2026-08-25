@@ -47,6 +47,18 @@ final class Config
     public function dbPassword(): string { return (string) (($this->config['db']['password'] ?? '') ?: ''); }
     public function dbTablePrefix(): string { return (string) (($this->config['db']['table_prefix'] ?? '') ?: ''); }
 
+    /**
+     * User accounts, sessions and permissions are shared between test and production.
+     * Runtime test therefore points at the production identity tables while tournament,
+     * scoring, kiosk and statistics tables keep their environment-specific prefix.
+     * CI may omit this setting to keep destructive smoke tests isolated in bd_test_.
+     */
+    public function identityTablePrefix(): string
+    {
+        $configured = trim((string) (($this->config['db']['identity_table_prefix'] ?? '') ?: ''));
+        return $configured !== '' ? $configured : $this->dbTablePrefix();
+    }
+
     public function membersSqlconnectPath(): string
     {
         $members = is_array($this->config['members_db'] ?? null) ? $this->config['members_db'] : [];
