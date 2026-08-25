@@ -7,7 +7,6 @@
 .tournament-room-next{display:flex;align-items:center;justify-content:space-between;gap:14px;border-radius:13px;padding:12px 14px;background:rgba(24,93,164,.08);border:1px solid rgba(24,93,164,.16)}.tournament-room-next-copy{display:grid;gap:2px}.tournament-room-next-copy small{color:var(--muted)}
 .tournament-room-tabs{display:flex;gap:6px;flex-wrap:wrap}.tournament-room-tabs button{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:999px;padding:9px 13px;font-weight:800;cursor:pointer}.tournament-room-tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}.tournament-room-view-hidden{display:none!important}
 .tournament-room-empty{padding:20px;text-align:center;border:1px dashed var(--line);border-radius:14px;color:var(--muted)}
-#tournaments.tournament-room-ready>#tournamentList{margin-top:4px}
-#kiosks .panel-head h2::after{content:" og skjermer";font-weight:inherit}#screens .panel-head{margin-top:10px}
+#tournaments.tournament-room-ready>#tournamentList{margin-top:4px}#screens .panel-head{margin-top:10px}
 @media(max-width:900px){.tournament-room{position:static}.tournament-room-top{grid-template-columns:1fr}.tournament-room-progress{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.admin-menu-label{display:none}.tournament-room-progress{grid-template-columns:1fr 1fr}.tournament-room-next{align-items:stretch;flex-direction:column}.tournament-room-next .button{width:100%}.admin-overview-next-head{display:grid}.admin-overview-next-actions{display:grid}.admin-overview-next-actions .button{width:100%;box-sizing:border-box;text-align:center}}
