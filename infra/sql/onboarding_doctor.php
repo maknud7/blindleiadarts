@@ -141,36 +141,6 @@ echo sprintf(
     (int) ($counts['member_linked'] ?? 0),
 );
 
-// Temporary metadata-only probe used while consolidating member/player UX.
-echo "MEMBER_SCHEMA_PROBE_BEGIN\n";
-$memberColumns = $db->query(
-    "SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medlemmer' ORDER BY ORDINAL_POSITION"
-);
-while ($row = $memberColumns->fetch_assoc()) {
-    echo 'medlemmer.' . $row['COLUMN_NAME'] . ':' . $row['DATA_TYPE'] . "\n";
-}
-$relatedTables = $db->query(
-    "SELECT DISTINCT TABLE_NAME FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA=DATABASE()
-        AND (LOWER(TABLE_NAME) REGEXP 'kontingent|betaling|payment|medlem'
-          OR LOWER(COLUMN_NAME) REGEXP 'kontingent|betalt|betaling|payment|paid|medlem_id|maaned')
-      ORDER BY TABLE_NAME"
-);
-while ($table = $relatedTables->fetch_assoc()) {
-    $name = (string) $table['TABLE_NAME'];
-    echo 'RELATED_TABLE=' . $name . "\n";
-    $stmt = $db->prepare('SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY ORDINAL_POSITION');
-    $stmt->bind_param('s', $name);
-    $stmt->execute();
-    $columns = $stmt->get_result();
-    while ($row = $columns->fetch_assoc()) {
-        echo '  ' . $row['COLUMN_NAME'] . ':' . $row['DATA_TYPE'] . "\n";
-    }
-    $stmt->close();
-}
-echo "MEMBER_SCHEMA_PROBE_END\n";
-
 if ($failures !== []) {
     throw new RuntimeException('Onboarding doctor failed with ' . count($failures) . ' issue(s).');
 }
