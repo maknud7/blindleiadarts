@@ -14,6 +14,7 @@ final class TournamentLiveRepository
     private TournamentOperationsRepository $operations;
     private PlayerPortalRepository $portal;
     private EloReadRepository $elo;
+    private TournamentPlayoffRepository $playoffs;
 
     public function __construct(Database $database)
     {
@@ -22,6 +23,7 @@ final class TournamentLiveRepository
         $this->operations = new TournamentOperationsRepository($database);
         $this->portal = new PlayerPortalRepository($database);
         $this->elo = new EloReadRepository($database);
+        $this->playoffs = new TournamentPlayoffRepository($database, null, $this->portal);
     }
 
     /** @return array<string,mixed>|null */
@@ -81,6 +83,7 @@ final class TournamentLiveRepository
             'next_matches' => array_slice($queueItems, 0, 10),
             'recent_results' => $ops['recent_results'],
             'tables' => $this->portal->getTournamentTables($tournamentId),
+            'playoff' => $this->playoffs->getBracket($tournamentId),
             'elo' => array_slice($this->elo->listClubElo((int) $tournament['club_id']), 0, 10),
             'highlights' => $this->highlights($tournamentId),
             'updated_at' => date('c'),
