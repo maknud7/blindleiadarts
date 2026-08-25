@@ -105,7 +105,7 @@ final class TournamentOperationsApplication
                 return JsonResponse::ok($operations->snapshot($tournamentId));
             }
             if ($method === 'POST' && $action === 'reconcile') {
-                $result = $operations->reconcileTournament($tournamentId);
+                $result = $this->fillReleasedBoards($operations, $tournamentId);
                 $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_operations_changed');
                 return JsonResponse::ok($result);
             }
@@ -150,6 +150,50 @@ final class TournamentOperationsApplication
         }
 
         return JsonResponse::error(405, 'method_not_allowed', 'Method is not supported for this operations route.');
+    }
+
+    /** @return array<string,mixed> */
+    private function fillReleasedBoards(TournamentOperationsRepository $operations, int $tournamentId): array
+    {
+        $before = $operations->snapshot($tournamentId);
+        $assigned = [];
+        $held = [];
+
+        foreach ((array) ($before['boards'] ?? []) as $board) {
+            $kioskId = (int) ($board['id'] ?? 0);
+            if ($kioskId <= 0 || ($board['active_match_id'] ?? null) !== null || (int) ($board['is_active'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $postMatch = $operations->kioskPostMatch($kioskId);
+            if (is_array($postMatch['last_completed_match'] ?? null)) {
+                $held[] = [
+                    'kiosk_id' => $kioskId,
+                    'board_number' => (int) ($board['board_number'] ?? 0),
+                    'reason' => 'awaiting_post_match_confirmation',
+                ];
+                continue;
+            }
+
+            $result = $operations->assignNextToKiosk($kioskId);
+            if (($result['assigned'] ?? false) === true && is_array($result['match'] ?? null)) {
+                $assigned[] = [
+                    'match_id' => (int) $result['match']['id'],
+                    'kiosk_id' => $kioskId,
+                    'board_number' => (int) ($board['board_number'] ?? 0),
+                    'players' => (string) $result['match']['player_a_name'] . ' vs ' . (string) $result['match']['player_b_name'],
+                ];
+            }
+        }
+
+        $snapshot = $operations->snapshot($tournamentId);
+        $snapshot['assignment'] = [
+            'assigned_count' => count($assigned),
+            'held_count' => count($held),
+            'items' => $assigned,
+            'held' => $held,
+        ];
+        return $snapshot;
     }
 
     /** @return array<string,mixed>|JsonResponse */
