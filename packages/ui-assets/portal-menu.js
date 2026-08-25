@@ -70,18 +70,59 @@ function bindLinks() {
   });
 }
 
+let lastRoleToken = null;
+async function syncRoleAccess() {
+  const gated = [...document.querySelectorAll("#adminPortalLink,[data-role-access='admin']")];
+  if (!gated.length) return;
+  const token = localStorage.getItem("bd:token") || "";
+  if (!token) {
+    gated.forEach((node) => node.classList.add("hidden"));
+    lastRoleToken = null;
+    return;
+  }
+  if (lastRoleToken === token && gated.every((node) => node.dataset.roleResolved === "1")) return;
+  try {
+    const response = await fetch("../api/v1/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => null);
+    const role = payload?.data?.user?.role || "";
+    const allowed = ["club_admin", "super_admin"].includes(role);
+    gated.forEach((node) => {
+      node.classList.toggle("hidden", !allowed);
+      node.dataset.roleResolved = "1";
+    });
+    lastRoleToken = token;
+  } catch {
+    gated.forEach((node) => node.classList.add("hidden"));
+  }
+}
+
 function refresh() {
   bindLinks();
   const requested = normalizeTarget(window.location.hash);
   const current = normalizeTarget(document.body.dataset.portalActive);
   activate(targets().has(requested) ? requested : current || defaultTarget(), { updateHash: false });
+  syncRoleAccess().catch(() => undefined);
 }
 
 const style = document.createElement("style");
-style.textContent = `.portal-view-hidden{display:none!important}.section-nav a.active,.portal-nav a.active{border-color:var(--accent,#11435d)!important;background:var(--accent,#11435d)!important;color:#fff!important}`;
+style.textContent = `
+.portal-view-hidden{display:none!important}
+.section-nav a.active,.portal-nav a.active{border-color:var(--accent,#11435d)!important;background:var(--accent,#11435d)!important;color:#fff!important}
+.portal-menu{position:sticky;top:84px;z-index:12;padding:10px;border-radius:16px;backdrop-filter:blur(16px)}
+.portal-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.shortcut-card{display:grid;gap:6px;min-height:104px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel-2,rgba(255,255,255,.78));color:inherit;text-decoration:none}
+.shortcut-card strong{font-size:17px}.shortcut-card span{color:var(--muted);font-size:13px;line-height:1.45}
+[data-portal-section]{animation:portalViewIn .14s ease-out}@keyframes portalViewIn{from{opacity:.45;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(max-width:760px){.portal-menu{top:0}.portal-shortcuts{grid-template-columns:1fr}}
+`;
 document.head.appendChild(style);
 
 window.addEventListener("hashchange", () => activate(window.location.hash, { updateHash: false }));
+window.addEventListener("storage", () => syncRoleAccess().catch(() => undefined));
+window.setInterval(() => syncRoleAccess().catch(() => undefined), 1500);
 
 const observer = new MutationObserver(() => refresh());
 observer.observe(document.documentElement, { childList: true, subtree: true });
