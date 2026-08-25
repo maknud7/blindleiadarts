@@ -6,10 +6,13 @@ on:
       - develop
     paths:
       - 'apps/api/**'
+      - 'apps/admin/**'
+      - 'apps/kiosk/**'
+      - 'apps/live/**'
       - 'apps/onboarding/**'
       - 'packages/**'
       - 'infra/sql/**'
-      - 'infra/deploy/generate_api_config.php'
+      - 'infra/deploy/**'
       - '.github/workflows/core-verify.yml'
   workflow_dispatch:
 
@@ -67,6 +70,16 @@ jobs:
 
       - name: Verify ELO ledger schema
         run: php infra/sql/elo_ledger_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Verify tournament operations schema
+        run: php infra/sql/tournament_operations_doctor.php
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
@@ -140,6 +153,9 @@ jobs:
       - name: Exercise ELO ledger apply and replay
         run: php infra/sql/elo_ledger_smoke.php
 
+      - name: Exercise tournament operations queue and lifecycle
+        run: php infra/sql/tournament_operations_smoke.php
+
       - name: Exercise canonical match scoring
         run: php infra/sql/match_scoring_smoke.php
 
@@ -163,8 +179,12 @@ jobs:
           test -f dist/test/onboarding/app.js
           test -f dist/test/api/member-onboarding.php
           test -f dist/test/player/portal-content.js
+          test -f dist/test/live/index.html
+          test -f dist/test/live/app.js
           test -f dist/test/admin/tournament-summary-admin.js
           test -f dist/test/admin/tournament-elo-admin.js
+          test -f dist/test/admin/tournament-operations-admin.js
+          test -f dist/test/kiosk/operations-runtime.js
           test -f dist/test/api/src/MatchScoringApplication.php
           test -f dist/test/api/src/Repository/MatchScoringRepository.php
           test -f dist/test/api/src/Service/Dart501Rules.php
@@ -174,3 +194,6 @@ jobs:
           test -f dist/test/api/src/Service/EloCalculator.php
           test -f dist/test/api/src/Service/EloLedgerService.php
           test -f dist/test/api/src/Service/EloReconciliationService.php
+          test -f dist/test/api/src/TournamentOperationsApplication.php
+          test -f dist/test/api/src/Repository/TournamentOperationsRepository.php
+          test -f dist/test/api/src/Repository/TournamentLiveRepository.php
