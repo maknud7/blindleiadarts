@@ -250,7 +250,7 @@ jobs:
               "$base/api/v1/activity" || true)"
             activity_body="$(cat "$response_file")"
             rm -f "$response_file"
-            if [[ "$activity_status" =~ ^2[0-9][0-9]$ ]] && grep -Fq '"ok":true' <<<"$activity_body"; then
+            if [[ "$activity_status" =~ ^2[0-9][0-9]$ ]] && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$activity_body"; then
               activity_ok="yes"
               break
             fi
