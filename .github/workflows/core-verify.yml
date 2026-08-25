@@ -55,6 +55,16 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
+      - name: Verify player portal content schema
+        run: php infra/sql/player_portal_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
       - name: Verify account-player-member identity
         run: php infra/sql/identity_doctor.php
         env:
@@ -136,3 +146,5 @@ jobs:
           test -f dist/test/onboarding/index.html
           test -f dist/test/onboarding/app.js
           test -f dist/test/api/member-onboarding.php
+          test -f dist/test/player/portal-content.js
+          test -f dist/test/admin/tournament-summary-admin.js

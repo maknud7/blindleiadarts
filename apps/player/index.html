@@ -28,6 +28,13 @@
       <button id="refreshButton" class="ghost">Oppdater</button>
     </section>
 
+    <nav class="portal-nav card" aria-label="Spillerportal">
+      <a href="#signup">Påmelding</a>
+      <a href="#tables">Tabeller</a>
+      <a href="#players">Spillere</a>
+      <a href="#summaries">Oppsummeringer</a>
+    </nav>
+
     <section class="card stack">
       <h2>Logg inn</h2>
       <form id="loginForm" class="stack">
@@ -51,7 +58,7 @@
       <div id="rankingList" class="stack"></div>
     </section>
 
-    <section class="card stack">
+    <section id="signup" class="card stack">
       <div class="section-head">
         <div>
           <p class="eyebrow">Mine turneringer</p>
@@ -74,8 +81,49 @@
       </div>
       <div id="tournamentList" class="stack"></div>
     </section>
+
+    <section id="tables" class="card stack">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Ranking</p>
+          <h2>ELO-tabell</h2>
+        </div>
+      </div>
+      <div id="eloTable" class="table-card"></div>
+      <div class="section-head content-subhead">
+        <div>
+          <p class="eyebrow">Turnering</p>
+          <h2>Gruppetabeller</h2>
+        </div>
+      </div>
+      <select id="tableTournamentSelect" aria-label="Velg turnering"></select>
+      <div id="groupTables" class="stack"></div>
+    </section>
+
+    <section id="players" class="card stack">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Klubben</p>
+          <h2>Spillere og statistikk</h2>
+        </div>
+      </div>
+      <div id="playerDirectory" class="player-directory"></div>
+      <article id="playerProfile" class="profile-card hidden"></article>
+    </section>
+
+    <section id="summaries" class="card stack">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Etter kampen</p>
+          <h2>Oppsummeringer</h2>
+        </div>
+      </div>
+      <p class="muted">Turneringsoppsummeringer, resultater og høydepunkter fra klubbkveldene.</p>
+      <div id="summaryList" class="stack"></div>
+    </section>
   </div>
 
   <script src="./app.js" type="module"></script>
+  <script src="./portal-content.js" type="module"></script>
 </body>
 </html>
