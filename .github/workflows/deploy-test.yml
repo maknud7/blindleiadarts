@@ -187,40 +187,78 @@ jobs:
         run: |
           set -Eeuo pipefail
           base="${BASE_URL%/}"
+
+          check_contains() {
+            local label="$1"
+            local url="$2"
+            local needle="$3"
+            echo "VERIFY: $label"
+            local body
+            body="$(curl -fsS --max-time 15 "$url")"
+            if ! grep -Fq "$needle" <<<"$body"; then
+              echo "Verification failed: $label did not contain expected marker: $needle" >&2
+              exit 1
+            fi
+          }
+
+          echo "VERIFY: release SHA"
+          release=""
           for attempt in 1 2 3 4 5; do
             release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
-            if printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"; then
+            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then
               break
             fi
             sleep 3
           done
-          release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM")"
-          printf '%s' "$release" | grep -Fq '"environment":"test"'
-          printf '%s' "$release" | grep -Fq "$EXPECTED_SHA"
+          grep -Fq '"environment":"test"' <<<"$release"
+          grep -Fq "$EXPECTED_SHA" <<<"$release"
+
+          echo "VERIFY: health"
           curl -fsS --max-time 15 "$base/api/v1/health" >/dev/null
-          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Personer'
-          curl -fsS --max-time 15 "$base/admin/" | grep -Fq 'Utstyr'
-          curl -fsS --max-time 15 "$base/admin/admin-ux.js" | grep -Fq 'Neste anbefalte steg'
-          curl -fsS --max-time 15 "$base/admin/activity-admin.js" | grep -Fq 'Aktivitet'
-          curl -fsS --max-time 15 "$base/player/" | grep -Fq 'Min profil'
-          curl -fsS --max-time 15 "$base/player/player-ux.js" | grep -Fq 'Akkurat nå'
-          curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'viewport-fit=cover'
-          curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/portal-menu.js" | grep -Fq 'portal-brand.css'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Mobile navigation must expose every destination'
-          curl -fsS --max-time 15 "$base/packages/ui-assets/activity.js" | grep -Fq 'page_view'
-          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'blindleia-dartklubb-logo.png'
-          curl -fsS --max-time 15 "$base/live/" | grep -Fq '/packages/ui-assets/activity.js'
-          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'viewport-fit=cover'
-          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'screen-ux.css'
-          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Kamper på skivene'
-          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'tablet-portrait.css'
-          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'brand-light.css'
-          curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'
-          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq '"orientation": "portrait"'
-          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'height: 100dvh'
-          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'overflow: hidden'
-          activity="$(curl -fsS --max-time 15 -X POST -H 'Content-Type: application/json' \
-            --data '{"events":[{"surface":"deploy","event_name":"deployment_verify","path":"/","club_slug":"blindleia-dartklubb","metadata":{"source":"deploy_test"}}]}' \
-            "$base/api/v1/activity")"
-          printf '%s' "$activity" | grep -Fq '"ok":true'
+          check_contains "admin people" "$base/admin/" "Personer"
+          check_contains "admin equipment" "$base/admin/" "Utstyr"
+          check_contains "admin UX" "$base/admin/admin-ux.js" "Neste anbefalte steg"
+          check_contains "activity admin" "$base/admin/activity-admin.js" "Aktivitet"
+          check_contains "player profile" "$base/player/" "Min profil"
+          check_contains "player UX" "$base/player/player-ux.js" "Akkurat nå"
+          check_contains "onboarding viewport" "$base/onboarding/" "viewport-fit=cover"
+          check_contains "onboarding password toggle" "$base/onboarding/" "data-toggle-password"
+          check_contains "portal brand" "$base/packages/ui-assets/portal-menu.js" "portal-brand.css"
+          check_contains "mobile navigation" "$base/packages/ui-assets/mobile-portal.css" "Mobile navigation must expose every destination"
+          check_contains "activity client" "$base/packages/ui-assets/activity.js" "page_view"
+          check_contains "public live logo" "$base/live/" "blindleia-dartklubb-logo.png"
+          check_contains "public live activity" "$base/live/" "/packages/ui-assets/activity.js"
+          check_contains "public live viewport" "$base/live/" "viewport-fit=cover"
+          check_contains "venue screen UX" "$base/screen/" "screen-ux.css"
+          check_contains "venue screen copy" "$base/screen/" "Kamper på skivene"
+          check_contains "kiosk tablet CSS" "$base/kiosk/" "tablet-portrait.css"
+          check_contains "kiosk brand CSS" "$base/kiosk/" "brand-light.css"
+          check_contains "kiosk admin mode" "$base/kiosk/admin-mode.js" "2201"
+          check_contains "kiosk portrait manifest" "$base/kiosk/manifest.webmanifest" '"orientation": "portrait"'
+          check_contains "kiosk viewport height" "$base/kiosk/tablet-portrait.css" "height: 100dvh"
+          check_contains "kiosk overflow" "$base/kiosk/tablet-portrait.css" "overflow: hidden"
+
+          echo "VERIFY: activity endpoint write"
+          activity_ok="no"
+          activity_body=""
+          activity_status=""
+          for attempt in 1 2 3 4 5; do
+            response_file="$(mktemp)"
+            activity_status="$(curl -sS --max-time 15 -o "$response_file" -w '%{http_code}' \
+              -X POST -H 'Content-Type: application/json' \
+              --data '{"events":[{"surface":"deploy","event_name":"deployment_verify","path":"/","club_slug":"blindleia-dartklubb","metadata":{"source":"deploy_test"}}]}' \
+              "$base/api/v1/activity" || true)"
+            activity_body="$(cat "$response_file")"
+            rm -f "$response_file"
+            if [[ "$activity_status" =~ ^2[0-9][0-9]$ ]] && grep -Fq '"ok":true' <<<"$activity_body"; then
+              activity_ok="yes"
+              break
+            fi
+            echo "Activity write attempt $attempt failed with HTTP ${activity_status:-unknown}: ${activity_body:-<empty>}" >&2
+            sleep 3
+          done
+          if [[ "$activity_ok" != "yes" ]]; then
+            echo "Verification failed: activity endpoint did not accept a test event." >&2
+            exit 1
+          fi
+          echo "VERIFY: all deployed test checks passed"
