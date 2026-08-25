@@ -49,13 +49,24 @@ final class Config
 
     /**
      * User accounts, sessions and permissions are shared between test and production.
-     * Runtime test therefore points at the production identity tables while tournament,
-     * scoring, kiosk and statistics tables keep their environment-specific prefix.
-     * CI may omit this setting to keep destructive smoke tests isolated in bd_test_.
+     * Runtime test therefore points at the production identity tables while tournament
+     * and scoring data keep their environment-specific prefix. CI may omit this setting
+     * to keep destructive smoke tests isolated in bd_test_.
      */
     public function identityTablePrefix(): string
     {
         $configured = trim((string) (($this->config['db']['identity_table_prefix'] ?? '') ?: ''));
+        return $configured !== '' ? $configured : $this->dbTablePrefix();
+    }
+
+    /**
+     * Physical boards are real club equipment and have one canonical registry. Deployed
+     * test and production point at the production hardware namespace. The test runtime may
+     * still create internal aliases for match foreign keys; those are not board masterdata.
+     */
+    public function hardwareTablePrefix(): string
+    {
+        $configured = trim((string) (($this->config['db']['hardware_table_prefix'] ?? '') ?: ''));
         return $configured !== '' ? $configured : $this->dbTablePrefix();
     }
 
