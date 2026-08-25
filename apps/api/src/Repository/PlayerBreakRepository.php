@@ -70,6 +70,38 @@ final class PlayerBreakRepository
         return $this->currentBreak($tournamentId, $playerId);
     }
 
+    /** @return array<string,mixed>|null */
+    public function findContext(int $playerId): ?array
+    {
+        $this->normalizeAll();
+        $sql = sprintf(
+            'SELECT t.id AS tournament_id, t.name AS tournament_name, t.status AS tournament_status,
+                    t.start_at, tp.status AS registration_status
+             FROM `%1$stournament_players` tp
+             INNER JOIN `%1$stournaments` t ON t.id=tp.tournament_id
+             WHERE tp.player_id=?
+               AND tp.status IN ("checked_in","paused")
+               AND t.status IN ("ready","in_progress")
+             ORDER BY FIELD(t.status,"in_progress","ready"), COALESCE(t.start_at,"2999-12-31 23:59:59") ASC, t.id ASC
+             LIMIT 1',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $playerId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row === null) {
+            return null;
+        }
+        $tournamentId = (int) $row['tournament_id'];
+        $row['tournament_id'] = $tournamentId;
+        $row['break_minutes'] = self::BREAK_MINUTES;
+        $row['break'] = $this->currentBreak($tournamentId, $playerId);
+        $row['match'] = $this->activeMatch($tournamentId, $playerId);
+        return $row;
+    }
+
     public function normalizeAll(): void
     {
         $sql = sprintf(
@@ -143,7 +175,6 @@ final class PlayerBreakRepository
         $expire->execute();
         $expire->close();
 
-        // A break always wins over a manual re-check-in while it is still active/scheduled.
         $pauseSql = sprintf(
             'UPDATE `%1$stournament_players` tp
              INNER JOIN `%1$stournament_player_breaks` pb
@@ -158,7 +189,6 @@ final class PlayerBreakRepository
         $pause->execute();
         $pause->close();
 
-        // Once all current breaks for a player are over, the player is available again automatically.
         $restoreSql = sprintf(
             'UPDATE `%1$stournament_players` tp
              SET tp.status="checked_in"
@@ -219,7 +249,7 @@ final class PlayerBreakRepository
     private function activeMatch(int $tournamentId, int $playerId): ?array
     {
         $sql = sprintf(
-            'SELECT id, status, starts_at
+            'SELECT id, status, starts_at, round_label, bracket_label
              FROM `%1$smatches`
              WHERE tournament_id=? AND (player_a_id=? OR player_b_id=?)
                AND status IN ("assigned","in_progress")
