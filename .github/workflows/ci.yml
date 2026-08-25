@@ -81,6 +81,23 @@ jobs:
           grep -Fq 'Neste anbefalte steg' apps/admin/admin-ux.js
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
 
+      - name: Mobile and tablet UX contract check
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'viewport-fit=cover' apps/onboarding/index.html
+          grep -Fq 'data-toggle-password' apps/onboarding/index.html
+          grep -Fq 'mobile-portal.css' packages/ui-assets/portal-menu.js
+          grep -Fq '"orientation": "portrait"' apps/kiosk/manifest.webmanifest
+          grep -Fq './brand-light.css' apps/kiosk/index.html
+          grep -Fq './tablet-portrait.css' apps/kiosk/index.html
+          grep -Fq 'overflow: hidden' apps/kiosk/tablet-portrait.css
+          grep -Fq 'height: 100dvh' apps/kiosk/tablet-portrait.css
+          grep -Fq 'tablet-portrait.css' apps/kiosk/service-worker.js
+          if grep -Fq '"orientation": "landscape"' apps/kiosk/manifest.webmanifest; then
+            echo 'Kiosk must be portrait-first.'
+            exit 1
+          fi
+
       - name: Release package smoke test
         run: |
           bash infra/deploy/build-release.sh test
@@ -93,9 +110,16 @@ jobs:
           test -f dist/test/admin/admin-ux.css
           test -f dist/test/player/player-ux.js
           test -f dist/test/player/player-ux.css
+          test -f dist/test/onboarding/index.html
+          test -f dist/test/onboarding/styles.css
+          test -f dist/test/onboarding/app.js
+          test -f dist/test/packages/ui-assets/mobile-portal.css
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
           test -f dist/test/kiosk/admin-mode.js
+          test -f dist/test/kiosk/brand-light.css
+          test -f dist/test/kiosk/tablet-portrait.css
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
+          grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
