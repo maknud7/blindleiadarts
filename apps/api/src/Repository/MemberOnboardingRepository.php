@@ -15,12 +15,14 @@ use Throwable;
 final class MemberOnboardingRepository
 {
     private mysqli $connection;
-    private string $prefix;
+    private string $dataPrefix;
+    private string $identityPrefix;
 
     public function __construct(Database $database)
     {
         $this->connection = $database->connection();
-        $this->prefix = $database->tablePrefix();
+        $this->dataPrefix = $database->tablePrefix();
+        $this->identityPrefix = $database->identityTablePrefix();
     }
 
     /** @return array{items:list<array<string,mixed>>,summary:array<string,int>} */
@@ -30,9 +32,9 @@ final class MemberOnboardingRepository
             throw new InvalidArgumentException('Ugyldig klubb.');
         }
 
-        $players = $this->prefix . 'players';
-        $users = $this->prefix . 'user_accounts';
-        $invitations = $this->prefix . 'user_onboarding_invitations';
+        $players = $this->dataPrefix . 'players';
+        $users = $this->identityPrefix . 'user_accounts';
+        $invitations = $this->identityPrefix . 'user_onboarding_invitations';
 
         $sql = "SELECT
                     m.id AS member_id,
@@ -125,10 +127,10 @@ final class MemberOnboardingRepository
         }
 
         $email = $this->normalizeOptionalEmail($email);
-        $users = $this->prefix . 'user_accounts';
-        $players = $this->prefix . 'players';
-        $sessions = $this->prefix . 'auth_sessions';
-        $invitations = $this->prefix . 'user_onboarding_invitations';
+        $users = $this->identityPrefix . 'user_accounts';
+        $players = $this->dataPrefix . 'players';
+        $sessions = $this->identityPrefix . 'auth_sessions';
+        $invitations = $this->identityPrefix . 'user_onboarding_invitations';
 
         $this->connection->begin_transaction();
         try {
@@ -148,9 +150,10 @@ final class MemberOnboardingRepository
             $playerStmt->execute();
             $player = $playerStmt->get_result()->fetch_assoc() ?: null;
             $playerStmt->close();
-            $playerId = $player !== null ? (int) $player['id'] : null;
+            $localPlayerId = $player !== null ? (int) $player['id'] : null;
+            $identityPlayerId = $this->identityPlayerIdForMember($memberId, $localPlayerId);
 
-            $account = $this->findAccountForMemberOrPlayer($memberId, $playerId, true);
+            $account = $this->findAccountForMemberOrPlayer($memberId, $identityPlayerId, true);
             if ($account !== null && (string) ($account['account_status'] ?? '') === 'active') {
                 throw new InvalidArgumentException('Medlemmet har allerede en aktiv brukerkonto.');
             }
@@ -166,7 +169,7 @@ final class MemberOnboardingRepository
                         (username, email, password_hash, display_name, player_id, member_id, role, is_active, account_status, invited_at)
                      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, NOW())"
                 );
-                $insert->bind_param('sssiisis', $username, $email, $displayName, $playerId, $memberId, $role, $isActive, $status);
+                $insert->bind_param('sssiisis', $username, $email, $displayName, $identityPlayerId, $memberId, $role, $isActive, $status);
                 $insert->execute();
                 $accountId = (int) $insert->insert_id;
                 $insert->close();
@@ -189,7 +192,7 @@ final class MemberOnboardingRepository
                          claimed_at=NULL
                      WHERE id=?"
                 );
-                $update->bind_param('iissi', $memberId, $playerId, $email, $status, $accountId);
+                $update->bind_param('iissi', $memberId, $identityPlayerId, $email, $status, $accountId);
                 $update->execute();
                 $update->close();
                 $accountEmail = $email ?? ($account['email'] ?? null);
@@ -253,8 +256,8 @@ final class MemberOnboardingRepository
     public function inspectInvitation(string $token): array
     {
         $tokenHash = $this->tokenHash($token);
-        $users = $this->prefix . 'user_accounts';
-        $invitations = $this->prefix . 'user_onboarding_invitations';
+        $users = $this->identityPrefix . 'user_accounts';
+        $invitations = $this->identityPrefix . 'user_onboarding_invitations';
 
         $stmt = $this->connection->prepare(
             "SELECT i.expires_at, i.member_id, ua.id AS account_id, ua.email, ua.account_status, m.navn AS member_name
@@ -303,9 +306,8 @@ final class MemberOnboardingRepository
         }
 
         $tokenHash = $this->tokenHash($token);
-        $users = $this->prefix . 'user_accounts';
-        $players = $this->prefix . 'players';
-        $invitations = $this->prefix . 'user_onboarding_invitations';
+        $users = $this->identityPrefix . 'user_accounts';
+        $invitations = $this->identityPrefix . 'user_onboarding_invitations';
 
         $this->connection->begin_transaction();
         try {
@@ -331,15 +333,7 @@ final class MemberOnboardingRepository
             $accountId = (int) $invite['user_account_id'];
             $memberId = (int) $invite['member_id'];
             $this->assertEmailAvailable($email, $accountId);
-
-            $playerStmt = $this->connection->prepare(
-                "SELECT id FROM `{$players}` WHERE member_id=? ORDER BY id ASC LIMIT 1"
-            );
-            $playerStmt->bind_param('i', $memberId);
-            $playerStmt->execute();
-            $playerRow = $playerStmt->get_result()->fetch_assoc() ?: null;
-            $playerStmt->close();
-            $playerId = $playerRow !== null ? (int) $playerRow['id'] : null;
+            $identityPlayerId = $this->identityPlayerIdForMember($memberId, null);
 
             $passwordHash = password_hash($password, PASSWORD_DEFAULT);
             if (!is_string($passwordHash) || $passwordHash === '') {
@@ -358,7 +352,7 @@ final class MemberOnboardingRepository
                      claimed_at=NOW()
                  WHERE id=?"
             );
-            $update->bind_param('ssiisi', $email, $passwordHash, $memberId, $playerId, $status, $accountId);
+            $update->bind_param('ssiisi', $email, $passwordHash, $memberId, $identityPlayerId, $status, $accountId);
             $update->execute();
             $update->close();
 
@@ -408,10 +402,10 @@ final class MemberOnboardingRepository
             throw new InvalidArgumentException('Ugyldig medlem.');
         }
 
-        $users = $this->prefix . 'user_accounts';
-        $sessions = $this->prefix . 'auth_sessions';
-        $globalRoles = $this->prefix . 'global_user_roles';
-        $invitations = $this->prefix . 'user_onboarding_invitations';
+        $users = $this->identityPrefix . 'user_accounts';
+        $sessions = $this->identityPrefix . 'auth_sessions';
+        $globalRoles = $this->identityPrefix . 'global_user_roles';
+        $invitations = $this->identityPrefix . 'user_onboarding_invitations';
 
         $this->connection->begin_transaction();
         try {
@@ -467,9 +461,9 @@ final class MemberOnboardingRepository
     }
 
     /** @return array<string,mixed>|null */
-    private function findAccountForMemberOrPlayer(int $memberId, ?int $playerId, bool $forUpdate): ?array
+    private function findAccountForMemberOrPlayer(int $memberId, ?int $identityPlayerId, bool $forUpdate): ?array
     {
-        $users = $this->prefix . 'user_accounts';
+        $users = $this->identityPrefix . 'user_accounts';
         $suffix = $forUpdate ? ' FOR UPDATE' : '';
 
         $stmt = $this->connection->prepare("SELECT * FROM `{$users}` WHERE member_id=? LIMIT 1{$suffix}");
@@ -477,21 +471,41 @@ final class MemberOnboardingRepository
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc() ?: null;
         $stmt->close();
-        if ($row !== null || $playerId === null) {
+        if ($row !== null || $identityPlayerId === null) {
             return $row;
         }
 
         $stmt = $this->connection->prepare("SELECT * FROM `{$users}` WHERE player_id=? LIMIT 1{$suffix}");
-        $stmt->bind_param('i', $playerId);
+        $stmt->bind_param('i', $identityPlayerId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc() ?: null;
         $stmt->close();
         return $row;
     }
 
+    private function identityPlayerIdForMember(int $memberId, ?int $localPlayerId): ?int
+    {
+        if ($this->identityPrefix === $this->dataPrefix) {
+            return $localPlayerId;
+        }
+
+        // user_accounts.player_id belongs to the shared production identity schema.
+        // Never write a bd_test_ player ID into that foreign key. Resolve the matching
+        // production player by the shared member_id when one already exists.
+        $players = $this->identityPrefix . 'players';
+        $stmt = $this->connection->prepare(
+            "SELECT id FROM `{$players}` WHERE member_id=? ORDER BY id ASC LIMIT 1"
+        );
+        $stmt->bind_param('i', $memberId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        return $row !== null ? (int) $row['id'] : null;
+    }
+
     private function nextInternalUsername(int $memberId): string
     {
-        $users = $this->prefix . 'user_accounts';
+        $users = $this->identityPrefix . 'user_accounts';
         $base = 'member-' . $memberId;
         $candidate = $base;
         for ($attempt = 0; $attempt < 10; $attempt++) {
@@ -528,7 +542,7 @@ final class MemberOnboardingRepository
 
     private function assertEmailAvailable(string $email, int $accountId): void
     {
-        $users = $this->prefix . 'user_accounts';
+        $users = $this->identityPrefix . 'user_accounts';
         $stmt = $this->connection->prepare(
             "SELECT id FROM `{$users}` WHERE LOWER(email)=LOWER(?) AND id<>? LIMIT 1"
         );
