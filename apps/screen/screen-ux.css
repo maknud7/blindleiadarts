@@ -1,0 +1,35 @@
+@import url("../packages/ui-assets/brand-tokens.css");
+
+:root{
+  --gold:var(--bd-brand-500,#3a7898);
+  --green:#54d18f;
+}
+
+html,body{overflow-x:hidden}
+body{
+  background:
+    radial-gradient(circle at top left,rgba(58,120,152,.20),transparent 30rem),
+    radial-gradient(circle at right center,rgba(17,67,93,.18),transparent 28rem),
+    linear-gradient(180deg,#071017 0%,#0a151e 100%);
+}
+
+.device-admin-meta{display:none!important}
+.eyebrow,.board-head h3,.compact-versus,.table-rank{color:#8fc1db}
+.connect-form button,.ghost-button{background:linear-gradient(135deg,var(--bd-brand-700,#1a5a78),var(--bd-brand-900,#0b3145));color:#fff}
+.status-assigned{color:#a9d3e8;background:rgba(58,120,152,.14)}
+
+.screen-view{
+  padding:max(1rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left));
+}
+.connect-view,.fallback-panel{
+  padding:max(2rem,env(safe-area-inset-top)) max(2rem,env(safe-area-inset-right)) max(2rem,env(safe-area-inset-bottom)) max(2rem,env(safe-area-inset-left));
+}
+
+/* Operational buttons should not compete with live information from viewing distance. */
+.header-actions{opacity:.42;transition:opacity .15s ease}
+.header-actions:hover,.header-actions:focus-within{opacity:1}
+
+@media(max-width:920px){
+  .header-actions{opacity:1;width:100%}
+  .header-actions button{flex:1}
+}
