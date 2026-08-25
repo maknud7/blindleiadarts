@@ -81,6 +81,21 @@ jobs:
           grep -Fq 'Neste anbefalte steg' apps/admin/admin-ux.js
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
 
+      - name: Public live and first-party activity check
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'blindleia-dartklubb' apps/live/app.js
+          grep -Fq '/public/clubs/' apps/live/app.js
+          grep -Fq 'href="../live/"' apps/admin/admin-ux.js
+          grep -Fq 'ActivityApplication' apps/api/index.php
+          grep -Fq 'v1/activity' apps/api/src/ActivityApplication.php
+          grep -Fq 'activity_events' infra/sql/migrations/0043_create_activity_events.sql
+          grep -Fq 'DEFAULT_CLUB_SLUG = "blindleia-dartklubb"' packages/ui-assets/activity.js
+          if grep -Ei 'document\.cookie|localStorage\.setItem\([^)]*(visitor|analytics|tracking|activity)' packages/ui-assets/activity.js; then
+            echo 'First-party activity tracker must not create an anonymous persistent identifier.'
+            exit 1
+          fi
+
       - name: Cross-surface visual UX check
         run: |
           set -Eeuo pipefail
@@ -117,9 +132,12 @@ jobs:
           test -f dist/test/api/src/PasswordResetApplication.php
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
+          test -f dist/test/api/src/ActivityApplication.php
+          test -f dist/test/api/src/Repository/ActivityRepository.php
           test -f dist/test/admin/season-admin.js
           test -f dist/test/admin/admin-ux.js
           test -f dist/test/admin/admin-ux.css
+          test -f dist/test/admin/activity-admin.js
           test -f dist/test/player/player-ux.js
           test -f dist/test/player/player-ux.css
           test -f dist/test/onboarding/index.html
@@ -131,12 +149,20 @@ jobs:
           test -f dist/test/screen/screen-ux.css
           test -f dist/test/packages/ui-assets/mobile-portal.css
           test -f dist/test/packages/ui-assets/portal-brand.css
+          test -f dist/test/packages/ui-assets/activity.js
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
           test -f dist/test/kiosk/admin-mode.js
           test -f dist/test/kiosk/brand-light.css
           test -f dist/test/kiosk/tablet-portrait.css
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/admin/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/player/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/live/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/screen/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/kiosk/index.html
+          grep -Fq '/packages/ui-assets/activity.js' dist/test/onboarding/index.html
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
           grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest

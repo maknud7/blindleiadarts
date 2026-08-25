@@ -58,6 +58,30 @@ if [[ -f "$ROOT_DIR/index.html" ]]; then
   cp "$ROOT_DIR/index.html" "$OUT_DIR/index.html"
 fi
 
+# First-party activity telemetry is injected into every browser surface in the
+# release. It does not create an analytics cookie or persistent anonymous ID.
+for html in \
+  "$OUT_DIR/index.html" \
+  "$OUT_DIR/admin/index.html" \
+  "$OUT_DIR/player/index.html" \
+  "$OUT_DIR/live/index.html" \
+  "$OUT_DIR/screen/index.html" \
+  "$OUT_DIR/kiosk/index.html" \
+  "$OUT_DIR/onboarding/index.html"; do
+  [[ -f "$html" ]] || continue
+  if ! grep -Fq '/packages/ui-assets/activity.js' "$html"; then
+    php -r '
+      $path = $argv[1];
+      $html = file_get_contents($path);
+      if ($html === false) { exit(1); }
+      $tag = "  <script type=\"module\" src=\"/packages/ui-assets/activity.js\"></script>\n";
+      $updated = str_replace("</body>", $tag . "</body>", $html, $count);
+      if ($count !== 1) { fwrite(STDERR, "Could not inject activity tracker into {$path}\n"); exit(1); }
+      file_put_contents($path, $updated);
+    ' "$html"
+  fi
+done
+
 # Make the deployed kiosk environment explicit in the release itself.
 # Runtime UI can then distinguish test/prod without relying on an extra
 # health request that may fail or be cached independently of the page.
