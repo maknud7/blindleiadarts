@@ -9,7 +9,6 @@ use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use DateTimeImmutable;
-use mysqli;
 use mysqli_sql_exception;
 use Throwable;
 
@@ -63,9 +62,9 @@ final class PasswordResetApplication
     private function requestReset(Request $request, Database $database): JsonResponse
     {
         $payload = $request->jsonBody();
-        $login = mb_strtolower(trim((string) ($payload['login'] ?? '')), 'UTF-8');
-        if ($login === '') {
-            return JsonResponse::error(422, 'reset_login_required', 'Skriv inn brukernavn eller e-postadresse.');
+        $email = mb_strtolower(trim((string) ($payload['email'] ?? '')), 'UTF-8');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return JsonResponse::error(422, 'reset_email_required', 'Skriv inn en gyldig e-postadresse.');
         }
 
         $db = $database->connection();
@@ -75,18 +74,18 @@ final class PasswordResetApplication
         $tokens = $dataPrefix . 'password_reset_tokens';
 
         $statement = $db->prepare(
-            "SELECT id, username, email, display_name, is_active, account_status
+            "SELECT id, email, display_name, is_active, account_status
                FROM `{$users}`
-              WHERE LOWER(username) = ? OR LOWER(email) = ?
+              WHERE LOWER(email) = LOWER(?)
               LIMIT 1"
         );
-        $statement->bind_param('ss', $login, $login);
+        $statement->bind_param('s', $email);
         $statement->execute();
         $user = $statement->get_result()->fetch_assoc() ?: null;
         $statement->close();
 
         $generic = JsonResponse::ok([
-            'message' => 'Hvis kontoen finnes og har en e-postadresse, sender vi en lenke for å velge nytt passord.',
+            'message' => 'Hvis e-postadressen er registrert, sender vi en lenke for å velge nytt passord.',
         ]);
 
         if ($user === null
@@ -208,7 +207,7 @@ final class PasswordResetApplication
         }
 
         return JsonResponse::ok([
-            'message' => 'Passordet er endret. Du kan logge inn med det nye passordet.',
+            'message' => 'Passordet er endret. Du kan logge inn med e-postadressen og det nye passordet.',
         ]);
     }
 
@@ -224,7 +223,8 @@ final class PasswordResetApplication
             . "Hvis du ikke ba om dette, kan du se bort fra e-posten.\n\n"
             . "Blindleia Dartklubb\n";
         $headers = [
-            'From: Blindleia Darts <noreply@ingenting.org>',
+            'From: Blindleia Dartklubb <blindleiadartklubb@ingenting.org>',
+            'Reply-To: blindleiadartklubb@ingenting.org',
             'Content-Type: text/plain; charset=UTF-8',
             'X-Mailer: Blindleia-Darts',
         ];
