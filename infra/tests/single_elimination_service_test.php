@@ -48,4 +48,38 @@ foreach ($seeded as $index => $row) {
     }
 }
 
+// Three groups sending two players each creates six qualifiers in an 8-slot
+// bracket. Lower-tier seeds may move among themselves to avoid an immediate
+// rematch against their own group winner.
+$threeGroups = [
+    ['player_id'=>11,'display_name'=>'A1','source_group_id'=>101,'source_group_position'=>1,'points'=>8,'leg_diff'=>5,'legs_won'=>7,'seed_number'=>1],
+    ['player_id'=>21,'display_name'=>'B1','source_group_id'=>102,'source_group_position'=>1,'points'=>7,'leg_diff'=>4,'legs_won'=>6,'seed_number'=>2],
+    ['player_id'=>31,'display_name'=>'C1','source_group_id'=>103,'source_group_position'=>1,'points'=>6,'leg_diff'=>3,'legs_won'=>5,'seed_number'=>3],
+    ['player_id'=>12,'display_name'=>'A2','source_group_id'=>101,'source_group_position'=>2,'points'=>5,'leg_diff'=>2,'legs_won'=>4,'seed_number'=>4],
+    ['player_id'=>22,'display_name'=>'B2','source_group_id'=>102,'source_group_position'=>2,'points'=>4,'leg_diff'=>1,'legs_won'=>3,'seed_number'=>5],
+    ['player_id'=>32,'display_name'=>'C2','source_group_id'=>103,'source_group_position'=>2,'points'=>3,'leg_diff'=>0,'legs_won'=>2,'seed_number'=>6],
+];
+$seededThreeGroups = $service->seedQualifiers($threeGroups);
+$bySeed = [];
+foreach ($seededThreeGroups as $row) {
+    $bySeed[(int) $row['playoff_seed']] = $row;
+}
+$order8 = $service->seedOrder(8);
+foreach (array_chunk($order8, 2) as [$seedA, $seedB]) {
+    $a = $bySeed[$seedA] ?? null;
+    $b = $bySeed[$seedB] ?? null;
+    if ($a === null || $b === null) {
+        continue; // bye
+    }
+    if ((int) $a['source_group_id'] === (int) $b['source_group_id']) {
+        fwrite(STDERR, sprintf(
+            "Same-group first-round rematch remained for group %d: seed %d vs seed %d.\n",
+            (int) $a['source_group_id'],
+            $seedA,
+            $seedB
+        ));
+        exit(1);
+    }
+}
+
 echo "Single elimination service checks passed.\n";
