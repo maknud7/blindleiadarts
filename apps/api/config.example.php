@@ -12,6 +12,11 @@ return [
         'publish_url' => 'https://realtime.example.test/publish',
         'publish_secret' => 'replace-me',
     ],
+    'scolia' => [
+        // Shared secret used only between apps/scolia-bridge and the internal PHP API.
+        // The Scolia service-account access token itself is configured in Admin per club.
+        'bridge_secret' => 'replace-with-a-long-random-secret',
+    ],
     'db' => [
         'host' => '127.0.0.1',
         'port' => 3306,
