@@ -187,6 +187,9 @@ jobs:
       - name: Exercise ELO ledger apply and replay
         run: php infra/sql/elo_ledger_smoke.php
 
+      - name: Exercise season standings and champion
+        run: php infra/sql/season_smoke.php
+
       - name: Exercise tournament operations queue and lifecycle
         run: php infra/sql/tournament_operations_smoke.php
 
@@ -239,9 +242,15 @@ jobs:
           test -f dist/test/admin/tournament-playoff-admin.js
           test -f dist/test/admin/tournament-checkin-admin.js
           test -f dist/test/admin/tournament-wizard.js
+          test -f dist/test/admin/season-admin.js
           test -f dist/test/admin/scolia-admin.js
           test -f dist/test/kiosk/operations-runtime.js
           test -f dist/test/kiosk/scolia-runtime.js
+          test -f dist/test/kiosk/manifest.webmanifest
+          test -f dist/test/kiosk/service-worker.js
+          test -f dist/test/kiosk/install.js
+          test -f dist/test/api/src/SeasonApplication.php
+          test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/ScoliaApplication.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
           test -f dist/test/api/src/TournamentWizardApplication.php
