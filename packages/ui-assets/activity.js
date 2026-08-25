@@ -2,16 +2,21 @@
   const API = new URL("../../api/v1/activity", import.meta?.url || window.location.href);
   const MAX_BATCH = 25;
   const FLUSH_MS = 4000;
+  const DEFAULT_CLUB_SLUG = "blindleia-dartklubb";
   const queue = [];
   let timer = null;
-  let context = { club_id: null, tournament_id: null };
+  let context = { club_id: null, club_slug: null, tournament_id: null };
 
   function surface() {
     const explicit = document.body?.dataset?.activitySurface;
     if (explicit) return explicit;
-    const segment = location.pathname.split("/").filter(Boolean).pop() || "home";
-    const known = ["admin", "player", "onboarding", "live", "screen", "kiosk"];
-    return known.includes(segment) ? segment : (location.pathname.includes("/admin/") ? "admin" : location.pathname.includes("/player/") ? "player" : "site");
+    if (location.pathname.includes("/admin/")) return "admin";
+    if (location.pathname.includes("/player/")) return "player";
+    if (location.pathname.includes("/onboarding/")) return "onboarding";
+    if (location.pathname.includes("/live/")) return "live";
+    if (location.pathname.includes("/screen/")) return "screen";
+    if (location.pathname.includes("/kiosk/")) return "kiosk";
+    return "site";
   }
 
   function deviceClass() {
@@ -32,6 +37,12 @@
     if (direct > 0) return direct;
     const selected = Number(localStorage.getItem("bd:selectedClubId") || document.getElementById("clubSelect")?.value || 0);
     return selected > 0 ? selected : null;
+  }
+
+  function selectedClubSlug() {
+    if (context.club_slug) return String(context.club_slug).slice(0, 120);
+    const query = new URLSearchParams(location.search).get("club");
+    return (query || document.body?.dataset?.clubSlug || DEFAULT_CLUB_SLUG).slice(0, 120);
   }
 
   function selectedTournamentId() {
@@ -55,6 +66,7 @@
       device_class: deviceClass(),
       referrer_host: referrerHost(),
       club_id: selectedClubId(),
+      club_slug: selectedClubSlug(),
       tournament_id: selectedTournamentId(),
       metadata,
     });
