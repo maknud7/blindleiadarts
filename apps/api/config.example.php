@@ -28,6 +28,9 @@ return [
         // Accounts, sessions and permissions are shared with production in the
         // deployed test environment. CI can omit/override this to remain isolated.
         'identity_table_prefix' => 'bd_prod_',
+        // Physical boards and their permanent configuration are one real registry.
+        // Test mode uses these boards but keeps test matches/scoring isolated.
+        'hardware_table_prefix' => 'bd_prod_',
     ],
     'members_db' => [
         // The member registry is shared for test and production and uses the same
