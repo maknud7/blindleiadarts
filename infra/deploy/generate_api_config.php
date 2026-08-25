@@ -32,6 +32,7 @@ if ($output === null || $output === '') {
 
 $dataPrefix = env_required('DB_TABLE_PREFIX');
 $identityPrefix = env_optional('IDENTITY_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
+$hardwarePrefix = env_optional('HARDWARE_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
 
 $config = [
     'app_env' => env_required('APP_ENV'),
@@ -56,6 +57,7 @@ $config = [
         'password' => env_required('DB_PASSWORD'),
         'table_prefix' => $dataPrefix,
         'identity_table_prefix' => $identityPrefix,
+        'hardware_table_prefix' => $hardwarePrefix,
     ],
     'members_db' => [
         'sqlconnect_path' => env_optional(
