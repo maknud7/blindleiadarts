@@ -1,2 +1,4 @@
 Production deployment authorized 2026-08-25.
-Verified develop before trigger: e6f5c68ab953b5c57f239a0e540c96eddb7f59ca
+Verified application merge: 1bc9265409a94c1215283bf1472b341d56ba1475
+Production workflow URL fallback fixed: 2e4121a71a9d5ce174985dcd58ad32bc22a9ff17
+Retry: 2
