@@ -19,6 +19,8 @@ const boardNameInput = document.getElementById("claimBoardName");
 const sponsorLabelInput = document.getElementById("claimSponsorLabel");
 const sponsorLogoUrlInput = document.getElementById("claimSponsorLogoUrl");
 const scoringModeSelect = document.getElementById("claimScoringMode");
+const scoliaSerialRow = document.getElementById("claimScoliaSerialRow");
+const scoliaSerialInput = document.getElementById("claimScoliaSerial");
 
 let boardMode = "new";
 let boards = [];
@@ -27,6 +29,8 @@ let boardNumberTouched = false;
 function token() { return localStorage.getItem("bd:token") || ""; }
 function clubId() { return Number(clubSelect?.value || localStorage.getItem("bd:selectedClubId") || 0); }
 function normalizeCode(value) { return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); }
+function normalizeScoliaId(value) { return String(value || "").trim(); }
+function validScoliaId(value) { return /^[A-Za-z0-9._:-]{3,120}$/.test(normalizeScoliaId(value)); }
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 
 async function requestJson(url, { method = "GET", body, auth = false } = {}) {
@@ -51,6 +55,12 @@ function showStatus(title, detail = "", tone = "warning") {
 }
 function hideStatus() { statusBox.className = "claim-status hidden"; statusBox.innerHTML = ""; }
 
+function renderScoliaField() {
+  const enabled = boardMode === "new" && scoringModeSelect?.value === "scolia";
+  scoliaSerialRow?.classList.toggle("hidden", !enabled);
+  if (scoliaSerialInput) scoliaSerialInput.required = enabled;
+}
+
 function nextBoardNumber(items) {
   const used = new Set(items.map((board) => Number(board.board_number || 0)).filter((value) => value > 0));
   let candidate = 1;
@@ -67,6 +77,7 @@ function setBoardMode(mode) {
   if (boardNumberInput) boardNumberInput.required = boardMode === "new";
   if (boardSelect) boardSelect.required = boardMode === "existing";
   submitButton.textContent = boardMode === "new" ? "Opprett og koble" : "Koble til board";
+  renderScoliaField();
 }
 
 async function loadBoards() {
@@ -87,9 +98,7 @@ async function loadBoards() {
   }).join("")}`;
 
   const suggested = nextBoardNumber(boards);
-  if (boardNumberInput && (!boardNumberTouched || Number(boardNumberInput.value || 0) <= 0)) {
-    boardNumberInput.value = String(suggested);
-  }
+  if (boardNumberInput && (!boardNumberTouched || Number(boardNumberInput.value || 0) <= 0)) boardNumberInput.value = String(suggested);
   if (boardNameInput) boardNameInput.placeholder = `Board ${suggested} eller f.eks. Sjøbua Arena`;
 
   existingBoardChoice.disabled = available.length === 0;
@@ -101,7 +110,6 @@ async function inspectCode() {
   const code = normalizeCode(codeInput.value);
   codeInput.value = code;
   if (!code || !clubId() || !token()) { hideStatus(); return null; }
-
   try {
     const url = new URL(PAIRING_URL, window.location.href);
     url.searchParams.set("action", "admin-info");
@@ -126,7 +134,6 @@ async function inspectCode() {
 async function claimExistingTerminal(code) {
   const kioskId = Number(boardSelect.value || 0);
   if (!kioskId) throw new Error("Velg hvilket eksisterende board nettbrettet står ved.");
-
   const url = new URL(PAIRING_URL, window.location.href);
   url.searchParams.set("action", "claim");
   url.searchParams.set("club_id", String(clubId()));
@@ -136,6 +143,11 @@ async function claimExistingTerminal(code) {
 async function createAndClaimTerminal(code) {
   const boardNumber = Number(boardNumberInput.value || 0);
   if (boardNumber <= 0) throw new Error("Boardnummer må være 1 eller høyere.");
+  const scoringMode = String(scoringModeSelect.value || "manual");
+  const scoliaSerial = normalizeScoliaId(scoliaSerialInput?.value || "");
+  if (scoringMode === "scolia" && !validScoliaId(scoliaSerial)) {
+    throw new Error("Scolia-board må ha en gyldig Scolia-ID / serienummer.");
+  }
 
   const url = new URL(CREATE_AND_PAIR_URL, window.location.href);
   url.searchParams.set("club_id", String(clubId()));
@@ -149,7 +161,8 @@ async function createAndClaimTerminal(code) {
         name: String(boardNameInput.value || "").trim(),
         sponsor_label: String(sponsorLabelInput.value || "").trim(),
         sponsor_logo_url: String(sponsorLogoUrlInput.value || "").trim(),
-        scoring_mode: String(scoringModeSelect.value || "manual"),
+        scoring_mode: scoringMode,
+        scolia_serial_number: scoringMode === "scolia" ? scoliaSerial : null,
       },
     },
   });
@@ -178,45 +191,32 @@ form?.addEventListener("submit", async (event) => {
     sponsorLabelInput.value = "";
     sponsorLogoUrlInput.value = "";
     scoringModeSelect.value = "manual";
+    if (scoliaSerialInput) scoliaSerialInput.value = "";
     boardNumberTouched = false;
+    renderScoliaField();
     await loadBoards();
     setBoardMode("new");
     setTimeout(() => refreshButton?.click(), 250);
   } catch (error) {
     showStatus("Kunne ikke koble terminalen", error.message, "bad");
-  } finally {
-    submitButton.disabled = false;
-  }
+  } finally { submitButton.disabled = false; }
 });
 
-newBoardChoice?.addEventListener("click", async () => {
-  setBoardMode("new");
-  if (codeInput.value) await inspectCode();
-});
-existingBoardChoice?.addEventListener("click", async () => {
-  if (existingBoardChoice.disabled) return;
-  setBoardMode("existing");
-  if (codeInput.value) await inspectCode();
-});
+newBoardChoice?.addEventListener("click", async () => { setBoardMode("new"); if (codeInput.value) await inspectCode(); });
+existingBoardChoice?.addEventListener("click", async () => { if (existingBoardChoice.disabled) return; setBoardMode("existing"); if (codeInput.value) await inspectCode(); });
 boardNumberInput?.addEventListener("input", () => { boardNumberTouched = true; });
 codeInput?.addEventListener("input", () => { codeInput.value = normalizeCode(codeInput.value); });
 codeInput?.addEventListener("change", () => inspectCode());
+scoringModeSelect?.addEventListener("change", renderScoliaField);
 clubSelect?.addEventListener("change", async () => {
   boardNumberTouched = false;
   await loadBoards().catch(() => undefined);
   if (codeInput.value) await inspectCode();
 });
 
-function adminReady() {
-  return Boolean(token() && clubId() && !document.getElementById("adminApp")?.classList.contains("hidden"));
-}
-
+function adminReady() { return Boolean(token() && clubId() && !document.getElementById("adminApp")?.classList.contains("hidden")); }
 async function initializeWhenReady(pairing) {
-  if (!adminReady()) {
-    setTimeout(() => initializeWhenReady(pairing), 350);
-    return;
-  }
-
+  if (!adminReady()) { setTimeout(() => initializeWhenReady(pairing), 350); return; }
   setBoardMode("new");
   await loadBoards().catch((error) => showStatus("Kunne ikke laste boards", error.message, "bad"));
   if (pairing) {
@@ -224,11 +224,10 @@ async function initializeWhenReady(pairing) {
     await inspectCode();
   }
 }
-
 function bootClaim() {
   const pairing = normalizeCode(new URLSearchParams(window.location.search).get("pairing") || "");
   if (pairing) codeInput.value = pairing;
+  renderScoliaField();
   initializeWhenReady(pairing);
 }
-
 bootClaim();
