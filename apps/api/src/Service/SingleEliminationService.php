@@ -72,6 +72,8 @@ final class SingleEliminationService
     /**
      * Seed group winners before runners-up etc. Within the same group position,
      * performance decides the order using the exact group-table tie breakers.
+     * Seeds inside the same qualification tier may then swap to avoid an
+     * immediate rematch from the same group where that is possible.
      *
      * @param array<int,array<string,mixed>> $qualifiers
      * @return array<int,array<string,mixed>>
@@ -104,6 +106,79 @@ final class SingleEliminationService
             $qualifier['playoff_seed'] = $index + 1;
         }
         unset($qualifier);
+
+        $qualifiers = $this->reduceSameGroupFirstRoundConflicts($qualifiers);
+        usort($qualifiers, static fn (array $a, array $b): int => ((int) $a['playoff_seed']) <=> ((int) $b['playoff_seed']));
         return $qualifiers;
+    }
+
+    /** @param array<int,array<string,mixed>> $qualifiers @return array<int,array<string,mixed>> */
+    private function reduceSameGroupFirstRoundConflicts(array $qualifiers): array
+    {
+        if (count($qualifiers) < 3) {
+            return $qualifiers;
+        }
+
+        $bestConflicts = $this->firstRoundConflictCount($qualifiers);
+        if ($bestConflicts === 0) {
+            return $qualifiers;
+        }
+
+        for ($iteration = 0; $iteration < 20 && $bestConflicts > 0; $iteration++) {
+            $bestSwap = null;
+            $bestDistance = PHP_INT_MAX;
+            for ($i = 0, $count = count($qualifiers); $i < $count; $i++) {
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if ((int) ($qualifiers[$i]['source_group_position'] ?? -1)
+                        !== (int) ($qualifiers[$j]['source_group_position'] ?? -2)) {
+                        continue;
+                    }
+                    $candidate = $qualifiers;
+                    $seedI = (int) $candidate[$i]['playoff_seed'];
+                    $seedJ = (int) $candidate[$j]['playoff_seed'];
+                    $candidate[$i]['playoff_seed'] = $seedJ;
+                    $candidate[$j]['playoff_seed'] = $seedI;
+                    $conflicts = $this->firstRoundConflictCount($candidate);
+                    $distance = abs($seedI - $seedJ);
+                    if ($conflicts < $bestConflicts
+                        || ($conflicts === $bestConflicts && $bestSwap !== null && $distance < $bestDistance)) {
+                        $bestSwap = [$i, $j, $conflicts];
+                        $bestDistance = $distance;
+                    }
+                }
+            }
+            if ($bestSwap === null || $bestSwap[2] >= $bestConflicts) {
+                break;
+            }
+            [$i, $j, $bestConflicts] = $bestSwap;
+            $seedI = (int) $qualifiers[$i]['playoff_seed'];
+            $qualifiers[$i]['playoff_seed'] = (int) $qualifiers[$j]['playoff_seed'];
+            $qualifiers[$j]['playoff_seed'] = $seedI;
+        }
+        return $qualifiers;
+    }
+
+    /** @param array<int,array<string,mixed>> $qualifiers */
+    private function firstRoundConflictCount(array $qualifiers): int
+    {
+        $size = $this->bracketSize(count($qualifiers));
+        $order = $this->seedOrder($size);
+        $bySeed = [];
+        foreach ($qualifiers as $qualifier) {
+            $bySeed[(int) $qualifier['playoff_seed']] = $qualifier;
+        }
+        $conflicts = 0;
+        for ($slot = 0; $slot < count($order); $slot += 2) {
+            $a = $bySeed[$order[$slot]] ?? null;
+            $b = $bySeed[$order[$slot + 1]] ?? null;
+            if ($a === null || $b === null) {
+                continue;
+            }
+            if ((int) ($a['source_group_id'] ?? 0) > 0
+                && (int) ($a['source_group_id'] ?? 0) === (int) ($b['source_group_id'] ?? -1)) {
+                $conflicts++;
+            }
+        }
+        return $conflicts;
     }
 }
