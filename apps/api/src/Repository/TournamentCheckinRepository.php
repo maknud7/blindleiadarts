@@ -7,7 +7,6 @@ namespace Blindleia\Dartkiosk\Api\Repository;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use DateTimeImmutable;
 use mysqli;
-use mysqli_sql_exception;
 
 final class TournamentCheckinRepository
 {
@@ -24,7 +23,8 @@ final class TournamentCheckinRepository
     public function getClubSettings(int $clubId): array
     {
         $stmt = $this->connection->prepare(sprintf(
-            'SELECT * FROM `%1$sclub_checkin_settings` WHERE club_id=? LIMIT 1',
+            'SELECT club_id,default_method,opens_minutes_before_start,closes_minutes_after_start,updated_by_user_id,created_at,updated_at
+             FROM `%1$sclub_checkin_settings` WHERE club_id=? LIMIT 1',
             $this->tablePrefix
         ));
         $stmt->bind_param('i', $clubId);
@@ -35,14 +35,8 @@ final class TournamentCheckinRepository
         return array_merge([
             'club_id' => $clubId,
             'default_method' => 'admin_or_code',
-            'venue_latitude' => null,
-            'venue_longitude' => null,
-            'onsite_radius_meters' => 150,
             'opens_minutes_before_start' => 60,
             'closes_minutes_after_start' => 10,
-            'require_geolocation' => 1,
-            'gps_fallback_enabled' => 1,
-            'max_location_accuracy_meters' => 250,
         ], $row);
     }
 
@@ -51,40 +45,21 @@ final class TournamentCheckinRepository
     {
         $current = $this->getClubSettings($clubId);
         $method = $this->normalizeMethod($payload['default_method'] ?? $current['default_method']);
-        $lat = $this->nullableFloat($payload['venue_latitude'] ?? $current['venue_latitude']);
-        $lng = $this->nullableFloat($payload['venue_longitude'] ?? $current['venue_longitude']);
-
-        if (($lat === null) xor ($lng === null)) {
-            throw new ValidationException('checkin_coordinates_incomplete', 'Både breddegrad og lengdegrad må settes for GPS-fallback.');
-        }
-        if ($lat !== null && ($lat < -90 || $lat > 90)) {
-            throw new ValidationException('invalid_venue_latitude', 'Ugyldig breddegrad.');
-        }
-        if ($lng !== null && ($lng < -180 || $lng > 180)) {
-            throw new ValidationException('invalid_venue_longitude', 'Ugyldig lengdegrad.');
-        }
-
-        $radius = min(5000, max(20, (int) ($payload['onsite_radius_meters'] ?? $current['onsite_radius_meters'])));
         $opens = min(1440, max(0, (int) ($payload['opens_minutes_before_start'] ?? $current['opens_minutes_before_start'])));
         $closes = min(360, max(0, (int) ($payload['closes_minutes_after_start'] ?? $current['closes_minutes_after_start'])));
-        $require = $this->boolInt($payload['require_geolocation'] ?? $current['require_geolocation']);
-        $gpsFallback = $this->boolInt($payload['gps_fallback_enabled'] ?? $current['gps_fallback_enabled']);
-        $accuracy = min(2000, max(20, (int) ($payload['max_location_accuracy_meters'] ?? $current['max_location_accuracy_meters'])));
 
         $sql = sprintf(
             'INSERT INTO `%1$sclub_checkin_settings`
-             (club_id,default_method,venue_latitude,venue_longitude,onsite_radius_meters,opens_minutes_before_start,
-              closes_minutes_after_start,require_geolocation,gps_fallback_enabled,max_location_accuracy_meters,updated_by_user_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE default_method=VALUES(default_method),venue_latitude=VALUES(venue_latitude),
-              venue_longitude=VALUES(venue_longitude),onsite_radius_meters=VALUES(onsite_radius_meters),
-              opens_minutes_before_start=VALUES(opens_minutes_before_start),closes_minutes_after_start=VALUES(closes_minutes_after_start),
-              require_geolocation=VALUES(require_geolocation),gps_fallback_enabled=VALUES(gps_fallback_enabled),
-              max_location_accuracy_meters=VALUES(max_location_accuracy_meters),updated_by_user_id=VALUES(updated_by_user_id)',
+             (club_id,default_method,opens_minutes_before_start,closes_minutes_after_start,updated_by_user_id)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE default_method=VALUES(default_method),
+              opens_minutes_before_start=VALUES(opens_minutes_before_start),
+              closes_minutes_after_start=VALUES(closes_minutes_after_start),
+              updated_by_user_id=VALUES(updated_by_user_id)',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('isddiiiiiii', $clubId, $method, $lat, $lng, $radius, $opens, $closes, $require, $gpsFallback, $accuracy, $userId);
+        $stmt->bind_param('isiii', $clubId, $method, $opens, $closes, $userId);
         $stmt->execute();
         $stmt->close();
 
@@ -96,7 +71,7 @@ final class TournamentCheckinRepository
     {
         $sql = sprintf(
             'SELECT t.id,t.club_id,t.name,t.status,t.start_at,t.checkin_opens_at,t.checkin_closes_at,
-                    t.checkin_method,t.checkin_code,t.checkin_require_onsite,t.checkin_gps_fallback_enabled,t.checkin_radius_meters
+                    t.checkin_method,t.checkin_code
              FROM `%1$stournaments` t WHERE t.id=? LIMIT 1',
             $this->tablePrefix
         );
@@ -131,15 +106,6 @@ final class TournamentCheckinRepository
         $method = array_key_exists('checkin_method', $payload)
             ? $this->nullableMethod($payload['checkin_method'])
             : $this->nullableMethod($current['checkin_method'] ?? null);
-        $require = array_key_exists('checkin_require_onsite', $payload)
-            ? $this->nullableBoolInt($payload['checkin_require_onsite'])
-            : $this->nullableBoolInt($current['checkin_require_onsite'] ?? null);
-        $gpsFallback = array_key_exists('checkin_gps_fallback_enabled', $payload)
-            ? $this->nullableBoolInt($payload['checkin_gps_fallback_enabled'])
-            : $this->nullableBoolInt($current['checkin_gps_fallback_enabled'] ?? null);
-        $radius = array_key_exists('checkin_radius_meters', $payload)
-            ? $this->nullablePositiveInt($payload['checkin_radius_meters'], 20, 5000)
-            : ($current['checkin_radius_meters'] !== null ? (int) $current['checkin_radius_meters'] : null);
 
         if ($opensAt !== null && $closesAt !== null && strtotime($opensAt) >= strtotime($closesAt)) {
             throw new ValidationException('invalid_checkin_window', 'Check-in må stenge etter at den åpner.');
@@ -150,6 +116,7 @@ final class TournamentCheckinRepository
             : $this->normalizeCode($current['checkin_code'] ?? null);
         $rotate = $this->boolInt($payload['rotate_checkin_code'] ?? false) === 1;
         $effectiveMethod = $method ?? $this->normalizeMethod($current['default_method'] ?? 'admin_or_code');
+
         if ($rotate || ($this->methodUsesCode($effectiveMethod) && $code === null)) {
             $code = $this->generateUniqueCode((int) $current['club_id'], $tournamentId);
         }
@@ -159,13 +126,12 @@ final class TournamentCheckinRepository
 
         $sql = sprintf(
             'UPDATE `%1$stournaments`
-             SET checkin_opens_at=?,checkin_closes_at=?,checkin_method=?,checkin_code=?,
-                 checkin_require_onsite=?,checkin_gps_fallback_enabled=?,checkin_radius_meters=?
+             SET checkin_opens_at=?,checkin_closes_at=?,checkin_method=?,checkin_code=?
              WHERE id=?',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('ssssiiii', $opensAt, $closesAt, $method, $code, $require, $gpsFallback, $radius, $tournamentId);
+        $stmt->bind_param('ssssi', $opensAt, $closesAt, $method, $code, $tournamentId);
         $stmt->execute();
         $stmt->close();
 
@@ -179,6 +145,11 @@ final class TournamentCheckinRepository
         if ($settings === null) {
             throw new ValidationException('tournament_not_found', 'Turneringen ble ikke funnet.', 404);
         }
+        $method = $this->normalizeMethod($settings['effective_method'] ?? 'admin_or_code');
+        if (!$this->methodUsesCode($method)) {
+            throw new ValidationException('checkin_code_not_enabled', 'Denne turneringen bruker ikke spillerkode.', 409);
+        }
+
         $code = $this->generateUniqueCode((int) $settings['club_id'], $tournamentId);
         $stmt = $this->connection->prepare(sprintf(
             'UPDATE `%1$stournaments` SET checkin_code=? WHERE id=?',
@@ -190,15 +161,10 @@ final class TournamentCheckinRepository
         return $this->getTournamentSettings($tournamentId) ?? [];
     }
 
-    /**
-     * @return array<string,mixed>
-     */
+    /** @return array<string,mixed> */
     public function checkInPlayer(
         int $tournamentId,
         int $playerId,
-        ?float $latitude,
-        ?float $longitude,
-        ?float $accuracyMeters,
         bool $adminOverride = false,
         ?string $code = null,
         bool $force = false
@@ -214,7 +180,7 @@ final class TournamentCheckinRepository
         }
         $status = (string) $registration['status'];
         if ($status === 'checked_in') {
-            return $this->formatResult($settings, $registration, null, true);
+            return $this->formatResult($settings, $registration, true);
         }
         if ($status === 'waitlisted') {
             throw new ValidationException('registration_waitlisted', 'Du står på venteliste og kan ikke checke inn før du har fått plass.', 422);
@@ -227,9 +193,6 @@ final class TournamentCheckinRepository
             $this->assertWindowOpen($settings);
         }
 
-        $source = 'legacy';
-        $distance = null;
-
         if ($adminOverride) {
             $source = 'admin_override';
         } else {
@@ -240,49 +203,29 @@ final class TournamentCheckinRepository
 
             $normalizedCode = $this->normalizeCode($code);
             $expectedCode = $this->normalizeCode($settings['checkin_code'] ?? null);
-            $codeAccepted = false;
-
-            if ($this->methodUsesCode($method) && $normalizedCode !== null && $expectedCode !== null) {
-                $codeAccepted = hash_equals($expectedCode, $normalizedCode);
-                if ($codeAccepted) {
-                    $source = 'player_code';
-                }
+            if ($normalizedCode === null) {
+                throw new ValidationException('checkin_code_required', 'Tast inn check-in-koden som vises i lokalet.', 422);
             }
-
-            if (!$codeAccepted) {
-                $gpsAllowed = $method === 'gps' || (int) ($settings['effective_gps_fallback_enabled'] ?? 0) === 1;
-                if ($gpsAllowed && $latitude !== null && $longitude !== null && $accuracyMeters !== null) {
-                    $distance = $this->validateGps($settings, $latitude, $longitude, $accuracyMeters);
-                    $source = 'player_geolocation';
-                } elseif ($this->methodUsesCode($method)) {
-                    if ($normalizedCode !== null) {
-                        throw new ValidationException('checkin_code_invalid', 'Check-in-koden stemmer ikke. Se koden på live-skjermen eller kontakt turneringsleder.', 409);
-                    }
-                    if ($gpsAllowed) {
-                        throw new ValidationException('checkin_code_or_gps_required', 'Tast inn koden fra live-skjermen. Hvis kode ikke kan brukes, kan GPS-fallback prøves.', 422);
-                    }
-                    throw new ValidationException('checkin_code_required', 'Tast inn check-in-koden som vises i lokalet.', 422);
-                } else {
-                    throw new ValidationException('checkin_location_required', 'GPS-posisjon må deles for denne turneringen.', 422);
-                }
+            if ($expectedCode === null || !hash_equals($expectedCode, $normalizedCode)) {
+                throw new ValidationException('checkin_code_invalid', 'Check-in-koden stemmer ikke. Se koden på Live-skjermen eller kontakt turneringsleder.', 409);
             }
+            $source = 'player_code';
         }
 
         $sql = sprintf(
             'UPDATE `%1$stournament_players`
-             SET status="checked_in",checked_in_at=NOW(3),checkin_source=?,checkin_latitude=?,checkin_longitude=?,
-                 checkin_accuracy_meters=?,checkin_distance_meters=?
+             SET status="checked_in",checked_in_at=NOW(3),checkin_source=?
              WHERE id=?',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
         $registrationId = (int) $registration['id'];
-        $stmt->bind_param('sddddi', $source, $latitude, $longitude, $accuracyMeters, $distance, $registrationId);
+        $stmt->bind_param('si', $source, $registrationId);
         $stmt->execute();
         $stmt->close();
 
         $fresh = $this->registration($tournamentId, $playerId) ?? $registration;
-        return $this->formatResult($settings, $fresh, $distance, false);
+        return $this->formatResult($settings, $fresh, false);
     }
 
     /** @return array<string,mixed> */
@@ -293,22 +236,17 @@ final class TournamentCheckinRepository
             throw new ValidationException('tournament_not_found', 'Turneringen ble ikke funnet.', 404);
         }
         $registration = $this->registration($tournamentId, $playerId);
-        $windowState = $this->windowState($settings);
         $method = $this->normalizeMethod($settings['effective_method'] ?? 'admin_or_code');
 
         return [
             'tournament_id' => $tournamentId,
             'registration_status' => $registration['status'] ?? null,
-            'window_state' => $windowState,
+            'window_state' => $this->windowState($settings),
             'opens_at' => $settings['effective_checkin_opens_at'],
             'closes_at' => $settings['effective_checkin_closes_at'],
             'method' => $method,
             'code_allowed' => $this->methodUsesCode($method),
-            'admin_checkin_allowed' => in_array($method, ['admin_or_code', 'admin_only', 'code', 'gps'], true),
-            'gps_fallback_enabled' => (int) ($settings['effective_gps_fallback_enabled'] ?? 0) === 1,
-            'require_onsite_for_gps' => (int) ($settings['effective_require_onsite'] ?? 1) === 1,
-            'radius_meters' => (int) ($settings['effective_radius_meters'] ?? 150),
-            'venue_configured' => $settings['venue_latitude'] !== null && $settings['venue_longitude'] !== null,
+            'admin_checkin_allowed' => true,
             'checked_in_at' => $registration['checked_in_at'] ?? null,
             'checkin_source' => $registration['checkin_source'] ?? null,
         ];
@@ -382,40 +320,6 @@ final class TournamentCheckinRepository
         return $now < $opens ? 'not_open' : ($now > $closes ? 'closed' : 'open');
     }
 
-    /** @param array<string,mixed> $settings */
-    private function validateGps(array $settings, float $latitude, float $longitude, float $accuracyMeters): ?float
-    {
-        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
-            throw new ValidationException('checkin_location_invalid', 'Telefonen returnerte en ugyldig posisjon.', 422);
-        }
-        $maxAccuracy = (float) ($settings['max_location_accuracy_meters'] ?? 250);
-        if ($accuracyMeters <= 0 || $accuracyMeters > $maxAccuracy) {
-            throw new ValidationException('checkin_location_too_inaccurate', 'Posisjonen er for unøyaktig. Prøv igjen eller bruk koden i lokalet.', 409);
-        }
-
-        if ((int) ($settings['effective_require_onsite'] ?? 1) !== 1) {
-            return null;
-        }
-
-        $venueLat = $this->nullableFloat($settings['venue_latitude'] ?? null);
-        $venueLng = $this->nullableFloat($settings['venue_longitude'] ?? null);
-        if ($venueLat === null || $venueLng === null) {
-            throw new ValidationException('checkin_venue_not_configured', 'GPS-fallback er ikke konfigurert for lokalet. Bruk koden eller kontakt arrangør.', 503);
-        }
-
-        $distance = $this->distanceMeters($venueLat, $venueLng, $latitude, $longitude);
-        $radius = (float) ($settings['effective_radius_meters'] ?? 150);
-        $gpsMargin = min(30.0, max(0.0, $accuracyMeters));
-        if ($distance > $radius + $gpsMargin) {
-            throw new ValidationException(
-                'checkin_not_onsite',
-                sprintf('Du ser ut til å være ca. %d meter fra arenaen.', (int) round($distance)),
-                409
-            );
-        }
-        return $distance;
-    }
-
     /** @param array<string,mixed> $tournament @param array<string,mixed> $club @return array<string,mixed> */
     private function withEffectiveSettings(array $tournament, array $club): array
     {
@@ -430,23 +334,11 @@ final class TournamentCheckinRepository
         $closes = $tournament['checkin_closes_at']
             ?: $start->modify('+' . (int) $club['closes_minutes_after_start'] . ' minutes')->format('Y-m-d H:i:s');
         $method = $tournament['checkin_method'] ?: $this->normalizeMethod($club['default_method'] ?? 'admin_or_code');
-        $require = $tournament['checkin_require_onsite'] === null
-            ? (int) $club['require_geolocation']
-            : (int) $tournament['checkin_require_onsite'];
-        $gpsFallback = $tournament['checkin_gps_fallback_enabled'] === null
-            ? (int) $club['gps_fallback_enabled']
-            : (int) $tournament['checkin_gps_fallback_enabled'];
-        $radius = $tournament['checkin_radius_meters'] === null
-            ? (int) $club['onsite_radius_meters']
-            : (int) $tournament['checkin_radius_meters'];
 
         return array_merge($tournament, $club, [
             'effective_checkin_opens_at' => $opens,
             'effective_checkin_closes_at' => $closes,
             'effective_method' => $method,
-            'effective_require_onsite' => $require,
-            'effective_gps_fallback_enabled' => $gpsFallback,
-            'effective_radius_meters' => $radius,
         ]);
     }
 
@@ -454,7 +346,7 @@ final class TournamentCheckinRepository
     private function registration(int $tournamentId, int $playerId): ?array
     {
         $stmt = $this->connection->prepare(sprintf(
-            'SELECT id,tournament_id,player_id,status,checked_in_at,checkin_source,checkin_distance_meters
+            'SELECT id,tournament_id,player_id,status,checked_in_at,checkin_source
              FROM `%1$stournament_players` WHERE tournament_id=? AND player_id=? LIMIT 1',
             $this->tablePrefix
         ));
@@ -466,7 +358,7 @@ final class TournamentCheckinRepository
     }
 
     /** @param array<string,mixed> $settings @param array<string,mixed> $registration @return array<string,mixed> */
-    private function formatResult(array $settings, array $registration, ?float $distance, bool $already): array
+    private function formatResult(array $settings, array $registration, bool $already): array
     {
         return [
             'tournament_id' => (int) $settings['id'],
@@ -474,7 +366,6 @@ final class TournamentCheckinRepository
             'status' => 'checked_in',
             'checked_in_at' => $registration['checked_in_at'] ?? null,
             'checkin_source' => $registration['checkin_source'] ?? null,
-            'distance_meters' => $distance ?? ($registration['checkin_distance_meters'] !== null ? (float) $registration['checkin_distance_meters'] : null),
             'already_checked_in' => $already,
         ];
     }
@@ -482,7 +373,7 @@ final class TournamentCheckinRepository
     private function normalizeMethod(mixed $value): string
     {
         $method = strtolower(trim((string) $value));
-        return in_array($method, ['admin_or_code', 'admin_only', 'code', 'gps'], true) ? $method : 'admin_or_code';
+        return in_array($method, ['admin_or_code', 'admin_only', 'code'], true) ? $method : 'admin_or_code';
     }
 
     private function nullableMethod(mixed $value): ?string
@@ -491,7 +382,7 @@ final class TournamentCheckinRepository
             return null;
         }
         $method = strtolower(trim((string) $value));
-        if (!in_array($method, ['admin_or_code', 'admin_only', 'code', 'gps'], true)) {
+        if (!in_array($method, ['admin_or_code', 'admin_only', 'code'], true)) {
             throw new ValidationException('invalid_checkin_method', 'Ugyldig check-in-metode.');
         }
         return $method;
@@ -550,28 +441,6 @@ final class TournamentCheckinRepository
         return date('Y-m-d H:i:s', $timestamp);
     }
 
-    private function nullableFloat(mixed $value): ?float
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        if (!is_numeric($value)) {
-            throw new ValidationException('invalid_location', 'Posisjonsdata må være numeriske.');
-        }
-        return (float) $value;
-    }
-
-    private function nullablePositiveInt(mixed $value, int $min, int $max): ?int
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        if (!is_numeric($value)) {
-            throw new ValidationException('invalid_checkin_number', 'Check-in-verdien må være et tall.');
-        }
-        return min($max, max($min, (int) $value));
-    }
-
     private function boolInt(mixed $value): int
     {
         if (is_bool($value)) return $value ? 1 : 0;
@@ -579,29 +448,10 @@ final class TournamentCheckinRepository
         return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true) ? 1 : 0;
     }
 
-    private function nullableBoolInt(mixed $value): ?int
-    {
-        if ($value === null || $value === '' || strtolower(trim((string) $value)) === 'inherit') {
-            return null;
-        }
-        return $this->boolInt($value);
-    }
-
     private function databaseNow(): DateTimeImmutable
     {
         $result = $this->connection->query('SELECT NOW(3) AS now_value');
         $row = $result->fetch_assoc() ?: [];
         return new DateTimeImmutable((string) ($row['now_value'] ?? 'now'));
-    }
-
-    private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
-    {
-        $earth = 6371000.0;
-        $phi1 = deg2rad($lat1);
-        $phi2 = deg2rad($lat2);
-        $deltaPhi = deg2rad($lat2 - $lat1);
-        $deltaLambda = deg2rad($lng2 - $lng1);
-        $a = sin($deltaPhi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($deltaLambda / 2) ** 2;
-        return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 }
