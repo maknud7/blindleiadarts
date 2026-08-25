@@ -75,6 +75,7 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
@@ -92,6 +93,8 @@ jobs:
           test -f dist/test/admin/tournament-wizard-v2.js
           test -f dist/test/player/checkin-runtime.js
           test -f dist/test/screen/checkin-display.js
+          grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
+          grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
 
       - name: Deploy test via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
