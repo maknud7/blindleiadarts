@@ -7,11 +7,10 @@ on:
     paths:
       - 'apps/api/**'
       - 'apps/onboarding/**'
-      - 'packages/connectors/src/DartsAtlas/**'
-      - 'packages/connectors/tests/**'
+      - 'packages/**'
       - 'infra/sql/**'
       - 'infra/deploy/generate_api_config.php'
-      - '.github/workflows/dartsatlas-verify.yml'
+      - '.github/workflows/core-verify.yml'
   workflow_dispatch:
 
 permissions:
@@ -35,9 +34,6 @@ jobs:
         run: |
           find apps packages infra -type f -name '*.php' -print0 \
             | xargs -0 -n1 php -l
-
-      - name: DartsAtlas parser smoke test
-        run: php -d zend.assertions=1 -d assert.exception=1 packages/connectors/tests/dartsatlas_parser_smoke.php
 
       - name: Run test migrations
         run: php infra/sql/migrate.php
@@ -106,12 +102,6 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
-          DARTSATLAS_SEASON_ID: ${{ vars.DARTSATLAS_SEASON_ID }}
-          DARTSATLAS_TOURNAMENT_ID: ${{ vars.DARTSATLAS_TOURNAMENT_ID }}
-          DARTSATLAS_CLUB_ID: ${{ vars.DARTSATLAS_CLUB_ID }}
-          DARTSATLAS_LOCAL_SEASON_ID: ${{ vars.DARTSATLAS_LOCAL_SEASON_ID }}
-          DARTSATLAS_MEMBERS_TABLE: medlemmer
-          DARTSATLAS_POLL_INTERVAL_SECONDS: ${{ vars.DARTSATLAS_POLL_INTERVAL_SECONDS }}
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
@@ -129,9 +119,6 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
-
-      - name: DartsAtlas connector schema doctor
-        run: php apps/api/bin/dartsatlas_doctor.php
 
       - name: Release package smoke test
         run: |
