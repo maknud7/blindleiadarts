@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `{{TABLE_PREFIX}}activity_events` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `occurred_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `user_account_id` BIGINT UNSIGNED DEFAULT NULL,
+    `auth_session_id` BIGINT UNSIGNED DEFAULT NULL,
+    `club_id` BIGINT UNSIGNED DEFAULT NULL,
+    `tournament_id` BIGINT UNSIGNED DEFAULT NULL,
+    `surface` VARCHAR(32) NOT NULL,
+    `event_name` VARCHAR(64) NOT NULL,
+    `path` VARCHAR(255) NOT NULL,
+    `page_title` VARCHAR(180) DEFAULT NULL,
+    `device_class` VARCHAR(16) DEFAULT NULL,
+    `referrer_host` VARCHAR(190) DEFAULT NULL,
+    `metadata_json` LONGTEXT DEFAULT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_activity_occurred_at` (`occurred_at`),
+    KEY `idx_activity_user_time` (`user_account_id`, `occurred_at`),
+    KEY `idx_activity_club_time` (`club_id`, `occurred_at`),
+    KEY `idx_activity_tournament_time` (`tournament_id`, `occurred_at`),
+    KEY `idx_activity_surface_event` (`surface`, `event_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
