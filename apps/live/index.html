@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#08131b">
+  <title>Blindleia Darts · Live</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="live-shell">
+    <header class="hero">
+      <div>
+        <p id="clubName" class="eyebrow">Blindleia Dartklubb</p>
+        <h1 id="tournamentName">Live</h1>
+        <p id="tournamentMeta" class="muted">Henter turnering …</p>
+      </div>
+      <div class="live-status"><span class="pulse"></span><span id="connectionLabel">Kobler til …</span></div>
+    </header>
+
+    <section id="progressCards" class="stats-grid"></section>
+
+    <section class="section">
+      <div class="section-head"><div><p class="eyebrow">På skivene</p><h2>Kamper live</h2></div><span id="updatedAt" class="muted"></span></div>
+      <div id="boards" class="boards-grid"></div>
+    </section>
+
+    <div class="two-column">
+      <section class="section panel">
+        <div class="section-head"><div><p class="eyebrow">Kø</p><h2>Neste kamper</h2></div></div>
+        <div id="queue" class="list"></div>
+      </section>
+      <section class="section panel">
+        <div class="section-head"><div><p class="eyebrow">Resultater</p><h2>Siste ferdige</h2></div></div>
+        <div id="results" class="list"></div>
+      </section>
+    </div>
+
+    <section class="section">
+      <div class="section-head"><div><p class="eyebrow">Turneringen</p><h2>Tabeller</h2></div></div>
+      <div id="tables" class="tables-grid"></div>
+    </section>
+
+    <div class="two-column">
+      <section class="section panel">
+        <div class="section-head"><div><p class="eyebrow">Sesongen</p><h2>ELO</h2></div></div>
+        <div id="elo" class="list ranking-list"></div>
+      </section>
+      <section class="section panel">
+        <div class="section-head"><div><p class="eyebrow">Kveldens tall</p><h2>Highlights</h2></div></div>
+        <div id="highlights" class="highlight-grid"></div>
+      </section>
+    </div>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
