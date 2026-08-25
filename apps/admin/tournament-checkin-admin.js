@@ -7,9 +7,9 @@ if (host) {
 
   function token() { return localStorage.getItem("bd:token") || ""; }
   function tournamentId() { return Number(document.getElementById("tcTournament")?.value || 0); }
-  function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
   function localInput(value) { return value ? String(value).replace(" ", "T").slice(0, 16) : ""; }
-  function sourceLabel(value) { return ({player_code:"Kode",player_geolocation:"GPS fallback",admin_override:"Turneringsleder",legacy:"Legacy"})[value] || value || "—"; }
+  function sourceLabel(value) { return ({player_code:"Kode",admin_override:"Turneringsleder",legacy:"Legacy"})[value] || value || "—"; }
+  function methodLabel(value) { return ({admin_or_code:"Turneringsleder + kode",admin_only:"Kun turneringsleder",code:"Kun kode"})[value] || value || "—"; }
 
   async function api(path, { method = "GET", body } = {}) {
     const headers = { Authorization: `Bearer ${token()}` };
@@ -30,11 +30,9 @@ if (host) {
     card.innerHTML = `
       <h3>Check-in</h3>
       <p class="muted">Standard er turneringsleder + unik kode i lokalet. Koden vises på Live-skjermen bare mens check-in er åpen.</p>
-      <label><span>Metode</span><select id="tcCheckinMethod"><option value="admin_or_code">Turneringsleder + kode (anbefalt)</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kode</option><option value="gps">GPS</option></select></label>
+      <label><span>Metode</span><select id="tcCheckinMethod"><option value="admin_or_code">Turneringsleder + kode (anbefalt)</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label>
       <div class="tc-two"><label><span>Åpner</span><input id="tcCheckinOpens" type="datetime-local"></label><label><span>Stenger</span><input id="tcCheckinCloses" type="datetime-local"></label></div>
       <div id="tcCheckinCodeBox" class="mini-card"><small class="muted">Kode i lokalet</small><strong id="tcCheckinCode" style="font-size:27px;letter-spacing:.14em">—</strong><button id="tcRotateCode" type="button" class="button secondary">Lag ny kode</button></div>
-      <label style="display:flex;align-items:center;gap:8px"><input id="tcGpsFallback" type="checkbox" style="width:auto"><span>Tillat GPS som fallback</span></label>
-      <label><span>GPS-radius (meter)</span><input id="tcCheckinRadius" type="number" min="20" max="5000" placeholder="Klubbstandard"></label>
       <div id="tcCheckinEffective" class="muted"></div>
       <button id="tcSaveCheckin" type="button" class="button">Lagre check-in</button>`;
     registrationGrid.appendChild(card);
@@ -67,10 +65,8 @@ if (host) {
       document.getElementById("tcCheckinMethod").value = currentSettings.effective_method || currentSettings.checkin_method || "admin_or_code";
       document.getElementById("tcCheckinOpens").value = localInput(currentSettings.checkin_opens_at);
       document.getElementById("tcCheckinCloses").value = localInput(currentSettings.checkin_closes_at);
-      document.getElementById("tcGpsFallback").checked = Number(currentSettings.effective_gps_fallback_enabled || 0) === 1;
-      document.getElementById("tcCheckinRadius").value = currentSettings.checkin_radius_meters ?? "";
       document.getElementById("tcCheckinCode").textContent = currentSettings.checkin_code || "Lages ved lagring";
-      document.getElementById("tcCheckinEffective").textContent = `Effektivt: ${String(currentSettings.effective_checkin_opens_at).replace(" ", " kl. ")} → ${String(currentSettings.effective_checkin_closes_at).replace(" ", " kl. ")} · ${currentSettings.effective_method || "admin_or_code"}${Number(currentSettings.effective_gps_fallback_enabled) === 1 ? " · GPS fallback" : ""}`;
+      document.getElementById("tcCheckinEffective").textContent = `Effektivt: ${String(currentSettings.effective_checkin_opens_at).replace(" ", " kl. ")} → ${String(currentSettings.effective_checkin_closes_at).replace(" ", " kl. ")} · ${methodLabel(currentSettings.effective_method || "admin_or_code")}`;
       renderCodeVisibility();
       decorateRegistrations();
     } catch (error) { show(error.message, "error"); }
@@ -86,9 +82,6 @@ if (host) {
         checkin_method: document.getElementById("tcCheckinMethod").value,
         checkin_opens_at: document.getElementById("tcCheckinOpens").value || null,
         checkin_closes_at: document.getElementById("tcCheckinCloses").value || null,
-        checkin_gps_fallback_enabled: document.getElementById("tcGpsFallback").checked,
-        checkin_require_onsite: true,
-        checkin_radius_meters: document.getElementById("tcCheckinRadius").value ? Number(document.getElementById("tcCheckinRadius").value) : null,
       }});
       currentSettings = data.settings || null;
       show("Check-in-oppsettet er lagret.");
