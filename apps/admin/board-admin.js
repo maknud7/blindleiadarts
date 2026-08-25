@@ -148,6 +148,6 @@ const observer = new MutationObserver(decorateRows);
 if (kioskList) observer.observe(kioskList, { childList: true, subtree: true });
 decorateRows();
 
-// Keep the UI explicit about ownership: Blindleia boards are not DartsAtlas boards.
+// Keep the UI explicit about ownership: boards belong to Blindleia Core.
 const kioskIntro = document.querySelector("#kiosks .panel-head .muted");
-if (kioskIntro) kioskIntro.textContent = "Boardene tilhører Blindleia Dartklubb. Nummer, navn, sponsor, scoring og nettbrett styres her og har ingen automatisk kobling til DartsAtlas.";
+if (kioskIntro) kioskIntro.textContent = "Boardene tilhører Blindleia Dartklubb. Nummer, navn, sponsor, scoring og nettbrett styres her med lokale board-ID-er.";

@@ -14,7 +14,7 @@
       <div>
         <p class="eyebrow">Blindleia Darts</p>
         <h1>Admin</h1>
-        <p class="muted">DartsAtlas, Live, medlemmer, kiosker og skjermer.</p>
+        <p class="muted">Turneringer, spillere, boards og live-skjermer.</p>
       </div>
       <form id="loginForm" class="login-form">
         <label><span>Brukernavn</span><input id="loginUsername" autocomplete="username" required></label>
@@ -45,7 +45,7 @@
         <div>
           <p class="eyebrow">Mandagsserien / klubbdrift</p>
           <h1>Blindleia Darts</h1>
-          <p class="muted">DartsAtlas leverer kampdata. Blindleia eier historikken, boardene, medlemskoblingen og skjermene i lokalet.</p>
+          <p class="muted">Blindleia eier turneringene, kampene, boardene, scoringdataene og historikken. Eksterne scoringskilder kan senere kobles på som adaptere.</p>
         </div>
         <div id="globalMessage" class="message hidden"></div>
       </section>
@@ -53,19 +53,17 @@
       <section id="metrics" class="metrics"></section>
 
       <nav class="section-nav" aria-label="Adminområder">
-        <a href="#dartsatlas">DartsAtlas</a>
+        <a href="#tournaments">Turneringer</a>
         <a href="#kiosks">Kiosker / boards</a>
-        <a href="#members">Medlemmer</a>
+        <a href="#players">Spillere</a>
         <a href="#screens">Live-skjermer</a>
       </nav>
 
-      <section id="dartsatlas" class="panel">
+      <section id="tournaments" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Datakilde</p><h2>DartsAtlas</h2><p class="muted">Status på synk, aktiv turnering og importert historikk.</p></div>
-          <button id="refreshDartsAtlasButton" type="button" class="button">Hent / oppdater nå</button>
+          <div><p class="eyebrow">Turneringsplattform</p><h2>Turneringer</h2><p class="muted">Turneringene leses direkte fra Blindleia sin egen database. Opprettelse, puljer og kampgenerator bygges videre herfra.</p></div>
         </div>
-        <div id="dartsAtlasStatus" class="status-grid"></div>
-        <div class="subsection-head"><h3>Turneringer</h3><span id="seasonLabel" class="pill"></span></div>
+        <div class="subsection-head"><h3>Turneringsoversikt</h3><span id="tournamentCount" class="pill">0</span></div>
         <div id="tournamentList" class="list"></div>
       </section>
 
@@ -74,7 +72,7 @@
           <div>
             <p class="eyebrow">Board Terminal</p>
             <h2>Kiosker / boards</h2>
-            <p class="muted">Scan et nytt nettbrett og opprett boardet samtidig. Boardnummeret brukes mot DartsAtlas, mens navn og sponsor følger den fysiske skiva.</p>
+            <p class="muted">Boardene tilhører Blindleia. Nummer, navn, sponsor, scoringmodus og nettbrett styres her og kampene tildeles med lokal board-ID.</p>
           </div>
           <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
         </div>
@@ -119,7 +117,6 @@
           </div>
         </div>
 
-        <!-- Beholdes skjult for bakoverkompatibilitet med eldre admin-JS mens QR-claim er normalflyt. -->
         <div class="hidden" aria-hidden="true">
           <div class="kiosk-code-strip"><div><span>Legacy klubbkode</span><strong id="kioskClubCode">—</strong></div><button id="copyKioskClubCode" type="button">Kopier</button></div>
           <div id="pairingRequestList"></div><span id="pairingCount">0</span>
@@ -141,13 +138,12 @@
         </div>
       </section>
 
-      <section id="members" class="panel">
+      <section id="players" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Identitet</p><h2>Spillere ↔ medlemmer</h2><p class="muted">Automatisk eksakt navnematch der det er trygt. Resten kan kobles manuelt mot samme medlemsregister som klubbadmin bruker.</p></div>
-          <label class="toggle"><input id="unlinkedOnly" type="checkbox"><span>Vis bare ukoblede</span></label>
+          <div><p class="eyebrow">Spillerbase</p><h2>Spillere</h2><p class="muted">Dette er klubbens egne spillerprofiler. Medlemsidentitet og brukerkonto er separate canonical koblinger og skal ikke blandes sammen med turneringsdata.</p></div>
+          <span id="playerCount" class="pill">0</span>
         </div>
-        <div id="memberRegistryStatus" class="inline-status"></div>
-        <div class="table-wrap"><table><thead><tr><th>Spiller</th><th>Kilde</th><th>Medlem</th><th>Kobling</th></tr></thead><tbody id="playerRows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Spiller</th><th>Status</th><th>Konto / kontakt</th><th>Rolle</th></tr></thead><tbody id="playerRows"></tbody></table></div>
       </section>
 
       <section id="screens" class="panel">
@@ -162,7 +158,7 @@
       </section>
 
       <section class="roadmap">
-        <div><p class="eyebrow">Scoringkilde</p><h2>Scolia</h2><p class="muted">Board Terminal er allerede kildeuavhengig. I manuell modus registrerer spilleren visits på nettbrettet. I Scolia-modus skal samme board og samme kamp bruke Scolia-eventer når API-integrasjonen kommer.</p></div>
+        <div><p class="eyebrow">Scoringkilde</p><h2>Scolia</h2><p class="muted">Board Terminal er kildeuavhengig. I manuell modus registrerer spilleren visits på nettbrettet. I Scolia-modus skal samme lokale board og samme lokale kamp bruke Scolia-eventer når API-integrasjonen kommer i fase 2.</p></div>
       </section>
     </main>
   </div>
