@@ -1,3 +1,8 @@
+const kioskBrandStyles = document.createElement("link");
+kioskBrandStyles.rel = "stylesheet";
+kioskBrandStyles.href = "./brand-light.css";
+document.head.appendChild(kioskBrandStyles);
+
 let deferredInstallPrompt = null;
 
 const isStandalone = () => window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
