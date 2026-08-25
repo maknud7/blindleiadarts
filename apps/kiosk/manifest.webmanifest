@@ -1,0 +1,19 @@
+{
+  "name": "Blindleia Darts Board Terminal",
+  "short_name": "Blindleia Board",
+  "description": "Fast board-terminal for Blindleia Darts",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#07131b",
+  "theme_color": "#07131b",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
