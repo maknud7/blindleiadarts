@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\MatchScoringApplication;
+use Blindleia\Dartkiosk\Api\PasswordResetApplication;
 use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\ScoliaApplication;
@@ -29,6 +30,11 @@ if ($origin === 'https://dart.ingenting.org') {
         http_response_code(204);
         return;
     }
+}
+
+$passwordReset = new PasswordResetApplication(__DIR__);
+if ($passwordReset->run()) {
+    return;
 }
 
 $scolia = new ScoliaApplication(__DIR__);
