@@ -12,6 +12,10 @@ ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css");
 
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
+if (location.pathname.includes("/admin/")) {
+  import(new URL("../../admin/tournament-policy-admin.js", import.meta.url).href).catch((error) => console.warn("Tournament policy UX unavailable", error));
+  import(new URL("../../admin/superadmin-clubs.js", import.meta.url).href).catch((error) => console.warn("Superadmin clubs UX unavailable", error));
+}
 
 const NAV_SELECTOR = "[data-portal-nav], .section-nav a[href^='#'], .portal-nav a[href^='#']";
 const SECTION_SELECTOR = "[data-portal-section], main > section[id], .shell > section[id]";
