@@ -48,15 +48,17 @@ return static function (mysqli $mysqli, string $prefix): void {
 
     // Canonical timing policy: registration opens 6d23h (=167h) before planned
     // start; check-in opens 2h before. Both close only when Start is pressed.
+    // checkin_closes_at uses an internal far-future sentinel until explicit start
+    // because the existing check-in runtime expects a concrete closing datetime.
     $mysqli->query(
         "UPDATE `{$tournaments}`
          SET registration_opens_at=CASE WHEN start_at IS NULL THEN NULL ELSE DATE_SUB(start_at, INTERVAL 167 HOUR) END,
              registration_closes_at=actual_started_at,
              checkin_opens_at=CASE WHEN start_at IS NULL THEN NULL ELSE DATE_SUB(start_at, INTERVAL 2 HOUR) END,
-             checkin_closes_at=actual_started_at"
+             checkin_closes_at=COALESCE(actual_started_at,'2099-12-31 23:59:59')"
     );
 
-    // Keep the legacy club defaults aligned for old readers. Timing is no longer
+    // Keep legacy club defaults aligned for old readers. Timing is no longer
     // configurable in the product; tournament-level derived values are canonical.
     $tableStmt = $mysqli->prepare('SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? LIMIT 1');
     $tableStmt->bind_param('s', $checkin);
