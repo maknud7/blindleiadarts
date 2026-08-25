@@ -116,7 +116,12 @@ jobs:
           test -f dist/test/onboarding/index.html
           test -f dist/test/onboarding/styles.css
           test -f dist/test/onboarding/app.js
+          test -f dist/test/live/index.html
+          test -f dist/test/live/styles.css
+          test -f dist/test/screen/index.html
+          test -f dist/test/screen/screen-ux.css
           test -f dist/test/packages/ui-assets/mobile-portal.css
+          test -f dist/test/packages/ui-assets/portal-brand.css
           test -f dist/test/screen/checkin-display.js
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
@@ -126,7 +131,12 @@ jobs:
           test -f dist/test/kiosk/tablet-portrait.css
           grep -Fq 'viewport-fit=cover' dist/test/onboarding/index.html
           grep -Fq 'data-toggle-password' dist/test/onboarding/index.html
+          grep -Fq 'portal-brand.css' dist/test/packages/ui-assets/portal-menu.js
           grep -Fq 'mobile-portal.css' dist/test/packages/ui-assets/portal-menu.js
+          grep -Fq 'viewport-fit=cover' dist/test/live/index.html
+          grep -Fq 'blindleia-dartklubb-logo.png' dist/test/live/index.html
+          grep -Fq 'screen-ux.css' dist/test/screen/index.html
+          ! grep -Fq 'Skive = kiosk' dist/test/screen/index.html
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
           grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
@@ -183,8 +193,12 @@ jobs:
           curl -fsS --max-time 15 "$base/player/player-ux.js" | grep -Fq 'Akkurat nå'
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'viewport-fit=cover'
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
+          curl -fsS --max-time 15 "$base/packages/ui-assets/portal-menu.js" | grep -Fq 'portal-brand.css'
           curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Member navigation'
-          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
+          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'blindleia-dartklubb-logo.png'
+          curl -fsS --max-time 15 "$base/live/" | grep -Fq 'viewport-fit=cover'
+          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'screen-ux.css'
+          curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Kamper på skivene'
           curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'tablet-portrait.css'
           curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'brand-light.css'
           curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'
