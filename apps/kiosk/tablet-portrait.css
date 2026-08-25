@@ -1,0 +1,544 @@
+/*
+ * Board Terminal UX contract:
+ * - portrait tablet is the primary device
+ * - no page scrolling during setup, idle, assigned or active match states
+ * - primary match actions must always stay inside one viewport
+ */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+}
+
+.terminal-shell {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  gap: 8px;
+}
+
+.terminal-topbar {
+  flex: 0 0 auto;
+}
+
+.terminal-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.state-card,
+.match-layout {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* First-time pairing must also fit without a vertical page scroll. */
+@media (orientation: portrait) {
+  .terminal-shell {
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .terminal-topbar {
+    min-height: 68px;
+    max-height: 74px;
+    padding: 8px 11px;
+    border-radius: 18px;
+  }
+
+  .brand-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
+  .terminal-topbar h1 {
+    font-size: clamp(17px, 2.7vw, 22px);
+  }
+
+  .brand-sponsor {
+    margin-top: 2px;
+    max-width: 42vw;
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  .icon-button {
+    width: 46px;
+    height: 46px;
+  }
+
+  .status-pill {
+    min-height: 38px;
+    padding: 6px 9px;
+  }
+
+  .setup-state {
+    display: block;
+    padding: 10px;
+  }
+
+  .claim-layout {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .setup-copy {
+    padding: 4px 8px;
+  }
+
+  .setup-copy h2 {
+    margin: 2px 0 5px;
+    font-size: clamp(25px, 4.8vw, 34px);
+    line-height: 1.02;
+  }
+
+  .setup-copy > .muted {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .claim-steps {
+    display: none;
+  }
+
+  .claim-card {
+    min-height: 0;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: minmax(220px, 44%) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto 1fr;
+    gap: 6px 14px;
+    align-items: center;
+    text-align: left;
+    border-radius: 20px;
+  }
+
+  .qr-wrap {
+    grid-column: 1;
+    grid-row: 1 / 6;
+    width: min(100%, 300px);
+    max-height: 100%;
+    margin: 0 auto;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .claim-card .claim-label,
+  .claim-card .claim-code,
+  .claim-card .muted,
+  .claim-card .waiting-line,
+  .claim-card .ghost-button {
+    grid-column: 2;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .claim-card .claim-label { grid-row: 1; align-self: end; }
+  .claim-card .claim-code {
+    grid-row: 2;
+    margin: 0;
+    font-size: clamp(34px, 7vw, 54px);
+    letter-spacing: .09em;
+  }
+  .claim-card > .muted { grid-row: 3; font-size: 12px; }
+  .claim-card .waiting-line {
+    grid-row: 4;
+    justify-content: flex-start;
+    margin: 2px 0;
+    font-size: 12px;
+  }
+  .claim-card .ghost-button {
+    grid-row: 5;
+    align-self: end;
+    min-height: 48px;
+  }
+
+  .idle-state,
+  .assigned-state {
+    padding: 16px;
+  }
+
+  .board-hero {
+    align-self: center;
+  }
+
+  .board-hero h2 {
+    font-size: clamp(62px, 12vw, 94px);
+  }
+
+  .assigned-state {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    align-items: stretch;
+  }
+
+  .match-meta {
+    margin-bottom: 8px;
+  }
+
+  .versus-grid {
+    width: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .versus-grid article {
+    min-height: 0;
+    height: 100%;
+    max-height: 300px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .versus-grid article h2 {
+    font-size: clamp(28px, 5.5vw, 46px);
+  }
+
+  .start-match {
+    width: 100%;
+    min-width: 0;
+    min-height: 62px;
+    margin-top: 10px;
+    font-size: 19px;
+  }
+
+  /* Active match: scoreboard + scoring + a compact three-visit strip. */
+  .match-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: clamp(158px, 21dvh, 205px) minmax(0, 1fr) 76px;
+    gap: 8px;
+    align-content: stretch;
+  }
+
+  .scoreboard {
+    grid-column: 1;
+    height: 100%;
+    min-height: 0;
+    padding: 8px;
+    grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr);
+    gap: 7px;
+    border-radius: 18px;
+  }
+
+  .player-card {
+    min-height: 0;
+    height: 100%;
+    padding: 9px 10px;
+    border-radius: 16px;
+    gap: 1px;
+  }
+
+  .player-card h2 {
+    padding-top: 2px;
+    font-size: clamp(19px, 4vw, 30px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .throw-marker {
+    padding: 3px 7px;
+    font-size: 9px;
+  }
+
+  .remaining {
+    font-size: clamp(48px, 9.5vw, 74px);
+  }
+
+  .legs {
+    font-size: 13px;
+  }
+
+  .match-center {
+    gap: 5px;
+  }
+
+  .match-center strong {
+    font-size: 17px;
+  }
+
+  .match-center .muted {
+    font-size: 11px;
+  }
+
+  .match-center .ghost-button {
+    min-height: 42px;
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+
+  .scoring-card {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: 9px;
+    border-radius: 18px;
+  }
+
+  .scoring-head {
+    min-height: 44px;
+    margin-bottom: 6px;
+  }
+
+  .scoring-head h3 {
+    font-size: clamp(20px, 4vw, 28px);
+  }
+
+  .mode-switch button {
+    min-height: 40px;
+    padding: 7px 10px;
+  }
+
+  .sum-mode {
+    height: calc(100% - 50px);
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 58px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .entry-display {
+    min-height: 0;
+    height: 58px;
+    margin: 0;
+    padding: 7px 12px;
+    border-radius: 14px;
+  }
+
+  .entry-display strong {
+    font-size: clamp(34px, 6vw, 46px);
+  }
+
+  .entry-display span {
+    max-width: 46%;
+    font-size: 11px;
+  }
+
+  .keypad {
+    min-height: 0;
+    height: 100%;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, minmax(42px, 1fr));
+    gap: 6px;
+  }
+
+  .keypad button {
+    min-height: 0;
+    height: 100%;
+    padding: 4px 8px;
+    font-size: clamp(20px, 4.5vw, 28px);
+    border-radius: 12px;
+  }
+
+  .keypad [data-key="ok"] {
+    font-size: 15px;
+    line-height: 1.05;
+  }
+
+  .dart-mode {
+    height: calc(100% - 50px);
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) 48px;
+    gap: 6px;
+  }
+
+  .dart-mode.hidden {
+    display: none !important;
+  }
+
+  .dart-summary {
+    margin: 0;
+    gap: 5px;
+  }
+
+  .dart-summary span,
+  .dart-summary strong {
+    padding: 6px;
+    font-size: 12px;
+  }
+
+  .dart-summary strong {
+    font-size: 20px;
+  }
+
+  .dart-controls {
+    min-height: 0;
+    grid-template-columns: 58px 1fr;
+    gap: 6px;
+  }
+
+  .multipliers {
+    gap: 5px;
+  }
+
+  .multipliers button,
+  .number-grid button,
+  .special-grid button {
+    min-height: 0;
+    padding: 3px;
+  }
+
+  .number-grid {
+    height: 100%;
+    grid-template-rows: repeat(4, minmax(34px, 1fr));
+    gap: 5px;
+  }
+
+  .special-grid {
+    height: 44px;
+    margin-top: 5px;
+    gap: 5px;
+  }
+
+  .dart-actions {
+    height: 48px;
+    margin: 0;
+    gap: 6px;
+  }
+
+  .dart-actions button {
+    min-height: 0;
+    padding: 6px 9px;
+  }
+
+  .scolia-card {
+    min-height: 0;
+    height: 100%;
+    padding: 14px 18px;
+  }
+
+  .activity-card {
+    min-height: 0;
+    height: 76px;
+    overflow: hidden;
+    padding: 7px 9px;
+    border-radius: 16px;
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+  }
+
+  .activity-head {
+    margin: 0;
+  }
+
+  .activity-head .eyebrow {
+    display: none;
+  }
+
+  .activity-head h3 {
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .visit-list {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .visit-row {
+    min-width: 0;
+    padding: 5px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  .visit-row:nth-child(n+4) {
+    display: none;
+  }
+
+  .visit-score {
+    font-size: 16px;
+  }
+
+  .visit-row span {
+    font-size: 9px;
+  }
+
+  .empty-visits {
+    padding: 6px;
+    font-size: 11px;
+  }
+
+  .settings-dialog {
+    max-height: calc(100dvh - 20px);
+    overflow: hidden;
+    padding: 14px;
+  }
+
+  .settings-meta {
+    gap: 7px;
+  }
+
+  .settings-actions {
+    gap: 7px;
+  }
+
+  .checkout-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+}
+
+/* The kiosk is a tablet product. Tiny phones remain usable as emergency fallback,
+   but secondary detail is removed before we ever introduce page scrolling. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .brand-copy .eyebrow,
+  .brand-sponsor,
+  .activity-card {
+    display: none !important;
+  }
+
+  .match-layout {
+    grid-template-rows: clamp(148px, 24dvh, 180px) minmax(0, 1fr);
+  }
+
+  .claim-card {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto auto auto auto;
+    text-align: center;
+  }
+
+  .qr-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    width: min(100%, 245px);
+  }
+
+  .claim-card .claim-label,
+  .claim-card .claim-code,
+  .claim-card .muted,
+  .claim-card .waiting-line,
+  .claim-card .ghost-button {
+    grid-column: 1;
+    justify-self: stretch;
+  }
+
+  .claim-card .claim-label { grid-row: 2; }
+  .claim-card .claim-code { grid-row: 3; font-size: 34px; }
+  .claim-card > .muted { display: none; }
+  .claim-card .waiting-line { grid-row: 4; justify-content: center; }
+  .claim-card .ghost-button { grid-row: 5; }
+}
