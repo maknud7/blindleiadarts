@@ -122,11 +122,19 @@ jobs:
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
           test -f dist/test/kiosk/admin-mode.js
+          test -f dist/test/kiosk/brand-light.css
+          test -f dist/test/kiosk/tablet-portrait.css
           grep -Fq 'viewport-fit=cover' dist/test/onboarding/index.html
           grep -Fq 'data-toggle-password' dist/test/onboarding/index.html
           grep -Fq 'mobile-portal.css' dist/test/packages/ui-assets/portal-menu.js
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
+          grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
+          grep -Fq './brand-light.css' dist/test/kiosk/index.html
+          grep -Fq './tablet-portrait.css' dist/test/kiosk/index.html
+          grep -Fq 'height: 100dvh' dist/test/kiosk/tablet-portrait.css
+          grep -Fq 'overflow: hidden' dist/test/kiosk/tablet-portrait.css
+          grep -Fq 'tablet-portrait.css' dist/test/kiosk/service-worker.js
           grep -Fq 'type="email" placeholder="E-postadresse"' dist/test/player/index.html
           grep -Fq '<span>E-postadresse</span>' dist/test/admin/index.html
           grep -Fq '>Personer</a>' dist/test/admin/index.html
@@ -177,6 +185,9 @@ jobs:
           curl -fsS --max-time 15 "$base/onboarding/" | grep -Fq 'data-toggle-password'
           curl -fsS --max-time 15 "$base/packages/ui-assets/mobile-portal.css" | grep -Fq 'Member navigation'
           curl -fsS --max-time 15 "$base/screen/" | grep -Fq 'Venue Screen'
-          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'Board Terminal'
+          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'tablet-portrait.css'
+          curl -fsS --max-time 15 "$base/kiosk/" | grep -Fq 'brand-light.css'
           curl -fsS --max-time 15 "$base/kiosk/admin-mode.js" | grep -Fq '2201'
-          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq 'blindleia-dartklubb-logo.png'
+          curl -fsS --max-time 15 "$base/kiosk/manifest.webmanifest" | grep -Fq '"orientation": "portrait"'
+          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'height: 100dvh'
+          curl -fsS --max-time 15 "$base/kiosk/tablet-portrait.css" | grep -Fq 'overflow: hidden'
