@@ -43,6 +43,9 @@ jobs:
       - name: Canonical 501 scoring rules
         run: php apps/api/tests/dart501_rules_test.php
 
+      - name: Mandagsserien ELO rules
+        run: php infra/tests/elo_calculator_test.php
+
       - name: JavaScript syntax check
         run: |
           find apps -type f -name '*.js' -print0 \
