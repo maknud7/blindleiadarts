@@ -42,6 +42,9 @@ $config = [
         'publish_url' => getenv('REALTIME_PUBLISH_URL') ?: '',
         'publish_secret' => getenv('REALTIME_PUBLISH_SECRET') ?: '',
     ],
+    'scolia' => [
+        'bridge_secret' => getenv('SCOLIA_BRIDGE_SECRET') ?: '',
+    ],
     'db' => [
         'host' => env_required('DB_HOST'),
         'port' => (int) env_required('DB_PORT'),
