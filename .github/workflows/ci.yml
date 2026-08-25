@@ -81,12 +81,24 @@ jobs:
           grep -Fq 'Neste anbefalte steg' apps/admin/admin-ux.js
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
 
-      - name: Mobile and tablet UX contract check
+      - name: Cross-surface visual UX check
         run: |
           set -Eeuo pipefail
+          grep -Fq 'portal-brand.css' packages/ui-assets/portal-menu.js
           grep -Fq 'viewport-fit=cover' apps/onboarding/index.html
           grep -Fq 'data-toggle-password' apps/onboarding/index.html
           grep -Fq 'mobile-portal.css' packages/ui-assets/portal-menu.js
+          grep -Fq 'viewport-fit=cover' apps/live/index.html
+          grep -Fq 'blindleia-dartklubb-logo.png' apps/live/index.html
+          grep -Fq 'screen-ux.css' apps/screen/index.html
+          if grep -Fq 'Skive = kiosk' apps/screen/index.html; then
+            echo 'Venue screen exposes technical implementation language.'
+            exit 1
+          fi
+
+      - name: Portrait tablet kiosk contract check
+        run: |
+          set -Eeuo pipefail
           grep -Fq '"orientation": "portrait"' apps/kiosk/manifest.webmanifest
           grep -Fq './brand-light.css' apps/kiosk/index.html
           grep -Fq './tablet-portrait.css' apps/kiosk/index.html
@@ -113,7 +125,12 @@ jobs:
           test -f dist/test/onboarding/index.html
           test -f dist/test/onboarding/styles.css
           test -f dist/test/onboarding/app.js
+          test -f dist/test/live/index.html
+          test -f dist/test/live/styles.css
+          test -f dist/test/screen/index.html
+          test -f dist/test/screen/screen-ux.css
           test -f dist/test/packages/ui-assets/mobile-portal.css
+          test -f dist/test/packages/ui-assets/portal-brand.css
           test -f dist/test/kiosk/manifest.webmanifest
           test -f dist/test/kiosk/service-worker.js
           test -f dist/test/kiosk/install.js
