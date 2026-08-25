@@ -17,13 +17,13 @@ return static function (mysqli $mysqli, string $prefix): void {
     ];
 
     $stmt = $mysqli->prepare(
-        'SELECT DISTINCT TABLE_NAME, CONSTRAINT_NAME
+        "SELECT DISTINCT TABLE_NAME, CONSTRAINT_NAME
            FROM information_schema.KEY_COLUMN_USAGE
           WHERE CONSTRAINT_SCHEMA=DATABASE()
             AND REFERENCED_TABLE_SCHEMA=DATABASE()
             AND REFERENCED_TABLE_NAME=?
-            AND CONSTRAINT_NAME<>\'PRIMARY\''
-          ORDER BY TABLE_NAME, CONSTRAINT_NAME'
+            AND CONSTRAINT_NAME<>'PRIMARY'
+          ORDER BY TABLE_NAME, CONSTRAINT_NAME"
     );
     $stmt->bind_param('s', $users);
     $stmt->execute();
