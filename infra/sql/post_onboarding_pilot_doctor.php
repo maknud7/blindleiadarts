@@ -32,7 +32,15 @@ $stmt = $mysqli->prepare(
             EXISTS(SELECT 1 FROM `{$roles}` r WHERE r.user_account_id=ua.id AND r.role='super_admin') AS has_super_admin,
             (SELECT COUNT(*) FROM `{$invites}` i WHERE i.user_account_id=ua.id AND i.used_at IS NOT NULL) AS used_invites,
             (SELECT COUNT(*) FROM `{$invites}` i WHERE i.user_account_id=ua.id AND i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > NOW()) AS open_invites,
-            (SELECT COUNT(*) FROM `{$sessions}` s WHERE s.user_account_id=ua.id AND s.revoked_at IS NULL) AS active_sessions
+            (SELECT COUNT(*) FROM `{$sessions}` s
+              WHERE s.user_account_id=ua.id
+                AND s.revoked_at IS NULL
+                AND ua.claimed_at IS NOT NULL
+                AND s.created_at < ua.claimed_at) AS unrevoked_preclaim_sessions,
+            (SELECT COUNT(*) FROM `{$sessions}` s
+              WHERE s.user_account_id=ua.id
+                AND s.revoked_at IS NULL
+                AND (ua.claimed_at IS NULL OR s.created_at >= ua.claimed_at)) AS valid_postclaim_sessions
      FROM `{$users}` ua
      LEFT JOIN `{$players}` p ON p.id=ua.player_id
      WHERE ua.display_name=?
@@ -62,7 +70,10 @@ $checks = [
     'super_admin_retained' => (int)$row['has_super_admin'] === 1,
     'invite_consumed' => (int)$row['used_invites'] >= 1,
     'no_open_invites' => (int)$row['open_invites'] === 0,
-    'old_sessions_revoked' => (int)$row['active_sessions'] === 0,
+    // On a persistent test environment the already-claimed admin can legitimately
+    // have fresh login sessions. The onboarding invariant is only that sessions
+    // which existed before the claim were revoked.
+    'old_sessions_revoked' => (int)$row['unrevoked_preclaim_sessions'] === 0,
 ];
 
 $ok = true;
@@ -71,6 +82,7 @@ foreach ($checks as $name => $passed) {
     $ok = $ok && $passed;
 }
 
+echo 'ACTIVE_POSTCLAIM_SESSIONS=' . (int)$row['valid_postclaim_sessions'] . "\n";
 echo 'POST_ONBOARDING_PILOT_OK=' . ($ok ? 'yes' : 'no') . "\n";
 
 if (!$ok) {
