@@ -55,7 +55,8 @@ return static function (mysqli $mysqli, string $prefix): void {
          SET registration_opens_at=CASE WHEN start_at IS NULL THEN NULL ELSE DATE_SUB(start_at, INTERVAL 167 HOUR) END,
              registration_closes_at=actual_started_at,
              checkin_opens_at=CASE WHEN start_at IS NULL THEN NULL ELSE DATE_SUB(start_at, INTERVAL 2 HOUR) END,
-             checkin_closes_at=COALESCE(actual_started_at,'2099-12-31 23:59:59')"
+             checkin_closes_at=COALESCE(actual_started_at,'2099-12-31 23:59:59'),
+             auto_assign_enabled=CASE WHEN actual_started_at IS NULL AND status IN ('draft','ready') THEN 0 ELSE auto_assign_enabled END"
     );
 
     // Keep legacy club defaults aligned for old readers. Timing is no longer
