@@ -16,10 +16,9 @@ $respond = static function (array $payload, int $status = 200): never {
     exit;
 };
 
-// One-time operational endpoint. Only the SHA-256 digest is committed; the raw key
-// is never stored in the repository. The endpoint also writes a server-side marker
-// after one successful reset so the operation cannot be repeated with the same key.
-$expectedKeyHash = 'e64dce478f9d267f8da5ec6db1d41a89caae91120bd17118f7cb6a1c30ae9cbf';
+// The release workflow replaces this placeholder only in dist/test with a fresh
+// one-time digest. No usable operational key is ever committed to the repository.
+$expectedKeyHash = '__OWNER_RESET_KEY_HASH__';
 $providedKey = trim((string) ($_GET['key'] ?? ''));
 if ($providedKey === '' || !hash_equals($expectedKeyHash, hash('sha256', $providedKey))) {
     $respond(['ok' => false, 'error' => ['code' => 'not_found', 'message' => 'Ikke tilgjengelig.']], 404);
@@ -116,8 +115,6 @@ try {
         $revokeSessions->execute();
         $revokeSessions->close();
 
-        // Remove outstanding password reset links from both test and canonical prod
-        // namespaces when those tables exist.
         foreach (array_unique([$dataPrefix, $identityPrefix]) as $prefix) {
             $table = $prefix . 'password_reset_tokens';
             $exists = $db->prepare('SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? LIMIT 1');
