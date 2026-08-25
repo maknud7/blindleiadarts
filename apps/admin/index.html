@@ -3,18 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Blindleia Darts Admin</title>
+  <title>Blindleia Darts</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./pairing-claim.css">
+  <link rel="stylesheet" href="./tournament-admin.css">
+  <link rel="stylesheet" href="./tournament-operations-admin.css">
+  <link rel="stylesheet" href="./tournament-playoff-admin.css">
+  <link rel="stylesheet" href="./member-onboarding-admin.css">
 </head>
-<body>
+<body data-portal-default="overview">
   <section id="authGate" class="auth-shell">
     <div class="login-card">
       <div class="brand-mark">BD</div>
       <div>
         <p class="eyebrow">Blindleia Darts</p>
-        <h1>Admin</h1>
-        <p class="muted">Turneringer, spillere, boards og live-skjermer.</p>
+        <h1>Logg inn</h1>
+        <p class="muted">Samme konto brukes i spillerportalen og administrasjonen. Tilgangen avgjør hvilke menyer du ser.</p>
       </div>
       <form id="loginForm" class="login-form">
         <label><span>Brukernavn</span><input id="loginUsername" autocomplete="username" required></label>
@@ -29,52 +33,61 @@
     <header class="topbar">
       <div class="topbar-brand">
         <div class="brand-mark small">BD</div>
-        <div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Admin</strong></div>
+        <div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Portal</strong></div>
       </div>
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
-        <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
-        <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne Live</a>
+        <a class="button secondary" href="../player/">Min side</a>
+        <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Live</a>
         <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button>
         <button id="logoutButton" type="button" class="button quiet">Logg ut</button>
       </div>
     </header>
 
     <main class="main">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">Mandagsserien / klubbdrift</p>
-          <h1>Blindleia Darts</h1>
-          <p class="muted">Blindleia eier turneringene, kampene, boardene, scoringdataene og historikken. Eksterne scoringskilder kan senere kobles på som adaptere.</p>
-        </div>
-        <div id="globalMessage" class="message hidden"></div>
-      </section>
-
-      <section id="metrics" class="metrics"></section>
-
-      <nav class="section-nav" aria-label="Adminområder">
-        <a href="#tournaments">Turneringer</a>
-        <a href="#kiosks">Kiosker / boards</a>
-        <a href="#players">Spillere</a>
-        <a href="#screens">Live-skjermer</a>
+      <nav class="section-nav portal-menu" aria-label="Portalmeny">
+        <a href="#overview" data-portal-nav>Oversikt</a>
+        <a href="#tournaments" data-portal-nav>Turneringer</a>
+        <a href="#kiosks" data-portal-nav>Boards</a>
+        <a href="#players" data-portal-nav>Spillere</a>
+        <a href="#members" data-portal-nav>Medlemmer</a>
+        <a href="#screens" data-portal-nav>Live-skjermer</a>
+        <a href="#integrations" data-portal-nav>Scolia / innstillinger</a>
       </nav>
 
-      <section id="tournaments" class="panel">
+      <section id="overview" data-portal-section="overview" class="portal-view">
+        <div class="hero">
+          <div>
+            <p class="eyebrow">Klubbportal</p>
+            <h1>Blindleia Darts</h1>
+            <p class="muted">Én portal for spillere og drift. Administratortilgang gir ekstra menyer, men kampene, spillerprofilene og turneringene er de samme canonical dataene.</p>
+          </div>
+          <div id="globalMessage" class="message hidden"></div>
+        </div>
+        <div id="metrics" class="metrics"></div>
+        <div class="portal-shortcuts">
+          <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Opprett, check-in, puljer, kamper og sluttspill</span></a>
+          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Boards</strong><span>Terminaler, pairing og scoringkilde</span></a>
+          <a class="shortcut-card" href="#integrations" data-portal-nav><strong>Scolia</strong><span>Status, kø, fallback og feil</span></a>
+        </div>
+      </section>
+
+      <section id="tournaments" data-portal-section="tournaments" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Turneringsplattform</p><h2>Turneringer</h2><p class="muted">Turneringene leses direkte fra Blindleia sin egen database. Opprettelse, puljer og kampgenerator bygges videre herfra.</p></div>
+          <div><p class="eyebrow">Turneringsplattform</p><h2>Turneringer</h2><p class="muted">Opprett turneringer med veiviseren, administrer påmelding og check-in, trekk grupper og følg hele turneringsløpet her.</p></div>
         </div>
         <div class="subsection-head"><h3>Turneringsoversikt</h3><span id="tournamentCount" class="pill">0</span></div>
         <div id="tournamentList" class="list"></div>
       </section>
 
-      <section id="kiosks" class="panel">
+      <section id="kiosks" data-portal-section="kiosks" class="panel">
         <div class="panel-head">
           <div>
             <p class="eyebrow">Board Terminal</p>
-            <h2>Kiosker / boards</h2>
-            <p class="muted">Boardene tilhører Blindleia. Nummer, navn, sponsor, scoringmodus og nettbrett styres her og kampene tildeles med lokal board-ID.</p>
+            <h2>Boards</h2>
+            <p class="muted">Boardene tilhører Blindleia. Nummer, navn, sponsor, scoringmodus, Scolia og nettbrett styres mot samme lokale board-ID.</p>
           </div>
-          <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne kiosk</a>
+          <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne terminal</a>
         </div>
 
         <div class="claim-admin-card">
@@ -82,19 +95,17 @@
             <div>
               <p class="eyebrow">Koble nytt nettbrett</p>
               <h3>Scan QR-koden på terminalen</h3>
-              <p class="muted">Ved førstegangsoppsett oppretter du normalt boardet her. Hvis et nettbrett erstattes senere, velger du bare det eksisterende boardet.</p>
+              <p class="muted">Ved førstegangsoppsett oppretter du normalt boardet her. Ved bytte av nettbrett velger du det eksisterende boardet.</p>
               <div class="claim-tip"><span>1</span><p class="muted">Åpne <strong>/kiosk/</strong> på nettbrettet og scan QR-koden.</p></div>
               <div class="claim-tip"><span>2</span><p class="muted">Velg <strong>Nytt board</strong> og gi skiva nummer, navn og eventuell sponsor.</p></div>
               <div class="claim-tip"><span>3</span><p class="muted">Trykk <strong>Opprett og koble</strong>. Neste gang huskes boardet automatisk.</p></div>
             </div>
             <form id="claimKioskForm" class="claim-form">
               <label><span>Pairingkode</span><input id="claimKioskCode" class="claim-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="B7K4P2" required></label>
-
               <div class="board-choice" role="group" aria-label="Velg boardtype">
                 <button id="claimNewBoardChoice" class="active" type="button">+ Nytt board</button>
                 <button id="claimExistingBoardChoice" type="button">Eksisterende board</button>
               </div>
-
               <div id="claimNewBoardFields" class="claim-board-fields">
                 <div class="claim-two-columns">
                   <label><span>Boardnummer</span><input id="claimBoardNumber" type="number" min="1" inputmode="numeric" required></label>
@@ -103,14 +114,10 @@
                 <label><span>Navn på skiva</span><input id="claimBoardName" maxlength="120" placeholder="F.eks. Sjøbua Arena"></label>
                 <label><span>Sponsor / presentert av</span><input id="claimSponsorLabel" maxlength="150" placeholder="F.eks. Sjøbua"></label>
                 <label><span>Sponsorlogo (URL)</span><input id="claimSponsorLogoUrl" type="url" maxlength="255" placeholder="https://..."></label>
-                <p class="claim-help">Navnet og sponsoren tilhører boardet. Bytter du nettbrett senere, følger dette automatisk med.</p>
               </div>
-
               <div id="claimExistingBoardFields" class="claim-board-fields hidden">
                 <label><span>Eksisterende board</span><select id="claimKioskBoard"><option value="">Velg board …</option></select></label>
-                <p class="claim-help">Bruk dette når et nettbrett skal erstattes på en skive som allerede finnes.</p>
               </div>
-
               <button id="claimKioskButton" type="submit">Opprett og koble</button>
               <div id="claimKioskStatus" class="claim-status hidden"></div>
             </form>
@@ -125,7 +132,7 @@
         <div class="kiosk-layout">
           <form id="kioskForm" class="create-card">
             <h3>Opprett board uten nettbrett</h3>
-            <p class="muted">Avansert bruk. Normalflyten er å opprette boardet direkte når nettbrettet pares.</p>
+            <p class="muted">Avansert bruk. Normalflyten er å opprette boardet når nettbrettet pares.</p>
             <label><span>Boardnummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
             <label><span>Navn</span><input name="name" placeholder="Board 1"></label>
             <label><span>Scoring</span><select name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
@@ -138,32 +145,47 @@
         </div>
       </section>
 
-      <section id="players" class="panel">
+      <section id="players" data-portal-section="players" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Spillerbase</p><h2>Spillere</h2><p class="muted">Dette er klubbens egne spillerprofiler. Medlemsidentitet og brukerkonto er separate canonical koblinger og skal ikke blandes sammen med turneringsdata.</p></div>
+          <div><p class="eyebrow">Spillerbase</p><h2>Spillere</h2><p class="muted">Klubbens canonical spillerprofiler, statistikkkobling og tilgang.</p></div>
           <span id="playerCount" class="pill">0</span>
         </div>
         <div class="table-wrap"><table><thead><tr><th>Spiller</th><th>Status</th><th>Konto / kontakt</th><th>Rolle</th></tr></thead><tbody id="playerRows"></tbody></table></div>
       </section>
 
-      <section id="screens" class="panel">
+      <section id="members" data-portal-section="members" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Live</p><h2>Live-skjermer</h2><p class="muted">Lag en kode én gang, tast den inn på TV-en, og skjermen husker klubben videre.</p></div>
-          <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne screen</a>
+          <div><p class="eyebrow">Tilgang</p><h2>Medlemmer og kontoer</h2><p class="muted">Medlemskap, spillerprofil og brukerkonto er separate identiteter. Her administreres invitasjon og tilgang uten å endre turneringshistorikk.</p></div>
+        </div>
+        <div id="memberRegistryStatus" class="muted">Laster medlemsregister …</div>
+      </section>
+
+      <section id="screens" data-portal-section="screens" class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Live</p><h2>Live-skjermer</h2><p class="muted">Par TV-er og venue-skjermer. Check-in-koden vises på paret Live-skjerm mens check-in-vinduet er åpent.</p></div>
+          <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne Live</a>
         </div>
         <div class="screen-layout">
           <form id="screenForm" class="create-card"><h3>Ny skjerm</h3><label><span>Navn</span><input name="label" placeholder="Hovedskjerm, Bar-TV ..." required></label><button type="submit" class="button">Lag skjermkode</button></form>
           <div><div class="subsection-head"><h3>Eksisterende skjermer</h3><span id="screenCount" class="pill"></span></div><div id="screenList" class="list"></div></div>
         </div>
       </section>
-
-      <section class="roadmap">
-        <div><p class="eyebrow">Scoringkilde</p><h2>Scolia</h2><p class="muted">Board Terminal er kildeuavhengig. I manuell modus registrerer spilleren visits på nettbrettet. I Scolia-modus skal samme lokale board og samme lokale kamp bruke Scolia-eventer når API-integrasjonen kommer i fase 2.</p></div>
-      </section>
     </main>
   </div>
 
   <script src="./app.js" type="module"></script>
   <script src="./pairing-claim.js" type="module"></script>
+  <script src="./board-admin.js" type="module"></script>
+  <script src="./tournament-admin.js" type="module"></script>
+  <script src="./tournament-checkin-admin.js" type="module"></script>
+  <script src="./tournament-elo-admin.js" type="module"></script>
+  <script src="./tournament-operations-admin.js" type="module"></script>
+  <script src="./tournament-playoff-admin.js" type="module"></script>
+  <script src="./tournament-summary-admin.js" type="module"></script>
+  <script src="./member-onboarding-admin.js" type="module"></script>
+  <script src="./scolia-admin.js" type="module"></script>
+  <script src="./checkin-admin-v2.js" type="module"></script>
+  <script src="./tournament-wizard-v2.js" type="module"></script>
+  <script src="../packages/ui-assets/portal-menu.js" type="module"></script>
 </body>
 </html>

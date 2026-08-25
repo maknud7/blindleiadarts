@@ -34,8 +34,7 @@ function install() {
       <label><span>Stenger etter start (min)</span><input id="checkinAfter" type="number" min="0" max="360"></label>
     </div>
     <div class="integration-actions"><button type="submit" class="button">Lagre check-in-standard</button></div>
-    <p class="muted">Turneringsleder kan alltid checke inn påmeldte spillere fra turneringsadmin. Kode vises bare på paret Live-skjerm mens check-in-vinduet er åpent.</p>
-    <div hidden aria-hidden="true"><input id="venueLat"><input id="venueLng"><input id="venueRadius" value="150"><input id="venueAccuracy" value="250"><input id="checkinRequireGeo" type="checkbox"><span id="venueReadout"></span></div>`;
+    <p class="muted">Turneringsleder kan checke inn påmeldte spillere fra turneringsadmin. Kode vises bare på en paret Live-skjerm mens check-in-vinduet er åpent.</p>`;
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
