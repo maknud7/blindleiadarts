@@ -9,6 +9,7 @@ import "./tournament-summary-admin.js";
 import "./tournament-checkin-admin.js";
 import "./season-admin.js";
 import "./scolia-admin.js";
+import "./scolia-shadow-tools.js";
 import "./checkin-admin-v2.js";
 import "./tournament-wizard-v2.js";
 import "./admin-ux-bootstrap.js";
