@@ -4,7 +4,7 @@
 
   const css = document.createElement("link");
   css.rel = "stylesheet";
-  css.href = "./operations-runtime.css?v=20260826-1145";
+  css.href = "./operations-runtime.css?v=20260826-1200";
   document.head.appendChild(css);
 
   const panel = document.createElement("div");
@@ -58,6 +58,13 @@
     return payload.data;
   }
   function isIdleVisible() { return !idle.classList.contains("hidden"); }
+
+  function showIdleQueueStatus(text = "Boardet er ledig og følger kampkøen automatisk.") {
+    result.classList.add("hidden");
+    undo.classList.add("hidden");
+    upcoming.classList.add("hidden");
+    status.textContent = text;
+  }
 
   function renderReservation(reservation) {
     if (!reservation) {
@@ -118,14 +125,15 @@
       lastMatchId = Number(match?.id || 0);
 
       if (!match) {
-        result.classList.add("hidden");
-        undo.classList.add("hidden");
-        upcoming.classList.add("hidden");
-        status.textContent = reservation
-          ? "Neste kamp er reservert."
-          : "Boardet er ledig og følger kampkøen automatisk.";
+        showIdleQueueStatus(reservation ? "Neste kamp er reservert." : undefined);
         if (reservation && remaining <= 0) promoteNext({ quiet: true }).catch(() => undefined);
         if (!reservation) promoteNext({ quiet: true }).catch(() => undefined);
+        return;
+      }
+
+      if (remaining <= 0 && !reservation) {
+        showIdleQueueStatus("Resultatvinduet er ferdig. Venter på neste kvalifiserte kamp.");
+        promoteNext({ quiet: true }).catch(() => undefined);
         return;
       }
 
@@ -140,10 +148,8 @@
         status.textContent = remaining > 0
           ? "Neste kamp er valgt og venter på resultatvinduet."
           : "Bytter til neste kamp …";
-      } else if (remaining > 0) {
-        status.textContent = "Resultatet vises i 30 sekunder. Kampmotoren leter etter neste kamp.";
       } else {
-        status.textContent = "Resultatvinduet er ferdig. Henter neste kvalifiserte kamp …";
+        status.textContent = "Resultatet vises i 30 sekunder. Kampmotoren leter etter neste kamp.";
       }
 
       if (remaining <= 0) promoteNext({ quiet: true }).catch(() => undefined);
