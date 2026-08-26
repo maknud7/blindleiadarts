@@ -611,12 +611,16 @@ final class TournamentMatchEngineRepository
     private function groupProgress(int $tournamentId): array
     {
         $stmt = $this->connection->prepare(sprintf(
-            'SELECT tournament_group_id,
-                    SUM(CASE WHEN status="completed" THEN 1 ELSE 0 END) AS completed_count,
+            'SELECT m.tournament_group_id,
+                    SUM(CASE
+                        WHEN m.status IN ("assigned","in_progress","completed") OR r.id IS NOT NULL THEN 1
+                        ELSE 0
+                    END) AS dispatched_count,
                     COUNT(*) AS total_count
-             FROM `%1$smatches`
-             WHERE tournament_id=? AND tournament_group_id IS NOT NULL
-             GROUP BY tournament_group_id',
+             FROM `%1$smatches` m
+             LEFT JOIN `%1$stournament_board_reservations` r ON r.match_id=m.id
+             WHERE m.tournament_id=? AND m.tournament_group_id IS NOT NULL
+             GROUP BY m.tournament_group_id',
             $this->tablePrefix
         ));
         $stmt->bind_param('i', $tournamentId);
@@ -626,7 +630,7 @@ final class TournamentMatchEngineRepository
         $result = [];
         foreach ($rows as $row) {
             $total = max(1, (int) $row['total_count']);
-            $result[(int) $row['tournament_group_id']] = ((int) $row['completed_count']) / $total;
+            $result[(int) $row['tournament_group_id']] = ((int) $row['dispatched_count']) / $total;
         }
         return $result;
     }
