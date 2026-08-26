@@ -1,8 +1,10 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260826-0924";
+const MODULE_VERSION = "20260826-0940";
 let requested = false;
 let loading = null;
 let waitTimer = null;
+let liveLoading = null;
+let afterLoading = null;
 
 function token() {
   return localStorage.getItem("bd:token") || "";
@@ -35,6 +37,34 @@ function hideLoading() {
   document.getElementById("tournamentModuleLoading")?.remove();
 }
 
+function announceToolsReady() {
+  window.dispatchEvent(new CustomEvent("bd:tournament-tools-ready", {
+    detail: window.__bdTournamentContext || null,
+  }));
+}
+
+async function loadLiveTools() {
+  if (liveLoading) return liveLoading;
+  liveLoading = Promise.all([
+    import(moduleUrl("./tournament-operations-admin.js")),
+    import(moduleUrl("./tournament-playoff-admin.js")),
+  ]).then(() => announceToolsReady());
+  return liveLoading;
+}
+
+async function loadAfterTools() {
+  if (afterLoading) return afterLoading;
+  afterLoading = import(moduleUrl("./tournament-summary-admin.js"))
+    .then(() => announceToolsReady());
+  return afterLoading;
+}
+
+function loadToolsForContext(context) {
+  const view = String(context?.view || "");
+  if (view === "live") loadLiveTools().catch(() => undefined);
+  if (view === "after") loadAfterTools().catch(() => undefined);
+}
+
 async function loadModules() {
   if (!host) return;
   if (loading) return loading;
@@ -43,19 +73,19 @@ async function loadModules() {
   host.dataset.tournamentModules = "loading";
 
   loading = (async () => {
+    // Før start trenger vi bare selve turneringsrommet, innsjekk og opprettelse.
+    // Drift, sluttspill og oppsummering lastes først når brukeren faktisk går dit.
     await import(moduleUrl("./tournament-admin.js"));
-
     await Promise.all([
       import(moduleUrl("./tournament-checkin-admin.js")),
-      import(moduleUrl("./tournament-operations-admin.js")),
-      import(moduleUrl("./tournament-playoff-admin.js")),
-      import(moduleUrl("./tournament-summary-admin.js")),
       import(moduleUrl("./tournament-wizard-v2.js")),
+      import(moduleUrl("./tournament-flow-ux.js")),
     ]);
-
     await import(moduleUrl("./tournament-workspace-ux.js"));
+
     host.dataset.tournamentModules = "ready";
     hideLoading();
+    loadToolsForContext(window.__bdTournamentContext);
   })().catch((error) => {
     host.dataset.tournamentModules = "error";
     hideLoading();
@@ -98,6 +128,10 @@ function requestTournamentRoom() {
 
 window.addEventListener("bd:portal-view", (event) => {
   if (event.detail?.target === "tournaments") requestTournamentRoom();
+});
+
+window.addEventListener("bd:tournament-context", (event) => {
+  loadToolsForContext(event.detail);
 });
 
 window.addEventListener("hashchange", () => {
