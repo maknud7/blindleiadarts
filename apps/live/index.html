@@ -7,13 +7,22 @@
   <meta name="color-scheme" content="light">
   <title>Blindleia Darts · Live</title>
   <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.png" type="image/png">
-  <link rel="stylesheet" href="./styles.css?v=20260826-1508">
+  <link rel="stylesheet" href="./styles.css?v=20260826-1528">
   <link rel="stylesheet" href="./checkin.css?v=20260826-1508">
 </head>
 <body class="phase-loading">
   <main class="live-shell">
     <section id="standbyState" class="standby-state" aria-label="Blindleia Dartklubb">
+      <div class="standby-clock-panel" aria-live="off">
+        <strong id="standbyClock" class="standby-clock">--:--:--</strong>
+        <span id="standbyDate" class="standby-date"></span>
+      </div>
       <img src="../static/club-logos/blindleia-dartklubb-logo.svg" alt="Blindleia Dartklubb" class="standby-logo">
+      <div id="standbyNext" class="standby-next hidden">
+        <span>Neste turnering</span>
+        <strong id="standbyNextName"></strong>
+        <small id="standbyNextWhen"></small>
+      </div>
     </section>
 
     <div id="activeExperience" class="active-experience hidden">
@@ -95,6 +104,6 @@
       </div>
     </div>
   </main>
-  <script src="./app.js?v=20260826-1508"></script>
+  <script src="./app.js?v=20260826-1528"></script>
 </body>
 </html>
