@@ -1,0 +1,237 @@
+/* Phone fallback for the kiosk. Tablets stay fixed to the portrait terminal canvas. */
+@media (max-width: 600px) {
+  html,
+  body {
+    width: 100%;
+    height: auto !important;
+    min-height: 100%;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: auto !important;
+  }
+
+  body {
+    position: static !important;
+    inset: auto !important;
+  }
+
+  .terminal-shell {
+    width: 100%;
+    height: auto !important;
+    min-height: 100svh !important;
+    overflow: visible !important;
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    gap: 7px;
+  }
+
+  .terminal-main,
+  .state-card,
+  .match-layout {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Keep club/board identity readable and let the sponsor use its own compact row. */
+  .kiosk-brand-v3 .terminal-topbar {
+    min-height: 0 !important;
+    max-height: none !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand status"
+      "sponsor sponsor";
+    gap: 5px 8px;
+    padding: 7px 8px 6px;
+  }
+
+  .kiosk-brand-v3 .brandline { grid-area: brand; min-width: 0; }
+  .kiosk-brand-v3 .terminal-status { grid-area: status; }
+  .kiosk-brand-v3 .brand-badge {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+    border-radius: 13px;
+  }
+  .kiosk-brand-v3 .brand-copy { min-width: 0; }
+  .kiosk-brand-v3 .brand-copy .eyebrow { display: none !important; }
+  .kiosk-brand-v3 .terminal-topbar h1 {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kiosk-brand-v3 .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .kiosk-brand-v3 .status-pill { display: none !important; }
+
+  .kiosk-brand-v3 .board-sponsor-badge {
+    grid-area: sponsor;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 30px;
+    justify-content: center;
+    padding: 5px 0 0 !important;
+    gap: 7px;
+    border-left: 0 !important;
+    border-top: 1px solid rgba(255,255,255,.18) !important;
+  }
+  .kiosk-brand-v3 .board-sponsor-badge img {
+    width: 30px;
+    height: 24px;
+    flex-basis: 30px;
+  }
+  .kiosk-brand-v3 .board-sponsor-copy strong {
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  /* Phone scoreboard: players stay side by side; match state gets its own row below. */
+  .kiosk-ux-v2 .match-layout {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto auto !important;
+    gap: 8px !important;
+    align-content: start !important;
+  }
+
+  .kiosk-ux-v2 .scoreboard {
+    height: auto !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    gap: 7px !important;
+    padding: 7px !important;
+  }
+  .kiosk-ux-v2 #playerABox { grid-column: 1; grid-row: 1; }
+  .kiosk-ux-v2 #playerBBox { grid-column: 2; grid-row: 1; }
+  .kiosk-ux-v2 .player-card {
+    height: 142px !important;
+    min-height: 142px !important;
+    padding: 9px 10px !important;
+  }
+  .kiosk-ux-v2 .player-card h2 {
+    font-size: clamp(18px, 5.6vw, 24px) !important;
+  }
+  .kiosk-ux-v2 .remaining {
+    font-size: clamp(48px, 15vw, 64px) !important;
+  }
+
+  .kiosk-ux-v2 .match-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 2px 3px 0;
+  }
+  .kiosk-ux-v2 #matchBoard,
+  .kiosk-ux-v2 #matchRound { display: none !important; }
+  .kiosk-ux-v2 .match-legs-label { font-size: 8px; }
+  .kiosk-ux-v2 .match-center .match-legs-score { font-size: 31px !important; }
+  .kiosk-ux-v2 #currentLeg {
+    margin: 0;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .kiosk-ux-v2 .match-center .ghost-button {
+    min-height: 40px;
+    margin-left: auto;
+    padding: 7px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* Do not crop the scoring controls on a phone; scrolling is preferable. */
+  .kiosk-ux-v2 .scoring-card {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 9px !important;
+  }
+  .kiosk-ux-v2 .scoring-head {
+    min-height: 42px;
+    margin-bottom: 7px;
+  }
+  .kiosk-ux-v2 .live-remaining-preview {
+    min-width: 118px;
+    padding-left: 8px;
+  }
+  .kiosk-ux-v2 .live-remaining-preview strong { font-size: 24px; }
+
+  .kiosk-ux-v2 .dart-mode {
+    height: auto !important;
+    min-height: 0 !important;
+    grid-template-rows: auto auto auto !important;
+    gap: 7px !important;
+  }
+  .kiosk-ux-v2 .dart-mode.hidden { display: none !important; }
+  .kiosk-ux-v2 .dart-controls {
+    min-height: 0 !important;
+    grid-template-columns: 54px minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+  .kiosk-ux-v2 .dart-controls > div:last-child {
+    display: grid !important;
+    grid-template-rows: auto auto !important;
+    gap: 6px !important;
+  }
+  .kiosk-ux-v2 .dart-controls .special-grid {
+    grid-row: 1 !important;
+    min-height: 48px !important;
+    height: 48px !important;
+  }
+  .kiosk-ux-v2 .dart-controls .number-grid {
+    grid-row: 2 !important;
+    height: auto !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-rows: none !important;
+    gap: 6px !important;
+  }
+  .kiosk-ux-v2 .number-grid button {
+    min-height: 54px !important;
+    height: 54px !important;
+    font-size: 18px;
+  }
+  .kiosk-ux-v2 .multipliers { gap: 6px; }
+  .kiosk-ux-v2 .multipliers button { min-height: 54px !important; }
+  .kiosk-ux-v2 .dart-actions {
+    height: auto !important;
+    min-height: 50px;
+    margin: 0 !important;
+  }
+  .kiosk-ux-v2 .dart-actions button { min-height: 50px !important; }
+
+  /* The four latest visits matter on phones too, especially for correction. */
+  .kiosk-ux-v2 .activity-card {
+    display: grid !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    grid-template-columns: 1fr !important;
+    gap: 7px !important;
+    padding: 10px !important;
+  }
+  .kiosk-ux-v2 .activity-head { display: flex; align-items: center; justify-content: space-between; }
+  .kiosk-ux-v2 .activity-head .eyebrow { display: none !important; }
+  .kiosk-ux-v2 .activity-head h3 { font-size: 13px; }
+  .kiosk-ux-v2 .visit-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+  .kiosk-ux-v2 button.visit-row { min-height: 60px; }
+
+  .settings-dialog,
+  .visit-edit-dialog {
+    max-height: calc(100dvh - 16px) !important;
+    overflow-y: auto !important;
+  }
+}
