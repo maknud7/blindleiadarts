@@ -48,6 +48,14 @@ function summaryText(value) {
   return esc(value).replace(/\r?\n/g, "<br>");
 }
 
+function hasRecordedStats(player) {
+  return Number(player.matches_played || 0) > 0
+    || Number(player.baseline_played || 0) > 0
+    || Number(player.score_180 || 0) > 0
+    || Number(player.highest_checkout || 0) > 0
+    || Number(player.recorded_average || 0) > 0;
+}
+
 async function resolveClubId() {
   const fromStorage = Number(localStorage.getItem("bd:playerClubId") || 0);
   const fromSelect = Number(el.clubSelect?.value || 0);
@@ -71,8 +79,8 @@ async function loadPortalContent() {
     api(`/clubs/${clubId}/registration-tournaments`),
   ]);
 
-  state.players = players.items || [];
-  state.elo = elo.items || [];
+  state.players = (players.items || []).filter(hasRecordedStats);
+  state.elo = (elo.items || []).filter(hasRecordedStats);
   state.summaries = summaries.items || [];
   state.tournaments = tournaments.items || [];
   renderElo();
@@ -84,16 +92,16 @@ async function loadPortalContent() {
 
 function renderElo() {
   if (!state.elo.length) {
-    el.eloTable.innerHTML = `<div class="mini-card"><p class="muted">Ingen ELO-data ennå.</p></div>`;
+    el.eloTable.innerHTML = `<div class="mini-card"><p class="muted">Ingen registrert statistikk ennå.</p></div>`;
     return;
   }
   el.eloTable.innerHTML = `
     <div class="table-scroll">
       <table class="portal-table">
-        <thead><tr><th>#</th><th>Spiller</th><th>ELO</th><th>ELO-kamper</th><th>Lokale seire</th></tr></thead>
-        <tbody>${state.elo.map((row) => `
+        <thead><tr><th>#</th><th>Spiller</th><th>ELO</th><th>Kamper</th><th>Seire</th></tr></thead>
+        <tbody>${state.elo.map((row, index) => `
           <tr data-player-profile="${Number(row.id)}">
-            <td>${Number(row.position)}</td>
+            <td>${index + 1}</td>
             <td><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td>
             <td>${Number(row.elo_rating || 1000).toFixed(1)}</td>
             <td>${Number(row.baseline_played ?? row.matches_played ?? 0)}</td>
@@ -106,14 +114,14 @@ function renderElo() {
 
 function renderPlayers() {
   if (!state.players.length) {
-    el.playerDirectory.innerHTML = `<div class="mini-card"><p class="muted">Ingen spillere å vise.</p></div>`;
+    el.playerDirectory.innerHTML = `<div class="mini-card"><p class="muted">Ingen spillere med registrerte kamper eller statistikk ennå.</p></div>`;
     return;
   }
   const sorted = [...state.players].sort((a, b) => String(a.display_name).localeCompare(String(b.display_name), "nb"));
   el.playerDirectory.innerHTML = sorted.map((player) => `
     <button type="button" class="player-card" data-player-profile="${Number(player.id)}">
       <span class="player-card-name">${esc(player.display_name)}</span>
-      <span class="player-card-meta">ELO ${Number(player.elo_rating || 1000).toFixed(1)} · ${Number(player.matches_played || 0)} lokale kamper</span>
+      <span class="player-card-meta">ELO ${Number(player.elo_rating || 1000).toFixed(1)} · ${Number(player.matches_played || player.baseline_played || 0)} kamper</span>
     </button>`).join("");
   bindProfileLinks(el.playerDirectory);
 }
@@ -165,7 +173,7 @@ async function loadPlayerProfile(playerId) {
     </div>
     <div class="profile-section">
       <h3>ELO-historikk</h3>
-      ${history.length ? history.slice(0, 8).map((entry) => `<div class="history-row"><div><strong>${Number(entry.rating).toFixed(1)}</strong><small>${esc(entry.tournament_name || entry.scope_type)}</small></div><span>${esc(formatDate(entry.calculated_at))}</span></div>`).join("") : `<p class="muted">Ingen lokale ELO-snapshots ennå. Nåværende baseline vises over.</p>`}
+      ${history.length ? history.slice(0, 8).map((entry) => `<div class="history-row"><div><strong>${Number(entry.rating).toFixed(1)}</strong><small>${esc(entry.tournament_name || entry.scope_type)}</small></div><span>${esc(formatDate(entry.calculated_at))}</span></div>`).join("") : `<p class="muted">Ingen ELO-historikk registrert ennå.</p>`}
     </div>`;
 
   el.playerProfile.querySelector(".profile-close")?.addEventListener("click", () => el.playerProfile.classList.add("hidden"));
