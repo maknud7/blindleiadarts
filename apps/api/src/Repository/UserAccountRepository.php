@@ -86,7 +86,12 @@ final class UserAccountRepository
         $sessionId = (int) ($row['session_id'] ?? 0);
         if ($sessionId > 0) {
             $sessions = $this->identityPrefix . 'auth_sessions';
-            $touch = $this->connection->prepare("UPDATE `{$sessions}` SET last_used_at = NOW() WHERE id = ?");
+            $touch = $this->connection->prepare(
+                "UPDATE `{$sessions}`
+                    SET last_used_at = NOW(),
+                        expires_at = DATE_ADD(NOW(), INTERVAL 180 DAY)
+                  WHERE id = ?"
+            );
             $touch->bind_param('i', $sessionId);
             $touch->execute();
             $touch->close();
@@ -121,7 +126,7 @@ final class UserAccountRepository
     {
         $token = bin2hex(random_bytes(32));
         $hash = hash('sha256', $token);
-        $expiresAt = (new DateTimeImmutable('+7 days'))->format('Y-m-d H:i:s');
+        $expiresAt = (new DateTimeImmutable('+180 days'))->format('Y-m-d H:i:s');
         $sessions = $this->identityPrefix . 'auth_sessions';
         $users = $this->identityPrefix . 'user_accounts';
 
