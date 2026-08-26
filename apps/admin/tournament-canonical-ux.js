@@ -217,6 +217,9 @@ if (host) {
   }
 
   function enforceAttendanceState() {
+    const workspace = host.querySelector(".tc-workspace");
+    workspace?.classList.toggle("tc-no-selection", !detail?.id);
+
     installGuestForm();
     simplifyStaticCopy();
     simplifyCheckinSettings();
@@ -384,6 +387,9 @@ if (host) {
   const style = document.createElement("style");
   style.id = "tournamentCanonicalUxStyles";
   style.textContent = `
+    .tc-room-head{display:none!important}
+    .tc-no-selection .tc-phase-nav,.tc-no-selection .tc-stage,.tc-no-selection .tc-desktop-rail{display:none!important}
+    .tc-no-selection .tc-desktop-grid{grid-template-columns:minmax(0,1fr)!important}
     .tc-attendance-note{display:grid;gap:3px;margin:0 0 10px;padding:11px 13px;border:1px solid #c8ddeb;border-radius:12px;background:#f2f8fc;color:var(--text)}
     .tc-attendance-note strong{font-size:13px}.tc-attendance-note span{font-size:12px;line-height:1.4;color:var(--muted)}
     .tc-guest-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:10px;align-items:end}
