@@ -6,4 +6,5 @@ if (!document.querySelector('link[data-admin-ux]')) {
   document.head.appendChild(link);
 }
 
-import('./admin-ux.js');
+// Legacy admin-ux.js used to create a second tournament room with its own
+// selector and tabs. The phase-based tournament workspace is now canonical.
