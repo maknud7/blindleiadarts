@@ -49,6 +49,7 @@ copy_dir "$ROOT_DIR/packages" "$OUT_DIR/packages"
 # Static assets are runtime dependencies too. Previously these directories were
 # created empty, which meant logo URLs were valid in CSS/HTML but returned 404
 # after deployment.
+mkdir -p "$OUT_DIR/static"
 copy_dir "$ROOT_DIR/static/club-logos" "$OUT_DIR/static/club-logos"
 copy_dir "$ROOT_DIR/static/sponsors" "$OUT_DIR/static/sponsors"
 copy_dir "$ROOT_DIR/static/players" "$OUT_DIR/static/players"
