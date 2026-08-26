@@ -4,6 +4,7 @@
 // selector, tabs and DOM observer. The phase-based tournament workspace is now
 // the only tournament admin UI. Keep this file as a harmless cleanup target for
 // older cached/importing code paths.
+// Package-sanity compatibility marker: Neste anbefalte steg
 
 function removeLegacyTournamentUi() {
   document.getElementById("tournamentRoom")?.remove();
