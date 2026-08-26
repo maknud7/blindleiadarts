@@ -1,10 +1,40 @@
-.live-checkin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center;margin:0 0 18px;padding:18px 20px;border:1px solid #c8dff1;border-radius:14px;background:linear-gradient(135deg,#fff,#eef6ff);box-shadow:0 5px 16px rgba(17,42,73,.055)}
-.live-checkin.hidden{display:none}
-.live-checkin h2{margin:2px 0 5px;color:#0c2340}
-.live-checkin .eyebrow{margin:0;color:#2f6fed}
-.live-checkin .muted{margin:0;color:#697c94}
-.live-checkin-code{min-width:230px;display:grid;gap:3px;padding:13px 16px;border:1px solid #bdd4ec;border-radius:12px;background:#fff;text-align:center}
-.live-checkin-code span{font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.1em;color:#697c94}
-.live-checkin-code strong{font-size:34px;line-height:1.05;letter-spacing:.14em;color:#0b2b50}
-.live-checkin-code small{font-size:11px;color:#697c94}
-@media(max-width:720px){.live-checkin{grid-template-columns:1fr;gap:12px}.live-checkin-code{min-width:0}.live-checkin-code strong{font-size:30px}}
+.checkin-stage{display:grid;grid-template-columns:minmax(0,.9fr) minmax(440px,1.1fr);gap:18px;margin-top:18px;min-height:calc(100svh - 190px)}
+.checkin-stage-main,.checkin-roster-panel{border:1px solid #d4dfeb;border-radius:18px;background:#fff;box-shadow:0 8px 26px rgba(17,42,73,.06)}
+.checkin-stage-main{display:flex;flex-direction:column;justify-content:center;padding:clamp(24px,4vw,54px)}
+.checkin-stage-main>.eyebrow{font-size:clamp(.78rem,1.1vw,1rem);color:#2f6fed}
+.checkin-stage-main h2{margin:5px 0 8px;font-size:clamp(2rem,4vw,4.4rem);line-height:1.02;letter-spacing:-.045em;color:#0b2b50}
+.checkin-lead{max-width:700px;margin:0 0 clamp(22px,3vw,38px);font-size:clamp(1rem,1.5vw,1.35rem);color:#697c94}
+.checkin-code-card{width:100%;display:grid;place-items:center;gap:7px;padding:clamp(22px,3vw,38px);border:2px solid #b8cee5;border-radius:18px;background:linear-gradient(145deg,#f8fbff,#fff);text-align:center}
+.checkin-code-card span{font-size:clamp(.7rem,.9vw,.9rem);font-weight:900;text-transform:uppercase;letter-spacing:.14em;color:#697c94}
+.checkin-code-card strong{font-size:clamp(4rem,8vw,8.6rem);line-height:.95;letter-spacing:.12em;color:#0b2b50;font-variant-numeric:tabular-nums}
+.checkin-code-card small{font-size:clamp(.85rem,1.15vw,1.05rem);color:#697c94}
+.checkin-progress{display:grid;gap:10px;margin-top:22px;color:#0b2b50}
+.checkin-progress>strong{font-size:clamp(1rem,1.45vw,1.3rem)}
+.checkin-progress-track{height:14px;border-radius:999px;overflow:hidden;background:#e8eef5}
+.checkin-progress-track span{display:block;width:0;height:100%;border-radius:inherit;background:#2d9b72;transition:width .35s ease}
+
+.checkin-roster-panel{display:flex;min-height:0;flex-direction:column;padding:clamp(20px,2.5vw,34px)}
+.checkin-roster-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px}
+.checkin-roster-head h3{margin:3px 0 0;font-size:clamp(1.55rem,2.4vw,2.4rem);color:#0b2b50}
+.checkin-roster-count{display:grid;place-items:center;min-width:58px;height:44px;padding:0 14px;border-radius:999px;background:#eef4ff;border:1px solid #cfddf2;color:#123c69;font-weight:900;font-size:1.15rem}
+.checkin-participants{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-content:start;overflow:auto;padding-right:3px}
+.checkin-person{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:58px;padding:10px 12px;border:1px solid #e0e7ef;border-radius:12px;background:#f9fbfd}
+.checkin-person strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.92rem,1.15vw,1.08rem);color:#0c2340}
+.checkin-person-status{font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:5px 8px;border-radius:999px;background:#edf2f7;color:#61738a;white-space:nowrap}
+.checkin-person.checked-in{border-color:#b9dfcf;background:#eef9f4}
+.checkin-person.checked-in .checkin-person-status{background:#d8f1e6;color:#176449}
+.checkin-person.waitlisted{opacity:.72}
+.checkin-person.waitlisted .checkin-person-status{background:#f4f0e8;color:#7b6a48}
+.checkin-empty{grid-column:1/-1;padding:30px;border:1px dashed #cad5e1;border-radius:14px;color:#697c94;text-align:center}
+
+@media(max-width:1050px){
+  .checkin-stage{grid-template-columns:1fr;min-height:0}
+  .checkin-stage-main{padding:28px}.checkin-code-card strong{font-size:clamp(3.7rem,12vw,7.4rem)}
+  .checkin-roster-panel{min-height:360px}.checkin-participants{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:720px){
+  .checkin-stage{margin-top:10px;gap:10px}.checkin-stage-main,.checkin-roster-panel{border-radius:14px}
+  .checkin-stage-main{padding:20px}.checkin-stage-main h2{font-size:2.15rem}.checkin-code-card{padding:20px 12px}.checkin-code-card strong{font-size:clamp(3.2rem,16vw,5.8rem)}
+  .checkin-roster-panel{padding:18px;min-height:0}.checkin-participants{grid-template-columns:1fr 1fr}.checkin-person{min-height:52px}
+}
+@media(max-width:470px){.checkin-participants{grid-template-columns:1fr}.checkin-person strong{white-space:normal}}
