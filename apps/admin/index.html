@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="./tournament-operations-admin.css">
   <link rel="stylesheet" href="./tournament-playoff-admin.css">
   <link rel="stylesheet" href="./member-onboarding-admin.css">
+  <link rel="stylesheet" href="./equipment-admin-ux.css?v=20260826-1335">
   <link rel="stylesheet" href="./admin-ux.css?v=20260826-0915">
   <link rel="stylesheet" href="../packages/ui-assets/portal-brand.css?v=20260826-1300">
 </head>
@@ -69,7 +70,7 @@
         <div class="portal-shortcuts">
           <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Gjennomfør kvelden i riktig rekkefølge</span></a>
           <a class="shortcut-card" href="#players" data-portal-nav><strong>Personer</strong><span>Medlemskap, tilgang, kontingent og dartprofil</span></a>
-          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Utstyr</strong><span>Boards, nettbrett, Scolia og venue-skjermer</span></a>
+          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Utstyr</strong><span>Skiver, nettbrett, Scolia og venue-skjermer</span></a>
         </div>
       </section>
 
@@ -86,7 +87,7 @@
           <div>
             <p class="eyebrow">Klubbutstyr</p>
             <h2>Utstyr</h2>
-            <p class="muted">Boards, nettbrett og Scolia administreres her. Velger du Scolia som scoringtype, må skiva kobles til en unik Scolia-ID.</p>
+            <p class="muted">Skiva er den faste enheten. Velg manuell eller Scolia-scoring på skiva, og koble nettbrett separat når det trengs.</p>
           </div>
           <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne terminal</a>
         </div>
@@ -133,16 +134,16 @@
 
         <div class="kiosk-layout">
           <form id="kioskForm" class="create-card">
-            <h3>Opprett board uten nettbrett</h3>
-            <p class="muted">Avansert bruk. Normalflyten er å opprette boardet når nettbrettet pares.</p>
-            <label><span>Boardnummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
-            <label><span>Navn</span><input name="name" placeholder="Board 1"></label>
+            <h3>Opprett skive</h3>
+            <p class="muted">Skivenummer og scoring er det eneste du normalt trenger.</p>
+            <label><span>Skivenummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
+            <label><span>Navn</span><input name="name" placeholder="Skive 1"></label>
             <label><span>Scoring</span><select id="kioskScoringMode" name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
             <label id="kioskScoliaSerialRow" class="hidden"><span>Scolia-ID / serienummer</span><input id="kioskScoliaSerial" name="scolia_serial_number" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"></label>
-            <button type="submit" class="button">Opprett board</button>
+            <button type="submit" class="button">Opprett skive</button>
           </form>
           <div>
-            <div class="subsection-head"><h3>Boards</h3><span id="kioskCount" class="pill">0</span></div>
+            <div class="subsection-head"><h3>Skiver</h3><span id="kioskCount" class="pill">0</span></div>
             <div id="kioskList" class="list"></div>
           </div>
         </div>
@@ -159,19 +160,19 @@
 
       <section id="screens" data-portal-section="kiosks" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Par TV-er og venue-skjermer. Check-in-koden vises på paret venue-skjerm mens check-in-vinduet er åpent.</p></div>
+          <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Opprett en skjermkode én gang. TV-en kobler seg til ved å skrive inn koden på venue-siden.</p></div>
           <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne venue-skjerm</a>
         </div>
         <div class="screen-layout">
           <form id="screenForm" class="create-card"><h3>Ny skjerm</h3><label><span>Navn</span><input name="label" placeholder="Hovedskjerm, Bar-TV ..." required></label><button type="submit" class="button">Lag skjermkode</button></form>
-          <div><div class="subsection-head"><h3>Eksisterende skjermer</h3><span id="screenCount" class="pill"></span></div><div id="screenList" class="list"></div></div>
+          <div><div class="subsection-head"><h3>Venue-skjermer</h3><span id="screenCount" class="pill"></span></div><div id="screenList" class="list"></div></div>
         </div>
       </section>
     </main>
   </div>
 
   <script src="./app.js" type="module"></script>
-  <script src="./pairing-claim.js" type="module"></script>
+  <script src="./pairing-claim.js?v=20260826-1335" type="module"></script>
   <script src="./board-admin.js" type="module"></script>
   <script src="./member-onboarding-admin.js" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
