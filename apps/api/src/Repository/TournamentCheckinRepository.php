@@ -290,17 +290,66 @@ final class TournamentCheckinRepository
             if ($this->normalizeCode($settings['checkin_code'] ?? null) === null) {
                 $settings = $this->rotateTournamentCode($tournamentId);
             }
+
+            $participants = $this->publicParticipants($tournamentId);
+            $checkedIn = 0;
+            $registered = 0;
+            $waitlisted = 0;
+            foreach ($participants as $participant) {
+                $status = (string) ($participant['status'] ?? '');
+                if ($status === 'checked_in') {
+                    $checkedIn++;
+                } elseif ($status === 'registered') {
+                    $registered++;
+                } elseif ($status === 'waitlisted') {
+                    $waitlisted++;
+                }
+            }
+
             return [
                 'tournament_id' => $tournamentId,
                 'tournament_name' => $settings['name'],
+                'start_at' => $settings['start_at'],
                 'code' => $settings['checkin_code'],
                 'opens_at' => $settings['effective_checkin_opens_at'],
                 'closes_at' => null,
                 'method' => $method,
+                'participants' => $participants,
+                'participant_count' => $checkedIn + $registered,
+                'checked_in_count' => $checkedIn,
+                'registered_count' => $registered,
+                'waitlisted_count' => $waitlisted,
             ];
         }
 
         return null;
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function publicParticipants(int $tournamentId): array
+    {
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT p.id AS player_id,p.display_name,tp.status,tp.checked_in_at
+             FROM `%1$stournament_players` tp
+             INNER JOIN `%1$splayers` p ON p.id=tp.player_id
+             WHERE tp.tournament_id=? AND tp.status IN ("checked_in","registered","waitlisted")
+             ORDER BY FIELD(tp.status,"checked_in","registered","waitlisted"), p.display_name ASC',
+            $this->tablePrefix
+        ));
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = [
+                'player_id' => (int) $row['player_id'],
+                'display_name' => (string) $row['display_name'],
+                'status' => (string) $row['status'],
+                'checked_in_at' => $row['checked_in_at'] ?? null,
+            ];
+        }
+        $stmt->close();
+        return $rows;
     }
 
     /** @param array<string,mixed> $settings */
