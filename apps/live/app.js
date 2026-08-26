@@ -5,6 +5,7 @@ const clubSlug = params.get("club") || "blindleia-dartklubb";
 const el = Object.fromEntries([
   "clubName", "tournamentName", "tournamentMeta", "connectionLabel", "progressCards", "boards",
   "queue", "results", "tables", "playoffSection", "playoffChampion", "playoff", "elo", "highlights", "updatedAt",
+  "checkinBanner", "checkinTournamentName", "checkinCode", "checkinWindow",
 ].map((id) => [id, document.getElementById(id)]));
 
 const state = { payload: null, socket: null, poll: null, realtime: null, loading: false };
@@ -20,11 +21,39 @@ function formatDateTime(value) {
   if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
+function formatTime(value) {
+  if (!value) return "";
+  const date = new Date(String(value).replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
 async function api(path) {
   const response = await fetch(`${API_ROOT}${path}`, { cache: "no-store" });
   const payload = await response.json();
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
   return payload.data;
+}
+
+function renderCheckin(data) {
+  const checkin = data?.active ? data.checkin : null;
+  if (!el.checkinBanner) return;
+  if (!checkin?.code) {
+    el.checkinBanner.classList.add("hidden");
+    return;
+  }
+  el.checkinTournamentName.textContent = checkin.tournament_name || "Turnering";
+  el.checkinCode.textContent = checkin.code;
+  const closes = formatTime(checkin.closes_at);
+  el.checkinWindow.textContent = closes ? `Åpen til kl. ${closes}` : "Innsjekk er åpen";
+  el.checkinBanner.classList.remove("hidden");
+}
+
+async function loadCheckin() {
+  try {
+    renderCheckin(await api(`/public/check-in-display?club_slug=${encodeURIComponent(clubSlug)}`));
+  } catch {
+    renderCheckin(null);
+  }
 }
 
 function renderProgress(progress = {}) {
@@ -108,7 +137,7 @@ function render(payload) {
   el.clubName.textContent = payload.club?.name || "Blindleia Dartklubb";
   el.tournamentName.textContent = payload.tournament?.name || "Live";
   const status = String(payload.tournament?.status || "");
-  const statusText = status === "in_progress" ? "Pågår" : status === "completed" ? "Ferdig" : status === "ready" ? "Klar" : status;
+  const statusText = status === "in_progress" ? "Pågår" : status === "completed" ? "Ferdig" : status === "ready" ? "Klar" : status === "draft" ? "Før start" : status;
   el.tournamentMeta.textContent = `${statusText}${payload.tournament?.start_at ? ` · ${formatDateTime(payload.tournament.start_at)}` : ""}`;
   el.updatedAt.textContent = `Oppdatert ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
   renderProgress(payload.progress);
@@ -126,9 +155,14 @@ async function load() {
   if (state.loading) return;
   state.loading = true;
   try {
-    render(await api(`/public/clubs/${encodeURIComponent(clubSlug)}/live`));
+    const [live] = await Promise.all([
+      api(`/public/clubs/${encodeURIComponent(clubSlug)}/live`),
+      loadCheckin(),
+    ]);
+    render(live);
     el.connectionLabel.textContent = "Live";
   } catch (error) {
+    await loadCheckin();
     el.connectionLabel.textContent = error.message;
   } finally {
     state.loading = false;
