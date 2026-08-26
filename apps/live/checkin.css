@@ -1,0 +1,10 @@
+.live-checkin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center;margin:0 0 18px;padding:18px 20px;border:1px solid #c8dff1;border-radius:14px;background:linear-gradient(135deg,#fff,#eef6ff);box-shadow:0 5px 16px rgba(17,42,73,.055)}
+.live-checkin.hidden{display:none}
+.live-checkin h2{margin:2px 0 5px;color:#0c2340}
+.live-checkin .eyebrow{margin:0;color:#2f6fed}
+.live-checkin .muted{margin:0;color:#697c94}
+.live-checkin-code{min-width:230px;display:grid;gap:3px;padding:13px 16px;border:1px solid #bdd4ec;border-radius:12px;background:#fff;text-align:center}
+.live-checkin-code span{font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.1em;color:#697c94}
+.live-checkin-code strong{font-size:34px;line-height:1.05;letter-spacing:.14em;color:#0b2b50}
+.live-checkin-code small{font-size:11px;color:#697c94}
+@media(max-width:720px){.live-checkin{grid-template-columns:1fr;gap:12px}.live-checkin-code{min-width:0}.live-checkin-code strong{font-size:30px}}
