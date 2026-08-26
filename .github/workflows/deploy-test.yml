@@ -158,8 +158,9 @@ jobs:
           grep -Fq 'tablet-portrait.css' dist/test/kiosk/service-worker.js
           grep -Fq 'type="email" placeholder="E-postadresse"' dist/test/player/index.html
           grep -Fq '<span>E-postadresse</span>' dist/test/admin/index.html
-          grep -Fq '>Personer</a>' dist/test/admin/index.html
+          grep -Fq '>Medlemmer</a>' dist/test/admin/index.html
           grep -Fq '>Utstyr</a>' dist/test/admin/index.html
+          grep -Fq '>Statistikk</a>' dist/test/player/index.html
           grep -Fq '>Min profil</a>' dist/test/player/index.html
           grep -Fq 'Neste anbefalte steg' dist/test/admin/admin-ux.js
           grep -Fq 'Akkurat nå' dist/test/player/player-ux.js
@@ -215,10 +216,11 @@ jobs:
 
           echo "VERIFY: health"
           curl -fsS --max-time 15 "$base/api/v1/health" >/dev/null
-          check_contains "admin people" "$base/admin/" "Personer"
+          check_contains "admin members" "$base/admin/" "Medlemmer"
           check_contains "admin equipment" "$base/admin/" "Utstyr"
           check_contains "admin UX" "$base/admin/admin-ux.js" "Neste anbefalte steg"
           check_contains "activity admin" "$base/admin/activity-admin.js" "Aktivitet"
+          check_contains "public statistics" "$base/player/" "Statistikk"
           check_contains "player profile" "$base/player/" "Min profil"
           check_contains "player UX" "$base/player/player-ux.js" "Akkurat nå"
           check_contains "onboarding viewport" "$base/onboarding/" "viewport-fit=cover"
