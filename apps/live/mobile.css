@@ -1,0 +1,110 @@
+/* Mobile overrides for the public Live display.
+   The TV layout remains the primary presentation; phones get a readable vertical flow. */
+@media (max-width:760px){
+  body.phase-checkin,body.phase-live{overflow-x:hidden}
+  .active-experience{min-width:0}
+
+  .hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10px 12px}
+  .live-brand,.live-brand>div{min-width:0}
+  .hero h1{font-size:clamp(1.65rem,7.5vw,2.25rem);overflow-wrap:anywhere}
+  .hero .muted{margin:5px 0 0;font-size:.8rem;line-height:1.3}
+  .live-status{align-self:start;max-width:100%}
+
+  .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stats-grid .stat-card:last-child:nth-child(odd){grid-column:1/-1}
+  .stat-card{min-width:0}
+
+  .boards-grid,.two-column,.tables-grid{grid-template-columns:1fr}
+  .panel,.board-card,.table-card{min-width:0}
+  .board-card{min-height:0}
+  .player-line{grid-template-columns:minmax(0,1fr) auto auto}
+  .player-line strong,.list-row strong{overflow-wrap:anywhere}
+
+  /* Tables fit the phone width instead of forcing a second horizontal navigation axis. */
+  .table-card{overflow:visible;padding:12px}
+  .table-scroll{overflow:visible}
+  .portal-table{min-width:0;width:100%;table-layout:auto;font-size:.78rem}
+  .portal-table th,.portal-table td{padding:7px 4px}
+  .portal-table th:nth-child(2),.portal-table td:nth-child(2){width:42%;overflow-wrap:anywhere}
+
+  /* On phones the playoff is a vertical story rather than a horizontally scrolling bracket. */
+  .live-bracket{display:grid;grid-template-columns:1fr;gap:16px;overflow:visible;padding-bottom:0}
+  .live-bracket-round{min-width:0;width:100%}
+  .live-bracket-matches{gap:8px}
+
+  .highlight-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .highlight:last-child:nth-child(odd){grid-column:1/-1}
+
+  /* Check-in should be easy to scan while walking into the venue. */
+  .checkin-stage{grid-template-columns:1fr;min-height:0}
+  .checkin-stage-main,.checkin-roster-panel{min-width:0}
+  .checkin-participants{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .checkin-person{min-width:0}
+}
+
+@media (max-width:520px){
+  .live-shell{padding:max(7px,env(safe-area-inset-top)) max(7px,env(safe-area-inset-right)) max(28px,calc(20px + env(safe-area-inset-bottom))) max(7px,env(safe-area-inset-left))}
+
+  .hero{grid-template-columns:1fr;padding:12px;border-radius:11px}
+  .live-brand{gap:10px}
+  .live-logo{width:42px;height:42px}
+  .hero h1{font-size:clamp(1.55rem,8vw,2rem)}
+  .live-status{width:max-content;max-width:100%;font-size:.7rem}
+
+  .section{margin-top:14px}
+  .section-head{gap:8px;margin-bottom:8px}
+  .section h2{font-size:1.25rem}
+  .section-head>.muted{font-size:.66rem}
+  .panel{padding:12px}
+
+  .stats-grid{gap:7px;margin:9px 0}
+  .stat-card{padding:10px}
+  .stat-card small{font-size:.64rem}
+  .stat-card strong{font-size:1.2rem}
+
+  .board-card{padding:12px}
+  .board-top{margin-bottom:8px}
+  .player-line{gap:7px;padding:8px 0}
+  .remaining{font-size:1.3rem}
+  .round{font-size:.75rem}
+
+  .list-row{gap:8px;padding:9px 0}
+  .list-row small{font-size:.72rem}
+  .ranking-list .list-row{grid-template-columns:32px minmax(0,1fr) auto}
+  .rating{font-size:.95rem}
+
+  .portal-table{font-size:.7rem}
+  .portal-table th,.portal-table td{padding:6px 2px}
+  .portal-table th{font-size:.6rem;letter-spacing:.03em}
+  .portal-table th:nth-child(2),.portal-table td:nth-child(2){width:46%}
+
+  .highlight-grid{grid-template-columns:1fr}
+  .highlight:last-child:nth-child(odd){grid-column:auto}
+  .highlight{padding:11px;text-align:left}
+  .highlight strong{font-size:1.45rem}
+
+  .checkin-stage{margin-top:8px;gap:8px}
+  .checkin-stage-main{padding:16px}
+  .checkin-stage-main h2{font-size:1.85rem}
+  .checkin-lead{font-size:.92rem;margin-bottom:16px}
+  .checkin-code-card{padding:16px 8px}
+  .checkin-code-card strong{font-size:clamp(2.45rem,12vw,3.6rem);letter-spacing:.07em;white-space:nowrap}
+  .checkin-code-card small{font-size:.76rem}
+  .checkin-progress{margin-top:16px}
+  .checkin-roster-panel{padding:14px}
+  .checkin-roster-head{margin-bottom:10px}
+  .checkin-roster-head h3{font-size:1.4rem}
+  .checkin-roster-count{min-width:46px;height:38px;font-size:1rem}
+  .checkin-participants{grid-template-columns:1fr}
+  .checkin-person{grid-template-columns:minmax(0,1fr) auto;min-height:50px;padding:9px 10px}
+  .checkin-person strong{white-space:normal;line-height:1.2}
+  .checkin-person-status{font-size:.62rem;padding:4px 6px}
+}
+
+@media (max-width:380px){
+  .section-head{display:grid}
+  .section-head>.muted{text-align:left}
+  .player-line{grid-template-columns:minmax(0,1fr) auto auto}
+  .checkin-person{grid-template-columns:1fr;gap:5px}
+  .checkin-person-status{justify-self:start}
+}
