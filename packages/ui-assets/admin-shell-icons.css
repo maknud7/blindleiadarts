@@ -4,6 +4,16 @@
     background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;
   }
 
+  body[data-portal-default="overview"] .topbar-brand .brand-mark.small{
+    display:block!important;
+    flex:0 0 38px!important;
+    width:38px!important;
+    height:38px!important;
+    border-radius:4px!important;
+    background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;
+    color:transparent!important;
+  }
+
   body[data-portal-default="overview"] .section-nav.portal-menu a::before{
     content:""!important;
     flex:0 0 19px!important;
