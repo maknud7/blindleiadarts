@@ -24,12 +24,22 @@ if (host) {
     summarySelect?.closest("label")?.classList.add("tc-context-selector-hidden");
   }
 
+  function dedupePanels(selector, preferredParent) {
+    const panels = [...host.querySelectorAll(selector)];
+    if (panels.length <= 1) return panels[0] || null;
+    const keep = panels.find((panel) => preferredParent && panel.parentElement === preferredParent) || panels[0];
+    panels.forEach((panel) => {
+      if (panel !== keep) panel.remove();
+    });
+    return keep;
+  }
+
   function embedExternalTools() {
     const liveStage = document.getElementById("tcStageLive");
     const afterStage = document.getElementById("tcStageAfter");
-    const operations = host.querySelector(".ops-admin-panel");
-    const playoff = host.querySelector(".playoff-control");
-    const summary = host.querySelector(".tc-summary-admin");
+    const operations = dedupePanels(".ops-admin-panel", liveStage);
+    const playoff = dedupePanels(".playoff-control", liveStage);
+    const summary = dedupePanels(".tc-summary-admin", afterStage);
 
     if (liveStage && operations && operations.parentElement !== liveStage) {
       operations.classList.add("tc-embedded-tool");
