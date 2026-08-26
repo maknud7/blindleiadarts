@@ -1,4 +1,5 @@
 const ENDPOINT = "../api/member-onboarding.php";
+const LINKS_ENDPOINT = "../api/onboarding-links.php";
 
 const panel = document.getElementById("players");
 if (panel) {
@@ -45,7 +46,17 @@ if (panel) {
     openInvite: block.querySelector("#memberOpenInvite"),
   };
 
-  const state = { token: "", clubId: 0, key: "", items: [], pending: [], loading: false, filter: "all", search: "" };
+  const state = {
+    token: "",
+    clubId: 0,
+    key: "",
+    items: [],
+    pending: [],
+    loading: false,
+    filter: "all",
+    search: "",
+    linkConfig: null,
+  };
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -67,6 +78,24 @@ if (panel) {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
     return payload.data;
+  }
+
+  async function loadLinkConfig() {
+    if (state.linkConfig) return state.linkConfig;
+    const response = await fetch(new URL(LINKS_ENDPOINT, window.location.href), { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || "Kunne ikke hente adressen for invitasjonslenken.");
+    state.linkConfig = payload.data;
+    return state.linkConfig;
+  }
+
+  function onboardingUrl(baseUrl, token) {
+    const base = String(baseUrl || "").trim();
+    if (!base) throw new Error("Invitasjonsadressen er ikke konfigurert.");
+    const root = base.endsWith("/") ? base : `${base}/`;
+    const url = new URL("onboarding/", root);
+    url.searchParams.set("token", token);
+    return url;
   }
 
   function statusInfo(status) {
@@ -202,11 +231,20 @@ if (panel) {
     el.result.innerHTML = `<strong>${escapeHtml(message)}</strong>`;
   }
 
-  function showInviteLink(title, inviteToken, expiresAt, note) {
-    const url = new URL("../onboarding/", window.location.href);
-    url.searchParams.set("token", inviteToken);
+  async function showInviteLink(title, inviteToken, expiresAt, note, target = "runtime") {
+    const config = await loadLinkConfig();
+    const isMemberInvite = target === "member";
+    const baseUrl = isMemberInvite ? config.member_onboarding_base_url : config.runtime_base_url;
+    const url = onboardingUrl(baseUrl, inviteToken);
+    const productionLink = isMemberInvite || String(config.app_env || "") === "prod";
+    const environmentLabel = productionLink ? "Produksjonslenke" : "Testlenke";
+    const environmentTone = productionLink ? "good" : "warning";
+    const environmentNote = !productionLink
+      ? "Dette er en testlenke og skal ikke sendes til medlemmer."
+      : "";
+
     el.result.className = "member-invite-result good";
-    el.result.innerHTML = `<div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(note)} Lenken er gyldig til ${escapeHtml(formatDate(expiresAt))}.</small></div><div class="member-link-row"><input readonly value="${escapeHtml(url.toString())}"><button type="button" class="button member-copy-link">Kopier lenke</button></div>`;
+    el.result.innerHTML = `<div><strong>${escapeHtml(title)}</strong><small><span class="badge ${environmentTone}">${environmentLabel}</span> ${escapeHtml(note)} ${escapeHtml(environmentNote)} Lenken er gyldig til ${escapeHtml(formatDate(expiresAt))}.</small></div><div class="member-link-row"><input readonly value="${escapeHtml(url.toString())}"><button type="button" class="button member-copy-link">Kopier lenke</button></div>`;
     el.result.querySelector(".member-copy-link")?.addEventListener("click", async (event) => {
       await navigator.clipboard.writeText(url.toString());
       event.currentTarget.textContent = "Kopiert";
@@ -217,7 +255,7 @@ if (panel) {
     el.openInvite.disabled = true;
     try {
       const data = await request("invite-open", { method: "POST", body: {} });
-      showInviteLink("Generell invitasjonslenke", data.token, data.expires_at, "Mottakeren fyller selv inn navn, e-post og passord.");
+      await showInviteLink("Generell invitasjonslenke", data.token, data.expires_at, "Mottakeren fyller selv inn navn, e-post og passord.", "runtime");
     } catch (error) {
       showInline(error.message, "bad");
     } finally {
@@ -266,7 +304,7 @@ if (panel) {
       button.disabled = true;
       try {
         const data = await request("invite", { method: "POST", body: { member_id: memberId } });
-        showInviteLink(`Invitasjonslenke til ${item.member_name}`, data.token, data.expires_at, "Lenken er koblet direkte til dette medlemmet. Personen velger selv e-post og passord.");
+        await showInviteLink(`Invitasjonslenke til ${item.member_name}`, data.token, data.expires_at, "Lenken er koblet direkte til dette medlemmet. Personen velger selv e-post og passord.", "member");
         state.key = "";
         await load(true);
       } catch (error) {
@@ -308,5 +346,6 @@ if (panel) {
   document.getElementById("refreshAllButton")?.addEventListener("click", () => { state.key = ""; setTimeout(() => load(true), 50); });
   document.getElementById("clubSelect")?.addEventListener("change", () => { state.key = ""; setTimeout(() => load(true), 100); });
   window.addEventListener("bd:portal-view", (event) => { if (event.detail?.target === "players") load(true); });
+  loadLinkConfig().catch(() => null);
   load(true);
 }
