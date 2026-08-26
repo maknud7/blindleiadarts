@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f3f8fb">
   <meta name="color-scheme" content="light">
-  <title>Aktiver medlemskonto · Blindleia Darts</title>
+  <title>Kom i gang · Blindleia Darts</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -17,19 +17,30 @@
         </div>
         <div class="brand-copy">
           <p class="eyebrow">Blindleia Darts</p>
-          <strong>Medlemskonto</strong>
+          <strong>Spillerkonto</strong>
         </div>
       </header>
 
       <div class="intro-block">
         <span class="step-pill">Kom i gang</span>
         <h1 id="title">Aktiver kontoen din</h1>
-        <p id="intro" class="muted" aria-live="polite">Kontrollerer aktiveringslenken …</p>
+        <p id="intro" class="muted" aria-live="polite">Kontrollerer invitasjonslenken …</p>
       </div>
 
       <div id="message" class="message hidden" role="alert" aria-live="assertive"></div>
 
       <form id="onboardingForm" class="form hidden" novalidate>
+        <div id="nameFields" class="name-fields hidden">
+          <div class="field-group">
+            <label for="firstName">Fornavn</label>
+            <input id="firstName" type="text" autocomplete="given-name" maxlength="100">
+          </div>
+          <div class="field-group">
+            <label for="lastName">Etternavn</label>
+            <input id="lastName" type="text" autocomplete="family-name" maxlength="120">
+          </div>
+        </div>
+
         <div class="field-group">
           <label for="email">E-postadresse</label>
           <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
@@ -57,19 +68,19 @@
           <span id="passwordMatchCheck">Passordene er like</span>
         </div>
 
-        <button id="submitButton" class="primary-action" type="submit">Aktiver konto</button>
-        <p class="form-note">Når du aktiverer kontoen, kobles innloggingen til medlemskapet ditt i Blindleia Dartklubb.</p>
+        <button id="submitButton" class="primary-action" type="submit">Send inn</button>
+        <p id="formNote" class="form-note"></p>
       </form>
 
       <div id="success" class="success hidden" tabindex="-1">
         <div class="success-mark" aria-hidden="true">✓</div>
         <p class="eyebrow">Ferdig</p>
-        <h2>Kontoen er aktivert</h2>
-        <p>Du kan nå logge inn og bruke medlemsprofilen din.</p>
-        <a class="primary-action" href="../player/#profile">Gå til Min side</a>
+        <h2 id="successTitle">Registreringen er sendt inn</h2>
+        <p id="successText">Klubben kobler registreringen til medlemskapet ditt.</p>
+        <a id="successLink" class="primary-action" href="../player/#profile">Gå til Min side</a>
       </div>
     </section>
   </main>
-  <script src="./app.js" type="module"></script>
+  <script src="./app.js?v=20260826-1845" type="module"></script>
 </body>
 </html>
