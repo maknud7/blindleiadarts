@@ -25,14 +25,12 @@ if (host) {
     if (!settingsHost) return false;
     settingsHost.innerHTML = `
       <details id="tcCheckinSettings" class="tc-disclosure tc-checkin-settings">
-        <summary><span>Innsjekk-innstillinger</span><small id="tcCheckinSummary">Bruker klubbstandard</small></summary>
+        <summary><span>Innsjekk</span><small id="tcCheckinSummary">Klubbstandard</small></summary>
         <div class="tc-disclosure-body stack">
-          <p class="muted">Dette er avansert oppsett. Til vanlig trenger du bare å sjekke inn spillerne i listen over.</p>
           <label><span>Metode</span><select id="tcCheckinMethod"><option value="admin_or_code">Turneringsleder + kode</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label>
-          <div class="tc-two"><label><span>Åpner</span><input id="tcCheckinOpens" type="datetime-local"></label><label><span>Stenger</span><input id="tcCheckinCloses" type="datetime-local"></label></div>
-          <div id="tcCheckinCodeBox" class="tc-code-box"><div><small class="muted">Kode i lokalet</small><strong id="tcCheckinCode">—</strong></div><button id="tcRotateCode" type="button" class="button secondary">Lag ny kode</button></div>
-          <div id="tcCheckinEffective" class="muted"></div>
-          <button id="tcSaveCheckin" type="button" class="button secondary">Lagre innstillinger</button>
+          <label><span>Innsjekk åpner</span><input id="tcCheckinOpens" type="datetime-local"></label>
+          <div id="tcCheckinCodeBox" class="tc-code-box"><div><small class="muted">Innsjekk-kode</small><strong id="tcCheckinCode">—</strong></div><button id="tcRotateCode" type="button" class="button secondary">Ny kode</button></div>
+          <button id="tcSaveCheckin" type="button" class="button secondary">Lagre</button>
         </div>
       </details>`;
     document.getElementById("tcSaveCheckin")?.addEventListener("click", save);
@@ -65,12 +63,10 @@ if (host) {
       const method = currentSettings.effective_method || currentSettings.checkin_method || "admin_or_code";
       document.getElementById("tcCheckinMethod").value = method;
       document.getElementById("tcCheckinOpens").value = localInput(currentSettings.checkin_opens_at);
-      document.getElementById("tcCheckinCloses").value = localInput(currentSettings.checkin_closes_at);
       document.getElementById("tcCheckinCode").textContent = currentSettings.checkin_code || "Lages ved behov";
       document.getElementById("tcCheckinSummary").textContent = methodUsesCode(method) && currentSettings.checkin_code
-        ? `${methodLabel(method)} · kode ${currentSettings.checkin_code}`
+        ? `${methodLabel(method)} · ${currentSettings.checkin_code}`
         : methodLabel(method);
-      document.getElementById("tcCheckinEffective").textContent = `Effektivt vindu: ${String(currentSettings.effective_checkin_opens_at).replace(" ", " kl. ")} → ${String(currentSettings.effective_checkin_closes_at).replace(" ", " kl. ")}`;
       renderCodeVisibility();
     } catch (error) { show(error.message, "error"); }
   }
@@ -84,10 +80,9 @@ if (host) {
       const data = await api(`/tournaments/${id}/checkin-settings`, { method: "PUT", body: {
         checkin_method: document.getElementById("tcCheckinMethod").value,
         checkin_opens_at: document.getElementById("tcCheckinOpens").value || null,
-        checkin_closes_at: document.getElementById("tcCheckinCloses").value || null,
       }});
       currentSettings = data.settings || null;
-      show("Innsjekk-innstillingene er lagret.");
+      show("Innsjekk er oppdatert.");
       await load();
     } catch (error) { show(error.message, "error"); }
     finally { button.disabled = false; }
@@ -97,12 +92,11 @@ if (host) {
     const id = tournamentId();
     if (!id) return;
     const button = document.getElementById("tcRotateCode");
-    if (!window.confirm("Lage ny innsjekk-kode? Den gamle slutter å virke med en gang.")) return;
     button.disabled = true;
     try {
       const data = await api(`/tournaments/${id}/checkin-code/rotate`, { method: "POST" });
       currentSettings = data.settings || null;
-      show("Ny innsjekk-kode er aktiv.");
+      show("Ny innsjekk-kode er klar.");
       await load();
     } catch (error) { show(error.message, "error"); }
     finally { button.disabled = false; }
