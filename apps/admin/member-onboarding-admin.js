@@ -4,7 +4,7 @@ const panel = document.getElementById("players");
 if (panel) {
   const css = document.createElement("link");
   css.rel = "stylesheet";
-  css.href = "./member-onboarding-admin.css?v=20260826-1545";
+  css.href = "./member-onboarding-admin.css?v=20260826-1845";
   document.head.appendChild(css);
 
   const block = document.createElement("div");
@@ -18,10 +18,12 @@ if (panel) {
         <button type="button" data-member-filter="access">Mangler tilgang</button>
         <button type="button" data-member-filter="disabled">Deaktivert</button>
       </div>
+      <button id="memberOpenInvite" type="button" class="button secondary">Ny invitasjonslenke</button>
       <span id="memberAccessCount" class="pill">—</span>
     </div>
     <div id="memberAccessSummary" class="member-access-summary"></div>
     <div id="memberInviteResult" class="member-invite-result hidden"></div>
+    <div id="memberPendingRegistrations" class="member-pending hidden"></div>
     <div class="table-wrap member-access-table-wrap">
       <table>
         <thead><tr><th>Medlem</th><th>Kontingent</th><th>Tilgang</th><th></th></tr></thead>
@@ -37,11 +39,13 @@ if (panel) {
     count: block.querySelector("#memberAccessCount"),
     summary: block.querySelector("#memberAccessSummary"),
     result: block.querySelector("#memberInviteResult"),
+    pending: block.querySelector("#memberPendingRegistrations"),
     rows: block.querySelector("#memberAccessRows"),
     search: block.querySelector("#memberSearch"),
+    openInvite: block.querySelector("#memberOpenInvite"),
   };
 
-  const state = { token: "", clubId: 0, key: "", items: [], loading: false, filter: "all", search: "" };
+  const state = { token: "", clubId: 0, key: "", items: [], pending: [], loading: false, filter: "all", search: "" };
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -85,6 +89,10 @@ if (panel) {
     const date = new Date(String(value).replace(" ", "T"));
     if (Number.isNaN(date.getTime())) return String(value);
     return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+  }
+
+  function normalizeName(value) {
+    return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("nb");
   }
 
   function duesCell(membership) {
@@ -132,8 +140,36 @@ if (panel) {
     }).join("");
   }
 
+  function memberOptions(registration) {
+    const exact = normalizeName(registration.display_name);
+    return state.items
+      .filter((item) => String(item.account?.status || "none") !== "active")
+      .map((item) => {
+        const selected = normalizeName(item.member_name) === exact ? " selected" : "";
+        return `<option value="${Number(item.member_id)}"${selected}>${escapeHtml(item.member_name)}</option>`;
+      }).join("");
+  }
+
+  function renderPending() {
+    if (!state.pending.length) {
+      el.pending.classList.add("hidden");
+      el.pending.innerHTML = "";
+      return;
+    }
+    el.pending.classList.remove("hidden");
+    el.pending.innerHTML = `
+      <div class="member-pending-head"><div><p class="eyebrow">Venter på godkjenning</p><h3>Registreringer fra invitasjonslenke</h3></div><span class="pill">${state.pending.length}</span></div>
+      <div class="member-pending-list">${state.pending.map((item) => `
+        <article class="member-pending-card" data-open-invite-id="${Number(item.id)}">
+          <div class="member-pending-person"><strong>${escapeHtml(item.display_name)}</strong><small>${escapeHtml(item.email)}</small></div>
+          <label><span>Koble til medlem</span><select class="member-pending-select"><option value="">Velg medlem …</option>${memberOptions(item)}</select></label>
+          <button type="button" class="button member-approve-open">Godkjenn</button>
+        </article>`).join("")}</div>`;
+  }
+
   function render(data) {
     state.items = data.items || [];
+    state.pending = data.pending_registrations || [];
     const summary = data.summary || {};
     el.count.textContent = `${summary.members || state.items.length} medlemmer`;
     const active = Number(summary.active || 0);
@@ -143,6 +179,7 @@ if (panel) {
       ["Mangler tilgang", waiting],
       ["Deaktivert", Number(summary.disabled || 0)],
     ].map(([label, value]) => `<span><strong>${Number(value)}</strong> ${escapeHtml(label)}</span>`).join("");
+    renderPending();
     renderRows();
   }
 
@@ -165,16 +202,28 @@ if (panel) {
     el.result.innerHTML = `<strong>${escapeHtml(message)}</strong>`;
   }
 
-  function showInviteLink(memberName, inviteToken, expiresAt) {
+  function showInviteLink(title, inviteToken, expiresAt, note) {
     const url = new URL("../onboarding/", window.location.href);
     url.searchParams.set("token", inviteToken);
     el.result.className = "member-invite-result good";
-    el.result.innerHTML = `<div><strong>Invitasjon til ${escapeHtml(memberName)}</strong><small>Personen velger selv e-post og passord. Lenken er gyldig til ${escapeHtml(formatDate(expiresAt))}.</small></div><div class="member-link-row"><input readonly value="${escapeHtml(url.toString())}"><button type="button" class="button member-copy-link">Kopier lenke</button></div>`;
+    el.result.innerHTML = `<div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(note)} Lenken er gyldig til ${escapeHtml(formatDate(expiresAt))}.</small></div><div class="member-link-row"><input readonly value="${escapeHtml(url.toString())}"><button type="button" class="button member-copy-link">Kopier lenke</button></div>`;
     el.result.querySelector(".member-copy-link")?.addEventListener("click", async (event) => {
       await navigator.clipboard.writeText(url.toString());
       event.currentTarget.textContent = "Kopiert";
     });
   }
+
+  el.openInvite?.addEventListener("click", async () => {
+    el.openInvite.disabled = true;
+    try {
+      const data = await request("invite-open", { method: "POST", body: {} });
+      showInviteLink("Ny invitasjonslenke", data.token, data.expires_at, "Mottakeren fyller selv inn navn, e-post og passord.");
+    } catch (error) {
+      showInline(error.message, "bad");
+    } finally {
+      el.openInvite.disabled = false;
+    }
+  });
 
   block.addEventListener("click", async (event) => {
     const filterButton = event.target.closest("[data-member-filter]");
@@ -182,6 +231,27 @@ if (panel) {
       state.filter = filterButton.dataset.memberFilter || "all";
       block.querySelectorAll("[data-member-filter]").forEach((button) => button.classList.toggle("active", button === filterButton));
       renderRows();
+      return;
+    }
+
+    const pendingCard = event.target.closest("[data-open-invite-id]");
+    const approveButton = event.target.closest(".member-approve-open");
+    if (pendingCard && approveButton) {
+      const inviteId = Number(pendingCard.dataset.openInviteId || 0);
+      const memberId = Number(pendingCard.querySelector(".member-pending-select")?.value || 0);
+      if (!memberId) {
+        showInline("Velg hvilket medlem registreringen skal kobles til.", "bad");
+        return;
+      }
+      approveButton.disabled = true;
+      try {
+        const data = await request("approve-open", { method: "POST", body: { invite_id: inviteId, member_id: memberId } });
+        showInline(`${data.name} er godkjent og kan logge inn.`, "good");
+        state.key = "";
+        await load(true);
+      } catch (error) {
+        showInline(error.message, "bad");
+      } finally { approveButton.disabled = false; }
       return;
     }
 
@@ -196,7 +266,7 @@ if (panel) {
       button.disabled = true;
       try {
         const data = await request("invite", { method: "POST", body: { member_id: memberId } });
-        showInviteLink(item.member_name, data.token, data.expires_at);
+        showInviteLink(`Invitasjon til ${item.member_name}`, data.token, data.expires_at, "Personen velger selv e-post og passord.");
         state.key = "";
         await load(true);
       } catch (error) {
