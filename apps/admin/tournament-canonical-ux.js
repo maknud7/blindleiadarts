@@ -5,8 +5,6 @@ if (host) {
   let context = window.__bdTournamentContext || null;
   let detail = null;
   let detailRequest = 0;
-  let checkinWorkTournamentId = 0;
-  let manualPhaseOverrideTournamentId = 0;
 
   function token() {
     return localStorage.getItem("bd:token") || "";
@@ -21,9 +19,6 @@ if (host) {
       node.classList.remove("tournament-room-view-hidden");
     });
 
-    // The phase-based .tc-workspace is canonical. During the transition more
-    // than one import path could instantiate it, which produced two selectors,
-    // two phase navigations and two check-in surfaces on the same page.
     const workspaces = [...host.querySelectorAll(":scope > .tc-workspace")];
     if (workspaces.length > 1) {
       const keep = workspaces.find((workspace) => workspace.querySelector("#tcDesktopRail")) || workspaces[0];
@@ -52,78 +47,39 @@ if (host) {
     return registrations().filter((registration) => String(registration.status) === "registered");
   }
 
-  function isFinished() {
-    return ["completed", "archived"].includes(String(detail?.status || context?.status || ""));
-  }
-
   function isStarted() {
-    return String(detail?.status || context?.status || "") === "in_progress";
+    return ["in_progress", "completed", "archived"].includes(String(detail?.status || context?.status || ""));
   }
 
   function currentTournamentId() {
     return Number(context?.id || detail?.id || document.getElementById("tcTournament")?.value || 0);
   }
 
-  function ensureCheckinNote() {
+  function enforceStartedState() {
     const stage = document.getElementById("tcStageCheckin");
     const list = document.getElementById("tcRegistrations");
     if (!stage || !list) return;
 
-    let note = document.getElementById("tcLateCheckinNote");
-    if (!isStarted() || isFinished()) {
+    let note = document.getElementById("tcStartedCheckinNote");
+    if (!isStarted()) {
       note?.remove();
       return;
     }
 
+    host.querySelectorAll(".tc-checkin").forEach((button) => button.remove());
+    document.getElementById("tcToFormat")?.setAttribute("disabled", "disabled");
+
     if (!note) {
       note = document.createElement("div");
-      note.id = "tcLateCheckinNote";
+      note.id = "tcStartedCheckinNote";
       note.className = "tc-attendance-note";
       list.before(note);
     }
-    note.innerHTML = `<strong>Oppmøte kan fortsatt korrigeres</strong><span>Turneringen er i gang. Du kan sjekke inn spillere som allerede er påmeldt, mens deltakerfelt og format fortsatt er låst.</span>`;
-  }
 
-  function decorateRegistrationRows() {
-    cleanupLegacyUi();
-    ensureCheckinNote();
-    if (isFinished()) return;
-
-    const pendingById = new Set(pendingRegistrations().map((registration) => Number(registration.player_id)));
-    host.querySelectorAll('.tc-registration[data-status="registered"]').forEach((row) => {
-      const playerId = Number(row.dataset.playerId || 0);
-      if (!playerId || (pendingById.size && !pendingById.has(playerId))) return;
-      if (row.querySelector(".tc-checkin")) return;
-
-      const actions = document.createElement("div");
-      actions.className = "tc-row-actions tc-late-checkin-actions";
-      actions.innerHTML = `<button type="button" class="button tc-checkin" data-player-id="${playerId}">Sjekk inn</button>`;
-      row.appendChild(actions);
-    });
-  }
-
-  function maybeOpenCheckin() {
-    const id = currentTournamentId();
     const pending = pendingRegistrations().length;
-
-    if (!id || !isStarted() || !pending || isFinished()) {
-      if (!pending || isFinished()) {
-        checkinWorkTournamentId = 0;
-        manualPhaseOverrideTournamentId = 0;
-      }
-      return;
-    }
-
-    // En eksplisitt faseendring fra turneringsleder skal respekteres. Vanlig
-    // refresh etter en innsjekk skal derimot ikke kaste brukeren over i Drift.
-    if (manualPhaseOverrideTournamentId === id) return;
-
-    if (!checkinWorkTournamentId) checkinWorkTournamentId = id;
-    if (checkinWorkTournamentId !== id) return;
-
-    if (String(context?.view || "") !== "checkin") {
-      document.querySelector('[data-tc-view="checkin"]')?.click();
-    }
+    note.innerHTML = pending > 0
+      ? `<strong>Innsjekk er stengt</strong><span>Turneringen er startet. ${pending} tidligere påmeldte står fortsatt som ikke møtt i eldre testdata og kan ikke sjekkes inn nå.</span>`
+      : `<strong>Innsjekk er stengt</strong><span>Turneringen er startet. Oppmøtet er låst for resten av turneringen.</span>`;
   }
 
   async function sync(nextContext = context) {
@@ -136,55 +92,28 @@ if (host) {
     const nextDetail = await tournamentDetail(id).catch(() => null);
     if (request !== detailRequest) return;
     detail = nextDetail;
-
-    maybeOpenCheckin();
-    window.requestAnimationFrame(decorateRegistrationRows);
+    window.requestAnimationFrame(enforceStartedState);
   }
-
-  host.addEventListener("click", (event) => {
-    const checkinButton = event.target.closest(".tc-checkin");
-    if (checkinButton) {
-      checkinWorkTournamentId = currentTournamentId();
-      manualPhaseOverrideTournamentId = 0;
-      return;
-    }
-
-    const phaseButton = event.target.closest("[data-tc-view]");
-    if (!phaseButton || !event.isTrusted) return;
-    const id = currentTournamentId();
-    const view = String(phaseButton.dataset.tcView || "");
-    if (!id) return;
-
-    if (view === "checkin") {
-      checkinWorkTournamentId = id;
-      manualPhaseOverrideTournamentId = 0;
-    } else {
-      manualPhaseOverrideTournamentId = id;
-    }
-  }, true);
-
-  document.getElementById("tcTournament")?.addEventListener("change", () => {
-    checkinWorkTournamentId = 0;
-    manualPhaseOverrideTournamentId = 0;
-  });
 
   const style = document.createElement("style");
   style.id = "tournamentCanonicalUxStyles";
   style.textContent = `
     .tc-attendance-note{display:grid;gap:3px;margin:0 0 10px;padding:11px 13px;border:1px solid #c8ddeb;border-radius:12px;background:#f2f8fc;color:var(--text)}
     .tc-attendance-note strong{font-size:13px}.tc-attendance-note span{font-size:12px;line-height:1.4;color:var(--muted)}
-    .tc-late-checkin-actions{margin-left:auto}
   `;
   document.head.appendChild(style);
 
   const registrationsRoot = document.getElementById("tcRegistrations");
   if (registrationsRoot) {
-    new MutationObserver(() => decorateRegistrationRows())
+    new MutationObserver(() => enforceStartedState())
       .observe(registrationsRoot, { childList: true });
   }
 
   window.addEventListener("bd:tournament-context", (event) => sync(event.detail));
-  window.addEventListener("bd:tournament-tools-ready", cleanupLegacyUi);
+  window.addEventListener("bd:tournament-tools-ready", () => {
+    cleanupLegacyUi();
+    enforceStartedState();
+  });
   window.addEventListener("bd:portal-view", (event) => {
     if (event.detail?.target === "tournaments") {
       cleanupLegacyUi();
@@ -192,6 +121,9 @@ if (host) {
     }
   });
 
-  [0, 120, 450, 1100].forEach((delay) => window.setTimeout(cleanupLegacyUi, delay));
+  [0, 120, 450, 1100].forEach((delay) => window.setTimeout(() => {
+    cleanupLegacyUi();
+    enforceStartedState();
+  }, delay));
   sync().catch(() => undefined);
 }
