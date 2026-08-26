@@ -66,8 +66,9 @@ function reloadWithoutShortcut() {
 async function leaveTestMode(button = null) {
   if (button) button.disabled = true;
   const code = localStorage.getItem("bd:kioskCode") || "";
+  const previousCode = localStorage.getItem(PRE_TEST_CODE_KEY) || "";
   const token = localStorage.getItem("bd:kioskPairingToken") || "";
-  if (code && token) {
+  if (code && token && code !== previousCode) {
     try {
       await fetch(`../api/v1/kiosks/${encodeURIComponent(code)}/unpair`, {
         method: "POST",
@@ -91,10 +92,9 @@ function ensureAdminTestControl() {
     card = document.createElement("section");
     card.id = "kioskTestModeSettings";
     card.className = "test-mode-settings-card";
-    card.dataset.kioskAdminControl = "1";
     card.innerHTML = `
       <div><strong>Testmodus</strong><small class="muted" id="kioskTestModeHelp"></small></div>
-      <button id="kioskTestModeToggle" type="button" class="ghost-button test-mode-settings-button"></button>`;
+      <button id="kioskTestModeToggle" type="button" class="ghost-button test-mode-settings-button" data-kiosk-admin-control></button>`;
     meta.appendChild(card);
     document.getElementById("kioskTestModeToggle")?.addEventListener("click", (event) => {
       if (active()) {
@@ -107,12 +107,15 @@ function ensureAdminTestControl() {
     });
   }
   const enabled = active();
+  const unlocked = typeof isUnlocked === "function" ? isUnlocked() : false;
   card.classList.toggle("active", enabled);
   const help = document.getElementById("kioskTestModeHelp");
   const button = document.getElementById("kioskTestModeToggle");
   if (help) help.textContent = enabled
     ? "Aktiv nå. Kamp og scoring går mot isolert test-runtime, og gule markeringer viser at terminalen er i test."
-    : "Bruk isolert test-runtime uten å påvirke ordinære kamp- og scoringdata.";
+    : (unlocked
+      ? "Bruk isolert test-runtime uten å påvirke ordinære kamp- og scoringdata."
+      : "Lås opp admin-modus under for å starte testmodus.");
   if (button) button.textContent = enabled ? "Avslutt testmodus" : "Start testmodus";
 }
 async function activateTestBoard(kioskId, source, button) {
@@ -171,7 +174,10 @@ async function bootTestMode() {
     rememberNormalTerminal();
     setActive(true);
   }
-  if (query === "0") setActive(false);
+  if (query === "0") {
+    setActive(false);
+    restoreNormalTerminal();
+  }
   styles();
   ensureAdminTestControl();
   const observer = new MutationObserver(ensureAdminTestControl);
