@@ -1,0 +1,46 @@
+/* Admin-only visual polish. Loaded by the shared portal brand layer. */
+@media (min-width:981px){
+  body[data-portal-default="overview"] .admin-menu-label::before{
+    background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;
+  }
+
+  body[data-portal-default="overview"] .section-nav.portal-menu a::before{
+    content:""!important;
+    flex:0 0 19px!important;
+    width:19px!important;
+    height:19px!important;
+    border:0!important;
+    border-radius:0!important;
+    opacity:.92!important;
+    background-position:center!important;
+    background-repeat:no-repeat!important;
+    background-size:19px 19px!important;
+  }
+
+  body[data-portal-default="overview"] .section-nav.portal-menu a[href="#overview"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1'/%3E%3C/svg%3E")!important;
+  }
+  body[data-portal-default="overview"] .section-nav.portal-menu a[href="#tournaments"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 4h8v4a4 4 0 0 1-8 0V4Z'/%3E%3Cpath d='M8 6H5a2 2 0 0 0 2 3h1M16 6h3a2 2 0 0 1-2 3h-1M12 12v4M8.5 20h7M10 16h4'/%3E%3C/svg%3E")!important;
+  }
+  body[data-portal-default="overview"] .section-nav.portal-menu a[href="#seasons"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01'/%3E%3C/svg%3E")!important;
+  }
+  body[data-portal-default="overview"] .section-nav.portal-menu a[href="#players"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E")!important;
+  }
+  body[data-portal-default="overview"] .section-nav.portal-menu a[href="#kiosks"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='20' height='14' rx='2'/%3E%3Cpath d='M8 21h8M12 17v4'/%3E%3C/svg%3E")!important;
+  }
+  body[data-portal-default="overview"] .section-nav.portal-menu a[href="#integrations"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.1A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6A1.7 1.7 0 0 0 10 2.5V2.4h4v.1a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7 1Z'/%3E%3C/svg%3E")!important;
+  }
+
+  body[data-portal-default="overview"] .section-nav.portal-menu a.active::before,
+  body[data-portal-default="overview"] .section-nav.portal-menu a:hover::before{filter:brightness(0) invert(1)}
+}
+
+/* The topbar/login logo must not depend on a relative CSS URL. */
+.brand-mark{
+  background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;
+}
