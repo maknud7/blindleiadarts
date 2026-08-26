@@ -5,7 +5,8 @@ if (host) {
   let context = window.__bdTournamentContext || null;
   let detail = null;
   let detailRequest = 0;
-  const autoOpenedCheckin = new Set();
+  let checkinWorkTournamentId = 0;
+  let manualPhaseOverrideTournamentId = 0;
 
   function token() {
     return localStorage.getItem("bd:token") || "";
@@ -20,8 +21,6 @@ if (host) {
       node.classList.remove("tournament-room-view-hidden");
     });
 
-    // Older cached module paths could mount the create button twice. There must
-    // only be one entry point for creating a tournament.
     const createButtons = [...host.querySelectorAll('[id="twOpen"]')];
     createButtons.slice(1).forEach((button) => button.remove());
   }
@@ -48,6 +47,10 @@ if (host) {
 
   function isStarted() {
     return String(detail?.status || context?.status || "") === "in_progress";
+  }
+
+  function currentTournamentId() {
+    return Number(context?.id || detail?.id || document.getElementById("tcTournament")?.value || 0);
   }
 
   function ensureCheckinNote() {
@@ -89,10 +92,23 @@ if (host) {
   }
 
   function maybeOpenCheckin() {
-    const id = Number(context?.id || detail?.id || 0);
-    if (!id || !isStarted() || !pendingRegistrations().length) return;
-    if (autoOpenedCheckin.has(id)) return;
-    autoOpenedCheckin.add(id);
+    const id = currentTournamentId();
+    const pending = pendingRegistrations().length;
+
+    if (!id || !isStarted() || !pending || isFinished()) {
+      if (!pending || isFinished()) {
+        checkinWorkTournamentId = 0;
+        manualPhaseOverrideTournamentId = 0;
+      }
+      return;
+    }
+
+    // En eksplisitt faseendring fra turneringsleder skal respekteres. Vanlig
+    // refresh etter en innsjekk skal derimot ikke kaste brukeren over i Drift.
+    if (manualPhaseOverrideTournamentId === id) return;
+
+    if (!checkinWorkTournamentId) checkinWorkTournamentId = id;
+    if (checkinWorkTournamentId !== id) return;
 
     if (String(context?.view || "") !== "checkin") {
       document.querySelector('[data-tc-view="checkin"]')?.click();
@@ -102,7 +118,7 @@ if (host) {
   async function sync(nextContext = context) {
     context = nextContext || context;
     cleanupLegacyUi();
-    const id = Number(context?.id || document.getElementById("tcTournament")?.value || 0);
+    const id = currentTournamentId();
     if (!id) return;
 
     const request = ++detailRequest;
@@ -113,6 +129,33 @@ if (host) {
     maybeOpenCheckin();
     window.requestAnimationFrame(decorateRegistrationRows);
   }
+
+  host.addEventListener("click", (event) => {
+    const checkinButton = event.target.closest(".tc-checkin");
+    if (checkinButton) {
+      checkinWorkTournamentId = currentTournamentId();
+      manualPhaseOverrideTournamentId = 0;
+      return;
+    }
+
+    const phaseButton = event.target.closest("[data-tc-view]");
+    if (!phaseButton || !event.isTrusted) return;
+    const id = currentTournamentId();
+    const view = String(phaseButton.dataset.tcView || "");
+    if (!id) return;
+
+    if (view === "checkin") {
+      checkinWorkTournamentId = id;
+      manualPhaseOverrideTournamentId = 0;
+    } else {
+      manualPhaseOverrideTournamentId = id;
+    }
+  }, true);
+
+  document.getElementById("tcTournament")?.addEventListener("change", () => {
+    checkinWorkTournamentId = 0;
+    manualPhaseOverrideTournamentId = 0;
+  });
 
   const style = document.createElement("style");
   style.id = "tournamentCanonicalUxStyles";
