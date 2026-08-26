@@ -58,17 +58,17 @@ function ensureAdminTestControl() {
   const label = active() ? "Avslutt testmodus" : "Aktiver testmodus";
   if (button.textContent !== label) button.textContent = label;
 }
-async function activateTestBoard(kioskId, button) {
+async function activateTestBoard(kioskId, source, button) {
   const token = ensureTestToken();
   button.disabled = true;
   try {
     const data = await jsonRequest(TEST_MODE_API, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Kiosk-Pairing-Token": token },
-      body: JSON.stringify({ kiosk_id: Number(kioskId) }),
+      body: JSON.stringify({ kiosk_id: Number(kioskId), source: source || "physical" }),
     });
     localStorage.setItem("bd:kioskCode", data.kiosk.code);
-    localStorage.setItem("bd:kioskTestPhysicalBoardId", String(data.physical_board?.id || kioskId));
+    localStorage.setItem("bd:kioskTestPhysicalBoardId", String(data.source_board?.id || data.physical_board?.id || kioskId));
     localStorage.removeItem("bd:kioskPairingRequestCode");
     localStorage.removeItem("bd:kioskPairingExpires");
     window.location.reload();
@@ -84,17 +84,20 @@ function buildPanel(items, message = "") {
   panel.className = "test-mode-panel";
   const hasItems = items.length > 0;
   const options = hasItems
-    ? items.map((item) => `<option value="${Number(item.id)}">${escapeHtml(item.club_name)} · Board ${Number(item.board_number)} · ${escapeHtml(item.name)}${item.scoring_mode === "scolia" ? " · Scolia" : ""}</option>`).join("")
-    : `<option value="">Ingen fysiske boards funnet</option>`;
+    ? items.map((item) => `<option value="${Number(item.id)}" data-source="${escapeHtml(item.source || "physical")}">${escapeHtml(item.club_name)} · Board ${Number(item.board_number)} · ${escapeHtml(item.name)}${item.scoring_mode === "scolia" ? " · Scolia" : ""}</option>`).join("")
+    : `<option value="">Ingen skiver funnet</option>`;
   panel.innerHTML = `
     <span class="test-mode-badge">Testmodus aktiv</span>
     <strong>Terminalen bruker isolert test-runtime</strong>
-    <small class="muted">${escapeHtml(message || "Testkamper og scoring lagres isolert. Det fysiske boardregisteret er felles, og Scolia flyttes ikke automatisk til test.")}</small>
-    <div class="test-mode-row" data-kiosk-admin-control><select aria-label="Velg fysisk board" ${hasItems ? "" : "disabled"}>${options}</select><button type="button" class="ghost-button" ${hasItems ? "" : "disabled"}>Bruk valgt board</button></div>
+    <small class="muted">${escapeHtml(message || "Testkamper og scoring lagres isolert. Du kan bruke en fysisk skive eller en skive som er opprettet i test-admin.")}</small>
+    <div class="test-mode-row" data-kiosk-admin-control><select aria-label="Velg skive" ${hasItems ? "" : "disabled"}>${options}</select><button type="button" class="ghost-button" ${hasItems ? "" : "disabled"}>Bruk valgt board</button></div>
     <button type="button" class="ghost-button test-mode-exit" data-kiosk-admin-control>Avslutt testmodus</button>`;
   const select = panel.querySelector("select");
   const use = panel.querySelector(".test-mode-row button");
-  if (hasItems) use.addEventListener("click", () => activateTestBoard(select.value, use));
+  if (hasItems) use.addEventListener("click", () => {
+    const selected = select.options[select.selectedIndex];
+    activateTestBoard(select.value, selected?.dataset.source || "physical", use);
+  });
   panel.querySelector(".test-mode-exit").addEventListener("click", () => {
     setActive(false);
     localStorage.removeItem("bd:kioskTestPhysicalBoardId");
@@ -124,14 +127,14 @@ async function bootTestMode() {
   if (!active()) return;
 
   document.body.classList.add("kiosk-test-mode");
-  replacePanel([], "Laster fysisk boardregister …");
+  replacePanel([], "Laster boardregister …");
   try {
     const data = await jsonRequest(TEST_MODE_API);
     replacePanel(data.items || [], (data.items || []).length
-      ? "Velg fysisk skive fra admin-modus. Testdata for kamp og scoring er fortsatt isolert."
-      : "Det fysiske boardregisteret har ingen aktive skiver.");
+      ? "Velg skiva du vil bruke. Skiver opprettet i test-admin kan brukes direkte, mens kamp- og scoringdata forblir isolert."
+      : "Det finnes ingen aktive skiver i fysisk register eller test-admin.");
   } catch (error) {
-    replacePanel([], `Kunne ikke laste fysisk boardregister: ${error.message || "ukjent feil"}`);
+    replacePanel([], `Kunne ikke laste boardregister: ${error.message || "ukjent feil"}`);
     console.warn("Kiosk test mode unavailable", error);
   }
 }
