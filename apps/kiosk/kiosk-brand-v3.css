@@ -32,32 +32,43 @@
   justify-content: flex-end;
 }
 
+/* Sponsor in topbar should feel like part of the header, not a separate card. */
 .kiosk-brand-v3 .board-sponsor-badge {
-  width: min(255px, 34vw);
-  max-width: none !important;
-  min-height: 50px;
-  flex: 0 1 255px;
-  padding: 7px 11px;
-  gap: 10px;
-  border-radius: 14px;
+  width: auto;
+  max-width: 230px !important;
+  min-height: 0;
+  flex: 0 1 auto;
+  padding: 2px 14px 2px 18px;
+  gap: 9px;
+  border: 0 !important;
+  border-left: 1px solid rgba(255,255,255,.2) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .kiosk-brand-v3 .board-sponsor-badge img {
-  width: 46px;
-  height: 38px;
-  flex: 0 0 46px;
-  padding: 2px;
-  border-radius: 8px;
+  width: 44px;
+  height: 34px;
+  flex: 0 0 44px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.kiosk-brand-v3 .board-sponsor-copy {
+  gap: 0;
 }
 
 .kiosk-brand-v3 .board-sponsor-copy span {
-  font-size: 9px;
-  letter-spacing: .1em;
+  display: none !important;
 }
 
 .kiosk-brand-v3 .board-sponsor-copy strong {
-  font-size: 13px;
-  line-height: 1.12;
+  font-size: 14px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: #fff;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -182,20 +193,15 @@
 
 @media (max-width: 660px) {
   .kiosk-brand-v3 .board-sponsor-badge {
-    width: auto;
-    max-width: 175px !important;
-    min-height: 44px;
-    padding: 6px 8px;
+    max-width: 165px !important;
+    padding: 2px 8px 2px 11px;
+    gap: 7px;
   }
 
   .kiosk-brand-v3 .board-sponsor-badge img {
-    width: 34px;
-    height: 32px;
-    flex-basis: 34px;
-  }
-
-  .kiosk-brand-v3 .board-sponsor-copy span {
-    display: none;
+    width: 32px;
+    height: 28px;
+    flex-basis: 32px;
   }
 
   .kiosk-brand-v3 .board-sponsor-copy strong {
