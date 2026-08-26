@@ -24,6 +24,27 @@ if (host) {
     summarySelect?.closest("label")?.classList.add("tc-context-selector-hidden");
   }
 
+  function embedExternalTools() {
+    const liveStage = document.getElementById("tcStageLive");
+    const afterStage = document.getElementById("tcStageAfter");
+    const operations = host.querySelector(".ops-admin-panel");
+    const playoff = host.querySelector(".playoff-control");
+    const summary = host.querySelector(".tc-summary-admin");
+
+    if (liveStage && operations && operations.parentElement !== liveStage) {
+      operations.classList.add("tc-embedded-tool");
+      liveStage.appendChild(operations);
+    }
+    if (liveStage && playoff && playoff.parentElement !== liveStage) {
+      playoff.classList.add("tc-embedded-tool");
+      liveStage.appendChild(playoff);
+    }
+    if (afterStage && summary && summary.parentElement !== afterStage) {
+      summary.classList.add("tc-embedded-tool");
+      afterStage.appendChild(summary);
+    }
+  }
+
   function ensureLiveTools() {
     const stage = document.getElementById("tcStageLive");
     if (!stage) return;
@@ -31,7 +52,7 @@ if (host) {
     const title = stage.querySelector(".tc-stage-head h3");
     const copy = stage.querySelector(".tc-stage-head .muted");
     if (title) title.textContent = "Kampdrift";
-    if (copy) copy.textContent = "Boards, kampkø og sluttspill.";
+    if (copy) copy.textContent = "Boards, kampkø og sluttspill samlet i samme arbeidsfase.";
 
     if (!document.getElementById("tcLiveTools")) {
       const toolbar = document.createElement("div");
@@ -46,7 +67,7 @@ if (host) {
       groups?.before(toolbar);
       toolbar.querySelectorAll("[data-live-tool]").forEach((button) => button.addEventListener("click", () => {
         liveTool = button.dataset.liveTool || "operations";
-        apply({ sync: false });
+        apply({ sync: true });
       }));
     }
 
@@ -95,11 +116,16 @@ if (host) {
     host.dataset.tcView = context.view || "checkin";
     host.dataset.tcLiveTool = liveTool;
     ensureLiveTools();
+    embedExternalTools();
     hideOwnTournamentPicker();
     organizeOperationsPanel();
-    if (sync) ["opsTournament", "poTournament", "tsaTournament"].forEach(syncSelect);
 
-    document.querySelectorAll("[data-live-tool]").forEach((button) => {
+    if (sync) {
+      if (context.view === "live") ["opsTournament", "poTournament"].forEach(syncSelect);
+      if (context.view === "after") syncSelect("tsaTournament");
+    }
+
+    host.querySelectorAll("[data-live-tool]").forEach((button) => {
       const active = button.dataset.liveTool === liveTool;
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", active ? "true" : "false");
@@ -115,7 +141,7 @@ if (host) {
 
   function settle() {
     settleTimers.forEach((timer) => window.clearTimeout(timer));
-    settleTimers = [0, 120, 400, 900].map((delay) => window.setTimeout(() => apply(), delay));
+    settleTimers = [0, 120, 350].map((delay) => window.setTimeout(() => apply(), delay));
   }
 
   window.addEventListener("bd:tournament-context", (event) => {
@@ -124,10 +150,9 @@ if (host) {
     settle();
   });
 
-  // Important: do not observe the whole tournament DOM here. The child modules
-  // re-render after their select change events. Observing those renders and then
-  // dispatching new change events creates a render/fetch feedback loop that can
-  // freeze the admin tab. A short, bounded settle pass is enough to catch modules
-  // that mount asynchronously without continuously reacting to their own output.
+  window.addEventListener("bd:tournament-tools-ready", () => {
+    settle();
+  });
+
   settle();
 }
