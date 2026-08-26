@@ -3,6 +3,9 @@
 return [
     'app_env' => 'test',
     'base_url' => 'https://example.test/blindleiadarts/test',
+    // Member-account invitations belong to the shared identity namespace and
+    // should resolve on the canonical production origin even from test admin.
+    'identity_base_url' => 'https://blindleiadarts.ingenting.org',
     'static_base_url' => 'https://example.test/blindleiadarts/test/static',
     'screen' => [
         'default_club_slug' => 'blindleia-dartklubb',
