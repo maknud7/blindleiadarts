@@ -1,10 +1,21 @@
 (() => {
+  if (window.__blindleiaActivityInstalled) return;
+  window.__blindleiaActivityInstalled = true;
+
   const API = new URL("../../api/v1/activity", import.meta?.url || window.location.href);
-  const MAX_BATCH = 25;
-  const FLUSH_MS = 4000;
+  const MAX_BATCH = 20;
+  const MAX_QUEUE = 50;
+  const FLUSH_MS = 30000;
+  const MIN_REQUEST_GAP_MS = 30000;
+  const BACKOFF_429_MS = 5 * 60 * 1000;
+  const DEDUPE_MS = 2000;
   const DEFAULT_CLUB_SLUG = "blindleia-dartklubb";
   const queue = [];
+  const recent = new Map();
   let timer = null;
+  let inFlight = false;
+  let lastRequestAt = 0;
+  let pausedUntil = 0;
   let context = { club_id: null, club_slug: null, tournament_id: null };
 
   function surface() {
@@ -56,7 +67,20 @@
     return `${location.pathname}${location.hash || ""}`.slice(0, 255);
   }
 
+  function eventKey(eventName, metadata) {
+    return `${eventName}|${cleanPath()}|${metadata?.portal_view || metadata?.action || metadata?.element_id || ""}`;
+  }
+
   function push(eventName, metadata = {}) {
+    const now = Date.now();
+    if (now < pausedUntil) return;
+
+    const key = eventKey(eventName, metadata);
+    const previousAt = recent.get(key) || 0;
+    if (now - previousAt < DEDUPE_MS) return;
+    recent.set(key, now);
+
+    if (queue.length >= MAX_QUEUE) queue.shift();
     queue.push({
       occurred_at: new Date().toISOString(),
       surface: surface(),
@@ -70,21 +94,41 @@
       tournament_id: selectedTournamentId(),
       metadata,
     });
-    if (queue.length >= MAX_BATCH) flush();
-    else schedule();
+    schedule();
   }
 
-  function schedule() {
-    if (timer) return;
-    timer = window.setTimeout(() => { timer = null; flush(); }, FLUSH_MS);
+  function clearTimer() {
+    if (!timer) return;
+    window.clearTimeout(timer);
+    timer = null;
+  }
+
+  function schedule(delay = FLUSH_MS) {
+    if (timer || inFlight || Date.now() < pausedUntil) return;
+    timer = window.setTimeout(() => {
+      timer = null;
+      flush();
+    }, Math.max(1000, delay));
   }
 
   async function flush({ keepalive = false } = {}) {
-    if (!queue.length) return;
+    if (!queue.length || inFlight || Date.now() < pausedUntil) return;
+
+    const now = Date.now();
+    const wait = MIN_REQUEST_GAP_MS - (now - lastRequestAt);
+    if (!keepalive && wait > 0) {
+      schedule(wait);
+      return;
+    }
+
+    inFlight = true;
+    clearTimer();
     const events = queue.splice(0, MAX_BATCH);
     const token = localStorage.getItem("bd:token") || "";
     const headers = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
+    lastRequestAt = now;
+
     try {
       const response = await fetch(API.toString(), {
         method: "POST",
@@ -94,37 +138,44 @@
         keepalive,
         credentials: "same-origin",
       });
-      if (!response.ok && !keepalive) console.warn("Activity logging failed", response.status);
+
+      if (response.status === 429) {
+        // Activity is non-critical. Drop queued telemetry and back off instead of
+        // creating a retry storm that can affect scoring/admin traffic.
+        queue.length = 0;
+        pausedUntil = Date.now() + BACKOFF_429_MS;
+        return;
+      }
+
+      if (!response.ok && !keepalive) {
+        console.warn("Activity logging paused after HTTP", response.status);
+      }
     } catch (error) {
       if (!keepalive) console.warn("Activity logging unavailable", error);
+      // Never requeue failed telemetry. Core application traffic has priority.
+    } finally {
+      inFlight = false;
     }
+
     if (queue.length) schedule();
   }
 
-  function sameOriginPath(href) {
-    if (!href) return null;
-    try {
-      const url = new URL(href, location.href);
-      return url.origin === location.origin ? `${url.pathname}${url.hash || ""}`.slice(0, 180) : null;
-    } catch { return null; }
-  }
-
-  function trackClick(event) {
-    const node = event.target?.closest?.("button,a,[role=button]");
-    if (!node || node.closest("[data-no-activity]") || node.dataset.noActivity !== undefined) return;
-    if (surface() === "kiosk" && node.matches("[data-key],[data-multiplier],[data-special],#numberGrid button")) return;
-    push("click", {
+  function trackExplicitClick(event) {
+    const node = event.target?.closest?.("[data-track]");
+    if (!node || node.closest("[data-no-activity]")) return;
+    push("action", {
       element_id: node.id || null,
-      element_tag: node.tagName?.toLowerCase?.() || null,
-      action: node.dataset.track || node.name || null,
-      href_path: node.tagName === "A" ? sameOriginPath(node.getAttribute("href")) : null,
+      action: node.dataset.track || null,
     });
   }
 
   function trackSubmit(event) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || form.closest("[data-no-activity]")) return;
-    push("form_submit", { element_id: form.id || null, element_tag: "form", action: form.dataset.track || null });
+    push("form_submit", {
+      element_id: form.id || null,
+      action: form.dataset.track || null,
+    });
   }
 
   window.BlindleiaActivity = {
@@ -135,9 +186,10 @@
     },
   };
 
-  document.addEventListener("click", trackClick, { capture: true, passive: true });
+  // Do not log every generic click. Navigation and form submits cover normal UX;
+  // data-track is available for specific business actions we explicitly care about.
+  document.addEventListener("click", trackExplicitClick, { capture: true, passive: true });
   document.addEventListener("submit", trackSubmit, { capture: true });
-  window.addEventListener("hashchange", () => push("navigation", { portal_view: location.hash.slice(1) || "home" }));
   window.addEventListener("bd:portal-view", (event) => push("navigation", { portal_view: event.detail?.target || null }));
   window.addEventListener("pagehide", () => flush({ keepalive: true }));
 
