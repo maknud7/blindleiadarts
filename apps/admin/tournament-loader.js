@@ -1,4 +1,5 @@
 const host = document.getElementById("tournaments");
+const MODULE_VERSION = "20260826-0924";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -13,6 +14,12 @@ function clubReady() {
 
 function adminVisible() {
   return !document.getElementById("adminApp")?.classList.contains("hidden");
+}
+
+function moduleUrl(path) {
+  const url = new URL(path, import.meta.url);
+  url.searchParams.set("v", MODULE_VERSION);
+  return url.href;
 }
 
 function showLoading() {
@@ -36,17 +43,17 @@ async function loadModules() {
   host.dataset.tournamentModules = "loading";
 
   loading = (async () => {
-    await import("./tournament-admin.js");
+    await import(moduleUrl("./tournament-admin.js"));
 
     await Promise.all([
-      import("./tournament-checkin-admin.js"),
-      import("./tournament-operations-admin.js"),
-      import("./tournament-playoff-admin.js"),
-      import("./tournament-summary-admin.js"),
-      import("./tournament-wizard-v2.js"),
+      import(moduleUrl("./tournament-checkin-admin.js")),
+      import(moduleUrl("./tournament-operations-admin.js")),
+      import(moduleUrl("./tournament-playoff-admin.js")),
+      import(moduleUrl("./tournament-summary-admin.js")),
+      import(moduleUrl("./tournament-wizard-v2.js")),
     ]);
 
-    await import("./tournament-workspace-ux.js");
+    await import(moduleUrl("./tournament-workspace-ux.js"));
     host.dataset.tournamentModules = "ready";
     hideLoading();
   })().catch((error) => {
