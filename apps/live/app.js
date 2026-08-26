@@ -100,7 +100,7 @@ function renderCheckin(data) {
   el.checkinWindow.textContent = startTime ? `Turneringen starter kl. ${startTime}` : "Innsjekk er åpen";
   el.checkinCount.textContent = `${checkedIn} av ${total} sjekket inn`;
   el.checkinProgressBar.style.width = `${progress}%`;
-  el.checkinRosterCount.textContent = String(total);
+  el.checkinRosterCount.textContent = String(participants.length || total);
   el.checkinParticipants.innerHTML = participants.length
     ? participants.map((player) => `<div class="checkin-person ${participantClass(String(player.status || ""))}"><strong>${esc(player.display_name)}</strong><span class="checkin-person-status">${esc(participantStatus(String(player.status || "")))}</span></div>`).join("")
     : `<div class="checkin-empty">Ingen påmeldte ennå.</div>`;
@@ -244,9 +244,12 @@ function startPolling() {
   state.poll = setInterval(() => load().catch(() => undefined), 3000);
 }
 async function startRealtime() {
+  // Keep a lightweight poll running even with websockets so the screen can move
+  // between standby, check-in and live without requiring a realtime event.
+  startPolling();
   const config = await realtimeConfig();
   const clubId = Number(state.payload?.club?.id || 0);
-  if (!config?.enabled || !config.websocket_url || !clubId) { startPolling(); return; }
+  if (!config?.enabled || !config.websocket_url || !clubId) return;
   try {
     const socket = new WebSocket(config.websocket_url);
     state.socket = socket;
@@ -263,11 +266,10 @@ async function startRealtime() {
     socket.addEventListener("close", () => {
       state.socket = null;
       if (state.phase === "live") el.connectionLabel.textContent = "Oppdaterer";
-      startPolling();
       setTimeout(() => startRealtime().catch(() => undefined), 2500);
     });
     socket.addEventListener("error", () => socket.close());
-  } catch { startPolling(); }
+  } catch { /* polling is already active */ }
 }
 
 load().then(startRealtime).catch(() => { setPhase("standby"); startPolling(); });
