@@ -218,7 +218,9 @@ if (host) {
     previousStatus = String(context?.status || "");
     wireStartGuard();
     wireOperationsGuard();
-    if (Number(context?.id || 0) !== previousId || !boardState) loadBoards().catch(() => undefined);
+    if (Number(context?.id || 0) !== previousId || previousStatus !== wasStatus || !boardState) {
+      loadBoards().catch(() => undefined);
+    }
     if (previousStatus === "in_progress" && wasStatus !== "in_progress") {
       window.setTimeout(() => kickoffTournament(Number(context?.id || 0)), 120);
     }
