@@ -50,6 +50,9 @@ function activate(target, { updateHash = true } = {}) {
   if (!available.has(next)) next = defaultTarget();
   if (!next) return;
 
+  const previous = normalizeTarget(document.body.dataset.portalActive);
+  const changed = previous !== next;
+
   sections().forEach((node) => {
     const active = normalizeTarget(node.dataset.portalSection) === next;
     node.classList.toggle("portal-view-hidden", !active);
@@ -65,7 +68,13 @@ function activate(target, { updateHash = true } = {}) {
 
   document.body.dataset.portalActive = next;
   if (updateHash && window.location.hash !== `#${next}`) history.replaceState(null, "", `#${next}`);
-  window.dispatchEvent(new CustomEvent("bd:portal-view", { detail: { target: next } }));
+
+  // This event means that the user actually changed portal view. DOM rendering
+  // inside the active view must never re-emit it; doing so creates fetch/render
+  // feedback loops in modules that load data when a view is entered.
+  if (changed) {
+    window.dispatchEvent(new CustomEvent("bd:portal-view", { detail: { target: next, previous } }));
+  }
 }
 
 function bindLinks() {
@@ -133,9 +142,17 @@ document.head.appendChild(style);
 
 window.addEventListener("hashchange", () => activate(window.location.hash, { updateHash: false }));
 window.addEventListener("storage", () => syncRoleAccess().catch(() => undefined));
-window.setInterval(() => syncRoleAccess().catch(() => undefined), 1500);
+window.setInterval(() => syncRoleAccess().catch(() => undefined), 5000);
 
-const observer = new MutationObserver(() => refresh());
+let refreshQueued = false;
+const observer = new MutationObserver(() => {
+  if (refreshQueued) return;
+  refreshQueued = true;
+  window.requestAnimationFrame(() => {
+    refreshQueued = false;
+    refresh();
+  });
+});
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refresh, { once: true });

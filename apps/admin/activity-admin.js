@@ -1,4 +1,7 @@
 const ACTIVITY_API = "../api/v1";
+const ACTIVITY_MIN_REFRESH_MS = 15000;
+let activityLoadPromise = null;
+let activityLastLoadedAt = 0;
 
 function authToken() { return localStorage.getItem("bd:token") || ""; }
 function selectedClubId() { return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:selectedClubId") || 0); }
@@ -12,7 +15,11 @@ function formatTime(value) {
 async function api(path) {
   const response = await fetch(`${ACTIVITY_API}${path}`, { headers: authToken() ? { Authorization: `Bearer ${authToken()}` } : {}, cache: "no-store" });
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+  if (!response.ok || !payload?.ok) {
+    const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return payload.data;
 }
 
@@ -53,7 +60,7 @@ function ensureActivityPanel() {
     <div id="activityRecent" class="list"></div>
     <div id="activityMessage" class="message hidden"></div>`;
   settings.appendChild(panel);
-  panel.querySelector("#activityRefresh")?.addEventListener("click", loadActivity);
+  panel.querySelector("#activityRefresh")?.addEventListener("click", () => loadActivity({ force: true }));
 }
 
 function render(data) {
@@ -83,22 +90,49 @@ function render(data) {
     : `<div class="empty">Ingen aktivitet ennå.</div>`;
 }
 
-async function loadActivity() {
+function isActivityViewActive() {
+  return document.body.dataset.portalActive === "integrations" || window.location.hash === "#integrations";
+}
+
+async function loadActivity({ force = false } = {}) {
   ensureActivityPanel();
   const clubId = selectedClubId();
   if (!clubId || !authToken()) return;
-  try {
-    render(await api(`/clubs/${clubId}/activity?days=30`));
-    const message = document.getElementById("activityMessage");
-    if (message) message.className = "message hidden";
-  } catch (error) {
-    const message = document.getElementById("activityMessage");
-    if (message) { message.textContent = error.message; message.className = "message error"; }
-  }
+  if (activityLoadPromise) return activityLoadPromise;
+  if (!force && Date.now() - activityLastLoadedAt < ACTIVITY_MIN_REFRESH_MS) return;
+
+  activityLoadPromise = (async () => {
+    try {
+      render(await api(`/clubs/${clubId}/activity?days=30`));
+      activityLastLoadedAt = Date.now();
+      const message = document.getElementById("activityMessage");
+      if (message) message.className = "message hidden";
+    } catch (error) {
+      const message = document.getElementById("activityMessage");
+      if (message) {
+        message.textContent = error.status === 429
+          ? "For mange forespørsler. Aktivitet oppdateres ikke automatisk nå; prøv igjen senere."
+          : error.message;
+        message.className = "message error";
+      }
+    } finally {
+      activityLoadPromise = null;
+    }
+  })();
+
+  return activityLoadPromise;
 }
 
 normalizeLiveLinks();
 ensureActivityPanel();
-document.getElementById("clubSelect")?.addEventListener("change", () => setTimeout(loadActivity, 50));
-window.addEventListener("bd:portal-view", (event) => { if (event.detail?.target === "integrations") loadActivity(); });
-setTimeout(() => { normalizeLiveLinks(); loadActivity(); }, 700);
+document.getElementById("clubSelect")?.addEventListener("change", () => {
+  activityLastLoadedAt = 0;
+  if (isActivityViewActive()) setTimeout(() => loadActivity({ force: true }), 100);
+});
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "integrations") loadActivity();
+});
+setTimeout(() => {
+  normalizeLiveLinks();
+  if (isActivityViewActive()) loadActivity();
+}, 700);
