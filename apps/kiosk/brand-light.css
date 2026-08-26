@@ -1,4 +1,4 @@
-@import url("../packages/ui-assets/blindleia-system.css?v=20260826-1205");
+@import url("../packages/ui-assets/blindleia-system.css");
 
 :root{color-scheme:light;--bg:#f3f6fb;--panel:#fff;--panel-2:#f7f9fc;--line:#dbe3ed;--line-strong:#c8d4e2;--ink:#0c2340;--muted:#697c94;--accent:#2f6fed;--accent-2:#245acb;--good:#238060;--danger:#bd3e49;--warning:#9b6818}
 body{color:var(--ink);background:#f3f6fb}
@@ -7,7 +7,7 @@ body{color:var(--ink);background:#f3f6fb}
 .terminal-topbar h1,.terminal-topbar strong,.terminal-topbar .eyebrow{color:#fff!important}.terminal-topbar .brand-sponsor{color:#cbd9ea!important}.terminal-topbar .brand-badge{background:#fff!important;border-color:rgba(255,255,255,.16)!important}.terminal-topbar .status-pill,.terminal-topbar .icon-button{background:rgba(255,255,255,.1)!important;color:#fff!important;border-color:rgba(255,255,255,.14)!important}
 .state-card,.scoreboard,.scoring-card,.activity-card{background:#fff;border-color:var(--line);box-shadow:0 5px 16px rgba(17,42,73,.055)}
 .brand-badge{background:#fff;border:1px solid var(--line);color:var(--accent)}.brand-logo{background:#fff}.eyebrow{color:var(--accent)}
-.status-pill,.badge,.mode-label,.icon-button,.ghost-button,.danger-button{background:#fff;color:var(--ink);border-color:var(--line)}.status-pill.good,.badge.good{color:#176449;background:#e8f6ef;border-color:#b8dfcd}
+.status-pill,.badge,.mode-label,.icon-button,.ghost-button{background:#fff;color:var(--ink);border-color:var(--line)}.danger-button{background:#fff0f2!important;color:#9e303a!important;border-color:#efc5ca!important;box-shadow:none!important}.status-pill.good,.badge.good{color:#176449;background:#e8f6ef;border-color:#b8dfcd}
 .setup-step,.versus-grid article,.visit-row{background:#f7f9fc;border-color:var(--line)}.step-number{background:var(--accent);color:#fff}.done-step{border-color:#b8dfcd}
 input,.entry-display,.dart-summary span,.dart-summary strong{background:#fff;color:var(--ink);border-color:var(--line)}input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,111,237,.16)}
 button{background:var(--accent);color:#fff}.pairing-card{border-color:#cfddf2;background:#eef4ff}.pairing-card strong,.visit-score,.dart-summary strong,.versus{color:var(--accent)}.waiting-line{color:var(--muted)}.spinner{border-color:#dbe3ed;border-top-color:var(--accent)}
