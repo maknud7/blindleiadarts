@@ -111,12 +111,14 @@ function ensureAdminTestControl() {
   card.classList.toggle("active", enabled);
   const help = document.getElementById("kioskTestModeHelp");
   const button = document.getElementById("kioskTestModeToggle");
-  if (help) help.textContent = enabled
+  const helpText = enabled
     ? "Aktiv nå. Kamp og scoring går mot isolert test-runtime, og gule markeringer viser at terminalen er i test."
     : (unlocked
       ? "Bruk isolert test-runtime uten å påvirke ordinære kamp- og scoringdata."
       : "Lås opp admin-modus under for å starte testmodus.");
-  if (button) button.textContent = enabled ? "Avslutt testmodus" : "Start testmodus";
+  const buttonText = enabled ? "Avslutt testmodus" : "Start testmodus";
+  if (help && help.textContent !== helpText) help.textContent = helpText;
+  if (button && button.textContent !== buttonText) button.textContent = buttonText;
 }
 async function activateTestBoard(kioskId, source, button) {
   const token = ensureTestToken();
