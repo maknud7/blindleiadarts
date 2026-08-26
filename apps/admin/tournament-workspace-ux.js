@@ -25,19 +25,32 @@ if (host) {
 
   function ensureLiveTools() {
     const stage = document.getElementById("tcStageLive");
-    if (!stage || document.getElementById("tcLiveTools")) return;
-    const toolbar = document.createElement("div");
-    toolbar.id = "tcLiveTools";
-    toolbar.className = "tc-live-tools";
-    toolbar.innerHTML = `
-      <button type="button" data-live-tool="operations" class="active">Kampdrift</button>
-      <button type="button" data-live-tool="playoff">Sluttspill</button>`;
+    if (!stage) return;
+
+    if (!document.getElementById("tcLiveTools")) {
+      const toolbar = document.createElement("div");
+      toolbar.id = "tcLiveTools";
+      toolbar.className = "tc-live-tools";
+      toolbar.innerHTML = `
+        <button type="button" data-live-tool="operations" class="active">Kampdrift</button>
+        <button type="button" data-live-tool="playoff">Sluttspill</button>`;
+      const groups = document.getElementById("tcGroups");
+      groups?.before(toolbar);
+      toolbar.querySelectorAll("[data-live-tool]").forEach((button) => button.addEventListener("click", () => {
+        liveTool = button.dataset.liveTool || "operations";
+        apply();
+      }));
+    }
+
     const groups = document.getElementById("tcGroups");
-    groups?.before(toolbar);
-    toolbar.querySelectorAll("[data-live-tool]").forEach((button) => button.addEventListener("click", () => {
-      liveTool = button.dataset.liveTool || "operations";
-      apply();
-    }));
+    if (groups && !document.getElementById("tcLiveGroupsDisclosure")) {
+      const details = document.createElement("details");
+      details.id = "tcLiveGroupsDisclosure";
+      details.className = "tc-disclosure tc-live-groups";
+      details.innerHTML = `<summary>Vis grupper og seeding</summary><div class="tc-disclosure-body"></div>`;
+      groups.before(details);
+      details.querySelector(".tc-disclosure-body")?.appendChild(groups);
+    }
   }
 
   function apply() {
