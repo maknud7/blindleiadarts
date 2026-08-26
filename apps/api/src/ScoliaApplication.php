@@ -134,7 +134,8 @@ final class ScoliaApplication
             return JsonResponse::error(404, 'scolia_admin_route_not_found', 'Unknown Scolia admin route.');
         }
 
-        // Admin: per-board mapping and recovery actions.
+        // Admin: per-board mapping and recovery actions. Scolia boards are live-only;
+        // mode=off is retained internally for boards whose scoring type is manual.
         if (preg_match('#^v1/clubs/(\d+)/kiosks/(\d+)/scolia(?:/(.*))?$#', $path, $m) === 1) {
             $clubId = (int) $m[1];
             $kioskId = (int) $m[2];
@@ -143,7 +144,13 @@ final class ScoliaApplication
             $tail = (string) ($m[3] ?? '');
             if ($method === 'GET' && $tail === '') return JsonResponse::ok(['board' => $repo->getBoardRuntimeStatus($clubId, $kioskId)]);
             if (in_array($method, ['PATCH','PUT'], true) && $tail === '') {
-                $board = $repo->updateBoardSettings($clubId, $kioskId, $request->jsonBody(), (int) $admin['id']);
+                $body = $request->jsonBody();
+                if (($body['mode'] ?? null) === 'shadow') $body['mode'] = 'live';
+                if (array_key_exists('mode', $body) && !in_array((string) $body['mode'], ['off', 'live'], true)) {
+                    return JsonResponse::error(422, 'scolia_mode_invalid', 'Scolia-board kan bare bruke live scoring.');
+                }
+                if (($body['mode'] ?? null) === 'live') $body['auto_fallback_to_manual'] = true;
+                $board = $repo->updateBoardSettings($clubId, $kioskId, $body, (int) $admin['id']);
                 if ($board === null) return JsonResponse::error(404, 'kiosk_not_found', 'Boardet ble ikke funnet.');
                 return JsonResponse::ok(['board' => $board]);
             }
