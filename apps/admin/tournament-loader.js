@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260826-1435";
+const MODULE_VERSION = "20260826-1445";
 let requested = false;
 let loading = null;
 let waitTimer = null;
