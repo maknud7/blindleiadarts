@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v11";
+const SHELL_CACHE = "bd-kiosk-shell-v12";
 const SHELL = [
   "./",
   "./index.html",
@@ -22,6 +22,7 @@ const SHELL = [
   "./kiosk-brand-v3.js",
   "./install.js",
   "./manifest.webmanifest",
+  "../static/club-logos/blindleia-dartklubb-logo.svg",
   "../static/club-logos/blindleia-dartklubb-logo.png"
 ];
 
