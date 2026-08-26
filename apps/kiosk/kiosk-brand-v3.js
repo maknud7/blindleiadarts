@@ -1,5 +1,5 @@
 (() => {
-  const BRAND_VERSION = "3.0";
+  const BRAND_VERSION = "3.1";
   let stableSnapshotSignature = "";
   let topSponsorSignature = "";
   let idleIdentitySignature = "";
@@ -25,7 +25,7 @@
   function fallbackClubLogo(club) {
     const name = String(club?.name || "").toLowerCase();
     if (name.includes("blindleia")) {
-      return resolveAssetUrl("../static/club-logos/blindleia-dartklubb-logo.png");
+      return resolveAssetUrl("../static/club-logos/blindleia-dartklubb-logo.svg");
     }
     return "";
   }
