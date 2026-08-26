@@ -18,7 +18,7 @@ if (panel) {
         <button type="button" data-member-filter="access">Mangler tilgang</button>
         <button type="button" data-member-filter="disabled">Deaktivert</button>
       </div>
-      <button id="memberOpenInvite" type="button" class="button secondary">Ny invitasjonslenke</button>
+      <button id="memberOpenInvite" type="button" class="button secondary">Generell invitasjonslenke</button>
       <span id="memberAccessCount" class="pill">—</span>
     </div>
     <div id="memberAccessSummary" class="member-access-summary"></div>
@@ -128,7 +128,7 @@ if (panel) {
       const isActive = status === "active";
       const playerName = item.player?.display_name || item.member_name;
       const memberNumber = item.membership?.member_number || item.member_number || null;
-      const actionLabel = status === "invited" ? "Ny invitasjon" : status === "disabled" ? "Inviter på nytt" : "Inviter";
+      const actionLabel = status === "invited" ? "Ny invitasjonslenke" : "Invitasjonslenke";
       return `<tr data-member-id="${Number(item.member_id)}">
         <td><strong>${escapeHtml(playerName)}</strong>${memberNumber ? `<small>Medlemsnr. ${escapeHtml(memberNumber)}</small>` : ""}</td>
         <td>${duesCell(item.membership)}</td>
@@ -217,7 +217,7 @@ if (panel) {
     el.openInvite.disabled = true;
     try {
       const data = await request("invite-open", { method: "POST", body: {} });
-      showInviteLink("Ny invitasjonslenke", data.token, data.expires_at, "Mottakeren fyller selv inn navn, e-post og passord.");
+      showInviteLink("Generell invitasjonslenke", data.token, data.expires_at, "Mottakeren fyller selv inn navn, e-post og passord.");
     } catch (error) {
       showInline(error.message, "bad");
     } finally {
@@ -266,7 +266,7 @@ if (panel) {
       button.disabled = true;
       try {
         const data = await request("invite", { method: "POST", body: { member_id: memberId } });
-        showInviteLink(`Invitasjon til ${item.member_name}`, data.token, data.expires_at, "Personen velger selv e-post og passord.");
+        showInviteLink(`Invitasjonslenke til ${item.member_name}`, data.token, data.expires_at, "Lenken er koblet direkte til dette medlemmet. Personen velger selv e-post og passord.");
         state.key = "";
         await load(true);
       } catch (error) {
