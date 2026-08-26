@@ -36,6 +36,8 @@ final class TournamentCheckinRepository
             'club_id' => $clubId,
             'default_method' => 'admin_or_code',
             'opens_minutes_before_start' => 60,
+            // Kept for backwards compatibility. Tournament check-in no longer
+            // closes from this value; it closes when attendance is finalized.
             'closes_minutes_after_start' => 10,
         ], $row);
     }
@@ -96,20 +98,18 @@ final class TournamentCheckinRepository
         if ($current === null) {
             return null;
         }
+        if ((string) ($current['status'] ?? '') !== 'draft') {
+            throw new ValidationException('checkin_closed', 'Innsjekken er avsluttet.', 409);
+        }
 
         $opensAt = array_key_exists('checkin_opens_at', $payload)
             ? $this->nullableDateTime($payload['checkin_opens_at'])
             : ($current['checkin_opens_at'] ?? null);
-        $closesAt = array_key_exists('checkin_closes_at', $payload)
-            ? $this->nullableDateTime($payload['checkin_closes_at'])
-            : ($current['checkin_closes_at'] ?? null);
+        // Closing is a workflow transition, not a configurable clock time.
+        $closesAt = $current['checkin_closes_at'] ?? null;
         $method = array_key_exists('checkin_method', $payload)
             ? $this->nullableMethod($payload['checkin_method'])
             : $this->nullableMethod($current['checkin_method'] ?? null);
-
-        if ($opensAt !== null && $closesAt !== null && strtotime($opensAt) >= strtotime($closesAt)) {
-            throw new ValidationException('invalid_checkin_window', 'Check-in må stenge etter at den åpner.');
-        }
 
         $code = array_key_exists('checkin_code', $payload)
             ? $this->normalizeCode($payload['checkin_code'])
@@ -145,9 +145,12 @@ final class TournamentCheckinRepository
         if ($settings === null) {
             throw new ValidationException('tournament_not_found', 'Turneringen ble ikke funnet.', 404);
         }
+        if ((string) ($settings['status'] ?? '') !== 'draft') {
+            throw new ValidationException('checkin_closed', 'Innsjekken er avsluttet.', 409);
+        }
         $method = $this->normalizeMethod($settings['effective_method'] ?? 'admin_or_code');
         if (!$this->methodUsesCode($method)) {
-            throw new ValidationException('checkin_code_not_enabled', 'Denne turneringen bruker ikke spillerkode.', 409);
+            throw new ValidationException('checkin_code_not_enabled', 'Denne turneringen bruker ikke innsjekk-kode.', 409);
         }
 
         $code = $this->generateUniqueCode((int) $settings['club_id'], $tournamentId);
@@ -173,20 +176,23 @@ final class TournamentCheckinRepository
         if ($settings === null) {
             throw new ValidationException('tournament_not_found', 'Turneringen ble ikke funnet.', 404);
         }
+        if ((string) ($settings['status'] ?? '') !== 'draft') {
+            throw new ValidationException('checkin_closed', 'Innsjekken er avsluttet.', 409);
+        }
 
         $registration = $this->registration($tournamentId, $playerId);
         if ($registration === null) {
-            throw new ValidationException('registration_required_before_check_in', 'Du må være påmeldt før du kan checke inn.', 422);
+            throw new ValidationException('registration_required_before_check_in', 'Du må være påmeldt før du kan sjekke inn.', 422);
         }
         $status = (string) $registration['status'];
         if ($status === 'checked_in') {
             return $this->formatResult($settings, $registration, true);
         }
         if ($status === 'waitlisted') {
-            throw new ValidationException('registration_waitlisted', 'Du står på venteliste og kan ikke checke inn før du har fått plass.', 422);
+            throw new ValidationException('registration_waitlisted', 'Du står på venteliste og kan ikke sjekke inn før du har fått plass.', 422);
         }
         if ($status !== 'registered') {
-            throw new ValidationException('registration_not_checkin_eligible', 'Denne påmeldingen kan ikke checkes inn.', 422);
+            throw new ValidationException('registration_not_checkin_eligible', 'Denne påmeldingen kan ikke sjekkes inn.', 422);
         }
 
         if (!$force) {
@@ -198,16 +204,16 @@ final class TournamentCheckinRepository
         } else {
             $method = $this->normalizeMethod($settings['effective_method'] ?? 'admin_or_code');
             if ($method === 'admin_only') {
-                throw new ValidationException('checkin_admin_required', 'Denne turneringen checkes inn av turneringsleder.', 409);
+                throw new ValidationException('checkin_admin_required', 'Denne turneringen sjekkes inn av turneringsleder.', 409);
             }
 
             $normalizedCode = $this->normalizeCode($code);
             $expectedCode = $this->normalizeCode($settings['checkin_code'] ?? null);
             if ($normalizedCode === null) {
-                throw new ValidationException('checkin_code_required', 'Tast inn check-in-koden som vises i lokalet.', 422);
+                throw new ValidationException('checkin_code_required', 'Tast inn innsjekk-koden som vises i lokalet.', 422);
             }
             if ($expectedCode === null || !hash_equals($expectedCode, $normalizedCode)) {
-                throw new ValidationException('checkin_code_invalid', 'Check-in-koden stemmer ikke. Se koden på Live-skjermen eller kontakt turneringsleder.', 409);
+                throw new ValidationException('checkin_code_invalid', 'Innsjekk-koden stemmer ikke. Se koden på Live-skjermen eller kontakt turneringsleder.', 409);
             }
             $source = 'player_code';
         }
@@ -246,7 +252,7 @@ final class TournamentCheckinRepository
             'closes_at' => $settings['effective_checkin_closes_at'],
             'method' => $method,
             'code_allowed' => $this->methodUsesCode($method),
-            'admin_checkin_allowed' => true,
+            'admin_checkin_allowed' => (string) ($settings['status'] ?? '') === 'draft',
             'checked_in_at' => $registration['checked_in_at'] ?? null,
             'checkin_source' => $registration['checkin_source'] ?? null,
         ];
@@ -257,9 +263,9 @@ final class TournamentCheckinRepository
     {
         $sql = sprintf(
             'SELECT id FROM `%1$stournaments`
-             WHERE club_id=? AND status IN ("draft","ready","in_progress") AND start_at IS NOT NULL
+             WHERE club_id=? AND status="draft" AND start_at IS NOT NULL
                AND start_at BETWEEN DATE_SUB(NOW(), INTERVAL 8 HOUR) AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
-             ORDER BY FIELD(status,"in_progress","ready","draft"), ABS(TIMESTAMPDIFF(SECOND,NOW(),start_at)), id ASC',
+             ORDER BY ABS(TIMESTAMPDIFF(SECOND,NOW(),start_at)), id ASC',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
@@ -289,7 +295,7 @@ final class TournamentCheckinRepository
                 'tournament_name' => $settings['name'],
                 'code' => $settings['checkin_code'],
                 'opens_at' => $settings['effective_checkin_opens_at'],
-                'closes_at' => $settings['effective_checkin_closes_at'],
+                'closes_at' => null,
                 'method' => $method,
             ];
         }
@@ -302,22 +308,20 @@ final class TournamentCheckinRepository
     {
         $now = $this->databaseNow();
         $opens = new DateTimeImmutable((string) $settings['effective_checkin_opens_at']);
-        $closes = new DateTimeImmutable((string) $settings['effective_checkin_closes_at']);
         if ($now < $opens) {
-            throw new ValidationException('checkin_not_open', 'Check-in åpner ' . $opens->format('d.m.Y H:i') . '.', 409);
-        }
-        if ($now > $closes) {
-            throw new ValidationException('checkin_closed', 'Check-in stengte ' . $closes->format('d.m.Y H:i') . '. Kontakt arrangør.', 409);
+            throw new ValidationException('checkin_not_open', 'Innsjekk åpner ' . $opens->format('d.m.Y H:i') . '.', 409);
         }
     }
 
     /** @param array<string,mixed> $settings */
     private function windowState(array $settings): string
     {
+        if ((string) ($settings['status'] ?? '') !== 'draft') {
+            return 'closed';
+        }
         $now = $this->databaseNow();
         $opens = new DateTimeImmutable((string) $settings['effective_checkin_opens_at']);
-        $closes = new DateTimeImmutable((string) $settings['effective_checkin_closes_at']);
-        return $now < $opens ? 'not_open' : ($now > $closes ? 'closed' : 'open');
+        return $now < $opens ? 'not_open' : 'open';
     }
 
     /** @param array<string,mixed> $tournament @param array<string,mixed> $club @return array<string,mixed> */
@@ -325,14 +329,13 @@ final class TournamentCheckinRepository
     {
         $startAt = trim((string) ($tournament['start_at'] ?? ''));
         if ($startAt === '') {
-            throw new ValidationException('checkin_start_time_required', 'Turneringen må ha starttid før check-in kan konfigureres.', 422);
+            throw new ValidationException('checkin_start_time_required', 'Turneringen må ha starttid før innsjekk kan konfigureres.', 422);
         }
 
         $start = new DateTimeImmutable($startAt);
         $opens = $tournament['checkin_opens_at']
             ?: $start->modify('-' . (int) $club['opens_minutes_before_start'] . ' minutes')->format('Y-m-d H:i:s');
-        $closes = $tournament['checkin_closes_at']
-            ?: $start->modify('+' . (int) $club['closes_minutes_after_start'] . ' minutes')->format('Y-m-d H:i:s');
+        $closes = $tournament['checkin_closes_at'] ?: null;
         $method = $tournament['checkin_method'] ?: $this->normalizeMethod($club['default_method'] ?? 'admin_or_code');
 
         return array_merge($tournament, $club, [
@@ -383,7 +386,7 @@ final class TournamentCheckinRepository
         }
         $method = strtolower(trim((string) $value));
         if (!in_array($method, ['admin_or_code', 'admin_only', 'code'], true)) {
-            throw new ValidationException('invalid_checkin_method', 'Ugyldig check-in-metode.');
+            throw new ValidationException('invalid_checkin_method', 'Ugyldig metode for innsjekk.');
         }
         return $method;
     }
@@ -401,7 +404,7 @@ final class TournamentCheckinRepository
             return null;
         }
         if (strlen($code) < 4 || strlen($code) > 12) {
-            throw new ValidationException('invalid_checkin_code', 'Check-in-koden må være 4–12 tegn.');
+            throw new ValidationException('invalid_checkin_code', 'Innsjekk-koden må være 4–12 tegn.');
         }
         return $code;
     }
@@ -426,7 +429,7 @@ final class TournamentCheckinRepository
                 return $code;
             }
         }
-        throw new ValidationException('checkin_code_generation_failed', 'Kunne ikke lage en unik check-in-kode.', 500);
+        throw new ValidationException('checkin_code_generation_failed', 'Kunne ikke lage en unik innsjekk-kode.', 500);
     }
 
     private function nullableDateTime(mixed $value): ?string
@@ -436,7 +439,7 @@ final class TournamentCheckinRepository
         }
         $timestamp = strtotime((string) $value);
         if ($timestamp === false) {
-            throw new ValidationException('invalid_checkin_datetime', 'Ugyldig dato/tid for check-in.');
+            throw new ValidationException('invalid_checkin_datetime', 'Ugyldig dato eller tidspunkt for innsjekk.');
         }
         return date('Y-m-d H:i:s', $timestamp);
     }
