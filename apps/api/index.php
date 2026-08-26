@@ -13,6 +13,7 @@ use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\ScoliaApplication;
 use Blindleia\Dartkiosk\Api\SeasonApplication;
+use Blindleia\Dartkiosk\Api\TournamentAttendanceApplication;
 use Blindleia\Dartkiosk\Api\TournamentCheckinApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
 use Blindleia\Dartkiosk\Api\TournamentFlowApplication;
@@ -58,6 +59,11 @@ if ($equipment->run()) {
 
 $scolia = new ScoliaApplication(__DIR__);
 if ($scolia->run()) {
+    return;
+}
+
+$attendance = new TournamentAttendanceApplication(__DIR__);
+if ($attendance->run()) {
     return;
 }
 
