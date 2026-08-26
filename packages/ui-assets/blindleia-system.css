@@ -1,0 +1,632 @@
+/*
+ * Canonical visual system for every Blindleia Darts surface.
+ * Inspired by the club admin/Grasrot workspace: navy navigation, cool neutral
+ * canvas, white work cards and one clear blue action colour.
+ */
+
+:root{
+  color-scheme:light;
+  --bd-navy-950:#071f3b;
+  --bd-navy-900:#0b2b50;
+  --bd-navy-800:#123c69;
+  --bd-navy-700:#1b4f84;
+  --bd-blue-700:#245acb;
+  --bd-blue-600:#2f6fed;
+  --bd-blue-500:#4b82f1;
+  --bd-blue-100:#dce9ff;
+  --bd-blue-50:#eef4ff;
+  --bd-canvas:#f3f6fb;
+  --bd-canvas-strong:#eaf0f7;
+  --bd-surface:#ffffff;
+  --bd-surface-soft:#f8fafc;
+  --bd-border:#dbe3ed;
+  --bd-border-strong:#c8d4e2;
+  --bd-text:#0c2340;
+  --bd-muted:#697c94;
+  --bd-success:#238060;
+  --bd-success-soft:#e8f6ef;
+  --bd-danger:#bd3e49;
+  --bd-danger-soft:#fff0f2;
+  --bd-warning:#9b6818;
+  --bd-warning-soft:#fff7e5;
+  --bd-radius-xs:8px;
+  --bd-radius-sm:10px;
+  --bd-radius:14px;
+  --bd-radius-lg:18px;
+  --bd-shadow-xs:0 1px 2px rgba(17,42,73,.04);
+  --bd-shadow-sm:0 5px 16px rgba(17,42,73,.055);
+  --bd-shadow:0 10px 30px rgba(17,42,73,.07);
+  --bd-focus:0 0 0 3px rgba(47,111,237,.16);
+
+  /* Compatibility aliases used throughout the existing apps. */
+  --bg:var(--bd-canvas);
+  --bg-deep:var(--bd-canvas-strong);
+  --panel:var(--bd-surface);
+  --panel-2:var(--bd-surface-soft);
+  --surface:var(--bd-surface);
+  --card:var(--bd-surface);
+  --line:var(--bd-border);
+  --line-strong:var(--bd-border-strong);
+  --border:var(--bd-border);
+  --ink:var(--bd-text);
+  --text:var(--bd-text);
+  --muted:var(--bd-muted);
+  --accent:var(--bd-blue-600);
+  --accent-strong:var(--bd-blue-700);
+  --accent-2:var(--bd-blue-700);
+  --accent-soft:var(--bd-blue-50);
+  --forest:var(--bd-blue-700);
+  --good:var(--bd-success);
+  --bad:var(--bd-danger);
+  --danger:var(--bd-danger);
+  --warning:var(--bd-warning);
+}
+
+body[data-bd-surface]{
+  margin:0;
+  color:var(--bd-text);
+  background:var(--bd-canvas);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+body[data-bd-surface] h1,
+body[data-bd-surface] h2,
+body[data-bd-surface] h3,
+body[data-bd-surface] h4,
+body[data-bd-surface] strong{
+  color:var(--bd-text);
+}
+
+body[data-bd-surface] h1,
+body[data-bd-surface] h2,
+body[data-bd-surface] h3,
+body[data-bd-surface] h4{
+  font-family:inherit;
+  letter-spacing:-.02em;
+}
+
+body[data-bd-surface] .eyebrow{
+  color:var(--bd-blue-600);
+  font-weight:850;
+  letter-spacing:.1em;
+}
+
+body[data-bd-surface] .muted{color:var(--bd-muted)}
+
+body[data-bd-surface] input,
+body[data-bd-surface] select,
+body[data-bd-surface] textarea{
+  color:var(--bd-text);
+  background:#fff;
+  border-color:var(--bd-border);
+  border-radius:var(--bd-radius-sm);
+  box-shadow:none;
+}
+
+body[data-bd-surface] input::placeholder,
+body[data-bd-surface] textarea::placeholder{color:#93a1b2;opacity:1}
+
+body[data-bd-surface] input:focus,
+body[data-bd-surface] select:focus,
+body[data-bd-surface] textarea:focus{
+  border-color:var(--bd-blue-500);
+  outline:none;
+  box-shadow:var(--bd-focus);
+}
+
+body[data-bd-surface] button,
+body[data-bd-surface] .button,
+body[data-bd-surface] .primary-action,
+body[data-bd-surface] .confirm-button,
+body[data-bd-surface] .start-match{
+  border-radius:var(--bd-radius-sm);
+  background:var(--bd-blue-600);
+  color:#fff;
+  border-color:var(--bd-blue-600);
+  box-shadow:0 3px 9px rgba(47,111,237,.16);
+}
+
+body[data-bd-surface] button:hover,
+body[data-bd-surface] .button:hover,
+body[data-bd-surface] .primary-action:hover,
+body[data-bd-surface] .confirm-button:hover,
+body[data-bd-surface] .start-match:hover{
+  background:var(--bd-blue-700);
+  border-color:var(--bd-blue-700);
+}
+
+body[data-bd-surface] .button.secondary,
+body[data-bd-surface] .secondary-action,
+body[data-bd-surface] button.ghost,
+body[data-bd-surface] .ghost,
+body[data-bd-surface] .ghost-button,
+body[data-bd-surface] .icon-button{
+  background:#fff;
+  color:var(--bd-navy-900);
+  border:1px solid var(--bd-border);
+  box-shadow:none;
+}
+
+body[data-bd-surface] .button.quiet{
+  background:transparent;
+  color:var(--bd-muted);
+  border:1px solid transparent;
+  box-shadow:none;
+}
+
+body[data-bd-surface] .pill,
+body[data-bd-surface] .badge,
+body[data-bd-surface] .status-chip{
+  background:var(--bd-blue-50);
+  color:var(--bd-navy-800);
+  border-color:#cfddf2;
+}
+
+body[data-bd-surface] .badge.good,
+body[data-bd-surface] .pill.good,
+body[data-bd-surface] .status-pill.good{
+  color:#176449;
+  background:var(--bd-success-soft);
+  border-color:#b8dfcd;
+}
+
+body[data-bd-surface] .badge.bad,
+body[data-bd-surface] .pill.bad{
+  color:#9e303a;
+  background:var(--bd-danger-soft);
+  border-color:#efc5ca;
+}
+
+body[data-bd-surface] .badge.warning,
+body[data-bd-surface] .pill.warning{
+  color:#815512;
+  background:var(--bd-warning-soft);
+  border-color:#ecd8a9;
+}
+
+body[data-bd-surface] .message{
+  color:#3d536e;
+  background:#f3f7fc;
+  border-color:var(--bd-border);
+}
+body[data-bd-surface] .message.success{color:#176449;background:var(--bd-success-soft);border-color:#b8dfcd}
+body[data-bd-surface] .message.error{color:#9e303a;background:var(--bd-danger-soft);border-color:#efc5ca}
+body[data-bd-surface] .message.warning{color:#815512;background:var(--bd-warning-soft);border-color:#ecd8a9}
+
+/* Shared white workspace surfaces. */
+body[data-bd-surface] .card,
+body[data-bd-surface] .panel,
+body[data-bd-surface] .metric,
+body[data-bd-surface] .mini-card,
+body[data-bd-surface] .list-item,
+body[data-bd-surface] .list-row,
+body[data-bd-surface] .profile-card,
+body[data-bd-surface] .summary-card,
+body[data-bd-surface] .table-card,
+body[data-bd-surface] .status-item,
+body[data-bd-surface] .create-card,
+body[data-bd-surface] .inline-status{
+  background:#fff;
+  color:var(--bd-text);
+  border-color:var(--bd-border);
+  box-shadow:var(--bd-shadow-xs);
+}
+
+body[data-bd-surface] table{background:#fff;color:var(--bd-text)}
+body[data-bd-surface] th{background:#f5f7fa;color:#667892}
+body[data-bd-surface] th,
+body[data-bd-surface] td{border-color:var(--bd-border)}
+
+/* -------------------------------------------------------------------------
+   ADMIN — desktop uses the same navy sidebar + broad white workspace model
+   as the Grasrot admin reference. Mobile intentionally becomes a compact
+   top navigation instead of squeezing the sidebar into the viewport.
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="admin"]{background:var(--bd-canvas)!important}
+body[data-bd-surface="admin"] .auth-shell{background:linear-gradient(145deg,#f7f9fc,#edf2f8)!important}
+body[data-bd-surface="admin"] .login-card{
+  border-radius:var(--bd-radius-lg)!important;
+  border:1px solid var(--bd-border)!important;
+  background:#fff!important;
+  box-shadow:0 22px 60px rgba(11,43,80,.12)!important;
+}
+body[data-bd-surface="admin"] .brand-mark{
+  background:#fff url("../../static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;
+  color:transparent!important;
+  border:1px solid var(--bd-border)!important;
+  box-shadow:var(--bd-shadow-sm)!important;
+}
+body[data-bd-surface="admin"] .topbar{
+  background:#fff!important;
+  border-bottom:1px solid var(--bd-border)!important;
+  box-shadow:0 2px 8px rgba(14,43,75,.035)!important;
+}
+body[data-bd-surface="admin"] .panel{
+  border-radius:var(--bd-radius)!important;
+  box-shadow:var(--bd-shadow-sm)!important;
+}
+body[data-bd-surface="admin"] .metric{
+  min-height:104px!important;
+  border-radius:var(--bd-radius)!important;
+  box-shadow:var(--bd-shadow-xs)!important;
+}
+body[data-bd-surface="admin"] .metric span{
+  color:var(--bd-muted)!important;
+  font-size:11px!important;
+  font-weight:800!important;
+  letter-spacing:.04em!important;
+}
+body[data-bd-surface="admin"] .metric strong{font-size:28px!important;color:var(--bd-text)!important}
+body[data-bd-surface="admin"] .list-row{border-radius:11px!important;box-shadow:none!important}
+body[data-bd-surface="admin"] .table-wrap{border-radius:12px!important;background:#fff!important;border-color:var(--bd-border)!important}
+body[data-bd-surface="admin"] .portal-shortcuts{gap:12px}
+body[data-bd-surface="admin"] .shortcut-card{
+  border-radius:var(--bd-radius)!important;
+  background:#fff!important;
+  border:1px solid var(--bd-border)!important;
+  box-shadow:var(--bd-shadow-xs)!important;
+}
+
+@media(min-width:981px){
+  body[data-bd-surface="admin"] .app{min-height:100vh;background:var(--bd-canvas)!important}
+  body[data-bd-surface="admin"] .section-nav.portal-menu{
+    position:fixed!important;
+    z-index:80!important;
+    inset:0 auto 0 0!important;
+    width:230px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:5px!important;
+    margin:0!important;
+    padding:92px 12px 20px!important;
+    border:0!important;
+    border-radius:0!important;
+    background:linear-gradient(180deg,var(--bd-navy-900),var(--bd-navy-950))!important;
+    box-shadow:none!important;
+    overflow-y:auto!important;
+  }
+  body[data-bd-surface="admin"] .admin-menu-label{
+    position:absolute!important;
+    top:19px!important;
+    left:17px!important;
+    width:196px!important;
+    min-height:52px!important;
+    display:flex!important;
+    align-items:center!important;
+    padding:0 0 0 52px!important;
+    font-size:0!important;
+    color:#fff!important;
+    letter-spacing:0!important;
+    text-transform:none!important;
+  }
+  body[data-bd-surface="admin"] .admin-menu-label::before{
+    content:"";
+    position:absolute;
+    left:0;
+    width:40px;
+    height:40px;
+    border-radius:3px;
+    background:#fff url("../../static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat;
+    box-shadow:0 2px 8px rgba(0,0,0,.12);
+  }
+  body[data-bd-surface="admin"] .admin-menu-label::after{
+    content:"Blindleia\A Dartklubb";
+    white-space:pre;
+    font-size:14px;
+    line-height:1.15;
+    font-weight:850;
+    color:#fff;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu a{
+    position:relative;
+    display:flex!important;
+    align-items:center!important;
+    gap:11px!important;
+    min-height:42px!important;
+    padding:9px 11px!important;
+    border:0!important;
+    border-radius:9px!important;
+    background:transparent!important;
+    color:#d8e5f3!important;
+    font-size:13px!important;
+    font-weight:760!important;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu a::before{
+    content:"";
+    flex:0 0 16px;
+    width:16px;
+    height:16px;
+    border:1.5px solid currentColor;
+    border-radius:4px;
+    opacity:.88;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu a:hover{
+    background:rgba(255,255,255,.07)!important;
+    color:#fff!important;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu a.active{
+    background:var(--bd-blue-600)!important;
+    color:#fff!important;
+    box-shadow:0 8px 20px rgba(0,0,0,.14)!important;
+  }
+  body[data-bd-surface="admin"] .topbar{
+    margin-left:230px!important;
+    min-height:74px!important;
+    padding:13px 28px!important;
+  }
+  body[data-bd-surface="admin"] .topbar-brand .brand-mark.small{display:none!important}
+  body[data-bd-surface="admin"] .topbar-brand .eyebrow{color:var(--bd-muted)!important;margin-bottom:2px!important}
+  body[data-bd-surface="admin"] .topbar-brand strong{font-size:18px!important;color:var(--bd-text)!important}
+  body[data-bd-surface="admin"] .main{
+    width:auto!important;
+    max-width:none!important;
+    margin:0 0 0 230px!important;
+    padding:24px 28px 64px!important;
+  }
+  body[data-bd-surface="admin"] .hero{padding:4px 0 22px!important}
+  body[data-bd-surface="admin"] .hero h1{font-size:34px!important;letter-spacing:-.025em!important}
+}
+
+/* -------------------------------------------------------------------------
+   PLAYER / MOBILE PORTAL
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="player"]{
+  background:var(--bd-canvas)!important;
+}
+body[data-bd-surface="player"] .shell{
+  width:min(900px,100%)!important;
+  padding:14px!important;
+  gap:12px!important;
+}
+body[data-bd-surface="player"] .hero,
+body[data-bd-surface="player"] .card{
+  border-radius:var(--bd-radius)!important;
+  border:1px solid var(--bd-border)!important;
+  box-shadow:var(--bd-shadow-sm)!important;
+  background:#fff!important;
+}
+body[data-bd-surface="player"] .brand-badge{
+  border-radius:12px!important;
+  border-color:var(--bd-border)!important;
+  background:#fff!important;
+  box-shadow:var(--bd-shadow-xs)!important;
+}
+body[data-bd-surface="player"] .portal-nav.portal-menu{
+  border-radius:var(--bd-radius)!important;
+  border:1px solid var(--bd-border)!important;
+  background:#fff!important;
+  box-shadow:var(--bd-shadow-xs)!important;
+}
+body[data-bd-surface="player"] .portal-nav.portal-menu a{
+  border:1px solid transparent!important;
+  border-radius:10px!important;
+  background:#f0f4f9!important;
+  color:var(--bd-navy-800)!important;
+}
+body[data-bd-surface="player"] .portal-nav.portal-menu a.active{
+  background:var(--bd-blue-600)!important;
+  color:#fff!important;
+  box-shadow:0 5px 14px rgba(47,111,237,.16)!important;
+}
+body[data-bd-surface="player"] .player-now-card{
+  background:linear-gradient(135deg,#fff,var(--bd-blue-50))!important;
+  border-color:#cbdcf6!important;
+  box-shadow:var(--bd-shadow-sm)!important;
+}
+body[data-bd-surface="player"] .stat-card{
+  border-radius:12px!important;
+  background:#fff!important;
+  box-shadow:none!important;
+}
+body[data-bd-surface="player"] .mini-card,
+body[data-bd-surface="player"] .list-item,
+body[data-bd-surface="player"] .table-card,
+body[data-bd-surface="player"] .profile-card,
+body[data-bd-surface="player"] .summary-card{border-radius:12px!important}
+
+/* -------------------------------------------------------------------------
+   KIOSK — keep the portrait/touch geometry, change only the visual language.
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="kiosk"]{
+  background:var(--bd-canvas)!important;
+  --bg:var(--bd-canvas);
+  --panel:#fff;
+  --panel-2:#f5f8fc;
+  --line:var(--bd-border);
+  --line-strong:var(--bd-border-strong);
+  --ink:var(--bd-text);
+  --muted:var(--bd-muted);
+  --accent:var(--bd-blue-600);
+  --accent-2:var(--bd-blue-700);
+}
+body[data-bd-surface="kiosk"] .terminal-topbar{
+  background:linear-gradient(135deg,var(--bd-navy-900),var(--bd-navy-950))!important;
+  border-color:rgba(255,255,255,.08)!important;
+  box-shadow:0 8px 28px rgba(7,31,59,.18)!important;
+}
+body[data-bd-surface="kiosk"] .terminal-topbar h1,
+body[data-bd-surface="kiosk"] .terminal-topbar strong,
+body[data-bd-surface="kiosk"] .terminal-topbar .eyebrow{color:#fff!important}
+body[data-bd-surface="kiosk"] .terminal-topbar .brand-sponsor{color:#cbd9ea!important}
+body[data-bd-surface="kiosk"] .terminal-topbar .brand-badge{background:#fff!important;border-color:rgba(255,255,255,.18)!important}
+body[data-bd-surface="kiosk"] .terminal-topbar .status-pill,
+body[data-bd-surface="kiosk"] .terminal-topbar .icon-button{
+  background:rgba(255,255,255,.1)!important;
+  color:#fff!important;
+  border-color:rgba(255,255,255,.14)!important;
+}
+body[data-bd-surface="kiosk"] .state-card,
+body[data-bd-surface="kiosk"] .scoreboard,
+body[data-bd-surface="kiosk"] .scoring-card,
+body[data-bd-surface="kiosk"] .activity-card,
+body[data-bd-surface="kiosk"] .post-match-result{
+  background:#fff!important;
+  border-color:var(--bd-border)!important;
+  box-shadow:var(--bd-shadow-sm)!important;
+}
+body[data-bd-surface="kiosk"] .player-card,
+body[data-bd-surface="kiosk"] .versus-grid article,
+body[data-bd-surface="kiosk"] .visit-row,
+body[data-bd-surface="kiosk"] .setup-step{
+  background:#f7f9fc!important;
+  border-color:var(--bd-border)!important;
+}
+body[data-bd-surface="kiosk"] .player-card.active{
+  background:var(--bd-blue-50)!important;
+  border-color:#a9c6f7!important;
+}
+body[data-bd-surface="kiosk"] .keypad button,
+body[data-bd-surface="kiosk"] .multipliers button,
+body[data-bd-surface="kiosk"] .number-grid button,
+body[data-bd-surface="kiosk"] .special-grid button{
+  background:#fff!important;
+  color:var(--bd-navy-900)!important;
+  border-color:var(--bd-border)!important;
+  box-shadow:var(--bd-shadow-xs)!important;
+}
+body[data-bd-surface="kiosk"] .mode-switch{background:#edf2f8!important;border-color:var(--bd-border)!important}
+body[data-bd-surface="kiosk"] .mode-switch button.active,
+body[data-bd-surface="kiosk"] .multipliers button.active{
+  background:var(--bd-blue-600)!important;
+  color:#fff!important;
+}
+body[data-bd-surface="kiosk"] .post-match-upcoming{
+  background:var(--bd-blue-50)!important;
+  border-color:#cadaf4!important;
+}
+body[data-bd-surface="kiosk"] .post-match-countdown strong{color:var(--bd-blue-600)!important}
+
+/* -------------------------------------------------------------------------
+   PUBLIC LIVE — a navy identity header over the same white dashboard cards.
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="live"]{background:var(--bd-canvas)!important}
+body[data-bd-surface="live"] .hero{
+  background:linear-gradient(135deg,var(--bd-navy-900),var(--bd-navy-950))!important;
+  border-color:rgba(255,255,255,.08)!important;
+  border-radius:var(--bd-radius)!important;
+  box-shadow:0 10px 28px rgba(7,31,59,.16)!important;
+}
+body[data-bd-surface="live"] .hero h1,
+body[data-bd-surface="live"] .hero .eyebrow,
+body[data-bd-surface="live"] .hero .muted{color:#fff!important}
+body[data-bd-surface="live"] .hero .muted{opacity:.74}
+body[data-bd-surface="live"] .live-logo{background:#fff;border-radius:8px;padding:4px}
+body[data-bd-surface="live"] .live-status{background:rgba(255,255,255,.1)!important;color:#d8f3e8!important;border-color:rgba(255,255,255,.14)!important}
+body[data-bd-surface="live"] .stat-card,
+body[data-bd-surface="live"] .panel,
+body[data-bd-surface="live"] .board-card,
+body[data-bd-surface="live"] .table-card,
+body[data-bd-surface="live"] .live-bracket-match{
+  border-radius:var(--bd-radius)!important;
+  border-color:var(--bd-border)!important;
+  background:#fff!important;
+  box-shadow:var(--bd-shadow-xs)!important;
+}
+body[data-bd-surface="live"] .stat-card strong,
+body[data-bd-surface="live"] .board-number,
+body[data-bd-surface="live"] .remaining,
+body[data-bd-surface="live"] .result-score,
+body[data-bd-surface="live"] .rating,
+body[data-bd-surface="live"] .section h2,
+body[data-bd-surface="live"] .table-card h3{color:var(--bd-text)!important}
+body[data-bd-surface="live"] .highlight{background:#f6f8fb!important;border-color:var(--bd-border)!important;border-radius:12px!important}
+body[data-bd-surface="live"] .portal-table th{background:#f5f7fa!important}
+
+/* -------------------------------------------------------------------------
+   VENUE SCREEN — light information board with a navy identity header.
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="screen"]{
+  --bg:var(--bd-canvas);
+  --panel:#fff;
+  --panel-soft:#f7f9fc;
+  --line:var(--bd-border);
+  --ink:var(--bd-text);
+  --muted:var(--bd-muted);
+  --gold:var(--bd-blue-600);
+  --green:var(--bd-success);
+  background:var(--bd-canvas)!important;
+  color:var(--bd-text)!important;
+}
+body[data-bd-surface="screen"] .connect-card,
+body[data-bd-surface="screen"] .screen-panel,
+body[data-bd-surface="screen"] .fallback-card{
+  background:#fff!important;
+  color:var(--bd-text)!important;
+  border-color:var(--bd-border)!important;
+  border-radius:var(--bd-radius-lg)!important;
+  box-shadow:var(--bd-shadow)!important;
+}
+body[data-bd-surface="screen"] .screen-header{
+  background:linear-gradient(135deg,var(--bd-navy-900),var(--bd-navy-950))!important;
+  color:#fff!important;
+  border-color:rgba(255,255,255,.08)!important;
+  border-radius:var(--bd-radius-lg)!important;
+  box-shadow:0 12px 32px rgba(7,31,59,.18)!important;
+}
+body[data-bd-surface="screen"] .screen-header h1,
+body[data-bd-surface="screen"] .screen-header strong,
+body[data-bd-surface="screen"] .screen-header .eyebrow{color:#fff!important}
+body[data-bd-surface="screen"] .screen-header .tournament-label,
+body[data-bd-surface="screen"] .screen-header .header-meta{color:#c8d7e8!important}
+body[data-bd-surface="screen"] .screen-header .brand-badge{background:#fff!important;border-color:rgba(255,255,255,.16)!important}
+body[data-bd-surface="screen"] .screen-header .ghost-button{background:rgba(255,255,255,.1)!important;color:#fff!important;border-color:rgba(255,255,255,.16)!important}
+body[data-bd-surface="screen"] .eyebrow,
+body[data-bd-surface="screen"] .board-head h3,
+body[data-bd-surface="screen"] .compact-versus,
+body[data-bd-surface="screen"] .table-rank{color:var(--bd-blue-600)!important}
+body[data-bd-surface="screen"] .pill,
+body[data-bd-surface="screen"] .status-chip{background:var(--bd-blue-50)!important;color:var(--bd-navy-800)!important;border-color:#cfddf2!important}
+body[data-bd-surface="screen"] .connect-form input{background:#fff!important;color:var(--bd-text)!important;border-color:var(--bd-border)!important}
+body[data-bd-surface="screen"] .screen-panel,
+body[data-bd-surface="screen"] .screen-panel *{text-shadow:none!important}
+
+/* -------------------------------------------------------------------------
+   ONBOARDING / AUTH
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="onboarding"]{background:linear-gradient(145deg,#f7f9fc,#edf2f8)!important}
+body[data-bd-surface="onboarding"] .card{
+  background:#fff!important;
+  border:1px solid var(--bd-border)!important;
+  border-radius:var(--bd-radius-lg)!important;
+  box-shadow:0 20px 55px rgba(11,43,80,.11)!important;
+}
+body[data-bd-surface="onboarding"] .brand-badge{background:#fff!important;border-color:var(--bd-border)!important;border-radius:10px!important}
+body[data-bd-surface="onboarding"] .step-pill{background:var(--bd-blue-50)!important;color:var(--bd-blue-700)!important;border-color:#cfddf2!important}
+body[data-bd-surface="onboarding"] .requirements{background:#f6f8fb!important;border-color:var(--bd-border)!important}
+body[data-bd-surface="onboarding"] .success-mark{background:var(--bd-success-soft)!important;color:var(--bd-success)!important}
+
+/* -------------------------------------------------------------------------
+   PUBLIC WEBSITE — keep the editorial layout, align palette/cards/buttons.
+   ------------------------------------------------------------------------- */
+body[data-bd-surface="site"]{background:var(--bd-canvas)!important}
+body[data-bd-surface="site"] .site-header{background:rgba(255,255,255,.96)!important;border-color:var(--bd-border)!important}
+body[data-bd-surface="site"] .button.primary{background:var(--bd-blue-600)!important;color:#fff!important}
+body[data-bd-surface="site"] .button.secondary{background:#fff!important;color:var(--bd-navy-900)!important;border-color:var(--bd-border)!important}
+body[data-bd-surface="site"] .stats,
+body[data-bd-surface="site"] .info-card,
+body[data-bd-surface="site"] .club-mark{border-color:var(--bd-border)!important;box-shadow:var(--bd-shadow-xs)!important}
+
+@media(max-width:980px){
+  body[data-bd-surface="admin"] .section-nav.portal-menu{
+    position:static!important;
+    width:auto!important;
+    background:#fff!important;
+    border:1px solid var(--bd-border)!important;
+    border-radius:var(--bd-radius)!important;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu a{color:var(--bd-navy-800)!important}
+  body[data-bd-surface="admin"] .section-nav.portal-menu a.active{background:var(--bd-blue-600)!important;color:#fff!important}
+}
+
+@media(max-width:760px){
+  body[data-bd-surface="admin"] .topbar,
+  body[data-bd-surface="player"] .hero{box-shadow:none!important}
+  body[data-bd-surface="admin"] .panel,
+  body[data-bd-surface="player"] .card{box-shadow:var(--bd-shadow-xs)!important}
+  body[data-bd-surface="live"] .hero{border-radius:12px!important}
+  body[data-bd-surface="screen"] .screen-header,
+  body[data-bd-surface="screen"] .screen-panel{border-radius:14px!important}
+}
