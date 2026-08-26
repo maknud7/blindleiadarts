@@ -1,0 +1,104 @@
+const host = document.getElementById("tournaments");
+let requested = false;
+let loading = null;
+let waitTimer = null;
+
+function token() {
+  return localStorage.getItem("bd:token") || "";
+}
+
+function clubReady() {
+  return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:selectedClubId") || 0) > 0;
+}
+
+function adminVisible() {
+  return !document.getElementById("adminApp")?.classList.contains("hidden");
+}
+
+function showLoading() {
+  if (!host || document.getElementById("tournamentModuleLoading")) return;
+  const node = document.createElement("div");
+  node.id = "tournamentModuleLoading";
+  node.className = "message";
+  node.textContent = "Åpner turneringsrom …";
+  host.querySelector(":scope > .panel-head")?.insertAdjacentElement("afterend", node);
+}
+
+function hideLoading() {
+  document.getElementById("tournamentModuleLoading")?.remove();
+}
+
+async function loadModules() {
+  if (!host) return;
+  if (loading) return loading;
+
+  showLoading();
+  host.dataset.tournamentModules = "loading";
+
+  loading = (async () => {
+    await import("./tournament-admin.js");
+
+    await Promise.all([
+      import("./tournament-checkin-admin.js"),
+      import("./tournament-operations-admin.js"),
+      import("./tournament-playoff-admin.js"),
+      import("./tournament-summary-admin.js"),
+      import("./tournament-wizard-v2.js"),
+    ]);
+
+    await import("./tournament-workspace-ux.js");
+    host.dataset.tournamentModules = "ready";
+    hideLoading();
+  })().catch((error) => {
+    host.dataset.tournamentModules = "error";
+    hideLoading();
+    const message = document.createElement("div");
+    message.className = "message error";
+    message.textContent = `Turneringsrommet kunne ikke lastes: ${error.message}`;
+    host.querySelector(":scope > .panel-head")?.insertAdjacentElement("afterend", message);
+    throw error;
+  });
+
+  return loading;
+}
+
+function tryLoad() {
+  if (!requested || !host) return;
+  if (token() && clubReady() && adminVisible()) {
+    if (waitTimer) {
+      window.clearInterval(waitTimer);
+      waitTimer = null;
+    }
+    loadModules().catch(() => undefined);
+    return;
+  }
+
+  if (!waitTimer) {
+    waitTimer = window.setInterval(() => {
+      if (token() && clubReady() && adminVisible()) {
+        window.clearInterval(waitTimer);
+        waitTimer = null;
+        loadModules().catch(() => undefined);
+      }
+    }, 120);
+  }
+}
+
+function requestTournamentRoom() {
+  requested = true;
+  tryLoad();
+}
+
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "tournaments") requestTournamentRoom();
+});
+
+window.addEventListener("hashchange", () => {
+  if (location.hash === "#tournaments") requestTournamentRoom();
+});
+
+document.getElementById("clubSelect")?.addEventListener("change", tryLoad);
+
+if (location.hash === "#tournaments" || document.body.dataset.portalActive === "tournaments") {
+  requestTournamentRoom();
+}
