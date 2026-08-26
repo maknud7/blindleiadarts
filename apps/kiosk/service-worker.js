@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v7";
+const SHELL_CACHE = "bd-kiosk-shell-v8";
 const SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const SHELL = [
   "./kiosk-polish.css",
   "./brand-light.css",
   "./tablet-portrait.css",
+  "./kiosk-ux-v2.css",
   "./operations-runtime.css",
   "../packages/ui-assets/brand-tokens.css",
   "../packages/ui-assets/blindleia-system.css",
@@ -16,6 +17,7 @@ const SHELL = [
   "./scolia-runtime.js",
   "./admin-mode.js",
   "./test-mode.js",
+  "./kiosk-ux-v2.js",
   "./install.js",
   "./manifest.webmanifest",
   "../static/club-logos/blindleia-dartklubb-logo.png"
