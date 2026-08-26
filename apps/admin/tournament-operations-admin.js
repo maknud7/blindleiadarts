@@ -11,20 +11,20 @@ if (opsHost) {
   panel.className = "ops-admin-panel";
   panel.innerHTML = `
     <div class="subsection-head">
-      <div><h3>Turneringsdrift</h3><p class="muted">Kampkø, boards og automatisk videreflyt under turneringen.</p></div>
+      <div><h3>Turneringsdrift</h3><p class="muted">Kampmotor, skiver og kø under turneringen.</p></div>
       <a id="opsLiveLink" class="button secondary" href="../live/" target="_blank" rel="noopener">Åpne live</a>
     </div>
     <div id="opsMessage" class="message hidden"></div>
     <div class="ops-toolbar">
       <label><span>Turnering</span><select id="opsTournament"></select></label>
-      <label class="ops-toggle"><input id="opsAuto" type="checkbox"><span>Automatisk kampflyt</span></label>
+      <label class="ops-toggle"><input id="opsAuto" type="checkbox"><span>Automatisk kampfordeling</span></label>
       <button id="opsSave" type="button" class="button secondary">Lagre</button>
-      <button id="opsReconcile" type="button" class="button">Fyll ledige boards</button>
+      <button id="opsReconcile" type="button" class="button">Fordel ledige skiver</button>
       <button id="opsRefresh" type="button" class="button quiet">Oppdater</button>
     </div>
     <div id="opsProgress" class="ops-progress"></div>
     <div class="ops-columns">
-      <div><div class="subsection-head"><h3>Boards</h3></div><div id="opsBoards" class="ops-board-grid"></div></div>
+      <div><div class="subsection-head"><h3>Skiver</h3></div><div id="opsBoards" class="ops-board-grid"></div></div>
       <div><div class="subsection-head"><h3>Kampkø</h3></div><div id="opsQueue" class="list"></div></div>
     </div>`;
   opsHost.appendChild(panel);
@@ -78,24 +78,47 @@ if (opsHost) {
       ["Pågår", Number(p.in_progress || 0)], ["Kalt opp", Number(p.assigned || 0)],
       ["I kø", Number(p.pending || 0)], ["Fremdrift", `${Number(p.percent || 0).toFixed(0)}%`],
     ].map(([label,value]) => `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("");
+
     const boards = data.boards || [];
-    el.opsBoards.innerHTML = boards.length ? boards.map((board) => `<article class="ops-board ${board.active_match_id ? "busy" : ""}"><div><strong>Board ${Number(board.board_number)}</strong><small>${esc(board.name || board.code)}</small></div>${board.active_match_id ? `<span>${esc(board.player_a_name)} – ${esc(board.player_b_name)}<small>${esc(board.active_match_status)}</small></span>` : `<span class="muted">Ledig</span>`}</article>`).join("") : `<div class="empty">Ingen boards er tilordnet turneringen.</div>`;
+    el.opsBoards.innerHTML = boards.length ? boards.map((board) => {
+      const reservation = board.reservation || null;
+      const busy = Boolean(board.active_match_id);
+      const cls = busy ? "busy" : reservation ? "reserved" : "";
+      const stateHtml = busy
+        ? `<span>${esc(board.player_a_name)} – ${esc(board.player_b_name)}<small>${esc(board.active_match_status)}</small></span>`
+        : reservation
+          ? `<span>${esc(reservation.player_a_name)} – ${esc(reservation.player_b_name)}<small>Neste · ${Number(reservation.remaining_seconds || 0)} sek</small></span>`
+          : `<span class="muted">Ledig</span>`;
+      return `<article class="ops-board ${cls}"><div><strong>Board ${Number(board.board_number)}</strong><small>${esc(board.name || board.code)}</small></div>${stateHtml}</article>`;
+    }).join("") : `<div class="empty">Ingen skiver er tilordnet turneringen.</div>`;
+
     const queue = (data.queue?.items || []).filter((m) => m.status === "pending");
-    el.opsQueue.innerHTML = queue.length ? queue.map((m) => `<div class="list-row"><div><strong>${esc(m.player_a_name)} – ${esc(m.player_b_name)}</strong><div class="row-meta"><span>${esc(m.round_label || m.bracket_label || "Kamp")}</span><span>${m.players_checked_in ? "checket inn" : "mangler check-in"}</span><span>${m.players_available ? "ledig" : "opptatt"}</span></div></div></div>`).join("") : `<div class="empty">Ingen ventende kamper.</div>`;
+    el.opsQueue.innerHTML = queue.length ? queue.map((m) => {
+      const reservation = m.reservation || null;
+      const availability = reservation
+        ? `reservert Board ${Number(reservation.board_number || 0)}`
+        : m.players_available ? "klar" : "venter";
+      return `<div class="list-row"><div><strong>${esc(m.player_a_name)} – ${esc(m.player_b_name)}</strong><div class="row-meta"><span>${esc(m.round_label || m.bracket_label || "Kamp")}</span><span>${m.players_checked_in ? "sjekket inn" : "mangler innsjekk"}</span><span>${esc(availability)}</span></div></div></div>`;
+    }).join("") : `<div class="empty">Ingen ventende kamper.</div>`;
   }
   el.opsTournament.addEventListener("change", () => loadSnapshot().catch((e) => show(e.message, "error")));
   el.opsRefresh.addEventListener("click", () => loadBase().catch((e) => show(e.message, "error")));
   el.opsSave.addEventListener("click", async () => {
     const id = Number(el.opsTournament.value || 0); if (!id) return;
     el.opsSave.disabled = true;
-    try { state.snapshot = await api(`/tournaments/${id}/operations/settings`, { method: "PATCH", body: { auto_assign_enabled: el.opsAuto.checked } }); show("Driftsinnstillingen er lagret.", "success"); render(); }
+    try { state.snapshot = await api(`/tournaments/${id}/operations/settings`, { method: "PATCH", body: { auto_assign_enabled: el.opsAuto.checked } }); show("Driftsinnstillingene er lagret.", "success"); render(); }
     catch (e) { show(e.message, "error"); }
     finally { el.opsSave.disabled = false; }
   });
   el.opsReconcile.addEventListener("click", async () => {
     const id = Number(el.opsTournament.value || 0); if (!id) return;
     el.opsReconcile.disabled = true;
-    try { state.snapshot = await api(`/tournaments/${id}/operations/reconcile`, { method: "POST" }); const n = Number(state.snapshot.assignment?.assigned_count || 0); show(n ? `${n} kamp${n === 1 ? "" : "er"} ble sendt til ledige boards.` : "Ingen nye kamper kunne sendes ut akkurat nå.", "success"); render(); }
+    try {
+      state.snapshot = await api(`/tournaments/${id}/operations/reconcile`, { method: "POST" });
+      const n = Number(state.snapshot.assignment?.assigned_count || 0);
+      show(n ? `${n} kamp${n === 1 ? "" : "er"} ble sendt til ledige skiver.` : "Kampmotoren fant ingen nye kamper som kunne sendes ut akkurat nå.", "success");
+      render();
+    }
     catch (e) { show(e.message, "error"); }
     finally { el.opsReconcile.disabled = false; }
   });
