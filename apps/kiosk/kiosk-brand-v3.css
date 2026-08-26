@@ -1,0 +1,216 @@
+/* Kiosk branding v3: stable topbar, visible club identity and a proper sponsor surface. */
+.kiosk-brand-v3 .brand-sponsor {
+  display: none !important;
+}
+
+.kiosk-brand-v3 .terminal-topbar {
+  min-height: 72px;
+}
+
+.kiosk-brand-v3 .brandline {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.kiosk-brand-v3 .brand-badge {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  padding: 3px;
+}
+
+.kiosk-brand-v3 .brand-logo {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  object-fit: contain;
+}
+
+.kiosk-brand-v3 .terminal-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.kiosk-brand-v3 .board-sponsor-badge {
+  width: min(255px, 34vw);
+  max-width: none !important;
+  min-height: 50px;
+  flex: 0 1 255px;
+  padding: 7px 11px;
+  gap: 10px;
+  border-radius: 14px;
+}
+
+.kiosk-brand-v3 .board-sponsor-badge img {
+  width: 46px;
+  height: 38px;
+  flex: 0 0 46px;
+  padding: 2px;
+  border-radius: 8px;
+}
+
+.kiosk-brand-v3 .board-sponsor-copy span {
+  font-size: 9px;
+  letter-spacing: .1em;
+}
+
+.kiosk-brand-v3 .board-sponsor-copy strong {
+  font-size: 13px;
+  line-height: 1.12;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.kiosk-brand-v3 #idleState {
+  position: relative;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+
+.kiosk-brand-v3 #idleState .board-hero {
+  width: min(100%, 590px);
+  align-self: center;
+  gap: 9px;
+}
+
+.kiosk-brand-v3 .idle-club-logo-wrap {
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 2px;
+  padding: 7px;
+  border: 1px solid #dbe3ed;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(12, 35, 64, .08);
+}
+
+.kiosk-brand-v3 .idle-club-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.kiosk-brand-v3 .idle-club-logo.hidden {
+  display: none !important;
+}
+
+.kiosk-brand-v3 #idleClub {
+  margin-top: 3px;
+}
+
+.kiosk-brand-v3 #idleBoard {
+  font-size: clamp(54px, 10vw, 82px);
+}
+
+.kiosk-brand-v3 .idle-sponsor-showcase {
+  width: min(100%, 520px);
+  min-height: 100px;
+  margin-top: 22px;
+  padding: 15px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  border: 1px solid #cedaea;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff, #f7faff);
+  box-shadow: 0 10px 30px rgba(12, 35, 64, .075);
+}
+
+.kiosk-brand-v3 .idle-sponsor-showcase.hidden {
+  display: none !important;
+}
+
+.kiosk-brand-v3 .idle-sponsor-logo {
+  width: min(190px, 42%);
+  max-height: 66px;
+  object-fit: contain;
+}
+
+.kiosk-brand-v3 .idle-sponsor-logo.hidden {
+  display: none !important;
+}
+
+.kiosk-brand-v3 .idle-sponsor-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.kiosk-brand-v3 .idle-sponsor-copy span {
+  color: #697c94;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.kiosk-brand-v3 .idle-sponsor-copy strong {
+  color: #0c2340;
+  font-size: clamp(21px, 4vw, 30px);
+  line-height: 1.05;
+}
+
+.kiosk-brand-v3 #idleState .post-match-panel {
+  width: min(100%, 760px);
+  margin-top: 10px;
+  align-self: end;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 900px), (orientation: portrait) {
+  .kiosk-brand-v3 .terminal-topbar {
+    min-height: 68px;
+    max-height: 74px;
+  }
+
+  .kiosk-brand-v3 .idle-club-logo-wrap {
+    width: 104px;
+    height: 104px;
+  }
+
+  .kiosk-brand-v3 .idle-sponsor-showcase {
+    min-height: 94px;
+    margin-top: 18px;
+  }
+}
+
+@media (max-width: 660px) {
+  .kiosk-brand-v3 .board-sponsor-badge {
+    width: auto;
+    max-width: 175px !important;
+    min-height: 44px;
+    padding: 6px 8px;
+  }
+
+  .kiosk-brand-v3 .board-sponsor-badge img {
+    width: 34px;
+    height: 32px;
+    flex-basis: 34px;
+  }
+
+  .kiosk-brand-v3 .board-sponsor-copy span {
+    display: none;
+  }
+
+  .kiosk-brand-v3 .board-sponsor-copy strong {
+    font-size: 11px;
+  }
+
+  .kiosk-brand-v3 .idle-club-logo-wrap {
+    width: 86px;
+    height: 86px;
+    border-radius: 20px;
+  }
+
+  .kiosk-brand-v3 .idle-sponsor-showcase {
+    min-height: 82px;
+    padding: 12px 15px;
+    gap: 13px;
+  }
+}
