@@ -24,8 +24,20 @@ async function requestJson(path, { method = "GET", body } = {}) {
   return payload.data;
 }
 
-function showMessage(text, tone = "info") {
-  const target = document.getElementById("globalMessage");
+function ensureFeedback(section, id) {
+  let target = document.getElementById(id);
+  if (target) return target;
+  target = document.createElement("div");
+  target.id = id;
+  target.className = "message hidden";
+  const actionbar = section?.querySelector(".equipment-actionbar");
+  if (actionbar) actionbar.insertAdjacentElement("afterend", target);
+  else section?.querySelector(":scope > .panel-head")?.insertAdjacentElement("afterend", target);
+  return target;
+}
+
+function showMessage(text, tone = "info", scope = "board") {
+  const target = document.getElementById(scope === "screen" ? "screenEquipmentMessage" : "boardEquipmentMessage");
   if (!target) return;
   target.textContent = text;
   target.className = `message ${tone}`;
@@ -74,9 +86,10 @@ function setupBoardFlow() {
   actionbar.className = "equipment-actionbar";
   actionbar.innerHTML = `<div class="equipment-actionbar-copy"><strong>Skiver</strong><span>Skiva er utstyret. Nettbrettet er bare terminalen som kobles til etterpå.</span></div><div class="equipment-actionbar-actions"><button id="newBoardButton" type="button">+ Ny skive</button><button id="pairTabletButton" type="button" class="button secondary">Koble nettbrett</button></div>`;
   panelHead.insertAdjacentElement("afterend", actionbar);
+  ensureFeedback(section, "boardEquipmentMessage");
 
   const createReveal = makeReveal("boardCreateReveal", "Ny skive", "Velg nummer og scoring. Resten er valgfritt.", form);
-  actionbar.insertAdjacentElement("afterend", createReveal);
+  document.getElementById("boardEquipmentMessage")?.insertAdjacentElement("afterend", createReveal);
   form.querySelector("h3").textContent = "Opprett skive";
   const intro = form.querySelector("p.muted");
   if (intro) intro.textContent = "Skivenummer og scoring er det eneste du normalt trenger.";
@@ -95,12 +108,7 @@ function setupBoardFlow() {
   if (listHeading) listHeading.textContent = "Skiver";
 
   document.getElementById("newBoardButton")?.addEventListener("click", () => openOnly(createReveal));
-  document.getElementById("pairTabletButton")?.addEventListener("click", () => {
-    if (document.querySelector("#kioskList .board-row")) {
-      document.getElementById("claimExistingBoardChoice")?.click();
-    }
-    openOnly(pairingReveal);
-  });
+  document.getElementById("pairTabletButton")?.addEventListener("click", () => openOnly(pairingReveal));
 
   form.addEventListener("submit", createBoard, true);
 }
@@ -115,7 +123,7 @@ async function createBoard(event) {
   const serial = String(data.get("scolia_serial_number") || "").trim();
   if (boardNumber <= 0) return;
   if (scoring === "scolia" && !/^[A-Za-z0-9._:-]{3,120}$/.test(serial)) {
-    showMessage("Scolia-skive må ha en gyldig Scolia-ID / serienummer.", "warning");
+    showMessage("Scolia-skive må ha en gyldig Scolia-ID / serienummer.", "warning", "board");
     return;
   }
 
@@ -141,10 +149,10 @@ async function createBoard(event) {
     form.reset();
     document.getElementById("kioskScoringMode")?.dispatchEvent(new Event("change"));
     document.getElementById("boardCreateReveal")?.classList.add("hidden");
-    showMessage(`Skive ${boardNumber} er opprettet. Koble nettbrett når du er klar.`, "success");
+    showMessage(`Skive ${boardNumber} er opprettet. Koble nettbrett når du er klar.`, "success", "board");
     document.getElementById("refreshAllButton")?.click();
   } catch (error) {
-    showMessage(error.message, "error");
+    showMessage(error.message, "error", "board");
   } finally {
     submit.disabled = false;
   }
@@ -161,17 +169,36 @@ function setupScreenFlow() {
   actionbar.className = "equipment-actionbar";
   actionbar.innerHTML = `<div class="equipment-actionbar-copy"><strong>Venue-skjermer</strong><span>Opprett en skjermkode én gang. Åpne venue-siden på TV-en og skriv inn koden.</span></div><div class="equipment-actionbar-actions"><button id="newScreenButton" type="button">+ Ny skjerm</button></div>`;
   panelHead.insertAdjacentElement("afterend", actionbar);
+  ensureFeedback(section, "screenEquipmentMessage");
 
   const reveal = makeReveal("screenCreateReveal", "Ny venue-skjerm", "Gi skjermen et navn du kjenner igjen. Tilkoblingskoden lages automatisk.", form);
-  actionbar.insertAdjacentElement("afterend", reveal);
+  document.getElementById("screenEquipmentMessage")?.insertAdjacentElement("afterend", reveal);
   form.querySelector("h3").textContent = "Opprett skjermkode";
   document.getElementById("newScreenButton")?.addEventListener("click", () => openOnly(reveal));
+  form.addEventListener("submit", createScreen, true);
+}
 
-  const observer = new MutationObserver(() => {
-    if (!reveal.classList.contains("hidden")) reveal.classList.add("hidden");
-  });
-  const list = document.getElementById("screenList");
-  if (list) observer.observe(list, { childList: true });
+async function createScreen(event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const label = String(data.get("label") || "").trim();
+  if (!label) return;
+  const submit = form.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  try {
+    const result = await requestJson(`/clubs/${clubId()}/screen-devices`, { method: "POST", body: { label } });
+    form.reset();
+    document.getElementById("screenCreateReveal")?.classList.add("hidden");
+    state.screenIds.clear();
+    showMessage(`Skjermen «${label}» er opprettet. Kode: ${result.device?.access_code || "—"}`, "success", "screen");
+    document.getElementById("refreshAllButton")?.click();
+  } catch (error) {
+    showMessage(error.message, "error", "screen");
+  } finally {
+    submit.disabled = false;
+  }
 }
 
 async function loadRole() {
@@ -215,12 +242,13 @@ async function deleteEquipment(button) {
   button.disabled = true;
   const kind = button.dataset.kind;
   const id = Number(button.dataset.id || 0);
+  const scope = kind === "screen" ? "screen" : "board";
   try {
     const path = kind === "screen"
       ? `/clubs/${clubId()}/screen-devices/${id}`
       : `/clubs/${clubId()}/kiosks/${id}`;
     await requestJson(path, { method: "DELETE" });
-    showMessage(kind === "screen" ? "Venue-skjermen er slettet." : "Skiva er slettet.", "success");
+    showMessage(kind === "screen" ? "Venue-skjermen er slettet." : "Skiva er slettet.", "success", scope);
     state.screenIds.clear();
     document.getElementById("refreshAllButton")?.click();
   } catch (error) {
@@ -228,7 +256,7 @@ async function deleteEquipment(button) {
     button.dataset.armed = "0";
     button.textContent = "Slett";
     button.classList.remove("is-armed");
-    showMessage(error.message, "error");
+    showMessage(error.message, "error", scope);
   }
 }
 
