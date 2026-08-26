@@ -40,15 +40,6 @@ if (host) {
     return ["in_progress", "completed", "archived"].includes(tournamentStatus());
   }
 
-  function esc(value) {
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
   async function api(path, { method = "GET", body } = {}) {
     const headers = token() ? { Authorization: `Bearer ${token()}` } : {};
     if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -76,6 +67,10 @@ if (host) {
 
   function setText(node, value) {
     if (node && node.textContent !== value) node.textContent = value;
+  }
+
+  function setHtml(node, value) {
+    if (node && node.innerHTML !== value) node.innerHTML = value;
   }
 
   function cleanupLegacyUi() {
@@ -111,18 +106,12 @@ if (host) {
     const panelIntro = host.querySelector(":scope > .panel-head .muted");
     setText(panelIntro, "Opprett og gjennomfør turneringen fra innsjekk til resultat.");
 
-    const formatNav = host.querySelector('[data-tc-view="format"] b');
-    setText(formatNav, "Format og start");
+    setText(host.querySelector('[data-tc-view="format"] b'), "Format og start");
+    setText(document.querySelector("#tcStageCheckin .tc-stage-head h3"), "Hvem er her?");
 
-    const checkinHeading = document.querySelector("#tcStageCheckin .tc-stage-head h3");
-    setText(checkinHeading, "Hvem er her?");
-
-    const formatIntro = document.querySelector("#tcStageFormat .tc-stage-head .muted");
-    formatIntro?.remove();
-    const liveIntro = document.querySelector("#tcStageLive .tc-stage-head .muted");
-    liveIntro?.remove();
-    const afterIntro = document.querySelector("#tcStageAfter .tc-stage-head .muted");
-    afterIntro?.remove();
+    document.querySelector("#tcStageFormat .tc-stage-head .muted")?.remove();
+    document.querySelector("#tcStageLive .tc-stage-head .muted")?.remove();
+    document.querySelector("#tcStageAfter .tc-stage-head .muted")?.remove();
 
     const drawMeta = document.getElementById("tcDrawMeta");
     if (drawMeta && drawMeta.textContent.includes("seed")) setText(drawMeta, "Grupper trukket");
@@ -166,6 +155,7 @@ if (host) {
     }
 
     const button = document.getElementById("tcGuestAdd");
+    if (!button) return;
     button.disabled = true;
     try {
       const data = await api(`/tournaments/${id}/registrations/guest`, {
@@ -173,8 +163,10 @@ if (host) {
         body: { first_name: first, last_name: last },
       });
       const name = data.registration?.display_name || `${first} ${last}`;
-      document.getElementById("tcGuestFirstName").value = "";
-      document.getElementById("tcGuestLastName").value = "";
+      const firstInput = document.getElementById("tcGuestFirstName");
+      const lastInput = document.getElementById("tcGuestLastName");
+      if (firstInput) firstInput.value = "";
+      if (lastInput) lastInput.value = "";
       document.getElementById("tcGuestDisclosure")?.removeAttribute("open");
       show(`${name} er lagt til og sjekket inn.`, "success");
       document.getElementById("tcRefresh")?.click();
@@ -190,41 +182,12 @@ if (host) {
     const settings = document.getElementById("tcCheckinSettings");
     if (!settings) return;
 
-    const summaryText = settings.querySelector("summary > span");
-    setText(summaryText, "Innsjekk");
-
+    setText(settings.querySelector("summary > span"), "Innsjekk");
     settings.querySelector(".tc-disclosure-body > p.muted")?.remove();
     document.getElementById("tcCheckinEffective")?.classList.add("hidden");
-
-    const closes = document.getElementById("tcCheckinCloses");
-    closes?.closest("label")?.classList.add("hidden");
-
-    const opens = document.getElementById("tcCheckinOpens");
-    setText(opens?.closest("label")?.querySelector("span"), "Innsjekk åpner");
-
-    const codeLabel = document.querySelector("#tcCheckinCodeBox small");
-    setText(codeLabel, "Innsjekk-kode");
-
-    const rotate = document.getElementById("tcRotateCode");
-    if (rotate && rotate.dataset.canonicalBound !== "1") {
-      const clone = rotate.cloneNode(true);
-      clone.dataset.canonicalBound = "1";
-      rotate.replaceWith(clone);
-      clone.addEventListener("click", async () => {
-        const id = currentTournamentId();
-        if (!id || attendanceClosed()) return;
-        clone.disabled = true;
-        try {
-          await api(`/tournaments/${id}/checkin-code/rotate`, { method: "POST" });
-          show("Ny innsjekk-kode er klar.", "success");
-          document.getElementById("tcRefresh")?.click();
-        } catch (error) {
-          show(error.message, "error");
-        } finally {
-          clone.disabled = false;
-        }
-      });
-    }
+    document.getElementById("tcCheckinCloses")?.closest("label")?.classList.add("hidden");
+    setText(document.getElementById("tcCheckinOpens")?.closest("label")?.querySelector("span"), "Innsjekk åpner");
+    setText(document.querySelector("#tcCheckinCodeBox small"), "Innsjekk-kode");
   }
 
   function rewriteRecommendation() {
@@ -232,25 +195,24 @@ if (host) {
     if (!root) return;
     const checked = checkedRegistrations().length;
     if (checked < MIN_PLAYERS) {
-      root.innerHTML = `<div class="tc-recommendation-icon">${checked}</div><div><strong>Minst ${MIN_PLAYERS} spillere</strong></div>`;
+      setHtml(root, `<div class="tc-recommendation-icon">${checked}</div><div><strong>Minst ${MIN_PLAYERS} spillere</strong></div>`);
       return;
     }
     root.querySelector("p.muted")?.remove();
-    const eyebrow = root.querySelector("p.eyebrow");
-    setText(eyebrow, "Forslag");
+    setText(root.querySelector("p.eyebrow"), "Forslag");
   }
 
   function rewriteStartArea() {
     const checked = checkedRegistrations().length;
     const warning = document.getElementById("tcStartWarning");
-    if (warning) {
-      if (isStarted()) {
-        warning.innerHTML = `<strong>Turneringen er i gang</strong>`;
-      } else if (tournamentStatus() === "ready") {
-        warning.innerHTML = `<strong>${checked} spillere er klare</strong>`;
-      } else {
-        warning.innerHTML = `<strong>Avslutt innsjekken først</strong>`;
-      }
+    if (!warning) return;
+
+    if (isStarted()) {
+      setHtml(warning, `<strong>Turneringen er i gang</strong>`);
+    } else if (tournamentStatus() === "ready") {
+      setHtml(warning, `<strong>${checked} spillere er klare</strong>`);
+    } else {
+      setHtml(warning, `<strong>Avslutt innsjekken først</strong>`);
     }
   }
 
@@ -297,7 +259,7 @@ if (host) {
     }
 
     const formatNav = host.querySelector('[data-tc-view="format"]');
-    if (formatNav) formatNav.disabled = draft;
+    if (formatNav) formatNav.disabled = !detail?.id || draft;
 
     if (attendanceClosed()) {
       host.querySelectorAll(".tc-checkin,.tc-remove").forEach((button) => button.remove());
@@ -317,20 +279,17 @@ if (host) {
         note.className = "tc-attendance-note";
         list.before(note);
       }
-      note.innerHTML = `<strong>Innsjekken er avsluttet</strong><span>${checked} spillere er med.</span>`;
+      setHtml(note, `<strong>Innsjekken er avsluttet</strong><span>${checked} spillere er med.</span>`);
     } else {
       note?.remove();
     }
 
-    // Ready means attendance is frozen and the operator should continue at format,
-    // including after a page refresh.
     if (ready && String(context?.view || "checkin") === "checkin") {
       window.setTimeout(() => host.querySelector('[data-tc-view="format"]')?.click(), 0);
     }
   }
 
   async function finishCheckin(event) {
-    if (event?.bdCanonicalPass === true) return;
     const id = currentTournamentId();
     if (!id || tournamentStatus() !== "draft") return;
 
@@ -344,6 +303,7 @@ if (host) {
     }
 
     const button = document.getElementById("tcToFormat");
+    if (!button) return;
     button.disabled = true;
     setText(button, "Avslutter innsjekk …");
     try {
@@ -373,9 +333,10 @@ if (host) {
       start.addEventListener("click", () => {
         if (tournamentStatus() !== "ready" || checkedRegistrations().length < MIN_PLAYERS) return;
         const original = window.confirm;
-        window.confirm = () => true;
+        const accept = () => true;
+        window.confirm = accept;
         window.setTimeout(() => {
-          if (window.confirm !== original) window.confirm = original;
+          if (window.confirm === accept) window.confirm = original;
         }, 0);
       }, true);
     }
