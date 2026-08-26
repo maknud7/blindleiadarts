@@ -26,15 +26,12 @@ function install() {
   if (!form || installed) return false;
   installed = true;
   form.innerHTML = `
-    <div><p class="eyebrow">Generelt for klubben</p><h3>Check-in-standard</h3></div>
-    <p class="muted">Anbefalt flyt er at turneringsleder checker inn spillere, eller at spilleren taster den unike turneringskoden som vises på Live-skjermen.</p>
+    <div><p class="eyebrow">Innsjekk</p><h3>Standard for klubben</h3></div>
     <div class="settings-grid">
-      <label class="wide"><span>Standard metode</span><select id="checkinDefaultMethod"><option value="admin_or_code">Turneringsleder + kode (anbefalt)</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label>
-      <label><span>Åpner før start (min)</span><input id="checkinBefore" type="number" min="0" max="1440"></label>
-      <label><span>Stenger etter start (min)</span><input id="checkinAfter" type="number" min="0" max="360"></label>
+      <label class="wide"><span>Metode</span><select id="checkinDefaultMethod"><option value="admin_or_code">Turneringsleder + kode</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label>
+      <label><span>Åpner før start</span><div class="field-with-unit"><input id="checkinBefore" type="number" min="0" max="1440"><span>min</span></div></label>
     </div>
-    <div class="integration-actions"><button type="submit" class="button">Lagre check-in-standard</button></div>
-    <p class="muted">Turneringsleder kan checke inn påmeldte spillere fra turneringsadmin. Kode vises bare på en paret Live-skjerm mens check-in-vinduet er åpent.</p>`;
+    <div class="integration-actions"><button type="submit" class="button">Lagre</button></div>`;
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -51,16 +48,14 @@ async function load() {
   const s = data.settings || {};
   document.getElementById("checkinDefaultMethod").value = s.default_method || "admin_or_code";
   document.getElementById("checkinBefore").value = Number(s.opens_minutes_before_start ?? 60);
-  document.getElementById("checkinAfter").value = Number(s.closes_minutes_after_start ?? 10);
 }
 
 async function save() {
   await api(`/clubs/${clubId()}/checkin-settings`, { method: "PUT", body: {
     default_method: document.getElementById("checkinDefaultMethod").value,
     opens_minutes_before_start: Number(document.getElementById("checkinBefore").value || 60),
-    closes_minutes_after_start: Number(document.getElementById("checkinAfter").value || 10),
   }});
-  message("Check-in-standarden er lagret.");
+  message("Innsjekk-standarden er lagret.");
   await load();
 }
 
