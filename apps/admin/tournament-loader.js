@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260826-1005";
+const MODULE_VERSION = "20260826-1045";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -73,8 +73,6 @@ async function loadModules() {
   host.dataset.tournamentModules = "loading";
 
   loading = (async () => {
-    // Før start trenger vi bare selve turneringsrommet, innsjekk og opprettelse.
-    // Drift, sluttspill og oppsummering lastes først når brukeren faktisk går dit.
     await import(moduleUrl("./tournament-admin.js"));
     await Promise.all([
       import(moduleUrl("./tournament-checkin-admin.js")),
@@ -83,9 +81,11 @@ async function loadModules() {
       import(moduleUrl("./tournament-desktop-rail.js")),
     ]);
     await import(moduleUrl("./tournament-workspace-ux.js"));
+    await import(moduleUrl("./tournament-canonical-ux.js"));
 
     host.dataset.tournamentModules = "ready";
     hideLoading();
+    announceToolsReady();
     loadToolsForContext(window.__bdTournamentContext);
   })().catch((error) => {
     host.dataset.tournamentModules = "error";
