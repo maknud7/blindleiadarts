@@ -68,7 +68,7 @@ final class TournamentOperationsApplication
             || ($method === 'GET' && preg_match('#^v1/public/tournaments/\d+/live$#', $path) === 1)
             || preg_match('#^v1/tournaments/\d+/operations(?:/(reconcile|settings|boards))?$#', $path) === 1
             || ($method === 'GET' && preg_match('#^v1/kiosks/[^/]+/post-match$#', $path) === 1)
-            || ($method === 'POST' && preg_match('#^v1/kiosks/[^/]+/next-match$#', $path) === 1);
+            || ($method === 'POST' && preg_match('#^v1/kiosks/[^/]+/(next-match|release-next-match)$#', $path) === 1);
     }
 
     private function dispatch(Request $request, string $path, Config $config, Database $database): JsonResponse
@@ -138,8 +138,9 @@ final class TournamentOperationsApplication
             return JsonResponse::error(405, 'method_not_allowed', 'Method is not supported for this operations route.');
         }
 
-        if (preg_match('#^v1/kiosks/([^/]+)/(post-match|next-match)$#', $path, $m) === 1) {
+        if (preg_match('#^v1/kiosks/([^/]+)/(post-match|next-match|release-next-match)$#', $path, $m) === 1) {
             $code = urldecode((string) $m[1]);
+            $action = (string) $m[2];
             $kiosks = new KioskRepository($database);
             $pairingToken = $request->header('x-kiosk-pairing-token');
             $state = $kiosks->findKioskStateByCode($code, $pairingToken);
@@ -152,7 +153,7 @@ final class TournamentOperationsApplication
                 return JsonResponse::error(409, 'kiosk_state_invalid', 'Kiosk state is missing its canonical id.');
             }
 
-            if ($method === 'GET' && $m[2] === 'post-match') {
+            if ($method === 'GET' && $action === 'post-match') {
                 $postMatch = $engine->kioskPostMatch($kioskId);
                 if (($postMatch['active_match'] ?? false) !== true
                     && is_array($postMatch['last_completed_match'] ?? null)
@@ -164,7 +165,12 @@ final class TournamentOperationsApplication
                 return JsonResponse::ok($postMatch);
             }
 
-            if ($method === 'POST' && $m[2] === 'next-match') {
+            if ($method === 'POST' && $action === 'release-next-match') {
+                $engine->releaseReservationForKiosk($kioskId);
+                return JsonResponse::ok(['released' => true]);
+            }
+
+            if ($method === 'POST' && $action === 'next-match') {
                 $assignment = $engine->assignNextToKiosk($kioskId);
                 $after = $kiosks->findKioskStateByCode($code, $pairingToken);
                 $club = is_array($kiosk['club'] ?? null) ? $kiosk['club'] : [];
