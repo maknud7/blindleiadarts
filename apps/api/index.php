@@ -14,6 +14,7 @@ use Blindleia\Dartkiosk\Api\ScoliaApplication;
 use Blindleia\Dartkiosk\Api\SeasonApplication;
 use Blindleia\Dartkiosk\Api\TournamentCheckinApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
+use Blindleia\Dartkiosk\Api\TournamentFlowApplication;
 use Blindleia\Dartkiosk\Api\TournamentOperationsApplication;
 use Blindleia\Dartkiosk\Api\TournamentPlayoffApplication;
 use Blindleia\Dartkiosk\Api\TournamentWizardApplication;
@@ -61,6 +62,11 @@ if ($checkin->run()) {
 
 $wizard = new TournamentWizardApplication(__DIR__);
 if ($wizard->run()) {
+    return;
+}
+
+$tournamentFlow = new TournamentFlowApplication(__DIR__);
+if ($tournamentFlow->run()) {
     return;
 }
 
