@@ -3,7 +3,8 @@ const params = new URLSearchParams(window.location.search);
 const clubSlug = params.get("club") || "blindleia-dartklubb";
 
 const el = Object.fromEntries([
-  "standbyState", "activeExperience", "checkinStage", "liveDashboard",
+  "standbyState", "standbyClock", "standbyDate", "standbyNext", "standbyNextName", "standbyNextWhen",
+  "activeExperience", "checkinStage", "liveDashboard",
   "clubName", "tournamentName", "tournamentMeta", "connectionLabel", "progressCards", "boards",
   "queue", "results", "tables", "playoffSection", "playoffChampion", "playoff", "elo", "highlights", "updatedAt",
   "checkinTournamentName", "checkinCode", "checkinWindow", "checkinCount", "checkinProgressBar",
@@ -32,11 +33,46 @@ function formatTime(value) {
   if (!date) return "";
   return new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
+function formatStandbyTournamentTime(value) {
+  const date = asDate(value);
+  if (!date) return "";
+  return new Intl.DateTimeFormat("nb-NO", {
+    weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
 async function api(path) {
   const response = await fetch(`${API_ROOT}${path}`, { cache: "no-store" });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
   return payload.data;
+}
+
+function updateStandbyClock() {
+  const now = new Date();
+  if (el.standbyClock) {
+    el.standbyClock.textContent = new Intl.DateTimeFormat("nb-NO", {
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    }).format(now);
+  }
+  if (el.standbyDate) {
+    const text = new Intl.DateTimeFormat("nb-NO", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    }).format(now);
+    el.standbyDate.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+  }
+}
+function renderStandby(live) {
+  updateStandbyClock();
+  const tournament = live?.tournament || null;
+  const start = asDate(tournament?.start_at);
+  const isPlanned = String(tournament?.status || "") === "draft" && start && start.getTime() > Date.now();
+
+  if (!el.standbyNext) return;
+  el.standbyNext.classList.toggle("hidden", !isPlanned);
+  if (!isPlanned) return;
+
+  el.standbyNextName.textContent = tournament?.name || "Turnering";
+  el.standbyNextWhen.textContent = formatStandbyTournamentTime(tournament?.start_at);
 }
 
 function setPhase(phase) {
@@ -228,6 +264,7 @@ async function load() {
 
     state.payload = null;
     state.checkin = null;
+    renderStandby(live);
     setPhase("standby");
   } finally {
     state.loading = false;
@@ -272,4 +309,6 @@ async function startRealtime() {
   } catch { /* polling is already active */ }
 }
 
-load().then(startRealtime).catch(() => { setPhase("standby"); startPolling(); });
+updateStandbyClock();
+setInterval(updateStandbyClock, 1000);
+load().then(startRealtime).catch(() => { renderStandby(null); setPhase("standby"); startPolling(); });
