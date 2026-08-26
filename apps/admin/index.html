@@ -11,8 +11,9 @@
   <link rel="stylesheet" href="./tournament-playoff-admin.css">
   <link rel="stylesheet" href="./member-onboarding-admin.css">
   <link rel="stylesheet" href="./admin-ux.css?v=20260826-0915">
+  <link rel="stylesheet" href="../packages/ui-assets/portal-brand.css?v=20260826-1300">
 </head>
-<body data-portal-default="overview">
+<body data-bd-surface="admin" data-portal-default="overview">
   <section id="authGate" class="auth-shell">
     <div class="login-card">
       <div class="brand-mark">BD</div>
@@ -39,7 +40,7 @@
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
         <a class="button secondary" href="../player/">Min side</a>
-        <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Live</a>
+        <a class="button secondary" href="../live/" target="_blank" rel="noopener">Live</a>
         <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button>
         <button id="logoutButton" type="button" class="button quiet">Logg ut</button>
       </div>
@@ -158,8 +159,8 @@
 
       <section id="screens" data-portal-section="kiosks" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Par TV-er og venue-skjermer. Check-in-koden vises på paret Live-skjerm mens check-in-vinduet er åpent.</p></div>
-          <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne Live</a>
+          <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Par TV-er og venue-skjermer. Check-in-koden vises på paret venue-skjerm mens check-in-vinduet er åpent.</p></div>
+          <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne venue-skjerm</a>
         </div>
         <div class="screen-layout">
           <form id="screenForm" class="create-card"><h3>Ny skjerm</h3><label><span>Navn</span><input name="label" placeholder="Hovedskjerm, Bar-TV ..." required></label><button type="submit" class="button">Lag skjermkode</button></form>
@@ -175,7 +176,7 @@
   <script src="./member-onboarding-admin.js" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
   <script src="./checkin-admin-v2.js" type="module"></script>
-  <script src="./tournament-loader.js" type="module"></script>
+  <script src="./tournament-loader.js?v=20260826-1300" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js" type="module"></script>
 </body>
 </html>
