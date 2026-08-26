@@ -3,6 +3,7 @@ const host = document.getElementById("tournaments");
 if (host) {
   let context = window.__bdTournamentContext || { id: 0, status: "", view: "checkin" };
   let liveTool = "operations";
+  let settleTimers = [];
 
   function syncSelect(id) {
     const select = document.getElementById(id);
@@ -45,7 +46,7 @@ if (host) {
       groups?.before(toolbar);
       toolbar.querySelectorAll("[data-live-tool]").forEach((button) => button.addEventListener("click", () => {
         liveTool = button.dataset.liveTool || "operations";
-        apply();
+        apply({ sync: false });
       }));
     }
 
@@ -90,13 +91,13 @@ if (host) {
     panel.dataset.tcUxOrganized = "1";
   }
 
-  function apply() {
+  function apply({ sync = true } = {}) {
     host.dataset.tcView = context.view || "checkin";
     host.dataset.tcLiveTool = liveTool;
     ensureLiveTools();
     hideOwnTournamentPicker();
     organizeOperationsPanel();
-    ["opsTournament", "poTournament", "tsaTournament"].forEach(syncSelect);
+    if (sync) ["opsTournament", "poTournament", "tsaTournament"].forEach(syncSelect);
 
     document.querySelectorAll("[data-live-tool]").forEach((button) => {
       const active = button.dataset.liveTool === liveTool;
@@ -112,13 +113,21 @@ if (host) {
     summary?.classList.toggle("tc-external-hidden", context.view !== "after");
   }
 
+  function settle() {
+    settleTimers.forEach((timer) => window.clearTimeout(timer));
+    settleTimers = [0, 120, 400, 900].map((delay) => window.setTimeout(() => apply(), delay));
+  }
+
   window.addEventListener("bd:tournament-context", (event) => {
     context = event.detail || context;
     if (context.view !== "live") liveTool = "operations";
-    apply();
+    settle();
   });
 
-  const observer = new MutationObserver(() => apply());
-  observer.observe(host, { childList: true, subtree: true });
-  apply();
+  // Important: do not observe the whole tournament DOM here. The child modules
+  // re-render after their select change events. Observing those renders and then
+  // dispatching new change events creates a render/fetch feedback loop that can
+  // freeze the admin tab. A short, bounded settle pass is enough to catch modules
+  // that mount asynchronously without continuously reacting to their own output.
+  settle();
 }
