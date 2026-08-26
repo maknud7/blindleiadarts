@@ -1,17 +1,72 @@
-:root{color-scheme:light;--bg:#f3f8fb!important;--bg-deep:#e8f2f7!important;--panel:#fff!important;--panel-2:#eef5f9!important;--card:#fff!important;--line:#d3e1e9!important;--line-strong:#bfd1dc!important;--ink:#10232f!important;--muted:#526b79!important;--accent:#11435d!important;--accent-strong:#0b3145!important;--accent-soft:#dcebf2!important;--forest:#1a5a78!important}
-html,body{background:#f3f8fb!important;color:#10232f!important}body{background:radial-gradient(circle at 92% 0,rgba(58,120,152,.14),transparent 28rem),linear-gradient(180deg,#fff 0%,#edf5f9 100%)!important}
-.auth-shell{background:transparent!important}.login-card,.hero,.card,.panel,.metric,.create-card,.status-item,.list-row,.inline-status,.table-wrap,.roadmap,.mini-card,.list-item,.stat-card,.table-card,.profile-card,.summary-card{background:#fff!important;color:#10232f!important;border-color:#d3e1e9!important;box-shadow:0 16px 42px rgba(11,49,69,.08)!important}
-.topbar{background:rgba(255,255,255,.94)!important;border-color:#d3e1e9!important;color:#10232f!important}.portal-menu{background:rgba(255,255,255,.96)!important;border:1px solid #d3e1e9!important}.section-nav a,.portal-nav a{background:#e7f1f6!important;color:#11435d!important;border-color:#d3e1e9!important}.section-nav a.active,.portal-nav a.active{background:#11435d!important;color:#fff!important;border-color:#11435d!important}
-input,select,textarea{background:#fff!important;color:#10232f!important;border-color:#cbdbe4!important}input::placeholder,textarea::placeholder{color:#6a7f8c!important;opacity:1}input:focus,select:focus,textarea:focus{border-color:#1a5a78!important;box-shadow:0 0 0 3px rgba(26,90,120,.12)!important}label{color:#304c5c!important}
-button,.button{background:#11435d!important;color:#fff!important}.button.secondary,.secondary-action,button.ghost,.ghost{background:#eef5f9!important;color:#0b3145!important;border:1px solid #cbdbe4!important}.button.quiet{background:transparent!important;color:#526b79!important}
-.metric,.stat-card{background:linear-gradient(180deg,#fff,#f6fafc)!important}.pill,.badge{background:#e7f1f6!important;color:#11435d!important;border-color:#cbdbe4!important}.badge.good{color:#216149!important;background:#e8f5ef!important;border-color:#add5c2!important}.badge.bad{color:#8f302c!important;background:#fbeeed!important;border-color:#e4b5b2!important}.badge.warning{color:#7d5b13!important;background:#fff6dc!important;border-color:#ecd799!important}
-table{background:#fff!important;color:#10232f!important}th{background:#eaf3f8!important;color:#405c6c!important}td,th{border-color:#d7e4eb!important}.row-meta,.row-right small,.muted{color:#526b79!important}
-.brand-mark{background:#fff url("../../static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;color:transparent!important;border:1px solid #d3e1e9!important;box-shadow:0 8px 24px rgba(11,49,69,.08)}.brand-mark.small{background-size:contain!important}.brand-badge{background:#fff!important;border-color:#d3e1e9!important}
-.shortcut-card{background:#fff!important;border-color:#d3e1e9!important;box-shadow:0 10px 26px rgba(11,49,69,.06)}
-.message{background:#eef5f9!important;border-color:#d3e1e9!important;color:#304c5c!important}.message.error{background:#fbeeed!important;color:#8f302c!important;border-color:#e4b5b2!important}.message.success{background:#e8f5ef!important;color:#216149!important;border-color:#add5c2!important}.message.warning{background:#fff6dc!important;color:#7d5b13!important;border-color:#ecd799!important}
-/* Legacy board/pairing components used to hard-code the old dark theme. Keep them in the same light, readable admin surface. */
-.claim-admin-card{background:linear-gradient(180deg,#fff,#f7fbfd)!important;border-color:#cbdbe4!important;color:#10232f!important;box-shadow:0 14px 34px rgba(11,49,69,.08)!important}
-.claim-form,.claim-board-fields,.board-choice,.claim-status{background:#f7fbfd!important;border-color:#cbdbe4!important;color:#10232f!important}
-.board-choice button{background:#e7f1f6!important;color:#11435d!important;border:1px solid transparent!important}.board-choice button.active{background:#11435d!important;color:#fff!important;border-color:#11435d!important}
-.claim-tip span,.board-number{background:#11435d!important;color:#fff!important;border-color:#11435d!important}.claim-help,.claim-status small{color:#526b79!important}
-.kiosk-code-strip{background:#eef5f9!important;border-color:#bfd1dc!important}.kiosk-code-strip span{color:#526b79!important}.kiosk-code-strip strong,.screen-code,.pair-code{color:#11435d!important}.copy-button{background:#eef5f9!important;color:#0b3145!important;border-color:#cbdbe4!important}
+@import url("./blindleia-system.css");
+
+/* Shared portal compatibility layer. Loaded last by portal-menu.js. */
+:root{
+  color-scheme:light;
+  --bg:var(--bd-canvas,#f3f6fb)!important;
+  --bg-deep:var(--bd-canvas-strong,#eaf0f7)!important;
+  --panel:#fff!important;
+  --panel-2:#f8fafc!important;
+  --card:#fff!important;
+  --line:var(--bd-border,#dbe3ed)!important;
+  --line-strong:var(--bd-border-strong,#c8d4e2)!important;
+  --ink:var(--bd-text,#0c2340)!important;
+  --text:var(--bd-text,#0c2340)!important;
+  --muted:var(--bd-muted,#697c94)!important;
+  --accent:var(--bd-blue-600,#2f6fed)!important;
+  --accent-strong:var(--bd-blue-700,#245acb)!important;
+  --accent-soft:var(--bd-blue-50,#eef4ff)!important;
+  --forest:var(--bd-blue-700,#245acb)!important;
+}
+
+html,body{background:var(--bd-canvas,#f3f6fb)!important;color:var(--bd-text,#0c2340)!important}
+body{background:var(--bd-canvas,#f3f6fb)!important}
+
+.auth-shell{background:linear-gradient(145deg,#f7f9fc,#edf2f8)!important}
+.login-card,.hero,.card,.panel,.metric,.create-card,.status-item,.list-row,.inline-status,.table-wrap,.roadmap,.mini-card,.list-item,.stat-card,.table-card,.profile-card,.summary-card{
+  background:#fff!important;
+  color:var(--bd-text,#0c2340)!important;
+  border-color:var(--bd-border,#dbe3ed)!important;
+}
+
+.topbar{background:#fff!important;border-color:var(--bd-border,#dbe3ed)!important;color:var(--bd-text,#0c2340)!important}
+.portal-menu{background:#fff!important;border:1px solid var(--bd-border,#dbe3ed)!important}
+.section-nav a,.portal-nav a{background:#f0f4f9!important;color:var(--bd-navy-800,#123c69)!important;border-color:transparent!important}
+.section-nav a.active,.portal-nav a.active{background:var(--bd-blue-600,#2f6fed)!important;color:#fff!important;border-color:var(--bd-blue-600,#2f6fed)!important}
+
+input,select,textarea{background:#fff!important;color:var(--bd-text,#0c2340)!important;border-color:var(--bd-border,#dbe3ed)!important}
+input::placeholder,textarea::placeholder{color:#93a1b2!important;opacity:1}
+input:focus,select:focus,textarea:focus{border-color:var(--bd-blue-500,#4b82f1)!important;box-shadow:0 0 0 3px rgba(47,111,237,.16)!important}
+label{color:#40536b!important}
+
+button,.button{background:var(--bd-blue-600,#2f6fed)!important;color:#fff!important}
+.button.secondary,.secondary-action,button.ghost,.ghost,.ghost-button{background:#fff!important;color:var(--bd-navy-900,#0b2b50)!important;border:1px solid var(--bd-border,#dbe3ed)!important}
+.button.quiet{background:transparent!important;color:var(--bd-muted,#697c94)!important}
+
+.metric,.stat-card{background:#fff!important}
+.pill,.badge{background:var(--bd-blue-50,#eef4ff)!important;color:var(--bd-navy-800,#123c69)!important;border-color:#cfddf2!important}
+.badge.good{color:#176449!important;background:#e8f6ef!important;border-color:#b8dfcd!important}
+.badge.bad{color:#9e303a!important;background:#fff0f2!important;border-color:#efc5ca!important}
+.badge.warning{color:#815512!important;background:#fff7e5!important;border-color:#ecd8a9!important}
+
+table{background:#fff!important;color:var(--bd-text,#0c2340)!important}
+th{background:#f5f7fa!important;color:#667892!important}
+td,th{border-color:var(--bd-border,#dbe3ed)!important}
+.row-meta,.row-right small,.muted{color:var(--bd-muted,#697c94)!important}
+
+.brand-mark{background:#fff url("../../static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;color:transparent!important;border:1px solid var(--bd-border,#dbe3ed)!important;box-shadow:var(--bd-shadow-sm,0 5px 16px rgba(17,42,73,.055))!important}
+.brand-mark.small{background-size:contain!important}
+.brand-badge{background:#fff!important;border-color:var(--bd-border,#dbe3ed)!important}
+.shortcut-card{background:#fff!important;border-color:var(--bd-border,#dbe3ed)!important;box-shadow:var(--bd-shadow-xs,0 1px 2px rgba(17,42,73,.04))!important}
+
+.message{background:#f3f7fc!important;border-color:var(--bd-border,#dbe3ed)!important;color:#3d536e!important}
+.message.error{background:#fff0f2!important;color:#9e303a!important;border-color:#efc5ca!important}
+.message.success{background:#e8f6ef!important;color:#176449!important;border-color:#b8dfcd!important}
+.message.warning{background:#fff7e5!important;color:#815512!important;border-color:#ecd8a9!important}
+
+/* Equipment and pairing components still contain legacy fallback colours. */
+.claim-admin-card{background:#fff!important;border-color:var(--bd-border,#dbe3ed)!important;color:var(--bd-text,#0c2340)!important;box-shadow:var(--bd-shadow-sm,0 5px 16px rgba(17,42,73,.055))!important}
+.claim-form,.claim-board-fields,.board-choice,.claim-status{background:#f8fafc!important;border-color:var(--bd-border,#dbe3ed)!important;color:var(--bd-text,#0c2340)!important}
+.board-choice button{background:#eef3f8!important;color:var(--bd-navy-800,#123c69)!important;border:1px solid transparent!important}.board-choice button.active{background:var(--bd-blue-600,#2f6fed)!important;color:#fff!important;border-color:var(--bd-blue-600,#2f6fed)!important}
+.claim-tip span,.board-number{background:var(--bd-blue-50,#eef4ff)!important;color:var(--bd-blue-700,#245acb)!important;border-color:#cfddf2!important}.claim-help,.claim-status small{color:var(--bd-muted,#697c94)!important}
+.kiosk-code-strip{background:var(--bd-blue-50,#eef4ff)!important;border-color:#cfddf2!important}.kiosk-code-strip span{color:var(--bd-muted,#697c94)!important}.kiosk-code-strip strong,.screen-code,.pair-code{color:var(--bd-blue-600,#2f6fed)!important}.copy-button{background:#fff!important;color:var(--bd-navy-900,#0b2b50)!important;border-color:var(--bd-border,#dbe3ed)!important}
