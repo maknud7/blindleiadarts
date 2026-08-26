@@ -40,6 +40,12 @@ final class Config
     }
 
     public function appEnv(): string { return (string) ($this->config['app_env'] ?? 'unknown'); }
+    public function baseUrl(): string { return rtrim((string) (($this->config['base_url'] ?? '') ?: ''), '/'); }
+    public function identityBaseUrl(): string
+    {
+        $configured = rtrim(trim((string) (($this->config['identity_base_url'] ?? '') ?: '')), '/');
+        return $configured !== '' ? $configured : $this->baseUrl();
+    }
     public function dbHost(): string { return (string) (($this->config['db']['host'] ?? '') ?: ''); }
     public function dbPort(): int { return (int) (($this->config['db']['port'] ?? 3306) ?: 3306); }
     public function dbName(): string { return (string) (($this->config['db']['database'] ?? '') ?: ''); }
