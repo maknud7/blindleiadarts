@@ -72,22 +72,22 @@ function setupBoardFlow() {
   const actionbar = document.createElement("div");
   actionbar.id = "equipmentBoardActions";
   actionbar.className = "equipment-actionbar";
-  actionbar.innerHTML = `<div class="equipment-actionbar-copy"><strong>Skiver</strong><span>Opprett selve skiva først. Nettbrett kobles til skiva etterpå.</span></div><div class="equipment-actionbar-actions"><button id="newBoardButton" type="button">+ Ny skive</button><button id="pairTabletButton" type="button" class="button secondary">Koble nettbrett</button></div>`;
+  actionbar.innerHTML = `<div class="equipment-actionbar-copy"><strong>Skiver</strong><span>Skiva er utstyret. Nettbrettet er bare terminalen som kobles til etterpå.</span></div><div class="equipment-actionbar-actions"><button id="newBoardButton" type="button">+ Ny skive</button><button id="pairTabletButton" type="button" class="button secondary">Koble nettbrett</button></div>`;
   panelHead.insertAdjacentElement("afterend", actionbar);
 
-  const createReveal = makeReveal("boardCreateReveal", "Ny skive", "Kun det som trengs for å få skiva inn i systemet.", form);
+  const createReveal = makeReveal("boardCreateReveal", "Ny skive", "Velg nummer og scoring. Resten er valgfritt.", form);
   actionbar.insertAdjacentElement("afterend", createReveal);
   form.querySelector("h3").textContent = "Opprett skive";
   const intro = form.querySelector("p.muted");
-  if (intro) intro.textContent = "Velg skivenummer og scoring. Navn og sponsor er valgfritt.";
+  if (intro) intro.textContent = "Skivenummer og scoring er det eneste du normalt trenger.";
   addAdvancedBoardFields(form);
 
   const pairingIntro = pairingCard.querySelector(".claim-admin-grid > div:first-child");
   pairingIntro?.classList.add("equipment-pairing-intro");
   if (pairingIntro) {
-    pairingIntro.innerHTML = `<p class="eyebrow">Nettbrett</p><h3>Koble nettbrett til en skive</h3><p class="muted">Åpne kiosk på nettbrettet og skriv pairingkoden her. Velg normalt en skive som allerede finnes. Hvis dette er første gangs oppsett kan du fortsatt opprette skiva i samme flyt.</p>`;
+    pairingIntro.innerHTML = `<p class="eyebrow">Nettbrett</p><h3>Koble nettbrett til en skive</h3><p class="muted">Åpne kiosk på nettbrettet og skriv pairingkoden her. Velg skiva terminalen skal stå ved. Du trenger ikke opprette skiva på nytt.</p>`;
   }
-  const pairingReveal = makeReveal("pairingReveal", "Koble nettbrett", "Pairing påvirker bare terminalen – ikke selve skiva.", pairingCard);
+  const pairingReveal = makeReveal("pairingReveal", "Koble nettbrett", "Pairing påvirker bare terminalen – ikke skive, scoringtype eller historikk.", pairingCard);
   createReveal.insertAdjacentElement("afterend", pairingReveal);
 
   layout.classList.add("equipment-list-only");
@@ -95,7 +95,12 @@ function setupBoardFlow() {
   if (listHeading) listHeading.textContent = "Skiver";
 
   document.getElementById("newBoardButton")?.addEventListener("click", () => openOnly(createReveal));
-  document.getElementById("pairTabletButton")?.addEventListener("click", () => openOnly(pairingReveal));
+  document.getElementById("pairTabletButton")?.addEventListener("click", () => {
+    if (document.querySelector("#kioskList .board-row")) {
+      document.getElementById("claimExistingBoardChoice")?.click();
+    }
+    openOnly(pairingReveal);
+  });
 
   form.addEventListener("submit", createBoard, true);
 }
@@ -154,10 +159,10 @@ function setupScreenFlow() {
 
   const actionbar = document.createElement("div");
   actionbar.className = "equipment-actionbar";
-  actionbar.innerHTML = `<div class="equipment-actionbar-copy"><strong>Venue-skjermer</strong><span>Opprett en skjermkode, åpne venue-siden på TV-en og skriv inn koden.</span></div><div class="equipment-actionbar-actions"><button id="newScreenButton" type="button">+ Ny skjerm</button></div>`;
+  actionbar.innerHTML = `<div class="equipment-actionbar-copy"><strong>Venue-skjermer</strong><span>Opprett en skjermkode én gang. Åpne venue-siden på TV-en og skriv inn koden.</span></div><div class="equipment-actionbar-actions"><button id="newScreenButton" type="button">+ Ny skjerm</button></div>`;
   panelHead.insertAdjacentElement("afterend", actionbar);
 
-  const reveal = makeReveal("screenCreateReveal", "Ny venue-skjerm", "Gi skjermen et navn du kjenner igjen. Koden genereres automatisk.", form);
+  const reveal = makeReveal("screenCreateReveal", "Ny venue-skjerm", "Gi skjermen et navn du kjenner igjen. Tilkoblingskoden lages automatisk.", form);
   actionbar.insertAdjacentElement("afterend", reveal);
   form.querySelector("h3").textContent = "Opprett skjermkode";
   document.getElementById("newScreenButton")?.addEventListener("click", () => openOnly(reveal));
@@ -165,11 +170,15 @@ function setupScreenFlow() {
   const observer = new MutationObserver(() => {
     if (!reveal.classList.contains("hidden")) reveal.classList.add("hidden");
   });
-  document.getElementById("screenList") && observer.observe(document.getElementById("screenList"), { childList: true });
+  const list = document.getElementById("screenList");
+  if (list) observer.observe(list, { childList: true });
 }
 
 async function loadRole() {
-  if (!token()) return;
+  if (!token()) {
+    state.role = null;
+    return;
+  }
   try {
     const me = await requestJson("/auth/me");
     state.role = me.user?.role || null;
@@ -224,6 +233,7 @@ async function deleteEquipment(button) {
 }
 
 async function decorateDeleteActions() {
+  if (state.role === null && token()) await loadRole();
   if (state.role !== "super_admin") return;
 
   document.querySelectorAll("#kioskList .board-row").forEach((row) => {
@@ -278,6 +288,10 @@ async function init() {
   document.getElementById("clubSelect")?.addEventListener("change", () => {
     state.screenIds.clear();
     window.setTimeout(() => decorateDeleteActions().catch(() => undefined), 150);
+  });
+  document.getElementById("loginForm")?.addEventListener("submit", () => {
+    state.role = null;
+    window.setTimeout(() => decorateDeleteActions().catch(() => undefined), 800);
   });
 }
 
