@@ -33,8 +33,8 @@ final class TournamentLiveRepository
             'SELECT t.id
              FROM `%1$stournaments` t
              INNER JOIN `%1$sclubs` c ON c.id=t.club_id
-             WHERE c.slug=? AND t.status IN ("in_progress","ready","completed")
-             ORDER BY FIELD(t.status,"in_progress","ready","completed"),
+             WHERE c.slug=? AND t.status IN ("in_progress","ready","draft","completed")
+             ORDER BY FIELD(t.status,"in_progress","ready","draft","completed"),
                       CASE WHEN t.status="completed" THEN COALESCE(t.end_at,t.start_at) END DESC,
                       CASE WHEN t.status<>"completed" THEN COALESCE(t.start_at,"2999-12-31 23:59:59") END ASC,
                       t.id DESC
