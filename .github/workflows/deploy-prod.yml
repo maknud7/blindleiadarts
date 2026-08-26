@@ -38,7 +38,7 @@ jobs:
 
       - name: Validate production config and shared credentials
         env:
-          PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://dart.ingenting.org' }}
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -78,8 +78,8 @@ jobs:
         run: php infra/deploy/generate_api_config.php --output=dist/prod/api/config.php
         env:
           APP_ENV: prod
-          BASE_URL: ${{ vars.PROD_BASE_URL || 'https://dart.ingenting.org' }}
-          STATIC_BASE_URL: ${{ vars.PROD_STATIC_BASE_URL || vars.PROD_BASE_URL || 'https://dart.ingenting.org' }}
+          BASE_URL: ${{ vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
+          STATIC_BASE_URL: ${{ vars.PROD_STATIC_BASE_URL || vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
           SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.PROD_SCREEN_CLUB_SLUG || 'blindleia-dartklubb' }}
           REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
@@ -103,6 +103,7 @@ jobs:
           set -euo pipefail
           grep -Fq "'table_prefix' => 'bd_prod_'" dist/prod/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/prod/api/config.php
+          grep -Fq "'identity_base_url' => 'https://blindleiadarts.ingenting.org'" dist/prod/api/config.php
 
       - name: Install sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
@@ -157,7 +158,7 @@ jobs:
 
       - name: Verify exact production release and internal health
         env:
-          PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://dart.ingenting.org' }}
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
