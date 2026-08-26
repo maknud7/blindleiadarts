@@ -8,7 +8,6 @@ if (host) {
   function token() { return localStorage.getItem("bd:token") || ""; }
   function tournamentId() { return Number(document.getElementById("tcTournament")?.value || 0); }
   function localInput(value) { return value ? String(value).replace(" ", "T").slice(0, 16) : ""; }
-  function sourceLabel(value) { return ({player_code:"Kode",admin_override:"Turneringsleder",legacy:"Legacy"})[value] || value || "—"; }
   function methodLabel(value) { return ({admin_or_code:"Turneringsleder + kode",admin_only:"Kun turneringsleder",code:"Kun kode"})[value] || value || "—"; }
 
   async function api(path, { method = "GET", body } = {}) {
@@ -21,24 +20,25 @@ if (host) {
   }
 
   function ensureCard() {
-    if (document.getElementById("tcCheckinCard")) return;
-    const registrationGrid = host.querySelector(".tournament-control .tournament-control-grid");
-    if (!registrationGrid) return;
-    const card = document.createElement("div");
-    card.id = "tcCheckinCard";
-    card.className = "create-card stack";
-    card.innerHTML = `
-      <h3>Check-in</h3>
-      <p class="muted">Standard er turneringsleder + unik kode i lokalet. Koden vises på Live-skjermen bare mens check-in er åpen.</p>
-      <label><span>Metode</span><select id="tcCheckinMethod"><option value="admin_or_code">Turneringsleder + kode (anbefalt)</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label>
-      <div class="tc-two"><label><span>Åpner</span><input id="tcCheckinOpens" type="datetime-local"></label><label><span>Stenger</span><input id="tcCheckinCloses" type="datetime-local"></label></div>
-      <div id="tcCheckinCodeBox" class="mini-card"><small class="muted">Kode i lokalet</small><strong id="tcCheckinCode" style="font-size:27px;letter-spacing:.14em">—</strong><button id="tcRotateCode" type="button" class="button secondary">Lag ny kode</button></div>
-      <div id="tcCheckinEffective" class="muted"></div>
-      <button id="tcSaveCheckin" type="button" class="button">Lagre check-in</button>`;
-    registrationGrid.appendChild(card);
+    if (document.getElementById("tcCheckinSettings")) return true;
+    const settingsHost = document.getElementById("tcCheckinSettingsHost");
+    if (!settingsHost) return false;
+    settingsHost.innerHTML = `
+      <details id="tcCheckinSettings" class="tc-disclosure tc-checkin-settings">
+        <summary><span>Innsjekk-innstillinger</span><small id="tcCheckinSummary">Bruker klubbstandard</small></summary>
+        <div class="tc-disclosure-body stack">
+          <p class="muted">Dette er avansert oppsett. Til vanlig trenger du bare å sjekke inn spillerne i listen over.</p>
+          <label><span>Metode</span><select id="tcCheckinMethod"><option value="admin_or_code">Turneringsleder + kode</option><option value="admin_only">Kun turneringsleder</option><option value="code">Kun kode</option></select></label>
+          <div class="tc-two"><label><span>Åpner</span><input id="tcCheckinOpens" type="datetime-local"></label><label><span>Stenger</span><input id="tcCheckinCloses" type="datetime-local"></label></div>
+          <div id="tcCheckinCodeBox" class="tc-code-box"><div><small class="muted">Kode i lokalet</small><strong id="tcCheckinCode">—</strong></div><button id="tcRotateCode" type="button" class="button secondary">Lag ny kode</button></div>
+          <div id="tcCheckinEffective" class="muted"></div>
+          <button id="tcSaveCheckin" type="button" class="button secondary">Lagre innstillinger</button>
+        </div>
+      </details>`;
     document.getElementById("tcSaveCheckin")?.addEventListener("click", save);
     document.getElementById("tcRotateCode")?.addEventListener("click", rotateCode);
     document.getElementById("tcCheckinMethod")?.addEventListener("change", renderCodeVisibility);
+    return true;
   }
 
   function show(message, tone = "success") {
@@ -55,20 +55,23 @@ if (host) {
   }
 
   async function load() {
-    ensureCard();
+    if (!ensureCard()) return;
     const id = tournamentId();
     if (!id || !token()) return;
     try {
       const data = await api(`/tournaments/${id}/checkin-settings`);
       currentSettings = data.settings || null;
       if (!currentSettings) return;
-      document.getElementById("tcCheckinMethod").value = currentSettings.effective_method || currentSettings.checkin_method || "admin_or_code";
+      const method = currentSettings.effective_method || currentSettings.checkin_method || "admin_or_code";
+      document.getElementById("tcCheckinMethod").value = method;
       document.getElementById("tcCheckinOpens").value = localInput(currentSettings.checkin_opens_at);
       document.getElementById("tcCheckinCloses").value = localInput(currentSettings.checkin_closes_at);
-      document.getElementById("tcCheckinCode").textContent = currentSettings.checkin_code || "Lages ved lagring";
-      document.getElementById("tcCheckinEffective").textContent = `Effektivt: ${String(currentSettings.effective_checkin_opens_at).replace(" ", " kl. ")} → ${String(currentSettings.effective_checkin_closes_at).replace(" ", " kl. ")} · ${methodLabel(currentSettings.effective_method || "admin_or_code")}`;
+      document.getElementById("tcCheckinCode").textContent = currentSettings.checkin_code || "Lages ved behov";
+      document.getElementById("tcCheckinSummary").textContent = methodUsesCode(method) && currentSettings.checkin_code
+        ? `${methodLabel(method)} · kode ${currentSettings.checkin_code}`
+        : methodLabel(method);
+      document.getElementById("tcCheckinEffective").textContent = `Effektivt vindu: ${String(currentSettings.effective_checkin_opens_at).replace(" ", " kl. ")} → ${String(currentSettings.effective_checkin_closes_at).replace(" ", " kl. ")}`;
       renderCodeVisibility();
-      decorateRegistrations();
     } catch (error) { show(error.message, "error"); }
   }
 
@@ -84,7 +87,7 @@ if (host) {
         checkin_closes_at: document.getElementById("tcCheckinCloses").value || null,
       }});
       currentSettings = data.settings || null;
-      show("Check-in-oppsettet er lagret.");
+      show("Innsjekk-innstillingene er lagret.");
       await load();
     } catch (error) { show(error.message, "error"); }
     finally { button.disabled = false; }
@@ -94,61 +97,22 @@ if (host) {
     const id = tournamentId();
     if (!id) return;
     const button = document.getElementById("tcRotateCode");
-    if (!window.confirm("Lage ny check-in-kode? Den gamle slutter å virke med en gang.")) return;
+    if (!window.confirm("Lage ny innsjekk-kode? Den gamle slutter å virke med en gang.")) return;
     button.disabled = true;
     try {
       const data = await api(`/tournaments/${id}/checkin-code/rotate`, { method: "POST" });
       currentSettings = data.settings || null;
-      document.getElementById("tcCheckinCode").textContent = currentSettings?.checkin_code || "—";
-      show("Ny check-in-kode er aktiv og vil vises på Live-skjermen i check-in-vinduet.");
+      show("Ny innsjekk-kode er aktiv.");
+      await load();
     } catch (error) { show(error.message, "error"); }
     finally { button.disabled = false; }
   }
 
-  function decorateRegistrations() {
-    const root = document.getElementById("tcRegistrations");
-    if (!root) return;
-    root.querySelectorAll(".tc-registration").forEach((row) => {
-      if (row.querySelector("[data-admin-checkin]")) return;
-      const remove = row.querySelector(".tc-remove[data-player-id]");
-      const playerId = Number(remove?.dataset.playerId || 0);
-      if (!playerId) return;
-      const metaText = row.textContent || "";
-      if (metaText.includes("checked_in")) return;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "button secondary";
-      button.dataset.adminCheckin = String(playerId);
-      button.textContent = "Check inn";
-      button.addEventListener("click", () => adminCheckin(button));
-      remove?.parentNode?.insertBefore(button, remove);
-    });
-  }
-
-  async function adminCheckin(button) {
-    const id = tournamentId();
-    const playerId = Number(button.dataset.adminCheckin || 0);
-    if (!id || !playerId) return;
-    button.disabled = true;
-    try {
-      const data = await api(`/tournaments/${id}/admin-check-in/${playerId}`, { method: "POST", body: {} });
-      show(`Spilleren er checket inn (${sourceLabel(data.registration?.checkin_source)}).`);
-      document.getElementById("tcRefresh")?.click();
-      window.setTimeout(load, 250);
-    } catch (error) {
-      show(`${error.message} Normal admin-check-in følger tidsvinduet.`, "error");
-      button.disabled = false;
-    }
-  }
-
-  const observer = new MutationObserver(() => decorateRegistrations());
   const waitForControls = window.setInterval(() => {
-    ensureCard();
+    if (!ensureCard()) return;
     const select = document.getElementById("tcTournament");
-    const registrations = document.getElementById("tcRegistrations");
-    if (!select || !registrations) return;
-    clearInterval(waitForControls);
-    observer.observe(registrations, { childList: true, subtree: true });
+    if (!select) return;
+    window.clearInterval(waitForControls);
     select.addEventListener("change", () => { clearTimeout(loadTimer); loadTimer = setTimeout(load, 100); });
     document.getElementById("tcRefresh")?.addEventListener("click", () => { clearTimeout(loadTimer); loadTimer = setTimeout(load, 150); });
     load();
