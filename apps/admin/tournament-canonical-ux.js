@@ -285,7 +285,12 @@ if (host) {
     }
 
     if (ready && String(context?.view || "checkin") === "checkin") {
-      window.setTimeout(() => host.querySelector('[data-tc-view="format"]')?.click(), 0);
+      window.setTimeout(() => {
+        const formatButton = host.querySelector('[data-tc-view="format"]');
+        if (!formatButton) return;
+        formatButton.disabled = false;
+        formatButton.click();
+      }, 0);
     }
   }
 
@@ -310,9 +315,14 @@ if (host) {
       const data = await api(`/tournaments/${id}/finish-checkin`, { method: "POST" });
       const noShows = Number(data.attendance?.no_show_count || 0);
       show(noShows ? `${checked} spillere er med. ${noShows} er markert som ikke møtt.` : `${checked} spillere er med.`, "success");
-      context = { ...(context || {}), id, status: "ready", view: "format" };
+      context = { ...(context || {}), id, status: "ready", view: "checkin" };
       await sync(context);
-      host.querySelector('[data-tc-view="format"]')?.click();
+      window.requestAnimationFrame(() => {
+        const formatButton = host.querySelector('[data-tc-view="format"]');
+        if (!formatButton) return;
+        formatButton.disabled = false;
+        formatButton.click();
+      });
     } catch (error) {
       show(error.message, "error");
       button.disabled = false;
