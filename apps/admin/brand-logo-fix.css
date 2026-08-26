@@ -1,0 +1,16 @@
+/* Admin logo must resolve from the deployed site root, not from a stylesheet-relative path. */
+body[data-bd-surface="admin"] .brand-mark {
+  background-image: url("/static/club-logos/blindleia-dartklubb-logo.svg") !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+}
+
+@media (min-width:981px) {
+  body[data-bd-surface="admin"][data-portal-default="overview"] .admin-menu-label::before {
+    background-image: url("/static/club-logos/blindleia-dartklubb-logo.svg") !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+  }
+}
