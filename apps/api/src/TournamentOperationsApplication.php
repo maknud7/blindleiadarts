@@ -9,6 +9,7 @@ use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentLiveRepository;
+use Blindleia\Dartkiosk\Api\Repository\TournamentMatchEngineRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentOperationsRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
@@ -65,7 +66,7 @@ final class TournamentOperationsApplication
     {
         return ($method === 'GET' && preg_match('#^v1/public/clubs/[^/]+/live$#', $path) === 1)
             || ($method === 'GET' && preg_match('#^v1/public/tournaments/\d+/live$#', $path) === 1)
-            || preg_match('#^v1/tournaments/\d+/operations(?:/reconcile|/settings)?$#', $path) === 1
+            || preg_match('#^v1/tournaments/\d+/operations(?:/(reconcile|settings|boards))?$#', $path) === 1
             || ($method === 'GET' && preg_match('#^v1/kiosks/[^/]+/post-match$#', $path) === 1)
             || ($method === 'POST' && preg_match('#^v1/kiosks/[^/]+/next-match$#', $path) === 1);
     }
@@ -74,6 +75,7 @@ final class TournamentOperationsApplication
     {
         $method = $request->method();
         $operations = new TournamentOperationsRepository($database);
+        $engine = new TournamentMatchEngineRepository($database);
 
         if ($method === 'GET' && preg_match('#^v1/public/clubs/([^/]+)/live$#', $path, $m) === 1) {
             $live = (new TournamentLiveRepository($database))->byClubSlug(urldecode((string) $m[1]));
@@ -89,32 +91,47 @@ final class TournamentOperationsApplication
                 : JsonResponse::ok($live);
         }
 
-        if (preg_match('#^v1/tournaments/(\d+)/operations(?:/(reconcile|settings))?$#', $path, $m) === 1) {
+        if (preg_match('#^v1/tournaments/(\d+)/operations(?:/(reconcile|settings|boards))?$#', $path, $m) === 1) {
             $tournamentId = (int) $m[1];
             $tournament = $operations->findTournament($tournamentId);
             if ($tournament === null) {
                 return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
             }
+
             $users = new UserAccountRepository($database);
             $admin = $this->requireAdmin($request, $users, (int) $tournament['club_id']);
             if ($admin instanceof JsonResponse) {
                 return $admin;
             }
-            $action = $m[2] ?? '';
+
+            $action = (string) ($m[2] ?? '');
             if ($method === 'GET' && $action === '') {
-                return JsonResponse::ok($operations->snapshot($tournamentId));
+                return JsonResponse::ok($engine->decorateSnapshot($tournamentId, $operations->snapshot($tournamentId)));
+            }
+            if ($method === 'GET' && $action === 'boards') {
+                return JsonResponse::ok($engine->listBoardSelection($tournamentId));
+            }
+            if (in_array($method, ['PUT', 'PATCH'], true) && $action === 'boards') {
+                $payload = $request->jsonBody();
+                $ids = is_array($payload['kiosk_ids'] ?? null) ? $payload['kiosk_ids'] : [];
+                $result = $engine->updateBoardSelection($tournamentId, $ids);
+                $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_boards_changed');
+                return JsonResponse::ok($result);
             }
             if ($method === 'POST' && $action === 'reconcile') {
-                $result = $this->fillReleasedBoards($operations, $tournamentId);
+                $assignment = $engine->assignFreeBoards($tournamentId);
+                $snapshot = $engine->decorateSnapshot($tournamentId, $operations->snapshot($tournamentId));
+                $snapshot['assignment'] = $assignment;
                 $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_operations_changed');
-                return JsonResponse::ok($result);
+                return JsonResponse::ok($snapshot);
             }
             if (in_array($method, ['PUT', 'PATCH'], true) && $action === 'settings') {
                 $payload = $request->jsonBody();
                 if (!array_key_exists('auto_assign_enabled', $payload)) {
                     return JsonResponse::error(422, 'auto_assign_enabled_required', 'auto_assign_enabled is required.');
                 }
-                $result = $operations->updateAutoAssignEnabled($tournamentId, (bool) $payload['auto_assign_enabled']);
+                $operations->updateAutoAssignEnabled($tournamentId, (bool) $payload['auto_assign_enabled']);
+                $result = $engine->decorateSnapshot($tournamentId, $operations->snapshot($tournamentId));
                 $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_operations_settings_changed');
                 return JsonResponse::ok($result);
             }
@@ -124,7 +141,8 @@ final class TournamentOperationsApplication
         if (preg_match('#^v1/kiosks/([^/]+)/(post-match|next-match)$#', $path, $m) === 1) {
             $code = urldecode((string) $m[1]);
             $kiosks = new KioskRepository($database);
-            $state = $kiosks->findKioskStateByCode($code, $request->header('x-kiosk-pairing-token'));
+            $pairingToken = $request->header('x-kiosk-pairing-token');
+            $state = $kiosks->findKioskStateByCode($code, $pairingToken);
             if ($state === null) {
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
@@ -135,14 +153,23 @@ final class TournamentOperationsApplication
             }
 
             if ($method === 'GET' && $m[2] === 'post-match') {
-                return JsonResponse::ok($operations->kioskPostMatch($kioskId));
+                $postMatch = $engine->kioskPostMatch($kioskId);
+                if (($postMatch['active_match'] ?? false) !== true
+                    && is_array($postMatch['last_completed_match'] ?? null)
+                    && !is_array($postMatch['reservation'] ?? null)
+                    && (int) ($postMatch['remaining_seconds'] ?? 0) > 0) {
+                    $engine->reserveNextForKiosk($kioskId);
+                    $postMatch = $engine->kioskPostMatch($kioskId);
+                }
+                return JsonResponse::ok($postMatch);
             }
+
             if ($method === 'POST' && $m[2] === 'next-match') {
-                $assignment = $operations->assignNextToKiosk($kioskId);
-                $after = $kiosks->findKioskStateByCode($code, $request->header('x-kiosk-pairing-token'));
+                $assignment = $engine->assignNextToKiosk($kioskId);
+                $after = $kiosks->findKioskStateByCode($code, $pairingToken);
                 $club = is_array($kiosk['club'] ?? null) ? $kiosk['club'] : [];
                 $clubId = (int) ($club['id'] ?? 0);
-                if ($clubId > 0) {
+                if ($clubId > 0 && ($assignment['assigned'] ?? false) === true) {
                     $this->publishClubRefresh($config, $clubId, 'board_ready_for_next_match');
                 }
                 return JsonResponse::ok(['assignment' => $assignment, 'state' => $after]);
@@ -150,50 +177,6 @@ final class TournamentOperationsApplication
         }
 
         return JsonResponse::error(405, 'method_not_allowed', 'Method is not supported for this operations route.');
-    }
-
-    /** @return array<string,mixed> */
-    private function fillReleasedBoards(TournamentOperationsRepository $operations, int $tournamentId): array
-    {
-        $before = $operations->snapshot($tournamentId);
-        $assigned = [];
-        $held = [];
-
-        foreach ((array) ($before['boards'] ?? []) as $board) {
-            $kioskId = (int) ($board['id'] ?? 0);
-            if ($kioskId <= 0 || ($board['active_match_id'] ?? null) !== null || (int) ($board['is_active'] ?? 0) !== 1) {
-                continue;
-            }
-
-            $postMatch = $operations->kioskPostMatch($kioskId);
-            if (is_array($postMatch['last_completed_match'] ?? null)) {
-                $held[] = [
-                    'kiosk_id' => $kioskId,
-                    'board_number' => (int) ($board['board_number'] ?? 0),
-                    'reason' => 'awaiting_post_match_confirmation',
-                ];
-                continue;
-            }
-
-            $result = $operations->assignNextToKiosk($kioskId);
-            if (($result['assigned'] ?? false) === true && is_array($result['match'] ?? null)) {
-                $assigned[] = [
-                    'match_id' => (int) $result['match']['id'],
-                    'kiosk_id' => $kioskId,
-                    'board_number' => (int) ($board['board_number'] ?? 0),
-                    'players' => (string) $result['match']['player_a_name'] . ' vs ' . (string) $result['match']['player_b_name'],
-                ];
-            }
-        }
-
-        $snapshot = $operations->snapshot($tournamentId);
-        $snapshot['assignment'] = [
-            'assigned_count' => count($assigned),
-            'held_count' => count($held),
-            'items' => $assigned,
-            'held' => $held,
-        ];
-        return $snapshot;
     }
 
     /** @return array<string,mixed>|JsonResponse */
