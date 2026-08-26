@@ -160,6 +160,7 @@
     undo.disabled = true;
     status.textContent = "Åpner siste kast igjen …";
     try {
+      await request(`/kiosks/${encodeURIComponent(code)}/release-next-match`, { method: "POST" });
       await request(`/kiosks/${encodeURIComponent(code)}/undo`, { method: "POST" });
       window.location.reload();
     } catch (error) {
