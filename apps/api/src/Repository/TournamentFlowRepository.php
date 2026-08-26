@@ -10,6 +10,8 @@ use Throwable;
 
 final class TournamentFlowRepository
 {
+    private const MIN_PLAYERS = 4;
+
     private mysqli $connection;
     private string $tablePrefix;
 
@@ -53,8 +55,8 @@ final class TournamentFlowRepository
         }
 
         $checkedIn = $this->countRegistrations($tournamentId, ['checked_in']);
-        if ($checkedIn < 2) {
-            throw new ValidationException('not_enough_checked_in_players', 'Minst to spillere må være sjekket inn før turneringen kan startes.');
+        if ($checkedIn < self::MIN_PLAYERS) {
+            throw new ValidationException('not_enough_checked_in_players', 'Minst fire spillere må delta før turneringen kan startes.');
         }
 
         if ($status === 'in_progress') {
@@ -73,7 +75,6 @@ final class TournamentFlowRepository
 
         $this->connection->begin_transaction();
         try {
-            // A previous preview/draw must never survive the final attendance cut.
             $deleteGroupPlayers = $this->connection->prepare(sprintf(
                 'DELETE gp FROM `%1$stournament_group_players` gp
                  INNER JOIN `%1$stournament_groups` g ON g.id=gp.group_id
@@ -122,11 +123,10 @@ final class TournamentFlowRepository
             $clearSeeds->execute();
             $clearSeeds->close();
 
-            // registration_closes_at is the actual start action, not a planned deadline.
             $start = $this->connection->prepare(sprintf(
                 'UPDATE `%1$stournaments`
                  SET status="in_progress",
-                     registration_closes_at=DATE_SUB(NOW(), INTERVAL 1 SECOND),
+                     registration_closes_at=COALESCE(registration_closes_at, NOW()),
                      group_count=NULL, group_draw_mode=NULL, group_draw_seed=NULL, group_drawn_at=NULL
                  WHERE id=?',
                 $this->tablePrefix
