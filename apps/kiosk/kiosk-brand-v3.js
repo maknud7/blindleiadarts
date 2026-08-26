@@ -1,5 +1,5 @@
 (() => {
-  const BRAND_VERSION = "3.1";
+  const BRAND_VERSION = "3.2";
   let stableSnapshotSignature = "";
   let topSponsorSignature = "";
   let idleIdentitySignature = "";
@@ -86,7 +86,7 @@
       sponsor = document.createElement("section");
       sponsor.id = "idleSponsorShowcase";
       sponsor.className = "idle-sponsor-showcase hidden";
-      sponsor.setAttribute("aria-label", "Board sponsor");
+      sponsor.setAttribute("aria-label", "Skivesponsor");
       sponsor.innerHTML = `
         <img id="idleSponsorLogo" class="idle-sponsor-logo hidden" alt="Sponsorlogo">
         <div class="idle-sponsor-copy">
@@ -163,6 +163,54 @@
     el.brandFallback?.classList.add("hidden");
   }
 
+  function replaceText(node, replacer) {
+    if (!node) return;
+    const current = String(node.textContent || "");
+    const next = replacer(current);
+    if (next !== current) node.textContent = next;
+  }
+
+  function localizeSkiveTerms() {
+    document.title = "Blindleia Darts · Skiveterminal";
+    const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (appleTitle && appleTitle.content !== "Blindleia Skive") appleTitle.content = "Blindleia Skive";
+
+    replaceText(document.getElementById("brandTitle"), (text) => text === "Board Terminal" ? "Skiveterminal" : text.replace(/^Board\s+(\d+)/, "Skive $1"));
+    replaceText(document.getElementById("connectionText"), (text) => text.replace(/^Board\s+(\d+)/, "Skive $1"));
+    replaceText(document.getElementById("pairingMessage"), (text) => text.replace("velger board", "velger skive"));
+    replaceText(document.getElementById("idleBoard"), (text) => text.replace(/^Board\s+/, "Skive "));
+    replaceText(document.getElementById("idleMessage"), (text) => text.replace("dette boardet", "denne skiva"));
+    replaceText(document.getElementById("assignedBoard"), (text) => text.replace(/^Board\s+/, "Skive "));
+    replaceText(document.getElementById("matchBoard"), (text) => text.replace(/^Board(?:\s+|$)/, "Skive ").trim());
+
+    const setupIntro = document.querySelector("#setupState .setup-copy > .muted");
+    replaceText(setupIntro, (text) => text.replace("velg board", "velg skive"));
+    document.querySelectorAll("#setupState .claim-steps p").forEach((node) => {
+      replaceText(node, (text) => text.replace("Velg riktig board", "Velg riktig skive"));
+    });
+    const settingsEyebrow = document.querySelector("#settingsDialog .dialog-head .eyebrow");
+    replaceText(settingsEyebrow, (text) => text === "Board Terminal" ? "Skiveterminal" : text);
+    const scoliaCopy = document.querySelector("#scoliaScoring .muted");
+    replaceText(scoliaCopy, (text) => text.replace("Board Terminal følger kampen", "Skiveterminalen følger kampen"));
+
+    const operationStatus = document.querySelector("#idleState .post-match-status, #idleState [data-operations-status]");
+    replaceText(operationStatus, (text) => text.replace(/^Boardet/, "Skiva").replace(/boardet/g, "skiva"));
+
+    document.querySelectorAll(".test-mode-panel option").forEach((node) => {
+      replaceText(node, (text) => text.replace(" · Board ", " · Skive "));
+    });
+    document.querySelectorAll(".test-mode-panel button").forEach((node) => {
+      replaceText(node, (text) => text.replace("Bruk valgt board", "Bruk valgt skive"));
+    });
+    document.querySelectorAll(".test-mode-panel small").forEach((node) => {
+      replaceText(node, (text) => text
+        .replace(/boardregisteret/g, "skiveregisteret")
+        .replace(/fysiske boards/g, "fysiske skiver")
+        .replace(/fysisk board/g, "fysisk skive")
+        .replace(/boardet/g, "skiva"));
+    });
+  }
+
   if (typeof renderBoardSponsor === "function") {
     renderBoardSponsor = renderTopSponsorStable;
   }
@@ -174,6 +222,7 @@
       strengthenTopClubLogo();
       renderTopSponsorStable();
       renderIdleIdentity();
+      localizeSkiveTerms();
     };
   }
 
@@ -190,12 +239,17 @@
         renderTopSponsorStable();
         if (state?.renderedView === "idle") renderIdleIdentity();
       }
+      localizeSkiveTerms();
     };
   }
+
+  const languageObserver = new MutationObserver(() => localizeSkiveTerms());
+  languageObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 
   document.body.classList.add("kiosk-brand-v3");
   document.body.dataset.kioskBrand = BRAND_VERSION;
   strengthenTopClubLogo();
   renderTopSponsorStable();
   renderIdleIdentity();
+  localizeSkiveTerms();
 })();
