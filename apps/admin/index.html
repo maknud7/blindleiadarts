@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="./tournament-admin.css">
   <link rel="stylesheet" href="./tournament-operations-admin.css">
   <link rel="stylesheet" href="./tournament-playoff-admin.css">
-  <link rel="stylesheet" href="./member-onboarding-admin.css">
+  <link rel="stylesheet" href="./member-onboarding-admin.css?v=20260826-1545">
   <link rel="stylesheet" href="./equipment-admin-ux.css?v=20260826-1335">
   <link rel="stylesheet" href="./admin-ux.css?v=20260826-0915">
   <link rel="stylesheet" href="../packages/ui-assets/portal-brand.css?v=20260826-1300">
@@ -42,6 +42,7 @@
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
         <a class="button secondary" href="../player/">Min side</a>
+        <a class="button secondary" href="../player/#statistics" target="_blank" rel="noopener">Statistikk</a>
         <a class="button secondary" href="../live/" target="_blank" rel="noopener">Live</a>
         <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button>
         <button id="logoutButton" type="button" class="button quiet">Logg ut</button>
@@ -53,7 +54,7 @@
         <span class="admin-menu-label">Administrasjon</span>
         <a href="#overview" data-portal-nav>Oversikt</a>
         <a href="#tournaments" data-portal-nav>Turneringer</a>
-        <a href="#players" data-portal-nav>Personer</a>
+        <a href="#players" data-portal-nav>Medlemmer</a>
         <a href="#kiosks" data-portal-nav>Utstyr</a>
         <a href="#integrations" data-portal-nav>Innstillinger</a>
       </nav>
@@ -63,14 +64,14 @@
           <div>
             <p class="eyebrow">Klubbdrift</p>
             <h1>Administrasjon</h1>
-            <p class="muted">Start med det som krever handling nå. Turneringer kjøres i et eget turneringsrom; personer, sesonger, utstyr og innstillinger har egne menyvalg.</p>
+            <p class="muted">Turneringer, medlemmer, utstyr og innstillinger for klubben.</p>
           </div>
           <div id="globalMessage" class="message hidden"></div>
         </div>
         <div id="metrics" class="metrics"></div>
         <div class="portal-shortcuts">
-          <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Gjennomfør kvelden i riktig rekkefølge</span></a>
-          <a class="shortcut-card" href="#players" data-portal-nav><strong>Personer</strong><span>Medlemskap, tilgang, kontingent og dartprofil</span></a>
+          <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Gjennomfør kvelden fra innsjekk til resultat</span></a>
+          <a class="shortcut-card" href="#players" data-portal-nav><strong>Medlemmer</strong><span>Kontingent, tilgang og invitasjoner</span></a>
           <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Utstyr</strong><span>Skiver, nettbrett, Scolia og venue-skjermer</span></a>
         </div>
       </section>
@@ -135,11 +136,10 @@
 
       <section id="players" data-portal-section="players" class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Klubben</p><h2>Personer</h2><p class="muted">Én person med medlemskap, spillerprofil, kontingent og tilgang samlet.</p></div>
-          <span id="playerCount" class="pill">0</span>
+          <div><p class="eyebrow">Klubben</p><h2>Medlemmer</h2><p class="muted">Medlemskap, kontingent og tilgang.</p></div>
         </div>
-        <div id="memberRegistryStatus" class="muted">Laster personregister …</div>
-        <div class="hidden" aria-hidden="true"><table><tbody id="playerRows"></tbody></table></div>
+        <div id="memberRegistryStatus" class="muted">Laster medlemsregister …</div>
+        <div class="hidden" aria-hidden="true"><span id="playerCount">0</span><table><tbody id="playerRows"></tbody></table></div>
       </section>
 
       <section id="screens" data-portal-section="kiosks" class="panel">
@@ -158,7 +158,7 @@
   <script src="./app.js" type="module"></script>
   <script src="./pairing-claim.js?v=20260826-1345" type="module"></script>
   <script src="./board-admin.js?v=20260826-1435" type="module"></script>
-  <script src="./member-onboarding-admin.js" type="module"></script>
+  <script src="./member-onboarding-admin.js?v=20260826-1545" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
   <script src="./checkin-admin-v2.js?v=20260826-1445" type="module"></script>
   <script src="./tournament-loader.js?v=20260826-1510" type="module"></script>
