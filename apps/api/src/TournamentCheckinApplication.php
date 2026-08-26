@@ -6,6 +6,7 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScreenRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentCheckinRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
@@ -35,7 +36,8 @@ final class TournamentCheckinApplication
             $repo = new TournamentCheckinRepository($database);
             $users = new UserAccountRepository($database);
             $screens = new ScreenRepository($database);
-            $response = $this->dispatch($request, $path, $repo, $users, $screens);
+            $clubs = new ClubRepository($database);
+            $response = $this->dispatch($request, $path, $repo, $users, $screens, $clubs);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception) {
@@ -64,7 +66,8 @@ final class TournamentCheckinApplication
         string $path,
         TournamentCheckinRepository $repo,
         UserAccountRepository $users,
-        ScreenRepository $screens
+        ScreenRepository $screens,
+        ClubRepository $clubs
     ): JsonResponse {
         $method = $request->method();
 
@@ -73,6 +76,14 @@ final class TournamentCheckinApplication
             if ($user instanceof JsonResponse) {
                 return $user;
             }
+            $tournamentId = (int) $m[1];
+            $settings = $repo->getTournamentSettings($tournamentId);
+            if ($settings === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Turneringen ble ikke funnet.');
+            }
+            if ($this->checkinLocked($settings)) {
+                return $this->checkinLockedResponse();
+            }
             $playerId = (int) ($user['player_id'] ?? 0);
             if ($playerId <= 0) {
                 return JsonResponse::error(422, 'player_profile_missing', 'Kontoen er ikke koblet til en spillerprofil.');
@@ -80,7 +91,7 @@ final class TournamentCheckinApplication
             $payload = $request->jsonBody();
             return JsonResponse::ok([
                 'registration' => $repo->checkInPlayer(
-                    (int) $m[1],
+                    $tournamentId,
                     $playerId,
                     false,
                     isset($payload['code']) ? (string) $payload['code'] : null,
@@ -98,20 +109,44 @@ final class TournamentCheckinApplication
             if ($playerId <= 0) {
                 return JsonResponse::error(422, 'player_profile_missing', 'Kontoen er ikke koblet til en spillerprofil.');
             }
-            return JsonResponse::ok($repo->statusForPlayer((int) $m[1], $playerId));
+            $status = $repo->statusForPlayer((int) $m[1], $playerId);
+            $settings = $repo->getTournamentSettings((int) $m[1]);
+            if ($settings !== null && $this->checkinLocked($settings)) {
+                $status['window_state'] = 'closed';
+                $status['code_allowed'] = false;
+                $status['admin_checkin_allowed'] = false;
+            }
+            return JsonResponse::ok($status);
         }
 
         if ($method === 'GET' && $path === 'v1/public/check-in-display') {
             $screenToken = trim((string) ($_GET['screen_token'] ?? ''));
-            if ($screenToken === '') {
-                return JsonResponse::error(401, 'screen_token_required', 'Skjermtoken mangler.');
+            $clubSlug = trim((string) ($_GET['club_slug'] ?? ''));
+            $clubId = 0;
+
+            if ($screenToken !== '') {
+                $screen = $screens->resolveByAccessToken($screenToken);
+                $clubId = (int) ($screen['club']['id'] ?? 0);
+                if ($clubId <= 0) {
+                    return JsonResponse::error(401, 'screen_token_invalid', 'Skjermtoken er ugyldig.');
+                }
+            } elseif ($clubSlug !== '') {
+                $club = $clubs->findBySlug($clubSlug);
+                $clubId = (int) ($club['id'] ?? 0);
+                if ($clubId <= 0) {
+                    return JsonResponse::error(404, 'club_not_found', 'Klubben ble ikke funnet.');
+                }
+            } else {
+                return JsonResponse::error(422, 'checkin_display_context_required', 'Oppgi skjermtoken eller klubb.');
             }
-            $screen = $screens->resolveByAccessToken($screenToken);
-            $clubId = (int) ($screen['club']['id'] ?? 0);
-            if ($clubId <= 0) {
-                return JsonResponse::error(401, 'screen_token_invalid', 'Skjermtoken er ugyldig.');
-            }
+
             $display = $repo->publicDisplayForClub($clubId);
+            if ($display !== null) {
+                $settings = $repo->getTournamentSettings((int) ($display['tournament_id'] ?? 0));
+                if ($settings === null || $this->checkinLocked($settings)) {
+                    $display = null;
+                }
+            }
             return JsonResponse::ok([
                 'active' => $display !== null,
                 'checkin' => $display,
@@ -145,6 +180,9 @@ final class TournamentCheckinApplication
             if ($method === 'GET') {
                 return JsonResponse::ok(['settings' => $settings]);
             }
+            if ($this->checkinLocked($settings)) {
+                return $this->checkinLockedResponse();
+            }
             return JsonResponse::ok([
                 'settings' => $repo->updateTournamentSettings($tournamentId, $request->jsonBody()),
             ]);
@@ -160,6 +198,9 @@ final class TournamentCheckinApplication
             if ($admin instanceof JsonResponse) {
                 return $admin;
             }
+            if ($this->checkinLocked($settings)) {
+                return $this->checkinLockedResponse();
+            }
             return JsonResponse::ok(['settings' => $repo->rotateTournamentCode($tournamentId)]);
         }
 
@@ -173,6 +214,9 @@ final class TournamentCheckinApplication
             $admin = $this->requireAdmin($request, $users, (int) $settings['club_id']);
             if ($admin instanceof JsonResponse) {
                 return $admin;
+            }
+            if ($this->checkinLocked($settings)) {
+                return $this->checkinLockedResponse();
             }
             $payload = $request->jsonBody();
             $force = !empty($payload['force']);
@@ -188,6 +232,17 @@ final class TournamentCheckinApplication
         }
 
         return JsonResponse::error(405, 'method_not_allowed', 'Method not allowed.');
+    }
+
+    /** @param array<string,mixed> $settings */
+    private function checkinLocked(array $settings): bool
+    {
+        return in_array((string) ($settings['status'] ?? ''), ['in_progress', 'completed', 'archived'], true);
+    }
+
+    private function checkinLockedResponse(): JsonResponse
+    {
+        return JsonResponse::error(409, 'checkin_tournament_started', 'Innsjekk er stengt fordi turneringen er startet.');
     }
 
     /** @return array<string,mixed>|JsonResponse */
