@@ -37,12 +37,18 @@ try {
     $physicalClubs = $hardwarePrefix . 'clubs';
     $request = Request::fromGlobals();
 
+    // The original demo seed created BOARD-1..4 in every environment. Those rows
+    // are fixtures, not physical hardware, and must never be offered in test mode.
+    // Requiring the demo asset path makes this exclusion specific to the old seed
+    // and avoids hiding a legitimate board that happens to use a similar code.
+    $notLegacyDemoBoard = "NOT (k.code IN ('BOARD-1','BOARD-2','BOARD-3','BOARD-4') AND COALESCE(k.sponsor_logo_url,'') LIKE '/static/sponsors/demo-%')";
+
     if ($request->method() === 'GET') {
         $result = $db->query(
             "SELECT k.id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,k.sponsor_label,c.name AS club_name,c.slug AS club_slug
              FROM `{$physicalKiosks}` k
              INNER JOIN `{$physicalClubs}` c ON c.id=k.club_id
-             WHERE k.is_active=1
+             WHERE k.is_active=1 AND {$notLegacyDemoBoard}
              ORDER BY c.name,k.board_number,k.id"
         );
         $items = [];
@@ -85,7 +91,7 @@ try {
         "SELECT k.id,k.code,k.name,k.board_number,k.sponsor_label,k.sponsor_logo_url,k.scoring_mode,c.slug AS club_slug,c.name AS club_name
          FROM `{$physicalKiosks}` k
          INNER JOIN `{$physicalClubs}` c ON c.id=k.club_id
-         WHERE k.id=? AND k.is_active=1 LIMIT 1"
+         WHERE k.id=? AND k.is_active=1 AND {$notLegacyDemoBoard} LIMIT 1"
     );
     $stmt->bind_param('i', $physicalId);
     $stmt->execute();
