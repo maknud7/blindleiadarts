@@ -21,6 +21,17 @@ if (host) {
       node.classList.remove("tournament-room-view-hidden");
     });
 
+    // The phase-based .tc-workspace is canonical. During the transition more
+    // than one import path could instantiate it, which produced two selectors,
+    // two phase navigations and two check-in surfaces on the same page.
+    const workspaces = [...host.querySelectorAll(":scope > .tc-workspace")];
+    if (workspaces.length > 1) {
+      const keep = workspaces.find((workspace) => workspace.querySelector("#tcDesktopRail")) || workspaces[0];
+      workspaces.forEach((workspace) => {
+        if (workspace !== keep) workspace.remove();
+      });
+    }
+
     const createButtons = [...host.querySelectorAll('[id="twOpen"]')];
     createButtons.slice(1).forEach((button) => button.remove());
   }
