@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\MemberOnboardingRepository;
+use Blindleia\Dartkiosk\Api\Repository\SelfRegistrationRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
@@ -41,6 +42,7 @@ try {
     $prefix = $database->tablePrefix();
     $request = Request::fromGlobals();
     $repository = new MemberOnboardingRepository($database);
+    $selfRegistration = new SelfRegistrationRepository($database);
     $action = strtolower(trim((string) ($_GET['action'] ?? '')));
 
     $loadMembership = static function (int $memberId, bool $includePayments = false) use ($db): ?array {
@@ -95,16 +97,40 @@ try {
 
     if ($request->method() === 'GET' && $action === 'inspect') {
         $token = trim((string) ($_GET['token'] ?? ''));
-        $respond(['ok' => true, 'data' => $repository->inspectInvitation($token)]);
+        try {
+            $data = $repository->inspectInvitation($token);
+            $data['type'] = 'member';
+        } catch (InvalidArgumentException) {
+            $data = $selfRegistration->inspectInvitation($token);
+        }
+        $respond(['ok' => true, 'data' => $data]);
     }
 
     if ($request->method() === 'POST' && $action === 'complete') {
         $payload = $request->jsonBody();
-        $result = $repository->completeInvitation(
-            trim((string) ($payload['token'] ?? '')),
-            trim((string) ($payload['email'] ?? '')),
-            (string) ($payload['password'] ?? '')
-        );
+        $token = trim((string) ($payload['token'] ?? ''));
+        try {
+            $selfRegistration->inspectInvitation($token);
+            $result = $selfRegistration->submitInvitation(
+                $token,
+                trim((string) ($payload['first_name'] ?? '')),
+                trim((string) ($payload['last_name'] ?? '')),
+                trim((string) ($payload['email'] ?? '')),
+                (string) ($payload['password'] ?? '')
+            );
+        } catch (InvalidArgumentException $selfError) {
+            try {
+                $repository->inspectInvitation($token);
+            } catch (InvalidArgumentException) {
+                throw $selfError;
+            }
+            $result = $repository->completeInvitation(
+                $token,
+                trim((string) ($payload['email'] ?? '')),
+                (string) ($payload['password'] ?? '')
+            );
+            $result['type'] = 'member';
+        }
         $respond(['ok' => true, 'data' => $result]);
     }
 
@@ -142,7 +168,24 @@ try {
             $item['membership'] = $loadMembership((int) ($item['member_id'] ?? 0), false);
         }
         unset($item);
+        $data['pending_registrations'] = $selfRegistration->listPending($clubId);
         $respond(['ok' => true, 'data' => $data]);
+    }
+
+    if ($request->method() === 'POST' && $action === 'invite-open') {
+        $result = $selfRegistration->createInvitation($clubId, (int) $currentUser['id']);
+        $respond(['ok' => true, 'data' => $result], 201);
+    }
+
+    if ($request->method() === 'POST' && $action === 'approve-open') {
+        $payload = $request->jsonBody();
+        $result = $selfRegistration->approve(
+            $clubId,
+            (int) ($payload['invite_id'] ?? 0),
+            (int) ($payload['member_id'] ?? 0),
+            (int) $currentUser['id']
+        );
+        $respond(['ok' => true, 'data' => $result]);
     }
 
     if ($request->method() === 'POST' && $action === 'invite') {
@@ -150,8 +193,6 @@ try {
         $memberId = (int) ($payload['member_id'] ?? 0);
         if ($memberId <= 0) throw new InvalidArgumentException('Ugyldig spiller.');
 
-        // Club people are one durable identity: membership + player profile + login.
-        // Tournament-only opponents can remain guest player rows for historical stats.
         $playersTable = $prefix . 'players';
         $memberStmt = $db->prepare('SELECT id, navn FROM `medlemmer` WHERE id=? LIMIT 1');
         $memberStmt->bind_param('i', $memberId);
