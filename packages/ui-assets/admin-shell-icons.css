@@ -4,7 +4,7 @@
     background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat!important;
   }
 
-  body[data-portal-default="overview"] .topbar-brand .brand-mark.small{
+  html body[data-portal-default="overview"] .topbar-brand .brand-mark.small{
     display:block!important;
     flex:0 0 38px!important;
     width:38px!important;
