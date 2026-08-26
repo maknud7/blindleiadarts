@@ -3,57 +3,109 @@ const params = new URLSearchParams(window.location.search);
 const clubSlug = params.get("club") || "blindleia-dartklubb";
 
 const el = Object.fromEntries([
+  "standbyState", "activeExperience", "checkinStage", "liveDashboard",
   "clubName", "tournamentName", "tournamentMeta", "connectionLabel", "progressCards", "boards",
   "queue", "results", "tables", "playoffSection", "playoffChampion", "playoff", "elo", "highlights", "updatedAt",
-  "checkinBanner", "checkinTournamentName", "checkinCode", "checkinWindow",
+  "checkinTournamentName", "checkinCode", "checkinWindow", "checkinCount", "checkinProgressBar",
+  "checkinRosterCount", "checkinParticipants",
 ].map((id) => [id, document.getElementById(id)]));
 
-const state = { payload: null, socket: null, poll: null, realtime: null, loading: false };
+const state = { payload: null, checkin: null, phase: "loading", socket: null, poll: null, realtime: null, loading: false };
 
 function esc(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
-function formatDateTime(value) {
-  if (!value) return "";
+function asDate(value) {
+  if (!value) return null;
   const date = new Date(String(value).replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return String(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function formatDateTime(value) {
+  const date = asDate(value);
+  if (!date) return value ? String(value) : "";
   return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 function formatTime(value) {
-  if (!value) return "";
-  const date = new Date(String(value).replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return "";
+  const date = asDate(value);
+  if (!date) return "";
   return new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 async function api(path) {
   const response = await fetch(`${API_ROOT}${path}`, { cache: "no-store" });
-  const payload = await response.json();
+  const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
   return payload.data;
 }
 
-function renderCheckin(data) {
-  const checkin = data?.active ? data.checkin : null;
-  if (!el.checkinBanner) return;
-  if (!checkin?.code) {
-    el.checkinBanner.classList.add("hidden");
-    return;
-  }
-  el.checkinTournamentName.textContent = checkin.tournament_name || "Turnering";
-  el.checkinCode.textContent = checkin.code;
-  const closes = formatTime(checkin.closes_at);
-  el.checkinWindow.textContent = closes ? `Åpen til kl. ${closes}` : "Innsjekk er åpen";
-  el.checkinBanner.classList.remove("hidden");
+function setPhase(phase) {
+  if (state.phase === phase) return;
+  state.phase = phase;
+  document.body.classList.remove("phase-loading", "phase-standby", "phase-checkin", "phase-live");
+  document.body.classList.add(`phase-${phase}`);
+  el.standbyState?.classList.toggle("hidden", phase !== "standby");
+  el.activeExperience?.classList.toggle("hidden", phase === "standby" || phase === "loading");
+  el.checkinStage?.classList.toggle("hidden", phase !== "checkin");
+  el.liveDashboard?.classList.toggle("hidden", phase !== "live");
+  if (phase === "standby") document.title = "Blindleia Dartklubb";
 }
 
-async function loadCheckin() {
-  try {
-    renderCheckin(await api(`/public/check-in-display?club_slug=${encodeURIComponent(clubSlug)}`));
-  } catch {
-    renderCheckin(null);
-  }
+function sameLocalDay(value, reference = new Date()) {
+  const date = asDate(value);
+  if (!date) return false;
+  return date.getFullYear() === reference.getFullYear()
+    && date.getMonth() === reference.getMonth()
+    && date.getDate() === reference.getDate();
+}
+function livePayloadIsRelevant(payload) {
+  const status = String(payload?.tournament?.status || "");
+  if (status === "in_progress" || status === "ready") return true;
+  if (status !== "completed") return false;
+  const finished = payload?.tournament?.end_at || payload?.tournament?.start_at;
+  const date = asDate(finished);
+  if (!date) return false;
+  return sameLocalDay(date) || (Date.now() - date.getTime() >= 0 && Date.now() - date.getTime() <= 8 * 60 * 60 * 1000);
+}
+
+function participantStatus(status) {
+  if (status === "checked_in") return "Sjekket inn";
+  if (status === "waitlisted") return "Venteliste";
+  return "Påmeldt";
+}
+function participantClass(status) {
+  if (status === "checked_in") return "checked-in";
+  if (status === "waitlisted") return "waitlisted";
+  return "registered";
+}
+function renderCheckin(data) {
+  const checkin = data?.active ? data.checkin : null;
+  if (!checkin?.code) return false;
+  state.checkin = checkin;
+  state.payload = null;
+
+  const total = Math.max(0, Number(checkin.participant_count || 0));
+  const checkedIn = Math.max(0, Number(checkin.checked_in_count || 0));
+  const participants = Array.isArray(checkin.participants) ? checkin.participants : [];
+  const progress = total > 0 ? Math.min(100, Math.round((checkedIn / total) * 100)) : 0;
+
+  el.clubName.textContent = "Blindleia Dartklubb";
+  el.tournamentName.textContent = checkin.tournament_name || "Turnering";
+  const start = formatDateTime(checkin.start_at);
+  el.tournamentMeta.textContent = start ? `Innsjekk · ${start}` : "Innsjekk";
+  el.connectionLabel.textContent = "Innsjekk";
+  el.checkinTournamentName.textContent = checkin.tournament_name || "Turnering";
+  el.checkinCode.textContent = checkin.code;
+  const startTime = formatTime(checkin.start_at);
+  el.checkinWindow.textContent = startTime ? `Turneringen starter kl. ${startTime}` : "Innsjekk er åpen";
+  el.checkinCount.textContent = `${checkedIn} av ${total} sjekket inn`;
+  el.checkinProgressBar.style.width = `${progress}%`;
+  el.checkinRosterCount.textContent = String(total);
+  el.checkinParticipants.innerHTML = participants.length
+    ? participants.map((player) => `<div class="checkin-person ${participantClass(String(player.status || ""))}"><strong>${esc(player.display_name)}</strong><span class="checkin-person-status">${esc(participantStatus(String(player.status || "")))}</span></div>`).join("")
+    : `<div class="checkin-empty">Ingen påmeldte ennå.</div>`;
+  document.title = `${checkin.tournament_name || "Blindleia Darts"} · Innsjekk`;
+  return true;
 }
 
 function renderProgress(progress = {}) {
@@ -69,17 +121,17 @@ function renderProgress(progress = {}) {
 
 function renderBoards(boards = []) {
   if (!boards.length) {
-    el.boards.innerHTML = `<div class="empty">Ingen boards er koblet til turneringen ennå.</div>`;
+    el.boards.innerHTML = `<div class="empty">Ingen skiver er koblet til turneringen ennå.</div>`;
     return;
   }
   el.boards.innerHTML = boards.map((board) => {
     const match = board.live_match;
-    if (!match) return `<article class="board-card idle"><div class="board-top"><span class="board-number">Board ${Number(board.board_number)}</span><span class="badge">Ledig</span></div><p class="muted">Venter på neste kamp.</p></article>`;
+    if (!match) return `<article class="board-card idle"><div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge">Ledig</span></div><p class="muted">Venter på neste kamp.</p></article>`;
     const playing = match.status === "in_progress";
     const aActive = Number(match.current_player_id) === Number(match.player_a.id);
     const bActive = Number(match.current_player_id) === Number(match.player_b.id);
     return `<article class="board-card">
-      <div class="board-top"><span class="board-number">Board ${Number(board.board_number)}</span><span class="badge ${playing ? "live" : ""}">${playing ? "LIVE" : "Klar"}</span></div>
+      <div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge ${playing ? "live" : ""}">${playing ? "LIVE" : "Klar"}</span></div>
       <div class="players">
         <div class="player-line ${aActive ? "active" : ""}"><strong>${esc(match.player_a.display_name)}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${Number(match.player_a.legs_won)}</span></div>
         <div class="player-line ${bActive ? "active" : ""}"><strong>${esc(match.player_b.display_name)}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${Number(match.player_b.legs_won)}</span></div>
@@ -102,7 +154,7 @@ function renderTables(data = {}) {
 function playoffStatus(node) {
   const status = String(node.status || "");
   if (status === "in_progress") return "LIVE";
-  if (status === "assigned") return node.board_number ? `Board ${Number(node.board_number)}` : "Kalt opp";
+  if (status === "assigned") return node.board_number ? `Skive ${Number(node.board_number)}` : "Kalt opp";
   if (status === "pending" || status === "ready") return "Venter";
   if (status === "completed") return "Ferdig";
   if (status === "bye") return "Bye";
@@ -134,11 +186,13 @@ function renderHighlights(highlights = {}) {
 }
 function render(payload) {
   state.payload = payload;
+  state.checkin = null;
   el.clubName.textContent = payload.club?.name || "Blindleia Dartklubb";
   el.tournamentName.textContent = payload.tournament?.name || "Live";
   const status = String(payload.tournament?.status || "");
-  const statusText = status === "in_progress" ? "Pågår" : status === "completed" ? "Ferdig" : status === "ready" ? "Klar" : status === "draft" ? "Før start" : status;
+  const statusText = status === "in_progress" ? "Pågår" : status === "completed" ? "Ferdig" : status === "ready" ? "Klar til start" : "";
   el.tournamentMeta.textContent = `${statusText}${payload.tournament?.start_at ? ` · ${formatDateTime(payload.tournament.start_at)}` : ""}`;
+  el.connectionLabel.textContent = status === "completed" ? "Ferdig" : status === "ready" ? "Klar til start" : "Live";
   el.updatedAt.textContent = `Oppdatert ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
   renderProgress(payload.progress);
   renderBoards(payload.boards);
@@ -155,15 +209,26 @@ async function load() {
   if (state.loading) return;
   state.loading = true;
   try {
-    const [live] = await Promise.all([
+    const [liveResult, checkinResult] = await Promise.allSettled([
       api(`/public/clubs/${encodeURIComponent(clubSlug)}/live`),
-      loadCheckin(),
+      api(`/public/check-in-display?club_slug=${encodeURIComponent(clubSlug)}`),
     ]);
-    render(live);
-    el.connectionLabel.textContent = "Live";
-  } catch (error) {
-    await loadCheckin();
-    el.connectionLabel.textContent = error.message;
+    const checkin = checkinResult.status === "fulfilled" ? checkinResult.value : null;
+    const live = liveResult.status === "fulfilled" ? liveResult.value : null;
+
+    if (checkin?.active && renderCheckin(checkin)) {
+      setPhase("checkin");
+      return;
+    }
+    if (live && livePayloadIsRelevant(live)) {
+      render(live);
+      setPhase("live");
+      return;
+    }
+
+    state.payload = null;
+    state.checkin = null;
+    setPhase("standby");
   } finally {
     state.loading = false;
   }
@@ -186,7 +251,7 @@ async function startRealtime() {
     const socket = new WebSocket(config.websocket_url);
     state.socket = socket;
     socket.addEventListener("open", () => {
-      el.connectionLabel.textContent = "Live";
+      if (state.phase === "live") el.connectionLabel.textContent = "Live";
       socket.send(JSON.stringify({ type: "subscribe", channels: [`club:${clubId}`] }));
     });
     socket.addEventListener("message", (event) => {
@@ -195,9 +260,14 @@ async function startRealtime() {
         if (message?.type === "event" && message?.event === "snapshot") load().catch(() => undefined);
       } catch { /* ignore malformed event */ }
     });
-    socket.addEventListener("close", () => { state.socket = null; el.connectionLabel.textContent = "Oppdaterer"; startPolling(); setTimeout(() => startRealtime().catch(() => undefined), 2500); });
+    socket.addEventListener("close", () => {
+      state.socket = null;
+      if (state.phase === "live") el.connectionLabel.textContent = "Oppdaterer";
+      startPolling();
+      setTimeout(() => startRealtime().catch(() => undefined), 2500);
+    });
     socket.addEventListener("error", () => socket.close());
   } catch { startPolling(); }
 }
 
-load().then(startRealtime).catch(startPolling);
+load().then(startRealtime).catch(() => { setPhase("standby"); startPolling(); });
