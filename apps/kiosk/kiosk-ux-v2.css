@@ -1,0 +1,420 @@
+/* Kiosk UX v2: stable portrait scoring surface, stronger turn state and safer corrections. */
+
+.kiosk-ux-v2 #playerATurn,
+.kiosk-ux-v2 #playerBTurn,
+.kiosk-ux-v2 #throwingPlayer {
+  display: none !important;
+}
+
+.kiosk-ux-v2 .scoreboard,
+.kiosk-ux-v2 .player-card,
+.kiosk-ux-v2 .remaining,
+.kiosk-ux-v2 .visit-list,
+.kiosk-ux-v2 .visit-row {
+  transition: none !important;
+}
+
+.kiosk-ux-v2 .player-card {
+  grid-template-rows: auto 1fr auto;
+  border-width: 3px;
+  border-color: #d8e3ec;
+  background: #f7fafc;
+  box-shadow: none;
+}
+
+.kiosk-ux-v2 .player-card.active {
+  border-color: #16a34a !important;
+  background: #f0fdf4 !important;
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, .18), 0 0 0 2px rgba(22, 163, 74, .08) !important;
+}
+
+.kiosk-ux-v2 .player-card.active::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 5px rgba(22, 163, 74, .13);
+}
+
+.kiosk-ux-v2 .player-card h2,
+.kiosk-ux-v2 .remaining {
+  min-width: 0;
+}
+
+.kiosk-ux-v2 .player-card .legs {
+  display: none;
+}
+
+.kiosk-ux-v2 .remaining,
+.kiosk-ux-v2 .match-legs-score,
+.kiosk-ux-v2 .live-remaining-preview strong,
+.kiosk-ux-v2 .visit-score,
+.kiosk-ux-v2 .visit-edit-display {
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-ux-v2 .match-center {
+  gap: 3px;
+}
+
+.kiosk-ux-v2 .match-legs-label {
+  margin-top: 1px;
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.kiosk-ux-v2 .match-center .match-legs-score {
+  color: #082544;
+  font-size: clamp(25px, 4.8vw, 36px);
+  line-height: .95;
+  letter-spacing: -.045em;
+}
+
+.kiosk-ux-v2 #currentLeg {
+  margin-top: 2px;
+  color: #082544;
+  font-size: 15px;
+}
+
+.kiosk-ux-v2 #matchRound {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kiosk-ux-v2 .scoring-head > div:first-child {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kiosk-ux-v2 .scoring-head > div:first-child > .eyebrow {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.kiosk-ux-v2 .live-remaining-preview {
+  min-width: 150px;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  align-items: baseline;
+  padding-left: 10px;
+  border-left: 1px solid #d6e1ea;
+}
+
+.kiosk-ux-v2 .live-remaining-preview span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.kiosk-ux-v2 .live-remaining-preview strong {
+  color: #082544;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.kiosk-ux-v2 .live-remaining-preview small {
+  grid-column: 1 / -1;
+  min-height: 11px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.kiosk-ux-v2 .live-remaining-preview.is-bust strong,
+.kiosk-ux-v2 .live-remaining-preview.is-bust small {
+  color: #dc2626;
+}
+
+.kiosk-ux-v2 .live-remaining-preview.is-checkout strong,
+.kiosk-ux-v2 .live-remaining-preview.is-checkout small {
+  color: #15803d;
+}
+
+.kiosk-ux-v2 [data-key="ok"],
+.kiosk-ux-v2 #dartSubmitButton {
+  font-size: 28px !important;
+  line-height: 1 !important;
+}
+
+.kiosk-ux-v2 .dart-controls > div:last-child {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  gap: 5px;
+}
+
+.kiosk-ux-v2 .dart-controls .special-grid {
+  grid-row: 1;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  grid-template-columns: 1fr 1fr .72fr;
+}
+
+.kiosk-ux-v2 .dart-controls .number-grid {
+  grid-row: 2;
+  height: auto;
+  min-height: 0;
+}
+
+.kiosk-ux-v2 .special-grid button {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.kiosk-ux-v2 .special-grid [data-special="bull"],
+.kiosk-ux-v2 .special-grid [data-special="dbull"] {
+  border-color: #b9c9d7;
+  background: #eef4f8;
+  color: #082544;
+}
+
+.kiosk-ux-v2 .special-grid [data-special="dbull"] {
+  border-color: rgba(22, 163, 74, .45);
+  background: #f0fdf4;
+}
+
+.kiosk-ux-v2 .activity-card {
+  overflow: visible;
+}
+
+.kiosk-ux-v2 .visit-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.kiosk-ux-v2 .visit-row:nth-child(n+4) {
+  display: flex !important;
+}
+
+.kiosk-ux-v2 button.visit-row {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  padding: 6px 18px 6px 7px;
+  border: 1px solid #d7e2eb;
+  border-radius: 10px;
+  background: #f7fafc;
+  color: #082544;
+  text-align: left;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.kiosk-ux-v2 button.visit-row:active {
+  background: #eaf2f8;
+  transform: none;
+}
+
+.kiosk-ux-v2 .visit-edit-icon {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  color: #64748b !important;
+  font-size: 10px !important;
+}
+
+.kiosk-ux-v2 .visit-edit-dialog {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 16px;
+  border: 1px solid #cad8e3;
+  border-radius: 22px;
+  background: #fff;
+  color: #082544;
+  box-shadow: 0 28px 90px rgba(8, 37, 68, .28);
+}
+
+.kiosk-ux-v2 .visit-edit-dialog::backdrop {
+  background: rgba(8, 37, 68, .52);
+  backdrop-filter: blur(2px);
+}
+
+.kiosk-ux-v2 .visit-edit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kiosk-ux-v2 .visit-edit-head h3 {
+  font-size: 24px;
+}
+
+.kiosk-ux-v2 .visit-edit-display {
+  margin: 14px 0 10px;
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d7e2eb;
+  border-radius: 16px;
+  background: #f4f8fb;
+  color: #082544;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.kiosk-ux-v2 .visit-edit-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.kiosk-ux-v2 .visit-edit-keypad button {
+  min-height: 58px;
+  border: 1px solid #d7e2eb;
+  background: #eef4f8;
+  color: #082544;
+  font-size: 22px;
+}
+
+.kiosk-ux-v2 .visit-edit-keypad .confirm-button {
+  background: #2875ea;
+  color: #fff;
+  font-size: 28px;
+}
+
+.kiosk-ux-v2 .visit-edit-error {
+  min-height: 20px;
+  margin: 9px 0 0;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.kiosk-ux-v2 .visit-edit-note {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.kiosk-ux-v2 .visit-edit-dialog.is-busy button {
+  pointer-events: none;
+  opacity: .55;
+}
+
+.kiosk-ux-v2 .leg-win-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(8, 37, 68, .58);
+  backdrop-filter: blur(3px);
+}
+
+.kiosk-ux-v2 .leg-win-overlay.hidden {
+  display: none !important;
+}
+
+.kiosk-ux-v2 .leg-win-card {
+  width: min(500px, 100%);
+  padding: 24px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid rgba(22, 163, 74, .35);
+  border-radius: 24px;
+  background: #fff;
+  color: #082544;
+  text-align: center;
+  box-shadow: 0 28px 90px rgba(8, 37, 68, .32);
+}
+
+.kiosk-ux-v2 .leg-win-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+  font-size: 32px;
+  font-weight: 950;
+}
+
+.kiosk-ux-v2 .leg-win-card h2 {
+  font-size: 32px;
+}
+
+.kiosk-ux-v2 #legWinPlayer {
+  font-size: clamp(24px, 5vw, 36px);
+}
+
+.kiosk-ux-v2 .leg-win-score {
+  margin: 4px 0;
+  color: #082544;
+  font-size: 46px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -.04em;
+}
+
+.kiosk-ux-v2 #legWinContinue {
+  width: 100%;
+  min-height: 58px;
+  margin-top: 8px;
+  background: #2875ea;
+  color: #fff;
+  font-size: 18px;
+}
+
+@media (orientation: portrait), (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  .kiosk-ux-v2 .match-layout {
+    grid-template-rows: clamp(158px, 21dvh, 198px) minmax(0, 1fr) 84px;
+    gap: 11px;
+  }
+
+  .kiosk-ux-v2 .scoreboard {
+    grid-template-columns: minmax(0, 1fr) 102px minmax(0, 1fr);
+  }
+
+  .kiosk-ux-v2 .player-card {
+    padding: 10px 11px;
+  }
+
+  .kiosk-ux-v2 .player-card h2 {
+    padding-top: 1px;
+  }
+
+  .kiosk-ux-v2 .remaining {
+    align-self: end;
+  }
+
+  .kiosk-ux-v2 .scoring-head {
+    min-height: 46px;
+  }
+
+  .kiosk-ux-v2 .dart-mode {
+    grid-template-rows: auto minmax(0, 1fr) 50px;
+  }
+
+  .kiosk-ux-v2 .activity-card {
+    height: 84px;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 7px;
+    padding: 7px 9px;
+  }
+
+  .kiosk-ux-v2 .visit-list {
+    gap: 6px;
+  }
+}
