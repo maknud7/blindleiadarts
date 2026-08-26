@@ -47,12 +47,28 @@ if (host) {
     return registrations().filter((registration) => String(registration.status) === "registered");
   }
 
+  function checkedRegistrations() {
+    return registrations().filter((registration) => String(registration.status) === "checked_in");
+  }
+
   function isStarted() {
     return ["in_progress", "completed", "archived"].includes(String(detail?.status || context?.status || ""));
   }
 
   function currentTournamentId() {
     return Number(context?.id || detail?.id || document.getElementById("tcTournament")?.value || 0);
+  }
+
+  function clarifyPrestartContinuation() {
+    if (isStarted()) return;
+    const button = document.getElementById("tcToFormat");
+    if (!button) return;
+    const checked = checkedRegistrations().length;
+    const pending = pendingRegistrations().length;
+    if (checked >= 2) {
+      button.disabled = false;
+      button.textContent = pending > 0 ? `Gå videre med ${checked} spillere` : "Gå videre til format";
+    }
   }
 
   function enforceStartedState() {
@@ -63,6 +79,7 @@ if (host) {
     let note = document.getElementById("tcStartedCheckinNote");
     if (!isStarted()) {
       note?.remove();
+      clarifyPrestartContinuation();
       return;
     }
 
