@@ -91,6 +91,15 @@ jobs:
           grep -Fq 'v1/activity' apps/api/src/ActivityApplication.php
           grep -Fq 'activity_events' infra/sql/migrations/0043_create_activity_events.sql
           grep -Fq 'DEFAULT_CLUB_SLUG = "blindleia-dartklubb"' packages/ui-assets/activity.js
+          grep -Fq 'MIN_REQUEST_GAP_MS = 30000' packages/ui-assets/activity.js
+          grep -Fq 'BACKOFF_429_MS = 5 * 60 * 1000' packages/ui-assets/activity.js
+          grep -Fq '__blindleiaActivityInstalled' packages/ui-assets/activity.js
+          grep -Fq 'if (changed)' packages/ui-assets/portal-menu.js
+          grep -Fq 'activityLoadPromise' apps/admin/activity-admin.js
+          if grep -Fq 'document.addEventListener("click", trackClick' packages/ui-assets/activity.js; then
+            echo 'Activity tracker must not log every generic click.'
+            exit 1
+          fi
           if grep -Ei 'document\.cookie|localStorage\.setItem\([^)]*(visitor|analytics|tracking|activity)' packages/ui-assets/activity.js; then
             echo 'First-party activity tracker must not create an anonymous persistent identifier.'
             exit 1
