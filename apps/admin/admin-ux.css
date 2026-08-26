@@ -1,12 +1,117 @@
+:root{
+  color-scheme:light;
+  --bg:#eef4f8;
+  --panel:#ffffff;
+  --panel-2:#f7fafc;
+  --surface:#ffffff;
+  --line:#d8e2ea;
+  --line-strong:#bdcbd6;
+  --border:#d8e2ea;
+  --muted:#66788a;
+  --text:#152536;
+  --ink:#152536;
+  --accent:#185da4;
+  --accent-strong:#114a86;
+  --accent-soft:#e8f2fb;
+  --good:#257a58;
+  --bad:#bf3d46;
+  --warning:#a96a12;
+  --radius:18px;
+}
+
+html{background:var(--bg);color:var(--text)}
+body{background:radial-gradient(circle at 12% 0,#fff 0,#f6f9fc 31%,var(--bg) 72%);color:var(--text)}
+a{color:inherit}
+
+/* Base chrome */
+.auth-shell{background:linear-gradient(160deg,#f8fbfe,#eaf2f8)}
+.login-card{background:rgba(255,255,255,.98);border-color:var(--line);box-shadow:0 24px 70px rgba(26,65,96,.13)}
+.login-card h1,.hero h1,.panel h2,.panel h3,.topbar-brand strong{color:var(--text)}
+.brand-mark{background:linear-gradient(135deg,#2d75ba,var(--accent-strong));color:#fff;box-shadow:0 8px 20px rgba(24,93,164,.2)}
+.eyebrow{color:var(--accent)}
+.muted{color:var(--muted)}
+label{color:#40566a}
+input,select,textarea{background:#fff;color:var(--text);border-color:var(--line);box-shadow:none}
+input::placeholder,textarea::placeholder{color:#91a0ae}
+input:focus,select:focus,textarea:focus{border-color:#4b87bd;box-shadow:0 0 0 3px rgba(24,93,164,.11)}
+button,.button{background:var(--accent);color:#fff;box-shadow:0 3px 9px rgba(24,93,164,.13)}
+button:hover,.button:hover{background:var(--accent-strong)}
+.button.secondary,.secondary-action{background:#eef5fb;color:var(--accent-strong);border:1px solid #cadceb;box-shadow:none}
+.button.secondary:hover,.secondary-action:hover{background:#e3eff8;border-color:#abc9e0}
+.button.quiet{background:transparent;color:#61788c;border:1px solid transparent;box-shadow:none}
+.button.quiet:hover{background:#edf3f7;color:var(--text)}
+
+.topbar{background:rgba(255,255,255,.94);border-bottom-color:rgba(190,204,215,.82);box-shadow:0 5px 20px rgba(36,65,88,.055)}
+.main{color:var(--text)}
+.hero .muted{color:var(--muted)}
+.section-nav{background:rgba(238,244,248,.78);border-radius:16px;padding:6px}
+.section-nav a{background:transparent;border-color:transparent;color:#5d7183}
+.section-nav a:hover{border-color:#c5d7e5;background:#fff;color:var(--accent)}
+
+/* Common surfaces */
+.panel{background:rgba(255,255,255,.96);border-color:var(--line);box-shadow:0 12px 34px rgba(37,73,101,.065)}
+.metric{background:#fff;border-color:var(--line);box-shadow:0 8px 24px rgba(37,73,101,.045)}
+.metric span,.metric small{color:var(--muted)}
+.metric strong{color:var(--text)}
+.metric.good{border-color:#badbcc}
+.metric.bad{border-color:#ecc5c8}
+.status-item,.list-row,.create-card,.mini-card,.inline-status{background:#fff;border-color:var(--line);color:var(--text)}
+.list-row{box-shadow:0 3px 10px rgba(33,69,96,.035)}
+.row-meta,.row-right small{color:var(--muted)}
+.empty{border-color:#c8d6e0;color:var(--muted);background:#fbfdfe}
+.pill,.badge{background:#eef3f7;border-color:#d7e1e9;color:#54697b}
+.badge.good{color:#236b4f;border-color:#badbcc;background:#edf8f2}
+.badge.bad{color:#a4323c;border-color:#ecc5c8;background:#fff2f3}
+.badge.warning{color:#8a5a14;border-color:#ead4ae;background:#fff8e9}
+.message{background:#f2f6f9;border-color:var(--line);color:var(--text)}
+.message.error{border-color:#e4b4b8;color:#9f3139;background:#fff3f4}
+.message.warning{border-color:#e7cd9d;color:#80500c;background:#fff8e9}
+.message.success{border-color:#b6d8c8;color:#21654b;background:#eef8f3}
+.table-wrap{border-color:var(--line);background:#fff}
+table{background:#fff;color:var(--text)}
+th{background:#f3f7fa;color:var(--muted)}
+th,td{border-bottom-color:var(--line)}
+.copy-button{background:#eef5fb;color:var(--accent-strong);border-color:#cadceb}
+.board-number{background:#eef5fb;color:var(--accent);border-color:#cbddea}
+.roadmap{border-color:#c8d6e0;background:#f7fafc}
+.kiosk-code-strip{border-color:#c7dbea;background:#f1f7fc}
+.kiosk-code-strip strong,.screen-code,.pair-code{color:var(--accent)}
+
+/* Equipment/onboarding components that had dark fallbacks */
+.claim-admin-card,.member-onboarding-card,.ops-admin-panel,.playoff-control,.tc-summary-admin{color:var(--text)}
+.claim-admin-card,.claim-form,.claim-board-fields{--panel:#fff;--panel-2:#f7fafc;--line:#d8e2ea;--muted:#66788a;--accent:#185da4}
+.board-choice{background:#f1f5f8;border-color:var(--line)}
+.board-choice button{background:transparent!important;color:#5f7486!important;box-shadow:none!important}
+.board-choice button.active{background:#fff!important;color:var(--accent)!important;box-shadow:0 2px 8px rgba(32,72,103,.08)!important}
+
+/* Navigation label */
 .admin-menu-label{display:flex;align-items:center;padding:0 10px;font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
-.admin-overview-next{margin:0 0 18px;border:1px solid rgba(24,93,164,.2);background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(234,245,255,.94));box-shadow:0 14px 36px rgba(22,70,120,.09);border-radius:18px;padding:18px;display:grid;gap:14px}
+
+/* Tournament list / room shell */
+#tournaments{background:#fff}
+#tournaments .tournament-control{color:var(--text)}
+#tournaments .tc-stage,#tournaments .tc-group-card,#tournaments .tc-disclosure,#tournaments .tc-disclosure-body{background:#fff;color:var(--text)}
+#tournaments .tc-filterbar{background:#f3f7fa}
+#tournaments .tc-filterbar button.active,#tournaments .tc-live-tools button.active{background:#fff!important}
+#tournaments .tc-primary-next,#tournaments .tc-start-warning{background:#f6fafd}
+#tournaments .tc-recommendation,#tournaments .tc-code-box{background:#eef6fc}
+#tournaments .tc-context-card{border-bottom-color:var(--line)}
+
+/* Operations and playoff panes should look like part of the same room. */
+.ops-admin-panel,.playoff-control,.tc-summary-admin{background:transparent!important;border-color:var(--line)!important}
+.ops-toolbar,.ops-board,.playoff-status,.playoff-match,.playoff-entry{background:#fff!important;border-color:var(--line)!important;color:var(--text)!important}
+.ops-progress>div{background:#f6f9fb!important;border-color:var(--line)!important;color:var(--text)!important}
+.ops-progress span,.ops-board small,.playoff-match small{color:var(--muted)!important}
+
+/* Legacy admin-ux classes retained for pages/components that still use them. */
+.admin-overview-next{margin:0 0 18px;border:1px solid rgba(24,93,164,.16);background:linear-gradient(135deg,#fff,#f3f8fc);box-shadow:0 12px 30px rgba(22,70,120,.07);border-radius:18px;padding:18px;display:grid;gap:14px}
 .admin-overview-next h2,.admin-overview-next h3{margin:0}.admin-overview-next-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.admin-overview-next-status{display:flex;gap:8px;flex-wrap:wrap}.admin-overview-next-actions{display:flex;gap:10px;flex-wrap:wrap}
-.tournament-room{position:sticky;top:78px;z-index:20;margin:0 0 18px;border:1px solid rgba(24,93,164,.22);background:rgba(255,255,255,.97);backdrop-filter:blur(14px);box-shadow:0 12px 34px rgba(15,62,110,.10);border-radius:18px;padding:16px;display:grid;gap:14px}
+.tournament-room{position:sticky;top:78px;z-index:20;margin:0 0 18px;border:1px solid rgba(24,93,164,.18);background:rgba(255,255,255,.97);backdrop-filter:blur(14px);box-shadow:0 12px 34px rgba(15,62,110,.08);border-radius:18px;padding:16px;display:grid;gap:14px}
 .tournament-room-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,360px);gap:16px;align-items:end}.tournament-room-copy h2{margin:3px 0 5px}.tournament-room-copy p{margin:0}.tournament-room-select{display:grid;gap:5px}.tournament-room-select span{font-size:12px;color:var(--muted);font-weight:800}.tournament-room-select select{width:100%}
-.tournament-room-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tournament-room-progress>div{border:1px solid var(--line);border-radius:12px;padding:10px 11px;background:rgba(24,93,164,.035);display:grid;gap:2px}.tournament-room-progress span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.tournament-room-progress strong{font-size:18px}
-.tournament-room-next{display:flex;align-items:center;justify-content:space-between;gap:14px;border-radius:13px;padding:12px 14px;background:rgba(24,93,164,.08);border:1px solid rgba(24,93,164,.16)}.tournament-room-next-copy{display:grid;gap:2px}.tournament-room-next-copy small{color:var(--muted)}
-.tournament-room-tabs{display:flex;gap:6px;flex-wrap:wrap}.tournament-room-tabs button{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:999px;padding:9px 13px;font-weight:800;cursor:pointer}.tournament-room-tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}.tournament-room-view-hidden{display:none!important}
-.tournament-room-empty{padding:20px;text-align:center;border:1px dashed var(--line);border-radius:14px;color:var(--muted)}
-#tournaments.tournament-room-ready>#tournamentList{margin-top:4px}#screens .panel-head{margin-top:10px}
+.tournament-room-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.tournament-room-progress>div{border:1px solid var(--line);border-radius:12px;padding:10px 11px;background:#f5f9fc;display:grid;gap:2px}.tournament-room-progress span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.tournament-room-progress strong{font-size:18px}
+.tournament-room-next{display:flex;align-items:center;justify-content:space-between;gap:14px;border-radius:13px;padding:12px 14px;background:#eef6fc;border:1px solid #cfe1ef}.tournament-room-next-copy{display:grid;gap:2px}.tournament-room-next-copy small{color:var(--muted)}
+.tournament-room-tabs{display:flex;gap:6px;flex-wrap:wrap}.tournament-room-tabs button{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:999px;padding:9px 13px;font-weight:800;cursor:pointer;box-shadow:none}.tournament-room-tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}.tournament-room-view-hidden{display:none!important}.tournament-room-empty{padding:20px;text-align:center;border:1px dashed var(--line);border-radius:14px;color:var(--muted)}
+
 @media(max-width:900px){.tournament-room{position:static}.tournament-room-top{grid-template-columns:1fr}.tournament-room-progress{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:720px){.section-nav{background:transparent;padding:0}.topbar{background:#fff}.panel{box-shadow:none}}
 @media(max-width:650px){.admin-menu-label{display:none}.tournament-room-progress{grid-template-columns:1fr 1fr}.tournament-room-next{align-items:stretch;flex-direction:column}.tournament-room-next .button{width:100%}.admin-overview-next-head{display:grid}.admin-overview-next-actions{display:grid}.admin-overview-next-actions .button{width:100%;box-sizing:border-box;text-align:center}}
