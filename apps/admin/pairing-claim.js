@@ -1,5 +1,5 @@
 import "./pairing-claim-core.js?v=20260826-1340";
-import "./equipment-admin-ux.js?v=20260826-1335";
+import "./equipment-admin-ux.js?v=20260826-1345";
 import "./board-admin.js";
 import "./member-onboarding-admin.js";
 import "./tournament-admin.js";
