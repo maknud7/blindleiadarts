@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f3f8fb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Blindleia Board">
-  <title>Blindleia Darts · Board Terminal</title>
+  <meta name="apple-mobile-web-app-title" content="Blindleia Skive">
+  <title>Blindleia Darts · Skiveterminal</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.png" type="image/png">
   <link rel="apple-touch-icon" href="../static/club-logos/blindleia-dartklubb-logo.png">
@@ -24,7 +24,7 @@
     <header class="terminal-topbar">
       <div class="brandline">
         <div class="brand-badge"><img id="brandLogo" class="brand-logo hidden" alt="Klubblogo"><span id="brandFallback">BD</span></div>
-        <div class="brand-copy"><p id="brandEyebrow" class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Board Terminal</h1><p id="brandSponsor" class="brand-sponsor hidden"></p></div>
+        <div class="brand-copy"><p id="brandEyebrow" class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Skiveterminal</h1><p id="brandSponsor" class="brand-sponsor hidden"></p></div>
       </div>
       <div class="terminal-status">
         <span id="connectionPill" class="status-pill neutral"><span class="status-dot"></span><span id="connectionText">Ikke paret</span></span>
@@ -38,12 +38,12 @@
           <div class="setup-copy">
             <p class="eyebrow">Førstegangsoppsett</p>
             <h2>Koble denne terminalen til en skive</h2>
-            <p class="muted">Dette gjøres én gang. Scan QR-koden med mobilen til en klubbadmin, velg board og terminalen husker oppsettet videre.</p>
+            <p class="muted">Dette gjøres én gang. Scan QR-koden med mobilen til en klubbadmin, velg skive og terminalen husker oppsettet videre.</p>
 
             <div class="claim-steps">
               <div><span>1</span><p>Scan QR-koden med mobilen.</p></div>
               <div><span>2</span><p>Logg inn i Blindleia Admin hvis du ikke allerede er innlogget.</p></div>
-              <div><span>3</span><p>Velg riktig board og trykk «Koble til».</p></div>
+              <div><span>3</span><p>Velg riktig skive og trykk «Koble til».</p></div>
             </div>
           </div>
 
@@ -65,7 +65,7 @@
         <div class="board-hero">
           <span class="badge good">Klar</span>
           <p id="idleClub" class="eyebrow">Blindleia Dartklubb</p>
-          <h2 id="idleBoard">Board —</h2>
+          <h2 id="idleBoard">Skive —</h2>
           <p id="idleMessage" class="muted">Venter på neste kamp.</p>
           <div id="idleMode" class="mode-label">Manuell scoring</div>
         </div>
@@ -73,7 +73,7 @@
 
       <section id="assignedState" class="state-card assigned-state hidden">
         <div class="match-meta">
-          <span id="assignedBoard" class="badge">Board —</span>
+          <span id="assignedBoard" class="badge">Skive —</span>
           <span id="assignedRound" class="badge neutral">Kamp</span>
           <span id="assignedBestOf" class="badge neutral">Best of 3</span>
         </div>
@@ -94,7 +94,7 @@
             <div id="playerALegs" class="legs">0 legs</div>
           </div>
           <div class="match-center">
-            <span id="matchBoard" class="badge">Board</span>
+            <span id="matchBoard" class="badge">Skive</span>
             <strong id="currentLeg">Leg 1</strong>
             <span id="matchRound" class="muted">Kamp</span>
             <button id="undoButton" type="button" class="ghost-button">Angre siste kast</button>
@@ -135,7 +135,7 @@
 
         <section id="scoliaScoring" class="scoring-card scolia-card hidden">
           <div class="scolia-pulse"></div>
-          <div><p class="eyebrow">Scolia</p><h3>Venter på scoring fra skiva</h3><p class="muted">Board Terminal følger kampen. Kast fra Scolia registreres automatisk når integrasjonen er aktiv.</p></div>
+          <div><p class="eyebrow">Scolia</p><h3>Venter på scoring fra skiva</h3><p class="muted">Skiveterminalen følger kampen. Kast fra Scolia registreres automatisk når integrasjonen er aktiv.</p></div>
         </section>
 
         <aside class="activity-card">
@@ -148,7 +148,7 @@
 
   <div id="settingsOverlay" class="overlay hidden"></div>
   <section id="settingsDialog" class="settings-dialog hidden" role="dialog" aria-modal="true">
-    <div class="dialog-head"><div><p class="eyebrow">Board Terminal</p><h3>Innstillinger</h3></div><button id="settingsCloseButton" class="ghost-button" type="button">Lukk</button></div>
+    <div class="dialog-head"><div><p class="eyebrow">Skiveterminal</p><h3>Innstillinger</h3></div><button id="settingsCloseButton" class="ghost-button" type="button">Lukk</button></div>
     <div id="settingsMeta" class="settings-meta"></div>
     <div class="settings-actions">
       <button id="refreshButton" type="button" class="ghost-button">Oppdater nå</button>
@@ -168,7 +168,7 @@
   <script src="./operations-runtime.js"></script>
   <script src="./install.js"></script>
   <script src="./admin-mode.js"></script>
-  <script src="./test-mode.js?v=4"></script>
+  <script src="./test-mode.js?v=5"></script>
   <script src="./kiosk-ux-v2.js"></script>
   <script src="./kiosk-brand-v3.js?v=3"></script>
 </body>
