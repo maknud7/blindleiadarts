@@ -34,7 +34,7 @@ $dataPrefix = env_required('DB_TABLE_PREFIX');
 $identityPrefix = env_optional('IDENTITY_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
 $hardwarePrefix = env_optional('HARDWARE_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
 $baseUrl = getenv('BASE_URL') ?: '';
-$defaultIdentityBaseUrl = $identityPrefix !== $dataPrefix
+$defaultIdentityBaseUrl = $identityPrefix === 'bd_prod_'
     ? 'https://blindleiadarts.ingenting.org'
     : $baseUrl;
 
@@ -42,8 +42,8 @@ $config = [
     'app_env' => env_required('APP_ENV'),
     'base_url' => $baseUrl,
     // Identity is shared between test and production. Member-specific account
-    // invitations therefore use the canonical production origin even when they
-    // are created from the test admin surface.
+    // invitations therefore always use the canonical production origin when
+    // they target the production identity namespace.
     'identity_base_url' => env_optional('IDENTITY_BASE_URL', $defaultIdentityBaseUrl) ?? $defaultIdentityBaseUrl,
     'static_base_url' => getenv('STATIC_BASE_URL') ?: '',
     'screen' => [
