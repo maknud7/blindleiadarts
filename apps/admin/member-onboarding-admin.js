@@ -1,20 +1,22 @@
 const ENDPOINT = "../api/member-onboarding.php";
-const API_ROOT = "../api/v1";
 
 const panel = document.getElementById("players");
 if (panel) {
   const css = document.createElement("link");
   css.rel = "stylesheet";
-  css.href = "./member-onboarding-admin.css";
+  css.href = "./member-onboarding-admin.css?v=20260826-1545";
   document.head.appendChild(css);
 
   const block = document.createElement("div");
   block.className = "member-access-block";
   block.innerHTML = `
-    <div class="subsection-head member-access-head">
-      <div>
-        <h3>Spillere og tilgang</h3>
-        <p class="muted">Klubbens spillere administreres som én person med medlemskap, dartprofil og innlogging. Gjestespillere fra turneringer ligger ikke i dette registeret.</p>
+    <div class="member-toolbar">
+      <label class="member-search"><span class="sr-only">Søk i medlemmer</span><input id="memberSearch" type="search" placeholder="Søk etter medlem …" autocomplete="off"></label>
+      <div class="member-filters" role="group" aria-label="Filtrer medlemmer">
+        <button type="button" class="active" data-member-filter="all">Alle</button>
+        <button type="button" data-member-filter="active">Aktive</button>
+        <button type="button" data-member-filter="access">Mangler tilgang</button>
+        <button type="button" data-member-filter="disabled">Deaktivert</button>
       </div>
       <span id="memberAccessCount" class="pill">—</span>
     </div>
@@ -22,7 +24,7 @@ if (panel) {
     <div id="memberInviteResult" class="member-invite-result hidden"></div>
     <div class="table-wrap member-access-table-wrap">
       <table>
-        <thead><tr><th>Spiller</th><th>Tilgang</th><th>Kontingent</th><th>E-post</th><th>ELO</th><th>Kamper</th><th>Snitt</th><th>180</th><th></th></tr></thead>
+        <thead><tr><th>Medlem</th><th>Kontingent</th><th>Tilgang</th><th></th></tr></thead>
         <tbody id="memberAccessRows"></tbody>
       </table>
     </div>`;
@@ -36,9 +38,10 @@ if (panel) {
     summary: block.querySelector("#memberAccessSummary"),
     result: block.querySelector("#memberInviteResult"),
     rows: block.querySelector("#memberAccessRows"),
+    search: block.querySelector("#memberSearch"),
   };
 
-  const state = { token: "", clubId: 0, key: "", items: [], statsByPlayer: new Map(), loading: false };
+  const state = { token: "", clubId: 0, key: "", items: [], loading: false, filter: "all", search: "" };
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -62,13 +65,6 @@ if (panel) {
     return payload.data;
   }
 
-  async function loadStats() {
-    const response = await fetch(`${API_ROOT}/clubs/${state.clubId}/player-directory`, { cache: "no-store" });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) return new Map();
-    return new Map((payload.data?.items || []).map((item) => [Number(item.id), item]));
-  }
-
   function statusInfo(status) {
     switch (status) {
       case "active": return ["Aktiv", "good"];
@@ -77,11 +73,6 @@ if (panel) {
       case "unclaimed": return ["Ikke aktivert", "neutral"];
       default: return ["Ikke invitert", "neutral"];
     }
-  }
-
-  function formatNumber(value, digits = 0) {
-    const number = Number(value || 0);
-    return Number.isFinite(number) ? number.toFixed(digits) : "—";
   }
 
   function formatMoney(value) {
@@ -93,55 +84,66 @@ if (panel) {
     if (!value) return "—";
     const date = new Date(String(value).replace(" ", "T"));
     if (Number.isNaN(date.getTime())) return String(value);
-    return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+    return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
   }
 
   function duesCell(membership) {
     if (!membership) return `<span class="muted">Ikke registrert</span>`;
     const override = String(membership.status_override || "").trim();
     const latest = membership.latest_payment || null;
-    const monthly = membership.monthly_amount !== null && membership.monthly_amount !== undefined ? `${formatMoney(membership.monthly_amount)}/mnd` : "Beløp ikke satt";
-    if (override) return `<strong>${escapeHtml(override)}</strong><small>${escapeHtml(monthly)}</small>`;
-    if (latest) return `<strong>${escapeHtml(latest.period || formatDate(latest.date))}</strong><small>${formatMoney(latest.amount)} · ${escapeHtml(formatDate(latest.date))} · ${escapeHtml(monthly)}</small>`;
-    return `<strong>Ingen betaling registrert</strong><small>${escapeHtml(monthly)}</small>`;
+    if (override) return `<strong>${escapeHtml(override)}</strong>`;
+    if (latest) return `<strong>${escapeHtml(latest.period || formatDate(latest.date))}</strong><small>${formatMoney(latest.amount)}</small>`;
+    return `<strong>Ingen betaling registrert</strong>`;
   }
 
-  function render(data) {
-    state.items = data.items || [];
-    const summary = data.summary || {};
-    el.count.textContent = `${summary.members || state.items.length} spillere`;
-    const active = Number(summary.active || 0);
-    const waiting = Number(summary.invited || 0) + Number(summary.unclaimed || 0) + Number(summary.without_account || 0);
-    el.summary.innerHTML = [
-      ["Aktive", active],
-      ["Venter på tilgang", waiting],
-      ["Deaktivert", Number(summary.disabled || 0)],
-    ].map(([label, value]) => `<span><strong>${Number(value)}</strong> ${escapeHtml(label)}</span>`).join("");
+  function matchesFilter(item) {
+    const status = String(item.account?.status || "none");
+    if (state.filter === "active" && status !== "active") return false;
+    if (state.filter === "disabled" && status !== "disabled") return false;
+    if (state.filter === "access" && ["active", "disabled"].includes(status)) return false;
+    if (!state.search) return true;
+    const haystack = `${item.member_name || ""} ${item.player?.display_name || ""} ${item.membership?.member_number || ""}`.toLocaleLowerCase("nb");
+    return haystack.includes(state.search);
+  }
 
-    el.rows.innerHTML = state.items.map((item) => {
+  function renderRows() {
+    const items = state.items.filter(matchesFilter);
+    if (!items.length) {
+      el.rows.innerHTML = `<tr><td colspan="4"><div class="empty">Ingen medlemmer passer filteret.</div></td></tr>`;
+      return;
+    }
+
+    el.rows.innerHTML = items.map((item) => {
       const account = item.account || null;
       const status = account?.status || "none";
       const [label, tone] = statusInfo(status);
       const isActive = status === "active";
-      const email = account?.email || "";
-      const playerId = Number(item.player?.id || 0);
-      const stats = state.statsByPlayer.get(playerId) || {};
-      const actionLabel = status === "invited" ? "Ny lenke" : status === "disabled" ? "Inviter på nytt" : "Inviter";
       const playerName = item.player?.display_name || item.member_name;
+      const memberNumber = item.membership?.member_number || item.member_number || null;
+      const actionLabel = status === "invited" ? "Ny invitasjon" : status === "disabled" ? "Inviter på nytt" : "Inviter";
       return `<tr data-member-id="${Number(item.member_id)}">
-        <td><strong>${escapeHtml(playerName)}</strong>${playerId ? `<small>ELO ${formatNumber(stats.elo_rating || 1000, 1)}</small>` : `<small>Spillerprofil opprettes automatisk</small>`}</td>
-        <td><span class="badge ${tone}">${escapeHtml(label)}</span>${account?.invite_expires_at ? `<small>Lenke utløper ${escapeHtml(formatDate(account.invite_expires_at))}</small>` : ""}</td>
+        <td><strong>${escapeHtml(playerName)}</strong>${memberNumber ? `<small>Medlemsnr. ${escapeHtml(memberNumber)}</small>` : ""}</td>
         <td>${duesCell(item.membership)}</td>
-        <td><input class="member-email-input" type="email" value="${escapeHtml(email)}" placeholder="E-post" ${isActive ? "readonly" : ""}></td>
-        <td>${playerId ? formatNumber(stats.elo_rating || 1000, 1) : "—"}</td>
-        <td>${playerId ? Number(stats.matches_played || 0) : "—"}</td>
-        <td>${playerId ? formatNumber(stats.recorded_average || 0, 2) : "—"}</td>
-        <td>${playerId ? Number(stats.score_180 || 0) : "—"}</td>
+        <td><span class="badge ${tone}">${escapeHtml(label)}</span>${account?.invite_expires_at && status === "invited" ? `<small>Gyldig til ${escapeHtml(formatDate(account.invite_expires_at))}</small>` : ""}</td>
         <td class="member-access-actions">${isActive
           ? `<button type="button" class="button quiet member-disable">Deaktiver</button>`
           : `<button type="button" class="button secondary member-invite">${escapeHtml(actionLabel)}</button>`}</td>
       </tr>`;
     }).join("");
+  }
+
+  function render(data) {
+    state.items = data.items || [];
+    const summary = data.summary || {};
+    el.count.textContent = `${summary.members || state.items.length} medlemmer`;
+    const active = Number(summary.active || 0);
+    const waiting = Number(summary.invited || 0) + Number(summary.unclaimed || 0) + Number(summary.without_account || 0);
+    el.summary.innerHTML = [
+      ["Aktive", active],
+      ["Mangler tilgang", waiting],
+      ["Deaktivert", Number(summary.disabled || 0)],
+    ].map(([label, value]) => `<span><strong>${Number(value)}</strong> ${escapeHtml(label)}</span>`).join("");
+    renderRows();
   }
 
   async function load(force = false) {
@@ -151,20 +153,23 @@ if (panel) {
     if (!token || !clubId || state.loading || (!force && key === state.key)) return;
     state.token = token; state.clubId = clubId; state.key = key; state.loading = true;
     try {
-      const [members, stats] = await Promise.all([request("list"), loadStats()]);
-      state.statsByPlayer = stats;
-      render(members);
+      render(await request("list"));
     } catch (error) {
       state.key = "";
-      el.rows.innerHTML = `<tr><td colspan="9"><div class="empty">${escapeHtml(error.message)}</div></td></tr>`;
+      el.rows.innerHTML = `<tr><td colspan="4"><div class="empty">${escapeHtml(error.message)}</div></td></tr>`;
     } finally { state.loading = false; }
   }
 
-  function showInviteLink(memberName, token, expiresAt) {
+  function showInline(message, tone = "info") {
+    el.result.className = `member-invite-result ${tone}`;
+    el.result.innerHTML = `<strong>${escapeHtml(message)}</strong>`;
+  }
+
+  function showInviteLink(memberName, inviteToken, expiresAt) {
     const url = new URL("../onboarding/", window.location.href);
-    url.searchParams.set("token", token);
-    el.result.classList.remove("hidden");
-    el.result.innerHTML = `<div><strong>Invitasjon til ${escapeHtml(memberName)}</strong><small>Gyldig til ${escapeHtml(formatDate(expiresAt))}. Den gamle lenken er nå ugyldig.</small></div><div class="member-link-row"><input readonly value="${escapeHtml(url.toString())}"><button type="button" class="button member-copy-link">Kopier lenke</button></div>`;
+    url.searchParams.set("token", inviteToken);
+    el.result.className = "member-invite-result good";
+    el.result.innerHTML = `<div><strong>Invitasjon til ${escapeHtml(memberName)}</strong><small>Personen velger selv e-post og passord. Lenken er gyldig til ${escapeHtml(formatDate(expiresAt))}.</small></div><div class="member-link-row"><input readonly value="${escapeHtml(url.toString())}"><button type="button" class="button member-copy-link">Kopier lenke</button></div>`;
     el.result.querySelector(".member-copy-link")?.addEventListener("click", async (event) => {
       await navigator.clipboard.writeText(url.toString());
       event.currentTarget.textContent = "Kopiert";
@@ -172,6 +177,14 @@ if (panel) {
   }
 
   block.addEventListener("click", async (event) => {
+    const filterButton = event.target.closest("[data-member-filter]");
+    if (filterButton) {
+      state.filter = filterButton.dataset.memberFilter || "all";
+      block.querySelectorAll("[data-member-filter]").forEach((button) => button.classList.toggle("active", button === filterButton));
+      renderRows();
+      return;
+    }
+
     const row = event.target.closest("tr[data-member-id]");
     if (!row) return;
     const memberId = Number(row.dataset.memberId || 0);
@@ -180,34 +193,50 @@ if (panel) {
 
     if (event.target.closest(".member-invite")) {
       const button = event.target.closest(".member-invite");
-      const email = row.querySelector(".member-email-input")?.value.trim() || "";
       button.disabled = true;
       try {
-        const data = await request("invite", { method: "POST", body: { member_id: memberId, email } });
+        const data = await request("invite", { method: "POST", body: { member_id: memberId } });
         showInviteLink(item.member_name, data.token, data.expires_at);
         state.key = "";
         await load(true);
-      } catch (error) { alert(error.message); }
-      finally { button.disabled = false; }
+      } catch (error) {
+        showInline(error.message, "bad");
+      } finally { button.disabled = false; }
       return;
     }
 
-    if (event.target.closest(".member-disable")) {
-      if (!confirm(`Deaktivere innloggingen til ${item.member_name}? Kamp- og statistikkhistorikken beholdes.`)) return;
-      const button = event.target.closest(".member-disable");
-      button.disabled = true;
+    const disableButton = event.target.closest(".member-disable");
+    if (disableButton) {
+      if (disableButton.dataset.confirm !== "1") {
+        disableButton.dataset.confirm = "1";
+        disableButton.textContent = "Bekreft deaktivering";
+        window.setTimeout(() => {
+          if (disableButton.isConnected && disableButton.dataset.confirm === "1") {
+            disableButton.dataset.confirm = "";
+            disableButton.textContent = "Deaktiver";
+          }
+        }, 5000);
+        return;
+      }
+      disableButton.disabled = true;
       try {
         await request("disable", { method: "POST", body: { member_id: memberId } });
+        showInline(`${item.member_name} er deaktivert.`, "good");
         state.key = "";
         await load(true);
-      } catch (error) { alert(error.message); }
-      finally { button.disabled = false; }
+      } catch (error) {
+        showInline(error.message, "bad");
+      } finally { disableButton.disabled = false; }
     }
+  });
+
+  el.search?.addEventListener("input", () => {
+    state.search = String(el.search.value || "").trim().toLocaleLowerCase("nb");
+    renderRows();
   });
 
   document.getElementById("refreshAllButton")?.addEventListener("click", () => { state.key = ""; setTimeout(() => load(true), 50); });
   document.getElementById("clubSelect")?.addEventListener("change", () => { state.key = ""; setTimeout(() => load(true), 100); });
-  window.addEventListener("focus", () => load(true));
-  setInterval(() => load(false), 1000);
+  window.addEventListener("bd:portal-view", (event) => { if (event.detail?.target === "players") load(true); });
   load(true);
 }
