@@ -7,6 +7,8 @@ if (host) {
   let loadRequest = 0;
   let startBypass = false;
   let opsSaveBypass = false;
+  let previousStatus = String(context?.status || "");
+  const kickoffDone = new Set();
 
   function token() { return localStorage.getItem("bd:token") || ""; }
   function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
@@ -31,7 +33,7 @@ if (host) {
   }
 
   function setMessage(container, text = "", tone = "") {
-    const message = container.querySelector("[data-board-message]");
+    const message = container?.querySelector("[data-board-message]");
     if (!message) return;
     message.textContent = text;
     message.className = `tc-board-message ${tone}`.trim();
@@ -128,15 +130,27 @@ if (host) {
       return false;
     }
     setMessage(container, "Lagrer skiver …");
-    const data = await api(`/tournaments/${Number(context.id)}/operations/boards`, {
+    boardState = await api(`/tournaments/${Number(context.id)}/operations/boards`, {
       method: "PUT",
       body: { kiosk_ids: ids },
     });
-    boardState = data;
-    setMessage(container, "Skiveoppsettet er lagret.", "success");
     ensureFormatMount();
     ensureOperationsMount();
+    const fresh = container.id === "opsBoardSelection" ? document.getElementById("opsBoardSelection") : document.getElementById("tcBoardSelection");
+    setMessage(fresh, "Skiveoppsettet er lagret.", "success");
     return true;
+  }
+
+  async function kickoffTournament(tournamentId) {
+    if (!tournamentId || kickoffDone.has(tournamentId)) return;
+    kickoffDone.add(tournamentId);
+    try {
+      await api(`/tournaments/${tournamentId}/operations/reconcile`, { method: "POST" });
+    } catch (error) {
+      kickoffDone.delete(tournamentId);
+      const mount = document.getElementById("opsBoardSelection") || document.getElementById("tcBoardSelection");
+      setMessage(mount, `Turneringen er startet, men første kampfordeling feilet: ${error.message}`, "error");
+    }
   }
 
   function wireStartGuard() {
@@ -198,11 +212,16 @@ if (host) {
   document.head.appendChild(style);
 
   window.addEventListener("bd:tournament-context", (event) => {
-    const previous = Number(context?.id || 0);
+    const previousId = Number(context?.id || 0);
+    const wasStatus = previousStatus;
     context = event.detail || context;
+    previousStatus = String(context?.status || "");
     wireStartGuard();
     wireOperationsGuard();
-    if (Number(context?.id || 0) !== previous || !boardState) loadBoards().catch(() => undefined);
+    if (Number(context?.id || 0) !== previousId || !boardState) loadBoards().catch(() => undefined);
+    if (previousStatus === "in_progress" && wasStatus !== "in_progress") {
+      window.setTimeout(() => kickoffTournament(Number(context?.id || 0)), 120);
+    }
   });
   window.addEventListener("bd:tournament-tools-ready", () => {
     wireOperationsGuard();
