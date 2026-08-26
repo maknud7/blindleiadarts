@@ -8,6 +8,7 @@
   <title>Blindleia Darts · Live</title>
   <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.png" type="image/png">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./checkin.css?v=20260826-1300">
 </head>
 <body>
   <main class="live-shell">
@@ -22,6 +23,15 @@
       </div>
       <div class="live-status"><span class="pulse"></span><span id="connectionLabel">Kobler til …</span></div>
     </header>
+
+    <section id="checkinBanner" class="live-checkin hidden" aria-live="polite">
+      <div>
+        <p class="eyebrow">Innsjekk er åpen</p>
+        <h2 id="checkinTournamentName">Turnering</h2>
+        <p class="muted">Bruk koden på Min side, eller sjekk inn hos turneringsleder.</p>
+      </div>
+      <div class="live-checkin-code"><span>Innsjekk-kode</span><strong id="checkinCode">------</strong><small id="checkinWindow"></small></div>
+    </section>
 
     <section id="progressCards" class="stats-grid" aria-label="Turneringsstatus"></section>
 
@@ -62,6 +72,6 @@
       </section>
     </div>
   </main>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20260826-1300"></script>
 </body>
 </html>
