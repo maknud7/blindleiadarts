@@ -26,8 +26,7 @@
     <nav class="portal-nav portal-menu card" aria-label="Portalmeny">
       <a href="#home" data-portal-nav>Hjem</a>
       <a href="#tournaments" data-portal-nav>Turneringer</a>
-      <a href="#tables" data-portal-nav>Ranking</a>
-      <a href="#players" data-portal-nav>Spillere</a>
+      <a href="#statistics" data-portal-nav>Statistikk</a>
       <a href="#profile" data-portal-nav>Min profil</a>
       <a id="adminPortalLink" class="hidden admin-nav-link" href="../admin/#overview">Administrasjon</a>
     </nav>
@@ -39,38 +38,45 @@
     </section>
 
     <section id="memberAccountSection" data-portal-section="profile" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Medlemskap og dart</p><h2>Kontingent og kastestatistikk</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow">Medlemskap og dart</p><h2>Kontingent og egne tall</h2></div></div>
       <div id="memberAccountCard" class="stack"><p class="muted">Logg inn for å se medlemskap, kontingent og egne tall.</p></div>
     </section>
 
-    <section id="playerBreakSection" data-portal-section="home" class="card stack"><div class="section-head"><div><p class="eyebrow">Under turneringen</p><h2>Spillerpause</h2></div></div><div id="playerBreakCard" class="mini-card"><p class="muted">Logg inn og check inn i en aktiv turnering for å bruke 7 minutters spillerpause.</p></div></section>
+    <section id="playerBreakSection" data-portal-section="home" class="card stack"><div class="section-head"><div><p class="eyebrow">Under turneringen</p><h2>Spillerpause</h2></div></div><div id="playerBreakCard" class="mini-card"><p class="muted">Logg inn og sjekk inn i en aktiv turnering for å bruke 7 minutters spillerpause.</p></div></section>
 
     <section data-portal-section="home" class="card stack"><div class="section-head"><div><p class="eyebrow">Mine tall</p><h2>Statistikk og ranking</h2></div></div><div id="statsGrid" class="stats-grid"></div><div id="rankingList" class="stack"></div></section>
 
     <section id="signup" data-portal-section="tournaments" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmelding og check-in</h2></div></div>
-      <div class="mini-card"><strong>Check-in i lokalet</strong><p class="muted">Turneringsleder kan checke deg inn, eller du kan taste koden som vises på Live-skjermen når check-in åpner. Du kan fortsatt melde deg av fram til turneringen startes.</p></div>
+      <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmelding og innsjekk</h2></div></div>
+      <div class="mini-card"><strong>Innsjekk i lokalet</strong><p class="muted">Turneringsleder kan sjekke deg inn, eller du kan taste koden som vises på Live-skjermen når innsjekk åpner. Du kan fortsatt melde deg av fram til turneringen startes.</p></div>
       <div id="registrationList" class="stack"></div>
     </section>
 
     <section data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Turneringer</p><h2>Åpne turneringer</h2></div></div><div id="tournamentList" class="stack"></div></section>
 
-    <section id="summaries" data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><p class="muted">Resultater og høydepunkter fra klubbkveldene.</p><div id="summaryList" class="stack"></div></section>
+    <section id="summaries" data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><div id="summaryList" class="stack"></div></section>
 
-    <section id="tables" data-portal-section="tables" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Ranking</p><h2>ELO-tabell</h2></div></div><div id="eloTable" class="table-card"></div>
-      <div class="section-head content-subhead"><div><p class="eyebrow">Turnering</p><h2>Gruppetabeller</h2></div></div><select id="tableTournamentSelect" aria-label="Velg turnering"></select><div id="groupTables" class="stack"></div>
-      <div class="section-head content-subhead"><div><p class="eyebrow">Turnering</p><h2>Sluttspill</h2></div></div><div id="portalPlayoff"></div>
+    <section id="tables" data-portal-section="tournaments" class="card stack">
+      <div class="section-head"><div><p class="eyebrow">Turnering</p><h2>Tabeller og sluttspill</h2></div></div>
+      <select id="tableTournamentSelect" aria-label="Velg turnering"></select>
+      <div id="groupTables" class="stack"></div>
+      <div class="section-head content-subhead"><div><h2>Sluttspill</h2></div></div><div id="portalPlayoff"></div>
     </section>
 
-    <section id="players" data-portal-section="players" class="card stack"><div class="section-head"><div><p class="eyebrow">Klubben</p><h2>Spillere</h2></div></div><div id="playerDirectory" class="player-directory"></div><article id="playerProfile" class="profile-card hidden"></article></section>
+    <section id="statistics" data-portal-section="statistics" class="card stack">
+      <div class="section-head"><div><p class="eyebrow">Klubben</p><h2>Statistikk</h2></div></div>
+      <p class="muted">Bare spillere med registrerte kamper eller statistikk vises.</p>
+      <div class="section-head content-subhead"><div><h2>ELO</h2></div></div><div id="eloTable" class="table-card"></div>
+      <div class="section-head content-subhead"><div><h2>Spillere</h2></div></div><div id="playerDirectory" class="player-directory"></div>
+      <article id="playerProfile" class="profile-card hidden"></article>
+    </section>
   </div>
 
   <script src="./checkin-runtime.js" type="module"></script>
   <script src="./app.js" type="module"></script>
   <script src="./tournament-registration-ux.js" type="module"></script>
   <script src="./member-account.js" type="module"></script>
-  <script src="./portal-content.js" type="module"></script>
+  <script src="./portal-content.js?v=20260826-1545" type="module"></script>
   <script src="./portal-playoffs.js" type="module"></script>
   <script src="./player-breaks.js" type="module"></script>
   <script src="./player-ux.js" type="module"></script>
