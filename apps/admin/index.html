@@ -95,33 +95,16 @@
         <div class="claim-admin-card">
           <div class="claim-admin-grid">
             <div>
-              <p class="eyebrow">Koble nytt nettbrett</p>
-              <h3>Scan QR-koden på terminalen</h3>
-              <p class="muted">Ved førstegangsoppsett oppretter du normalt boardet her. Ved bytte av nettbrett velger du det eksisterende boardet.</p>
-              <div class="claim-tip"><span>1</span><p class="muted">Åpne <strong>/kiosk/</strong> på nettbrettet og scan QR-koden.</p></div>
-              <div class="claim-tip"><span>2</span><p class="muted">Velg <strong>Nytt board</strong> og gi skiva nummer, navn, scoringtype og eventuell sponsor.</p></div>
-              <div class="claim-tip"><span>3</span><p class="muted">Er scoringtypen Scolia, fyller du også inn Scolia-ID-en før boardet kan lagres.</p></div>
+              <p class="eyebrow">Nettbrett</p>
+              <h3>Koble nettbrett til en skive</h3>
+              <p class="muted">Åpne kiosk på nettbrettet og skriv pairingkoden her. Deretter velger du skiva terminalen står ved.</p>
             </div>
             <form id="claimKioskForm" class="claim-form">
               <label><span>Pairingkode</span><input id="claimKioskCode" class="claim-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="B7K4P2" required></label>
-              <div class="board-choice" role="group" aria-label="Velg boardtype">
-                <button id="claimNewBoardChoice" class="active" type="button">+ Nytt board</button>
-                <button id="claimExistingBoardChoice" type="button">Eksisterende board</button>
+              <div id="claimExistingBoardFields" class="claim-board-fields">
+                <label><span>Skive</span><select id="claimKioskBoard" required><option value="">Velg skive …</option></select></label>
               </div>
-              <div id="claimNewBoardFields" class="claim-board-fields">
-                <div class="claim-two-columns">
-                  <label><span>Boardnummer</span><input id="claimBoardNumber" type="number" min="1" inputmode="numeric" required></label>
-                  <label><span>Scoring</span><select id="claimScoringMode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
-                </div>
-                <label id="claimScoliaSerialRow" class="hidden"><span>Scolia-ID / serienummer</span><input id="claimScoliaSerial" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"></label>
-                <label><span>Navn på skiva</span><input id="claimBoardName" maxlength="120" placeholder="F.eks. Sjøbua Arena"></label>
-                <label><span>Sponsor / presentert av</span><input id="claimSponsorLabel" maxlength="150" placeholder="F.eks. Sjøbua"></label>
-                <label><span>Sponsorlogo (URL)</span><input id="claimSponsorLogoUrl" type="url" maxlength="255" placeholder="https://..."></label>
-              </div>
-              <div id="claimExistingBoardFields" class="claim-board-fields hidden">
-                <label><span>Eksisterende board</span><select id="claimKioskBoard"><option value="">Velg board …</option></select></label>
-              </div>
-              <button id="claimKioskButton" type="submit">Opprett og koble</button>
+              <button id="claimKioskButton" type="submit">Koble nettbrett</button>
               <div id="claimKioskStatus" class="claim-status hidden"></div>
             </form>
           </div>
@@ -172,7 +155,7 @@
   </div>
 
   <script src="./app.js" type="module"></script>
-  <script src="./pairing-claim.js?v=20260826-1335" type="module"></script>
+  <script src="./pairing-claim.js?v=20260826-1345" type="module"></script>
   <script src="./board-admin.js" type="module"></script>
   <script src="./member-onboarding-admin.js" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
