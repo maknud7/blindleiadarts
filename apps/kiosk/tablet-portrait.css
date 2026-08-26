@@ -45,8 +45,9 @@ body {
   overflow: hidden;
 }
 
-/* First-time pairing must also fit without a vertical page scroll. */
-@media (orientation: portrait) {
+/* First-time pairing must also fit without a vertical page scroll.
+   Desktop browsers with a mouse use the same portrait-tablet layout for test fidelity. */
+@media (orientation: portrait), (hover: hover) and (pointer: fine) and (min-width: 900px) {
   .terminal-shell {
     padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   }
@@ -541,4 +542,23 @@ body {
   .claim-card > .muted { display: none; }
   .claim-card .waiting-line { grid-row: 4; justify-content: center; }
   .claim-card .ghost-button { grid-row: 5; }
+}
+
+/* On a desktop/laptop, render the kiosk as a centered portrait tablet canvas.
+   This keeps PC testing representative without changing touch-device behavior. */
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  body {
+    display: grid;
+    place-items: center;
+  }
+
+  .terminal-shell {
+    width: auto;
+    height: min(1024px, calc(100dvh - 32px));
+    aspect-ratio: 3 / 4;
+    max-width: calc(100vw - 32px);
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .32);
+  }
 }
