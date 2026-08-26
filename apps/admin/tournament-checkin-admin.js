@@ -1,5 +1,3 @@
-import("./tournament-workspace-ux.js");
-
 const API_ROOT = "../api/v1";
 const host = document.getElementById("tournaments");
 
