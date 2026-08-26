@@ -59,7 +59,9 @@
   }
   function isIdleVisible() { return !idle.classList.contains("hidden"); }
 
-  function showIdleQueueStatus(text = "Boardet er ledig og følger kampkøen automatisk.") {
+  const IDLE_QUEUE_STATUS = "Boardet er ledig og følger kampkøen automatisk. Venter på en aktiv turnering med automatisk kampfordeling.";
+
+  function showIdleQueueStatus(text = IDLE_QUEUE_STATUS) {
     result.classList.add("hidden");
     undo.classList.add("hidden");
     upcoming.classList.add("hidden");
@@ -99,7 +101,7 @@
       } else if (reason === "no_ready_match") {
         status.textContent = "Ingen kvalifisert kamp akkurat nå. Boardet følger køen automatisk.";
       } else if (reason === "no_active_tournament" || reason === "no_auto_tournament") {
-        status.textContent = "Venter på en aktiv turnering med automatisk kampfordeling.";
+        status.textContent = IDLE_QUEUE_STATUS;
       } else if (reason === "board_busy") {
         window.location.reload();
         return;
