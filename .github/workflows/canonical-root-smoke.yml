@@ -59,10 +59,16 @@ jobs:
           grep -Fq '/packages/ui-assets/blindleia-system.css' <<<"$player_html"
           grep -Fq '/packages/ui-assets/blindleia-system.css' <<<"$admin_html"
           grep -Fq 'window.location.replace' <<<"$canonical_js"
+          grep -Fq 'tournament-admin' <<<"$canonical_js"
           grep -Fq 'window.BlindleiaApp' <<<"$core_js"
           grep -Fq 'session: Object.freeze' <<<"$core_js"
+          grep -Fq 'hash: "#club"' <<<"$core_js"
           grep -Fq 'await app.session.resolve()' <<<"$portal_js"
-          grep -Fq '#admin/' <<<"$menu_js"
+          grep -Fq 'app.router.href' <<<"$menu_js"
+          if grep -Fq '#admin/' <<<"$menu_js"; then
+            echo "Legacy #admin/ route is still emitted by the unified shell." >&2
+            exit 1
+          fi
           grep -Fq 'rootRoute("player"' <<<"$menu_js"
           grep -Fq 'data-bd-surface="kiosk"' <<<"$(curl -fsS "$base/kiosk/?cb=$RANDOM")"
           grep -Fq 'data-bd-surface="live"' <<<"$(curl -fsS "$base/live/?cb=$RANDOM")"
