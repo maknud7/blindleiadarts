@@ -1,0 +1,51 @@
+name: Probe Atlas Series Three
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-probe-atlas-series-three-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas-series-three-source-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cool down Atlas
+        run: sleep 60
+      - name: Fetch and freeze Mandagsserien three source inventory
+        run: |
+          set -Eeuo pipefail
+          url='https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=PvGa73emrY6e'
+          ok=no
+          for attempt in $(seq 1 8); do
+            status="$(curl -sS -o /tmp/series-three.json -w '%{http_code}' --max-time 120 "$url" || true)"
+            echo "attempt=${attempt} status=${status}"
+            if [[ "$status" == '200' ]]; then ok=yes; break; fi
+            if [[ -s /tmp/series-three.json ]] && grep -Fq '"status":429' /tmp/series-three.json; then
+              case "$attempt" in 1) delay=60;; 2) delay=90;; 3) delay=120;; *) delay=180;; esac
+              sleep "$delay"
+            else
+              sleep 20
+            fi
+          done
+          [[ "$ok" == yes ]]
+          php -r '
+            $d=json_decode(file_get_contents("/tmp/series-three.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($d["tournament_external_id"]??"")!=="PvGa73emrY6e") throw new RuntimeException("Wrong tournament payload");
+            $players=[];$matches=[];
+            foreach(($d["pages"]??[]) as $name=>$p){
+              echo "PAGE {$name} status=".($p["status"]??0)." players=".count($p["players"]??[])." matches=".count($p["matches"]??[]).PHP_EOL;
+              foreach(($p["players"]??[]) as $id=>$player){$players[$id]=$player;echo "PLAYER {$name} {$id} {$player}".PHP_EOL;}
+              foreach(($p["matches"]??[]) as $id=>$label){$matches[$id]=$label;echo "MATCH {$name} {$id} {$label}".PHP_EOL;}
+            }
+            echo "SOURCE_SUMMARY players=".count($players)." matches=".count($matches).PHP_EOL;
+          '
