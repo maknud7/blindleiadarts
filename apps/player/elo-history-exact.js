@@ -67,6 +67,24 @@ function resultLabel(result) {
   return "Uavgjort";
 }
 
+function phaseLabel(item) {
+  if (item.phase === "group") return "Gruppespill";
+  if (item.phase === "playoff") return "Sluttspill";
+  return "Kamper";
+}
+
+function roundLabel(item) {
+  const raw = String(item.round_label || item.bracket_label || "Kamp").trim();
+  const normalized = raw.toLocaleLowerCase("nb-NO");
+  if (normalized.includes("quarter") || normalized.includes("kvart")) return "Kvartfinale";
+  if (normalized.includes("semi")) return "Semifinale";
+  if (normalized === "final" || normalized.includes("finale")) return "Finale";
+  if (item.phase === "group" && Number(item.logical_round || 0) > 0 && Number(item.logical_round) < 32767) {
+    return `Runde ${Number(item.logical_round)}`;
+  }
+  return raw;
+}
+
 function currentPlayerId() {
   return Number(profileRoot?.querySelector("[data-player]")?.dataset.player || profileRoot?.dataset.playerId || 0);
 }
@@ -98,13 +116,21 @@ async function patchProfile() {
   });
   if (!eloSection) return;
 
-  const signature = items.map((item) => `${item.match_id}:${Number(item.rating_before).toFixed(4)}:${Number(item.rating_after).toFixed(4)}`).join("|");
+  const signature = `${data.continuity_ok}:${items.map((item) => `${item.match_id}:${Number(item.rating_before).toFixed(4)}:${Number(item.rating_after).toFixed(4)}`).join("|")}`;
   if (eloSection.dataset.exactEloSignature === signature) return;
 
+  let previousTournament = null;
+  let previousPhase = null;
   const rows = items.map((item) => {
-    const round = item.round_label || item.bracket_label || "Kamp";
-    const context = [item.tournament_name, round, formatDate(item.finished_at || item.start_at || item.applied_at)].filter(Boolean).join(" · ");
-    return `<div class="elo-timeline-row" data-exact-match-elo="${Number(item.match_id)}">
+    const tournamentChanged = previousTournament !== Number(item.tournament_id);
+    const phaseChanged = tournamentChanged || previousPhase !== item.phase;
+    const divider = phaseChanged
+      ? `<div class="elo-timeline-divider"><strong>${esc(item.tournament_name || "Turnering")}</strong><span>${esc(phaseLabel(item))}</span></div>`
+      : "";
+    previousTournament = Number(item.tournament_id);
+    previousPhase = item.phase;
+    const context = [roundLabel(item), formatDate(item.occurred_at || item.finished_at || item.start_at || item.applied_at)].filter(Boolean).join(" · ");
+    return `${divider}<div class="elo-timeline-row" data-exact-match-elo="${Number(item.match_id)}">
       <div class="elo-timeline-context">
         <strong>${esc(resultLabel(item.result))} mot ${esc(item.opponent_name || "motstander")}</strong>
         <small>${esc(context)}</small>
@@ -113,8 +139,12 @@ async function patchProfile() {
     </div>`;
   }).join("");
 
+  const continuityText = data.continuity_ok && data.starts_at_1000
+    ? "Kronologisk fra første kamp: ELO starter på 1000 og videreføres uten reset mellom gruppespill og sluttspill."
+    : "ELO-historikken har et kontinuitetsavvik og bør kontrolleres.";
+
   eloSection.innerHTML = `<h3>ELO-utvikling</h3>
-    <p class="muted">Eksakt ELO før og etter hver kamp. Alle starter sesongen på 1000.</p>
+    <p class="muted">${esc(continuityText)}</p>
     <div class="elo-timeline">${rows}</div>`;
   eloSection.dataset.exactEloSignature = signature;
 }
