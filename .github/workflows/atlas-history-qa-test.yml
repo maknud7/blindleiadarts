@@ -1,0 +1,66 @@
+name: Atlas History QA Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-atlas-history-qa-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas-history-qa-test
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - name: "Mandagsserien #1"
+            external_id: fpC4m4hIZdjZ
+            expected_matches: 63
+            expected_players: 16
+          - name: "Mandagsserien #2"
+            external_id: FHHAnnuO8txa
+            expected_matches: 49
+            expected_players: 14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Lint Atlas history verifier
+        run: php -l infra/sql/atlas_history_verify.php
+
+      - name: Strictly verify imported tournament in TEST
+        run: >-
+          php infra/sql/atlas_history_verify.php
+          --external='${{ matrix.external_id }}'
+          --expected-matches='${{ matrix.expected_matches }}'
+          --expected-players='${{ matrix.expected_players }}'
+          --phase=final
+          --require-visits=1
+          --require-playoff=1
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
