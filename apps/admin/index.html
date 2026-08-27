@@ -4,6 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blindleia Darts</title>
+  <style>
+    html.admin-session-pending #authGate{visibility:hidden!important}
+    #adminSidebarAccount{display:none!important}
+  </style>
+  <script>
+    (() => {
+      const legacy = window.location.pathname.match(/^(.*\/)admin(?:\/index\.html|\/?)$/i);
+      if (legacy) {
+        const raw = String(window.location.hash || "").replace(/^#/, "").trim();
+        const normalized = raw.startsWith("admin/") ? raw.slice(6) : raw;
+        const target = /^[a-z0-9_-]+$/i.test(normalized) ? normalized : "overview";
+        window.location.replace(`${legacy[1] || "/"}#admin/${target}`);
+        return;
+      }
+      try {
+        if (localStorage.getItem("bd:token")) document.documentElement.classList.add("admin-session-pending");
+      } catch {}
+    })();
+  </script>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./pairing-claim.css">
   <link rel="stylesheet" href="./tournament-admin.css">
@@ -42,8 +61,8 @@
       </div>
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
-        <a class="button secondary" href="../player/">Min side</a>
-        <a class="button secondary" href="../player/#statistics" target="_blank" rel="noopener">Statistikk</a>
+        <a class="button secondary" href="../#home">Min side</a>
+        <a class="button secondary" href="../#statistics" target="_blank" rel="noopener">Statistikk</a>
         <a class="button secondary" href="../live/" target="_blank" rel="noopener">Live</a>
         <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button>
         <button id="logoutButton" type="button" class="button quiet">Logg ut</button>
@@ -164,6 +183,30 @@
     </main>
   </div>
 
+  <script>
+    (() => {
+      if (!document.documentElement.classList.contains("admin-session-pending")) return;
+      const clearPending = () => {
+        const gate = document.getElementById("authGate");
+        const app = document.getElementById("adminApp");
+        const message = document.getElementById("loginMessage");
+        const resolved = gate?.classList.contains("hidden")
+          || (app && !app.classList.contains("hidden"))
+          || (message && !message.classList.contains("hidden"));
+        if (!resolved) return false;
+        document.documentElement.classList.remove("admin-session-pending");
+        return true;
+      };
+      const observer = new MutationObserver(() => {
+        if (clearPending()) observer.disconnect();
+      });
+      observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
+      window.setTimeout(() => {
+        document.documentElement.classList.remove("admin-session-pending");
+        observer.disconnect();
+      }, 2500);
+    })();
+  </script>
   <script src="./app.js" type="module"></script>
   <script src="./health-tracker.js?v=20260827-1200" type="module"></script>
   <script src="./pairing-claim.js?v=20260826-1345" type="module"></script>
