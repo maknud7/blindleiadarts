@@ -18,15 +18,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           url='https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq'
-          for attempt in $(seq 1 12); do
+          for attempt in $(seq 1 30); do
             status="$(curl -sS -o /tmp/season.json -w '%{http_code}' --max-time 60 "$url" || true)"
             echo "Season probe attempt $attempt: HTTP ${status:-unknown}"
-            if [[ "$status" == '200' ]] && grep -Fq 'atlas-season-probe-v2' /tmp/season.json; then
+            if [[ "$status" == '200' ]] && grep -Fq 'atlas-season-probe-v3' /tmp/season.json; then
               cat /tmp/season.json
               exit 0
             fi
-            [[ -f /tmp/season.json ]] && cat /tmp/season.json || true
             sleep 10
           done
-          echo 'Expanded DartsAtlas season probe never became available' >&2
+          echo 'Canonical DartsAtlas season probe never became available' >&2
+          [[ -f /tmp/season.json ]] && cat /tmp/season.json >&2 || true
           exit 1
