@@ -10,7 +10,7 @@ function ensureStylesheet(url) {
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260827-1340");
+ensureStylesheet("./unified-portal-shell.css?v=20260827-1415");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
