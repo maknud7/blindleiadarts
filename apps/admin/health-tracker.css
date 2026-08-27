@@ -1,0 +1,14 @@
+.health-tracker{display:grid;gap:14px}
+.health-tracker-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.health-tracker-head button{width:auto;min-width:150px}
+.health-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line,#d9e2ec);border-radius:14px;padding:14px 16px;background:#fff}
+.health-summary p{margin:4px 0 0;color:var(--muted,#68788d);font-size:.86rem}
+.health-summary.good{background:#f2fbf5;border-color:#b9dec5}.health-summary.warning{background:#fff9eb;border-color:#ead6a1}.health-summary.bad{background:#fff1f1;border-color:#efb8b8}.health-summary.neutral{background:#f6f8fb}
+.health-overall{display:inline-flex;align-items:center;justify-content:center;min-width:52px;padding:.42rem .65rem;border-radius:999px;font-size:.76rem;font-weight:900;letter-spacing:.04em;background:#eef2f7;color:#334b65}
+.health-summary.good .health-overall{background:#d9f2e1;color:#176132}.health-summary.warning .health-overall{background:#f7e7b5;color:#76520b}.health-summary.bad .health-overall{background:#f7d1d1;color:#8a2424}
+.health-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.health-check{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid var(--line,#d9e2ec);border-radius:12px;padding:11px 12px;background:#fff;min-width:0}
+.health-check-main{display:flex;align-items:flex-start;gap:9px;min-width:0}.health-check-main>div{min-width:0}.health-check-main strong{display:block;font-size:.9rem}.health-check-main small{display:block;margin-top:3px;color:var(--muted,#68788d);font-size:.74rem;white-space:normal;overflow-wrap:anywhere}
+.health-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;margin-top:5px;background:#8ca0b5}.health-check.ok .health-dot{background:#2f9d57}.health-check.warn .health-dot{background:#d29a22}.health-check.fail .health-dot{background:#cf4040}
+.health-check-time{text-align:right;white-space:nowrap}.health-check-time strong{display:block;font-size:.86rem}.health-check-time span{display:block;margin-top:2px;color:var(--muted,#68788d);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em}
+@media(max-width:760px){.health-tracker-head{display:grid}.health-tracker-head button{width:100%}.health-results{grid-template-columns:1fr}}
