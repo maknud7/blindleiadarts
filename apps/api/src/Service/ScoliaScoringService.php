@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Blindleia\Dartkiosk\Api\Service;
 
-use Blindleia\Dartkiosk\Api\Repository\MatchScoringRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Throwable;
@@ -13,7 +12,7 @@ final class ScoliaScoringService
 {
     public function __construct(
         private readonly ScoliaRepository $scolia,
-        private readonly MatchScoringRepository $scoring,
+        private readonly CanonicalScoringService $scoring,
         private readonly Dart501Rules $rules = new Dart501Rules(),
         private readonly ScoliaSectorMapper $mapper = new ScoliaSectorMapper()
     ) {
@@ -114,7 +113,7 @@ final class ScoliaScoringService
             return ['status' => 'ignored', 'meta' => ['reason' => 'turn_complete_waiting_for_takeout']];
         }
 
-        $this->scoring->startMatch($kioskId);
+        $this->scoring->startMatch($kioskId, 'scolia');
         $context = $this->scolia->getScoringContext($kioskId);
         if ($context === null) {
             return ['status' => 'ignored', 'meta' => ['reason' => 'no_active_match']];
@@ -225,7 +224,7 @@ final class ScoliaScoringService
             'darts' => $darts,
             'darts_used' => count($darts),
             'request_id' => $requestKey,
-        ]);
+        ], 'scolia');
         $visitId = $this->scolia->findVisitByRequestKey($requestKey);
         $this->scolia->clearVisitBuffer($kioskId);
         return [
@@ -233,6 +232,7 @@ final class ScoliaScoringService
             'visit_id' => $visitId ?? 0,
             'meta' => [
                 'canonical' => true,
+                'source' => 'scolia',
                 'request_id' => $requestKey,
                 'score' => $evaluation['score'],
                 'darts_used' => $evaluation['darts_used'],
