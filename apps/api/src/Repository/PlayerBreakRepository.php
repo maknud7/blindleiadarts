@@ -76,21 +76,30 @@ final class PlayerBreakRepository
         $this->normalizeAll();
         $sql = sprintf(
             'SELECT t.id AS tournament_id, t.name AS tournament_name, t.status AS tournament_status,
-                    t.start_at, tp.status AS registration_status
+                    t.start_at, t.end_at, tp.status AS registration_status
              FROM `%1$stournament_players` tp
              INNER JOIN `%1$stournaments` t ON t.id=tp.tournament_id
              WHERE tp.player_id=?
                AND tp.status IN ("checked_in","paused")
                AND t.status IN ("ready","in_progress")
-             ORDER BY FIELD(t.status,"in_progress","ready"), COALESCE(t.start_at,"2999-12-31 23:59:59") ASC, t.id ASC
-             LIMIT 1',
+             ORDER BY FIELD(t.status,"in_progress","ready"), COALESCE(t.start_at,"2999-12-31 23:59:59") ASC, t.id ASC',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
         $stmt->bind_param('i', $playerId);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
+
+        $row = null;
+        foreach ($rows as $candidate) {
+            $candidateTournamentId = (int) ($candidate['tournament_id'] ?? 0);
+            if ($candidateTournamentId > 0 && $this->isTournamentLiveNow($candidateTournamentId, $playerId)) {
+                $row = $candidate;
+                break;
+            }
+        }
+
         if ($row === null) {
             return null;
         }
@@ -240,9 +249,45 @@ final class PlayerBreakRepository
         if ((string) $row['registration_status'] !== 'checked_in') {
             throw new ValidationException('check_in_required_for_break', 'Du må være checket inn før du kan ta pause.', 409);
         }
-        if (!in_array((string) $row['tournament_status'], ['ready', 'in_progress'], true)) {
-            throw new ValidationException('tournament_not_active_for_break', 'Pause kan bare brukes mens turneringen er klar eller pågår.', 409);
+        if (!in_array((string) $row['tournament_status'], ['ready', 'in_progress'], true)
+            || !$this->isTournamentLiveNow($tournamentId, $playerId)) {
+            throw new ValidationException('tournament_not_active_for_break', 'Pause kan bare brukes mens turneringen faktisk pågår nå.', 409);
         }
+    }
+
+    private function isTournamentLiveNow(int $tournamentId, int $playerId): bool
+    {
+        $sql = sprintf(
+            'SELECT CASE WHEN
+                EXISTS (
+                    SELECT 1 FROM `%1$smatches` m
+                    WHERE m.tournament_id=t.id
+                      AND (m.player_a_id=? OR m.player_b_id=?)
+                      AND m.status IN ("assigned","in_progress")
+                )
+                OR (
+                    t.start_at IS NOT NULL
+                    AND t.start_at BETWEEN DATE_SUB(NOW(), INTERVAL 18 HOUR) AND DATE_ADD(NOW(), INTERVAL 6 HOUR)
+                    AND (t.end_at IS NULL OR t.end_at>=NOW())
+                )
+                OR (
+                    t.start_at IS NOT NULL
+                    AND t.start_at<=NOW()
+                    AND t.end_at IS NOT NULL
+                    AND t.end_at>=NOW()
+                )
+                THEN 1 ELSE 0 END AS live_now
+             FROM `%1$stournaments` t
+             WHERE t.id=? AND t.status IN ("ready","in_progress")
+             LIMIT 1',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('iii', $playerId, $playerId, $tournamentId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        return (int) ($row['live_now'] ?? 0) === 1;
     }
 
     /** @return array<string,mixed>|null */
