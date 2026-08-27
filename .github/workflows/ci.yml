@@ -91,7 +91,7 @@ jobs:
           set -Eeuo pipefail
           grep -Fq 'blindleia-dartklubb' apps/live/app.js
           grep -Fq '/public/clubs/' apps/live/app.js
-          grep -Fq 'href="../live/"' apps/admin/admin-ux.js
+          grep -Fq 'href="../live/"' apps/admin/index.html
           grep -Fq 'ActivityApplication' apps/api/index.php
           grep -Fq 'v1/activity' apps/api/src/ActivityApplication.php
           grep -Fq 'activity_events' infra/sql/migrations/0043_create_activity_events.sql
