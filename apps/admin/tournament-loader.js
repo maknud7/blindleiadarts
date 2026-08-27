@@ -85,6 +85,7 @@ async function loadModules() {
     await import(moduleUrl("./tournament-canonical-ux.js"));
     await import(moduleUrl("./tournament-empty-state.js"));
     await import(moduleUrl("./tournament-leader-v2.js"));
+    await import(moduleUrl("./tournament-leader-v2-board-state.js"));
 
     host.dataset.tournamentModules = "ready";
     hideLoading();
