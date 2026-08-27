@@ -17,6 +17,7 @@ concurrency:
 jobs:
   import:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,19 +32,22 @@ jobs:
       - name: Wait for Atlas visit parser on test
         run: |
           set -Eeuo pipefail
-          url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=XeROeLgL56iJ"
+          # Check that the deployed endpoint exists without consuming a DartsAtlas request.
+          url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=x"
           for attempt in $(seq 1 80); do
-            status="$(curl -sS -o /tmp/atlas-visit-smoke.json -w '%{http_code}' --max-time 45 "$url" || true)"
+            status="$(curl -sS -o /tmp/atlas-parser-check.json -w '%{http_code}' --max-time 20 "$url" || true)"
             echo "Parser attempt $attempt: HTTP ${status:-unknown}"
-            if [[ "$status" == "200" ]] && php -r '$d=json_decode(file_get_contents("/tmp/atlas-visit-smoke.json"),true); exit(($d["ok"]??false) && ($d["leg_count"]??0)>=1 ? 0 : 1);'; then
-              php -r '$d=json_decode(file_get_contents("/tmp/atlas-visit-smoke.json"),true); echo "Parser ready: legs=".$d["leg_count"]." visits=".$d["visit_count"]." darts=".$d["darts_count"].PHP_EOL;'
+            if [[ "$status" == "400" ]] && grep -Fq 'invalid_match_id' /tmp/atlas-parser-check.json; then
+              echo "Atlas visit parser ready"
               exit 0
             fi
-            if [[ -s /tmp/atlas-visit-smoke.json ]]; then cat /tmp/atlas-visit-smoke.json; fi
             sleep 5
           done
           echo "Atlas visit parser did not become ready" >&2
           exit 1
+
+      - name: Cool down Atlas source rate limit
+        run: sleep 90
 
       - name: Fetch all 63 Atlas match visit histories
         run: |
@@ -122,21 +126,36 @@ jobs:
             target="/tmp/atlas-visits/${match_id}.json"
             url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=${match_id}"
             ok=no
-            for attempt in $(seq 1 8); do
+            for attempt in $(seq 1 10); do
               status="$(curl -sS -o "$target" -w '%{http_code}' --max-time 45 "$url" || true)"
               if [[ "$status" == "200" ]] && MATCH_ID="$match_id" TARGET="$target" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); exit(($d["ok"]??false) && ($d["external_id"]??"")===getenv("MATCH_ID") ? 0 : 1);'; then
                 ok=yes
                 break
               fi
-              echo "Retry ${attempt}/8 for ${match_id}: HTTP ${status:-unknown}"
+
+              echo "Retry ${attempt}/10 for ${match_id}: HTTP ${status:-unknown}"
               [[ -s "$target" ]] && cat "$target" || true
-              sleep 2
+              if [[ -s "$target" ]] && grep -Fq '"status":429' "$target"; then
+                case "$attempt" in
+                  1) delay=60 ;;
+                  2) delay=90 ;;
+                  3) delay=120 ;;
+                  *) delay=180 ;;
+                esac
+                echo "DartsAtlas rate limit detected; waiting ${delay}s"
+                sleep "$delay"
+              else
+                sleep 10
+              fi
             done
             if [[ "$ok" != yes ]]; then
               echo "Failed to fetch/parse ${match_id}" >&2
               exit 1
             fi
             MATCH_ID="$match_id" TARGET="$target" CURRENT="$current" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); echo getenv("CURRENT")."/63 ".getenv("MATCH_ID").": legs=".$d["leg_count"]." visits=".$d["visit_count"]." darts=".$d["darts_count"].PHP_EOL;'
+            # Keep the source request rate deliberately low. DartsAtlas starts returning
+            # 429 if historical match pages are fetched in a burst.
+            sleep 12
           done < /tmp/atlas-match-ids.txt
 
           php -r '
