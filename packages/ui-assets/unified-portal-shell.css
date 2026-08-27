@@ -125,6 +125,8 @@ body[data-portal-default="overview"]{
   body[data-portal-default="home"] .card{border-radius:14px!important;box-shadow:0 5px 16px rgba(17,42,73,.055)!important;margin-bottom:14px!important}
 }
 
+/* Mobile follows the compact Blindleia admin navigation: a simple, tap-friendly grid.
+   Role-gated admin destinations are added to the same grid, without a second mobile shell. */
 @media(max-width:980px){
   .unified-player-topbar{position:static;padding:12px 14px;flex-direction:column;align-items:stretch;gap:10px}
   .unified-player-topbar .unified-topbar-actions{width:100%}
@@ -136,26 +138,69 @@ body[data-portal-default="overview"]{
 
   body[data-portal-default="home"] .portal-nav.portal-menu,
   body[data-portal-default="overview"] .section-nav.portal-menu{
-    display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;padding:10px!important;border-radius:14px!important;background:#fff!important;border:1px solid var(--bd-border,#dbe3ed)!important;
+    position:static!important;
+    width:auto!important;
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    grid-auto-flow:row!important;
+    gap:7px!important;
+    overflow:visible!important;
+    padding:8px!important;
+    margin:0 0 14px!important;
+    border:1px solid var(--bd-border,#dbe3ed)!important;
+    border-radius:13px!important;
+    background:#fff!important;
+    box-shadow:0 2px 9px rgba(17,42,73,.04)!important;
   }
-  .unified-sidebar-brand{display:flex;grid-column:1/-1;align-items:center;gap:9px;padding:2px 3px 8px;color:var(--bd-text,#0c2340)}
-  .unified-sidebar-brand::before{content:"";width:31px;height:31px;flex:0 0 31px;border:1px solid var(--bd-border,#dbe3ed);border-radius:4px;background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat}
-  .unified-sidebar-brand strong{font-size:12px}.unified-sidebar-brand small{display:none}
-  .unified-group-label{display:block!important;grid-column:1/-1;padding:8px 3px 1px;color:var(--bd-muted,#697c94);font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.11em}
-  .unified-group-label.admin{margin-top:4px;padding-top:10px;border-top:1px solid var(--bd-border,#dbe3ed);color:#8a620e}
+
+  .unified-sidebar-brand,
+  .unified-group-label,
+  .unified-sidebar-account,
+  .admin-menu-label{display:none!important}
+
   body[data-portal-default="home"] .portal-nav.portal-menu a,
-  body[data-portal-default="overview"] .section-nav.portal-menu a{min-height:40px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:9px 11px!important;border-radius:9px!important;background:#f0f4f9!important;color:var(--bd-navy-800,#123c69)!important;text-decoration:none!important;font-size:12px!important;font-weight:760!important}
+  body[data-portal-default="overview"] .section-nav.portal-menu a{
+    min-width:0!important;
+    min-height:44px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    padding:8px 6px!important;
+    border:1px solid transparent!important;
+    border-radius:9px!important;
+    background:#f0f4f9!important;
+    color:var(--bd-navy-800,#123c69)!important;
+    box-shadow:none!important;
+    text-align:center!important;
+    white-space:normal!important;
+    line-height:1.15!important;
+    font-size:12px!important;
+    font-weight:760!important;
+    text-decoration:none!important;
+  }
   body[data-portal-default="home"] .portal-nav.portal-menu a.active,
-  body[data-portal-default="overview"] .section-nav.portal-menu a.active{background:var(--bd-blue-600,#2f6fed)!important;color:#fff!important}
-  .unified-admin-link{background:#fff8e8!important;border:1px solid #efdfb6!important;color:#704f0b!important}
-  .unified-sidebar-account{display:grid;grid-column:1/-1;grid-template-columns:30px 1fr;align-items:center;gap:8px;margin-top:4px;padding:10px 3px 2px;border-top:1px solid var(--bd-border,#dbe3ed);color:var(--bd-text,#0c2340)}
-  .unified-sidebar-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#eef4ff;color:var(--bd-blue-700,#245acb);font-size:9px;font-weight:850}
-  .unified-sidebar-account strong{display:block;font-size:11px}.unified-sidebar-account small{display:block;font-size:9px;color:var(--bd-muted,#697c94)}
+  body[data-portal-default="overview"] .section-nav.portal-menu a.active{
+    background:var(--bd-blue-600,#2f6fed)!important;
+    color:#fff!important;
+    box-shadow:0 4px 12px rgba(47,111,237,.16)!important;
+  }
+
+  .unified-admin-link{
+    background:#fff8e8!important;
+    border-color:#efdfb6!important;
+    color:#704f0b!important;
+  }
+  .unified-admin-link.active{
+    background:var(--bd-blue-600,#2f6fed)!important;
+    border-color:var(--bd-blue-600,#2f6fed)!important;
+    color:#fff!important;
+  }
+  .unified-admin-link::after{display:none!important}
 }
 
-@media(max-width:480px){
+@media(max-width:390px){
   body[data-portal-default="home"] .portal-nav.portal-menu,
-  body[data-portal-default="overview"] .section-nav.portal-menu{grid-template-columns:1fr 1fr!important}
-  body[data-portal-default="home"] .portal-nav.portal-menu a,
-  body[data-portal-default="overview"] .section-nav.portal-menu a{font-size:11px!important;padding:8px 9px!important}
+  body[data-portal-default="overview"] .section-nav.portal-menu{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
 }
