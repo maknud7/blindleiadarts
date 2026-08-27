@@ -139,6 +139,32 @@ body #statistics .profile-match-history .history-row-button>span{
   color:#77889c!important;
 }
 
+body #statistics .elo-timeline-divider{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  margin-top:14px!important;
+  padding:9px 3px 7px!important;
+  border-bottom:1px solid #e2e8ef!important;
+}
+body #statistics .elo-timeline-divider:first-child{
+  margin-top:0!important;
+  padding-top:2px!important;
+}
+body #statistics .elo-timeline-divider strong{
+  font-size:.9rem!important;
+}
+body #statistics .elo-timeline-divider span{
+  padding:3px 8px!important;
+  border:1px solid #dce5ef!important;
+  border-radius:999px!important;
+  background:#f7f9fc!important;
+  color:#63768c!important;
+  font-size:.72rem!important;
+  font-weight:800!important;
+  letter-spacing:.02em!important;
+}
 body #statistics .elo-timeline-row{
   border:1px solid #e2e8ef!important;
   background:#fff!important;
@@ -174,5 +200,10 @@ body #statistics .elo-movement.negative{
   body #statistics .profile-section{
     margin:0 14px!important;
     padding:14px 0!important;
+  }
+  body #statistics .elo-timeline-divider{
+    align-items:flex-start!important;
+    flex-direction:column!important;
+    gap:5px!important;
   }
 }
