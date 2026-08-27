@@ -1,0 +1,69 @@
+name: Import Atlas Series One To Test
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-import-atlas-series-one-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas-series-one-test-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Fetch expanded Atlas source through test host
+        run: |
+          set -Eeuo pipefail
+          url="https://test.blindleiadarts.ingenting.org/api/atlas-import-probe.php"
+          for attempt in $(seq 1 50); do
+            status="$(curl -sS -o /tmp/atlas-series-one.json -w '%{http_code}' --max-time 90 "$url" || true)"
+            echo "Source attempt $attempt: HTTP ${status:-unknown}"
+            if [[ "$status" == "200" ]] && grep -Fq '"pages"' /tmp/atlas-series-one.json; then
+              php -r '$d=json_decode(file_get_contents("/tmp/atlas-series-one.json"),true,512,JSON_THROW_ON_ERROR); if(($d["tournament_external_id"]??"")!=="fpC4m4hIZdjZ") exit(2); echo "Atlas source ready\n";'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Atlas source did not become ready" >&2
+          exit 1
+
+      - name: Prepare one-time importer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('infra/sql/import_atlas_series_one_test.php')
+          s = p.read_text()
+          old = "$rankingInsert->bind_param('iiiiidssss', $seasonId, $tournamentId, $playerId, $entrants = 16, $stage, $stageNumber, $points, $sourceRef, $rankingMeta, $tournamentStartAt);"
+          new = "$entrants = 16;\n        $rankingInsert->bind_param('iiiisidsss', $seasonId, $tournamentId, $playerId, $entrants, $stage, $stageNumber, $points, $sourceRef, $rankingMeta, $tournamentStartAt);"
+          if old not in s:
+              raise SystemExit('Expected importer patch target not found')
+          p.write_text(s.replace(old, new))
+          PY
+          php -l infra/sql/import_atlas_series_one_test.php
+
+      - name: Import Mandagsserien one into test
+        run: php infra/sql/import_atlas_series_one_test.php /tmp/atlas-series-one.json
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
