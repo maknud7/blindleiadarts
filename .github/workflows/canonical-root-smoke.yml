@@ -35,7 +35,7 @@ jobs:
           echo "Canonical root smoke failed: matching release did not become live." >&2
           exit 1
 
-      - name: Verify canonical portal entrypoints
+      - name: Verify canonical portal foundation
         env:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
         run: |
@@ -46,14 +46,28 @@ jobs:
           player_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/?cb=$RANDOM")"
           admin_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/?cb=$RANDOM")"
           canonical_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/canonical-entry.js?cb=$RANDOM")"
+          core_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/app-core.js?cb=$RANDOM")"
+          portal_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/portal-menu.js?cb=$RANDOM")"
           menu_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/unified-portal-shell.js?cb=$RANDOM")"
+          design_css="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/blindleia-system.css?cb=$RANDOM")"
 
           grep -Fq 'data-canonical-router="1"' <<<"$root_html"
-          grep -Fq 'currentSurface()' <<<"$root_html"
+          grep -Fq 'app-core.js' <<<"$root_html"
+          grep -Fq 'app.session.resolve()' <<<"$root_html"
           grep -Fq '/packages/ui-assets/canonical-entry.js' <<<"$player_html"
           grep -Fq '/packages/ui-assets/canonical-entry.js' <<<"$admin_html"
+          grep -Fq '/packages/ui-assets/blindleia-system.css' <<<"$player_html"
+          grep -Fq '/packages/ui-assets/blindleia-system.css' <<<"$admin_html"
           grep -Fq 'window.location.replace' <<<"$canonical_js"
+          grep -Fq 'window.BlindleiaApp' <<<"$core_js"
+          grep -Fq 'session: Object.freeze' <<<"$core_js"
+          grep -Fq 'await app.session.resolve()' <<<"$portal_js"
           grep -Fq '#admin/' <<<"$menu_js"
           grep -Fq 'rootRoute("player"' <<<"$menu_js"
+          grep -Fq 'data-bd-surface="kiosk"' <<<"$(curl -fsS "$base/kiosk/?cb=$RANDOM")"
+          grep -Fq 'data-bd-surface="live"' <<<"$(curl -fsS "$base/live/?cb=$RANDOM")"
+          grep -Fq 'data-bd-surface="screen"' <<<"$(curl -fsS "$base/screen/?cb=$RANDOM")"
+          grep -Fq 'data-bd-surface="onboarding"' <<<"$(curl -fsS "$base/onboarding/?cb=$RANDOM")"
+          grep -Fq '.bd-card' <<<"$design_css"
 
           echo "CANONICAL_ROOT_SMOKE_OK=yes"
