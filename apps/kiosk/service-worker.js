@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v18";
+const SHELL_CACHE = "bd-kiosk-shell-v19";
 const SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,7 @@ const SHELL = [
   "./operations-runtime.css",
   "../packages/ui-assets/brand-tokens.css",
   "../packages/ui-assets/blindleia-system.css",
+  "./realtime-refresh-compat.js",
   "./app.js",
   "./pairing-runtime.js",
   "./operations-runtime.js",
