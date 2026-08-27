@@ -14,19 +14,19 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for test probe and fetch Atlas result
+      - name: Wait for expanded test probe and fetch Atlas result
         run: |
           set -Eeuo pipefail
           url="https://test.blindleiadarts.ingenting.org/api/atlas-import-probe.php"
-          for attempt in $(seq 1 40); do
-            status="$(curl -sS -o /tmp/atlas-probe.json -w '%{http_code}' --max-time 35 "$url" || true)"
+          for attempt in $(seq 1 50); do
+            status="$(curl -sS -o /tmp/atlas-probe.json -w '%{http_code}' --max-time 90 "$url" || true)"
             echo "Probe attempt $attempt: HTTP ${status:-unknown}"
-            if [[ "$status" == "200" ]]; then
+            if [[ "$status" == "200" ]] && grep -Fq '"pages"' /tmp/atlas-probe.json; then
               cat /tmp/atlas-probe.json
               exit 0
             fi
             sleep 10
           done
-          echo "Probe endpoint never became available" >&2
+          echo "Expanded probe endpoint never became available" >&2
           [[ -f /tmp/atlas-probe.json ]] && cat /tmp/atlas-probe.json >&2 || true
           exit 1
