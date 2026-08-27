@@ -1,0 +1,307 @@
+/* App-style mobile navigation for Blindleia Darts. Desktop/tablet navigation is unchanged. */
+.unified-mobile-bottom-nav,
+.unified-mobile-drawer-overlay,
+.unified-mobile-drawer-close,
+.unified-mobile-drawer-logout{display:none}
+
+@media(max-width:760px){
+  :root{--unified-mobile-bar:72px}
+
+  body[data-portal-default="home"],
+  body[data-portal-default="overview"]{
+    padding-bottom:calc(var(--unified-mobile-bar) + env(safe-area-inset-bottom))!important;
+  }
+  body[data-portal-default="home"] .shell,
+  body[data-portal-default="overview"] .main{
+    padding-bottom:calc(var(--unified-mobile-bar) + 24px + env(safe-area-inset-bottom))!important;
+  }
+
+  body[data-portal-default="overview"]:has(#authGate:not(.hidden)) .unified-mobile-bottom-nav,
+  body[data-portal-default="overview"]:has(#authGate:not(.hidden)) .unified-mobile-drawer-overlay{
+    display:none!important;
+  }
+
+  .unified-mobile-bottom-nav{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:120;
+    min-height:calc(var(--unified-mobile-bar) + env(safe-area-inset-bottom));
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    align-items:start;
+    padding:7px max(6px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px,env(safe-area-inset-left));
+    border-top:1px solid var(--bd-border,#dbe3ed);
+    background:rgba(255,255,255,.97);
+    box-shadow:0 -7px 22px rgba(17,42,73,.08);
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+  }
+  .unified-mobile-bottom-nav a,
+  .unified-mobile-bottom-nav button{
+    min-width:0;
+    min-height:58px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    padding:5px 2px;
+    border:0;
+    border-radius:10px;
+    background:transparent;
+    color:#71839a;
+    font:inherit;
+    font-size:10px;
+    font-weight:760;
+    line-height:1.1;
+    text-align:center;
+    text-decoration:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .unified-mobile-bottom-nav svg{
+    width:24px;
+    height:24px;
+    fill:currentColor;
+  }
+  .unified-mobile-bottom-nav a.active,
+  .unified-mobile-bottom-nav button.active{
+    color:var(--bd-blue-600,#2f6fed);
+  }
+
+  .unified-mobile-drawer-overlay{
+    position:fixed;
+    inset:0;
+    z-index:130;
+    display:block;
+    background:rgba(6,22,40,.48);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .22s ease;
+  }
+  body.unified-mobile-drawer-open .unified-mobile-drawer-overlay{
+    opacity:1;
+    pointer-events:auto;
+  }
+  body.unified-mobile-drawer-open{
+    overflow:hidden!important;
+    touch-action:none;
+  }
+
+  body[data-portal-default="home"] .portal-nav.portal-menu,
+  body[data-portal-default="overview"] .section-nav.portal-menu{
+    position:fixed!important;
+    inset:0 auto 0 0!important;
+    z-index:140!important;
+    width:min(79vw,350px)!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:5px!important;
+    margin:0!important;
+    padding:max(82px,calc(58px + env(safe-area-inset-top))) 14px max(18px,calc(12px + env(safe-area-inset-bottom)))!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    border:0!important;
+    border-radius:0!important;
+    background:linear-gradient(180deg,#0b2b50 0%,#071f3b 100%)!important;
+    box-shadow:16px 0 40px rgba(3,18,35,.22)!important;
+    transform:translate3d(-102%,0,0);
+    visibility:hidden;
+    pointer-events:none;
+    transition:transform .24s cubic-bezier(.22,.7,.2,1),visibility 0s linear .24s;
+    backdrop-filter:none!important;
+  }
+  body.unified-mobile-drawer-open[data-portal-default="home"] .portal-nav.portal-menu,
+  body.unified-mobile-drawer-open[data-portal-default="overview"] .section-nav.portal-menu{
+    transform:translate3d(0,0,0);
+    visibility:visible;
+    pointer-events:auto;
+    transition:transform .24s cubic-bezier(.22,.7,.2,1),visibility 0s linear 0s;
+  }
+
+  .unified-mobile-drawer-close{
+    position:absolute;
+    top:max(17px,env(safe-area-inset-top));
+    right:14px;
+    width:42px;
+    height:42px;
+    min-height:42px!important;
+    display:grid!important;
+    place-items:center;
+    padding:0!important;
+    border:0!important;
+    border-radius:12px!important;
+    background:rgba(255,255,255,.08)!important;
+    color:#d8e5f3!important;
+  }
+  .unified-mobile-drawer-close svg{
+    width:24px;
+    height:24px;
+    fill:currentColor;
+  }
+
+  .unified-sidebar-brand{
+    position:absolute!important;
+    top:max(17px,env(safe-area-inset-top))!important;
+    left:18px!important;
+    right:64px!important;
+    height:46px!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:11px!important;
+    padding:0!important;
+    color:#fff!important;
+  }
+  .unified-sidebar-brand::before{
+    content:"";
+    width:46px;
+    height:46px;
+    flex:0 0 46px;
+    border-radius:4px;
+    background:#fff url("/static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat;
+    box-shadow:0 2px 8px rgba(0,0,0,.13);
+  }
+  .unified-sidebar-brand strong{
+    display:block;
+    color:#fff!important;
+    font-size:15px!important;
+    line-height:1.12!important;
+  }
+  .unified-sidebar-brand small{
+    display:block!important;
+    margin-top:3px!important;
+    color:#a9bfd6!important;
+    font-size:9px!important;
+    text-transform:uppercase;
+    letter-spacing:.09em;
+  }
+
+  .unified-group-label{
+    min-height:28px!important;
+    display:flex!important;
+    align-items:center!important;
+    padding:11px 10px 3px!important;
+    color:#8fa8c1!important;
+    font-size:9px!important;
+    font-weight:850!important;
+    letter-spacing:.12em!important;
+    text-transform:uppercase!important;
+  }
+  .unified-group-label.admin{
+    margin-top:8px!important;
+    padding-top:14px!important;
+    border-top:1px solid rgba(255,255,255,.11)!important;
+  }
+
+  body[data-portal-default="home"] .portal-nav.portal-menu a,
+  body[data-portal-default="overview"] .section-nav.portal-menu a,
+  body[data-portal-default="home"] .portal-nav.portal-menu .unified-admin-link,
+  body[data-portal-default="overview"] .section-nav.portal-menu .unified-admin-link{
+    min-width:0!important;
+    min-height:46px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:10px!important;
+    padding:11px 13px!important;
+    border:0!important;
+    border-radius:11px!important;
+    background:transparent!important;
+    color:#cfdeed!important;
+    box-shadow:none!important;
+    font-size:14px!important;
+    font-weight:760!important;
+    line-height:1.2!important;
+    text-align:left!important;
+    text-decoration:none!important;
+  }
+  body[data-portal-default="home"] .portal-nav.portal-menu a:hover,
+  body[data-portal-default="overview"] .section-nav.portal-menu a:hover{
+    background:rgba(255,255,255,.07)!important;
+    color:#fff!important;
+  }
+  body[data-portal-default="home"] .portal-nav.portal-menu a.active,
+  body[data-portal-default="overview"] .section-nav.portal-menu a.active,
+  body[data-portal-default="home"] .portal-nav.portal-menu .unified-admin-link.active,
+  body[data-portal-default="overview"] .section-nav.portal-menu .unified-admin-link.active{
+    background:var(--bd-blue-600,#2f6fed)!important;
+    color:#fff!important;
+    box-shadow:0 9px 20px rgba(47,111,237,.25)!important;
+  }
+  .unified-admin-link::after{display:none!important}
+
+  .unified-sidebar-account{
+    display:grid!important;
+    grid-template-columns:34px minmax(0,1fr)!important;
+    align-items:center!important;
+    gap:9px!important;
+    margin-top:auto!important;
+    padding:14px 9px 9px!important;
+    border-top:1px solid rgba(255,255,255,.11)!important;
+    color:#fff!important;
+  }
+  .unified-sidebar-avatar{
+    width:34px!important;
+    height:34px!important;
+    display:grid!important;
+    place-items:center!important;
+    border:1px solid rgba(255,255,255,.38)!important;
+    border-radius:50%!important;
+    background:transparent!important;
+    color:#fff!important;
+    font-size:9px!important;
+    font-weight:850!important;
+  }
+  .unified-sidebar-account strong{
+    display:block!important;
+    color:#fff!important;
+    font-size:11px!important;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .unified-sidebar-account small{
+    display:block!important;
+    margin-top:2px!important;
+    color:#a9bfd6!important;
+    font-size:9px!important;
+  }
+
+  .unified-mobile-drawer-logout{
+    min-height:46px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:11px!important;
+    margin-top:3px!important;
+    padding:10px 12px!important;
+    border:0!important;
+    border-radius:11px!important;
+    background:transparent!important;
+    color:#cfdeed!important;
+    font:inherit!important;
+    font-size:14px!important;
+    font-weight:760!important;
+    text-align:left!important;
+  }
+  .unified-mobile-drawer-logout svg{
+    width:23px;
+    height:23px;
+    flex:0 0 23px;
+    fill:currentColor;
+  }
+
+  .unified-player-topbar{
+    padding-bottom:10px!important;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  .unified-mobile-drawer-overlay,
+  .portal-menu{transition:none!important}
+}
