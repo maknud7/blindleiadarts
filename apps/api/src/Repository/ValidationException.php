@@ -8,11 +8,17 @@ use RuntimeException;
 
 final class ValidationException extends RuntimeException
 {
-    public function __construct(
-        private string $errorCode,
-        string $message,
-        private int $statusCode = 422
-    ) {
+    private string $errorCode;
+    private int $statusCode;
+
+    public function __construct(string $errorCode, ?string $message = null, int $statusCode = 422)
+    {
+        if ($message === null) {
+            $message = $errorCode;
+            $errorCode = 'validation_error';
+        }
+        $this->errorCode = $errorCode;
+        $this->statusCode = $statusCode;
         parent::__construct($message);
     }
 
