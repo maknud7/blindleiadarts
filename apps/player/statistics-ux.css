@@ -1,0 +1,41 @@
+.statistics-page{gap:14px!important}
+.statistics-page-head{padding-bottom:2px}
+.statistics-page-head h2{font-size:30px}
+.statistics-page-head .muted{margin-top:5px;max-width:680px;line-height:1.45}
+.statistics-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:5px;border:1px solid var(--line);border-radius:12px;background:#f5f7fa}
+body .statistics-tabs button{min-height:42px;padding:9px 12px!important;border:0!important;border-radius:9px!important;background:transparent!important;color:#51677f!important;box-shadow:none!important;font-weight:800!important}
+body .statistics-tabs button:hover{background:#fff!important;color:var(--ink)!important}
+body .statistics-tabs button.active{background:#fff!important;color:var(--accent)!important;box-shadow:0 1px 5px rgba(17,42,73,.09)!important}
+.statistics-panel{display:grid;gap:12px;min-width:0}
+.statistics-panel-head{display:flex;justify-content:space-between;align-items:end;gap:16px;padding:4px 1px 0}
+.statistics-panel-head h3{font-size:20px}
+.statistics-panel-head .muted{margin-top:3px;font-size:13px}
+.statistics-table-card{padding:0!important;overflow:hidden;box-shadow:none!important}
+.statistics-table-card .season-table-heading{padding:14px 14px 8px;margin:0;border-bottom:1px solid var(--line)}
+.statistics-table-card .table-scroll{max-width:100%}
+.statistics-table-card .portal-table th{position:sticky;top:0;z-index:2}
+.statistics-table-card .portal-table th,.statistics-table-card .portal-table td{padding:.62rem .7rem}
+.statistics-table-card .portal-table tbody tr:last-child td{border-bottom:0}
+.statistics-table-card .portal-table tbody tr:hover{background:#f3f7ff}
+.player-directory-head{align-items:center}
+.player-search{width:min(300px,40%);margin:0}
+.player-search input{width:100%;min-height:42px;padding:.7rem .85rem}
+#statistics .player-directory{gap:8px}
+body #statistics .player-card{min-height:66px!important;display:block!important;text-align:left!important;background:#fff!important;color:var(--ink)!important;border:1px solid var(--line)!important;border-radius:11px!important;padding:11px 13px!important;box-shadow:none!important}
+body #statistics .player-card:hover{background:#f8fbff!important;border-color:#b9cdea!important;transform:none!important}
+body #statistics .player-card:focus-visible{outline:none!important;border-color:var(--accent)!important;box-shadow:0 0 0 3px rgba(47,111,237,.13)!important}
+#statistics .player-card-name{font-size:14px;color:var(--ink)!important}
+#statistics .player-card-meta{font-size:12px!important;color:var(--muted)!important;line-height:1.35}
+#statistics .profile-card{margin-top:4px;scroll-margin-top:88px}
+.statistics-empty-search{grid-column:1/-1;padding:18px;border:1px dashed var(--line);border-radius:11px;text-align:center;color:var(--muted);background:#fbfcfe}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+@media(max-width:680px){
+  .statistics-page-head h2{font-size:26px}
+  .statistics-tabs{grid-template-columns:repeat(3,minmax(0,1fr));position:sticky;top:0;z-index:8;background:#f5f7fa}
+  body .statistics-tabs button{font-size:12px!important;padding:8px 5px!important}
+  .statistics-panel-head{display:grid;align-items:start}
+  .player-directory-head{gap:10px}
+  .player-search{width:100%}
+  .statistics-table-card{margin-left:-2px;margin-right:-2px}
+}
