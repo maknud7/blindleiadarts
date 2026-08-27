@@ -21,73 +21,91 @@
     <p id="portalBootText">Åpner portalen …</p>
   </main>
 
-  <script>
-    (() => {
-      const VERSION = "20260827-1430";
-      const bootText = document.getElementById("portalBootText");
-      const rootPath = window.location.pathname.endsWith("/")
-        ? window.location.pathname
-        : window.location.pathname.replace(/[^/]*$/, "");
+  <script type="module">
+    const VERSION = "20260827-1745";
+    const app = (await import(`./packages/ui-assets/app-core.js?v=${VERSION}`)).default;
+    const bootText = document.getElementById("portalBootText");
+    const rootPath = window.location.pathname.endsWith("/")
+      ? window.location.pathname
+      : window.location.pathname.replace(/[^/]*$/, "");
 
-      function currentSurface() {
-        const hash = window.location.hash.replace(/^#/, "").trim();
-        return hash === "admin" || hash.startsWith("admin/") ? "admin" : "player";
+    function requestedRoute() {
+      return app.router.route(window.location.hash);
+    }
+
+    function normalizeRoute(route, user) {
+      if (route.surface === "admin" && !app.session.isAdmin(user)) {
+        const next = `${rootPath}#profile`;
+        history.replaceState(null, "", next);
+        return { surface: "player", view: "profile", hash: "#profile" };
+      }
+      if (route.surface === "admin" && !route.view) {
+        history.replaceState(null, "", `${rootPath}#admin/overview`);
+        return { surface: "admin", view: "overview", hash: "#admin/overview" };
+      }
+      return route;
+    }
+
+    function rewriteChildHtml(html, surface) {
+      const childPrefix = `${rootPath}${surface}/`.replace(/\/{2,}/g, "/");
+      const rootPrefix = rootPath.replace(/\/{2,}/g, "/");
+
+      let output = String(html)
+        .replace(/((?:href|src)=["'])\.\/([^"']+)/g, (_, start, rest) => `${start}${childPrefix}${rest}`)
+        .replace(/((?:href|src)=["'])\.\.\/([^"']+)/g, (_, start, rest) => `${start}${rootPrefix}${rest}`)
+        .replace(/portal-menu\.js(?=["'])/g, `portal-menu.js?v=${VERSION}`);
+
+      if (surface === "admin") {
+        output = output
+          .replaceAll(`href="${rootPrefix}player/#statistics"`, `href="${rootPrefix}#statistics"`)
+          .replaceAll(`href="${rootPrefix}player/"`, `href="${rootPrefix}#home"`)
+          .replaceAll(`href='${rootPrefix}player/#statistics'`, `href='${rootPrefix}#statistics'`)
+          .replaceAll(`href='${rootPrefix}player/'`, `href='${rootPrefix}#home'`);
+      } else {
+        output = output
+          .replaceAll(`href="${rootPrefix}admin/#overview"`, `href="${rootPrefix}#admin/overview"`)
+          .replaceAll(`href='${rootPrefix}admin/#overview'`, `href='${rootPrefix}#admin/overview'`);
       }
 
-      function normalizeAdminHash() {
-        if (currentSurface() !== "admin") return;
-        const hash = window.location.hash.replace(/^#/, "").trim();
-        if (hash === "admin") history.replaceState(null, "", `${rootPath}#admin/overview`);
-      }
+      const sharedStyles = [
+        `<link rel="stylesheet" href="${rootPrefix}packages/ui-assets/brand-tokens.css?v=${VERSION}">`,
+        `<link rel="stylesheet" href="${rootPrefix}packages/ui-assets/blindleia-system.css?v=${VERSION}">`,
+      ].join("");
+      output = output.replace(/<\/head>/i, `${sharedStyles}</head>`);
+      output = output.replace(
+        /<body([^>]*)>/i,
+        `<body$1 data-bd-surface="${surface}" data-canonical-root="1" data-canonical-surface="${surface}">`
+      );
+      return output;
+    }
 
-      function rewriteChildHtml(html, surface) {
-        const childPrefix = `${rootPath}${surface}/`.replace(/\/{2,}/g, "/");
-        const rootPrefix = rootPath.replace(/\/{2,}/g, "/");
+    async function boot() {
+      const initial = requestedRoute();
+      if (bootText) bootText.textContent = initial.surface === "admin" ? "Kontrollerer tilgang …" : "Åpner portalen …";
 
-        let output = String(html)
-          .replace(/((?:href|src)=["'])\.\/([^"']+)/g, (_, start, rest) => `${start}${childPrefix}${rest}`)
-          .replace(/((?:href|src)=["'])\.\.\/([^"']+)/g, (_, start, rest) => `${start}${rootPrefix}${rest}`)
-          .replace(/portal-menu\.js(?=["'])/g, `portal-menu.js?v=${VERSION}`);
+      // Root owns session resolution. Child feature bundles consume the same cached session.
+      const user = await app.session.resolve();
+      const route = normalizeRoute(initial, user);
+      const surface = route.surface;
+      if (bootText) bootText.textContent = surface === "admin" ? "Åpner klubbdrift …" : "Åpner portalen …";
 
-        if (surface === "admin") {
-          output = output
-            .replaceAll(`href="${rootPrefix}player/#statistics"`, `href="${rootPrefix}#statistics"`)
-            .replaceAll(`href="${rootPrefix}player/"`, `href="${rootPrefix}"`)
-            .replaceAll(`href='${rootPrefix}player/#statistics'`, `href='${rootPrefix}#statistics'`)
-            .replaceAll(`href='${rootPrefix}player/'`, `href='${rootPrefix}'`);
-        } else {
-          output = output
-            .replaceAll(`href="${rootPrefix}admin/#overview"`, `href="${rootPrefix}#admin/overview"`)
-            .replaceAll(`href='${rootPrefix}admin/#overview'`, `href='${rootPrefix}#admin/overview'`);
-        }
+      const source = new URL(`${surface}/index.html`, new URL(rootPath, window.location.origin));
+      source.searchParams.set("canonical", VERSION);
+      const response = await fetch(source.href, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Kunne ikke laste ${surface === "admin" ? "klubbdrift" : "portalen"} (${response.status}).`);
 
-        output = output.replace(/<body([^>]*)>/i, `<body$1 data-canonical-root="1" data-canonical-surface="${surface}">`);
-        return output;
-      }
+      const html = rewriteChildHtml(await response.text(), surface);
+      document.open();
+      document.write(html);
+      document.close();
+    }
 
-      async function boot() {
-        normalizeAdminHash();
-        const surface = currentSurface();
-        if (bootText) bootText.textContent = surface === "admin" ? "Åpner klubbdrift …" : "Åpner portalen …";
-
-        const source = new URL(`${surface}/index.html`, new URL(rootPath, window.location.origin));
-        source.searchParams.set("canonical", VERSION);
-
-        const response = await fetch(source.href, { cache: "no-store" });
-        if (!response.ok) throw new Error(`Kunne ikke laste ${surface === "admin" ? "klubbdrift" : "portalen"} (${response.status}).`);
-        const html = rewriteChildHtml(await response.text(), surface);
-        document.open();
-        document.write(html);
-        document.close();
-      }
-
-      boot().catch((error) => {
-        const root = document.getElementById("portalBoot");
-        if (!root) return;
-        root.innerHTML = `<span class="logo" aria-hidden="true"></span><h1>Blindleia Darts</h1><p class="error">${String(error.message || error)}</p><button class="retry" type="button">Prøv igjen</button>`;
-        root.querySelector(".retry")?.addEventListener("click", () => window.location.reload());
-      });
-    })();
+    boot().catch((error) => {
+      const root = document.getElementById("portalBoot");
+      if (!root) return;
+      root.innerHTML = `<span class="logo" aria-hidden="true"></span><h1>Blindleia Darts</h1><p class="error">${String(error.message || error)}</p><button class="retry" type="button">Prøv igjen</button>`;
+      root.querySelector(".retry")?.addEventListener("click", () => window.location.reload());
+    });
   </script>
 </body>
 </html>
