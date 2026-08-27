@@ -72,25 +72,28 @@ try{
   $ignoredId=$event('ignored-1','THROW_DETECTED',['sector'=>'T20']);$drainOwn([$ignoredId],'Fallback ignore');
   $ignoredState=$eventState($ignoredId);$assert($ignoredState['status']==='ignored','Scolia event was not ignored during manual fallback.');
 
-  $db->query(sprintf('UPDATE `%1$sscolia_board_runtime` SET fallback_active=0,needs_reconciliation=0,turn_locked_until_takeout=0 WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
-  $db->query(sprintf('UPDATE `%1$sscolia_board_settings` SET mode="shadow" WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
-  $shadowEvents=[
-    $event('s1','THROW_DETECTED',['sector'=>'T20']),
-    $event('s2','THROW_DETECTED',['sector'=>'T19']),
-    $event('s3','THROW_DETECTED',['sector'=>'T18']),
-    $event('s4','TAKEOUT_FINISHED',['falseTakeout'=>false]),
+  // Migration 0045 made Scolia live-only. Reconcile the fallback and verify that
+  // the next Scolia visit resumes canonical scoring instead of testing removed shadow mode.
+  $db->query(sprintf('UPDATE `%1$sscolia_board_runtime` SET fallback_active=0,needs_reconciliation=0,turn_locked_until_takeout=0,last_reconciled_at=NOW(3) WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
+  $repo->clearVisitBuffer($ids['kiosk']);
+  $resumedEvents=[
+    $event('r1','THROW_DETECTED',['sector'=>'T20']),
+    $event('r2','THROW_DETECTED',['sector'=>'T19']),
+    $event('r3','THROW_DETECTED',['sector'=>'T18']),
+    $event('r4','TAKEOUT_FINISHED',['falseTakeout'=>false]),
   ];
-  $drainOwn($shadowEvents,'Shadow Scolia');
-  foreach(array_slice($shadowEvents,0,3) as $index=>$providerId){
-    $state=$eventState($providerId);$meta=$state['meta'];
-    $assert($state['status']==='processed',sprintf('Shadow throw %d was %s: %s', $index+1, $state['status'], json_encode($meta,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)));
+  $drainOwn($resumedEvents,'Resumed live Scolia');
+  foreach(array_slice($resumedEvents,0,3) as $index=>$providerId){
+    $state=$eventState($providerId);$assert($state['status']==='processed',sprintf('Resumed live throw %d was %s: %s',$index+1,$state['status'],json_encode($state['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)));
   }
-  $shadowFinal=$eventState($shadowEvents[2]);
-  $assert((int)($shadowFinal['meta']['shadow_visit_id']??0)>0,'Third shadow throw did not create a shadow visit: '.json_encode($shadowFinal['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
-  $assert((int)($shadowFinal['meta']['score']??0)===171,'Third shadow throw produced wrong meta score: '.json_encode($shadowFinal['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
-  $s=$db->prepare(sprintf('SELECT score FROM `%1$sscolia_shadow_visits` WHERE match_id=? ORDER BY id DESC LIMIT 1',$p));$s->bind_param('i',$ids['match']);$s->execute();$shadow=$s->get_result()->fetch_assoc()?:[];$s->close();$shadowScore=(int)($shadow['score']??0);$assert($shadowScore===171,"Shadow visit score wrong: {$shadowScore}.");
-  $s=$db->prepare(sprintf('SELECT COUNT(*) c FROM `%1$svisits` WHERE match_id=?',$p));$s->bind_param('i',$ids['match']);$s->execute();$assert((int)($s->get_result()->fetch_assoc()['c']??0)===2,'Shadow scoring changed canonical visits.');$s->close();
-  echo "Scolia live/shadow/fallback canonical scoring smoke OK\n";
+  $resumedFinal=$eventState($resumedEvents[2]);
+  $assert((int)($resumedFinal['meta']['score']??0)===171,'Resumed live visit produced wrong meta score: '.json_encode($resumedFinal['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
+  $assert(!empty($resumedFinal['meta']['canonical']),'Resumed live visit was not canonical: '.json_encode($resumedFinal['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
+  $s=$db->prepare(sprintf('SELECT score,request_key FROM `%1$svisits` WHERE match_id=? ORDER BY id',$p));$s->bind_param('i',$ids['match']);$s->execute();$allVisits=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
+  $assert(count($allVisits)===3,'Resumed live Scolia should create exactly one additional canonical visit.');
+  $assert((int)$allVisits[2]['score']===171,'Resumed live canonical score wrong.');
+  $assert(str_starts_with((string)$allVisits[2]['request_key'],'scolia-'),'Resumed live canonical Scolia request key missing.');
+  echo "Scolia live/fallback/resume canonical scoring smoke OK\n";
 }finally{
   if($ids['match']) {foreach(['scolia_shadow_visits','scolia_visit_buffers','scolia_events','match_statistics','live_match_states','visits','legs'] as $table){$db->query(sprintf('DELETE FROM `%1$s%2$s` WHERE match_id=%3$d',$p,$table,$ids['match']));}$db->query(sprintf('DELETE FROM `%1$sscolia_incidents` WHERE match_id=%2$d',$p,$ids['match']));$db->query(sprintf('DELETE FROM `%1$smatches` WHERE id=%2$d',$p,$ids['match']));}
   if($ids['kiosk']) {foreach(['scolia_commands','scolia_board_runtime','scolia_board_settings'] as $table){$db->query(sprintf('DELETE FROM `%1$s%2$s` WHERE kiosk_id=%3$d',$p,$table,$ids['kiosk']));}$db->query(sprintf('DELETE FROM `%1$skiosks` WHERE id=%2$d',$p,$ids['kiosk']));}
