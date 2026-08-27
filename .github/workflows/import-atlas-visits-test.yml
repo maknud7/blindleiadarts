@@ -29,10 +29,12 @@ jobs:
           extensions: mysqli, mbstring
           coverage: none
 
-      - name: Wait for Atlas visit parser on test
+      - name: Validate importer
+        run: php -l infra/sql/import_atlas_visits_test.php
+
+      - name: Wait for updated Atlas visit parser on test
         run: |
           set -Eeuo pipefail
-          # Check that the deployed endpoint exists without consuming a DartsAtlas request.
           url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=x"
           for attempt in $(seq 1 80); do
             status="$(curl -sS -o /tmp/atlas-parser-check.json -w '%{http_code}' --max-time 20 "$url" || true)"
@@ -49,7 +51,14 @@ jobs:
       - name: Cool down Atlas source rate limit
         run: sleep 90
 
-      - name: Fetch all 63 Atlas match visit histories
+      - name: Fetch and import all 63 matches atomically
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
         run: |
           set -Eeuo pipefail
           mkdir -p /tmp/atlas-visits
@@ -126,6 +135,7 @@ jobs:
             target="/tmp/atlas-visits/${match_id}.json"
             url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=${match_id}"
             ok=no
+
             for attempt in $(seq 1 10); do
               status="$(curl -sS -o "$target" -w '%{http_code}' --max-time 45 "$url" || true)"
               if [[ "$status" == "200" ]] && MATCH_ID="$match_id" TARGET="$target" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); exit(($d["ok"]??false) && ($d["external_id"]??"")===getenv("MATCH_ID") ? 0 : 1);'; then
@@ -148,40 +158,25 @@ jobs:
                 sleep 10
               fi
             done
+
             if [[ "$ok" != yes ]]; then
               echo "Failed to fetch/parse ${match_id}" >&2
               exit 1
             fi
-            MATCH_ID="$match_id" TARGET="$target" CURRENT="$current" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); echo getenv("CURRENT")."/63 ".getenv("MATCH_ID").": legs=".$d["leg_count"]." visits=".$d["visit_count"]." darts=".$d["darts_count"].PHP_EOL;'
-            # Keep the source request rate deliberately low. DartsAtlas starts returning
-            # 429 if historical match pages are fetched in a burst.
+
+            MATCH_ID="$match_id" TARGET="$target" CURRENT="$current" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); echo getenv("CURRENT")."/63 fetched ".getenv("MATCH_ID").": legs=".$d["leg_count"]." visits=".$d["visit_count"]." darts=".$d["darts_count"].PHP_EOL;'
+
+            # Commit this match immediately. The importer wraps exactly this match in one
+            # database transaction, so statistics can update progressively without ever
+            # exposing a partially imported match.
+            php infra/sql/import_atlas_visits_test.php "$target"
+            echo "${current}/63 committed ${match_id} to TEST"
+
+            # Keep DartsAtlas request rate deliberately low.
             sleep 12
           done < /tmp/atlas-match-ids.txt
 
-          php -r '
-            $matches=[];
-            foreach (glob("/tmp/atlas-visits/*.json") as $file) {
-                $d=json_decode(file_get_contents($file),true,512,JSON_THROW_ON_ERROR);
-                $matches[$d["external_id"]]=$d;
-            }
-            if(count($matches)!==63) throw new RuntimeException("Expected 63 parsed matches, got ".count($matches));
-            file_put_contents("/tmp/atlas-visits-all.json", json_encode([
-                "tournament_external_id"=>"fpC4m4hIZdjZ",
-                "matches"=>$matches,
-            ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
-            $legs=$visits=$darts=0;
-            foreach($matches as $m){$legs+=$m["leg_count"];$visits+=$m["visit_count"];$darts+=$m["darts_count"];}
-            echo "Source totals: matches=63 legs={$legs} visits={$visits} darts={$darts}\n";
-          '
-
-      - name: Prepare and validate one-time importer
-        run: |
-          set -Eeuo pipefail
-          sed -i "s/'iiiii ii'/'iiiiiii'/" infra/sql/import_atlas_visits_test.php
-          php -l infra/sql/import_atlas_visits_test.php
-
-      - name: Import visits into test
-        run: php infra/sql/import_atlas_visits_test.php /tmp/atlas-visits-all.json
+      - name: Verify TEST history totals
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
@@ -189,3 +184,4 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+        run: php infra/sql/history_inventory.php
