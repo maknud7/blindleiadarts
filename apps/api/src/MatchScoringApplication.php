@@ -8,10 +8,8 @@ use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
-use Blindleia\Dartkiosk\Api\Repository\MatchScoringRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
-use Blindleia\Dartkiosk\Api\Service\EloReconciliationService;
-use Blindleia\Dartkiosk\Api\Service\PlayoffReconciliationService;
+use Blindleia\Dartkiosk\Api\Service\CanonicalScoringService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use mysqli_sql_exception;
@@ -74,7 +72,7 @@ final class MatchScoringApplication
         $pairingToken = $request->header('x-kiosk-pairing-token');
         $kiosks = new KioskRepository($database);
 
-        // Reuse the established pairing/access rules and public state formatting.
+        // Pairing/access is transport-specific. The actual scoring mutation is not.
         $before = $kiosks->findKioskStateByCode($kioskCode, $pairingToken);
         if ($before === null) {
             return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
@@ -86,83 +84,20 @@ final class MatchScoringApplication
             return JsonResponse::error(409, 'kiosk_state_invalid', 'Kiosk state is missing its canonical id.');
         }
 
-        $scoring = new MatchScoringRepository($database);
-        $playoffReconciliation = new PlayoffReconciliationService($database);
-        $targetMatchId = $action === 'undo'
-            ? $playoffReconciliation->assertUndoAllowed($kioskId)
-            : $playoffReconciliation->targetMatchIdForKiosk($kioskId, false);
-
+        $scoring = new CanonicalScoringService($database, $config);
         if ($action === 'start-match') {
-            $scoring->startMatch($kioskId);
+            $scoring->startMatch($kioskId, 'manual');
         } elseif ($action === 'visit') {
-            $scoring->recordVisit($kioskId, $request->jsonBody());
+            $scoring->recordVisit($kioskId, $request->jsonBody(), 'manual');
         } else {
-            $scoring->undoLastVisit($kioskId);
+            $scoring->undoLastVisit($kioskId, 'manual');
         }
-
-        // ELO and playoff progression are both derived from canonical match state.
-        // Reconciliation keeps both projections idempotent and repairable.
-        (new EloReconciliationService($database))->reconcileKiosk($kioskId);
-        $playoffReconciliation->afterMutation($targetMatchId, $action === 'undo');
 
         $state = $kiosks->findKioskStateByCode($kioskCode, $pairingToken);
         if ($state === null) {
             return JsonResponse::error(404, 'kiosk_not_found', 'Kiosk disappeared after the scoring mutation.');
         }
 
-        $this->publishRefreshEvents($config, $state);
         return JsonResponse::ok($state);
-    }
-
-    /** @param array<string, mixed> $state */
-    private function publishRefreshEvents(Config $config, array $state): void
-    {
-        if (!$config->realtimePublishEnabled()) {
-            return;
-        }
-
-        $kiosk = is_array($state['kiosk'] ?? null) ? $state['kiosk'] : [];
-        $code = trim((string) ($kiosk['code'] ?? ''));
-        $club = is_array($kiosk['club'] ?? null) ? $kiosk['club'] : [];
-        $clubId = (int) ($club['id'] ?? 0);
-
-        if ($code !== '') {
-            $this->publish($config, ['kiosk:' . $code], $state);
-        }
-        if ($clubId > 0) {
-            // Venue screen reloads canonical screen state when a club snapshot lacks a screen payload.
-            $this->publish($config, ['club:' . $clubId], ['refresh' => true, 'reason' => 'match_scoring_changed']);
-        }
-    }
-
-    /** @param array<int,string> $channels @param array<string,mixed> $payload */
-    private function publish(Config $config, array $channels, array $payload): void
-    {
-        $body = json_encode([
-            'secret' => $config->realtimePublishSecret(),
-            'channels' => $channels,
-            'event' => 'snapshot',
-            'payload' => $payload,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        if ($body === false) {
-            return;
-        }
-
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'POST',
-                'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body) . "\r\nConnection: close",
-                'content' => $body,
-                'timeout' => 1.5,
-                'ignore_errors' => true,
-            ],
-        ]);
-
-        try {
-            @file_get_contents($config->realtimePublishUrl(), false, $context);
-        } catch (Throwable) {
-            // Realtime is best effort and must never break canonical scoring.
-        }
     }
 }
