@@ -1,0 +1,59 @@
+name: Canonical Root Smoke
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-root-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for matching test release
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in $(seq 1 40); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then
+              echo "Matching release is live."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Canonical root smoke failed: matching release did not become live." >&2
+          exit 1
+
+      - name: Verify canonical portal entrypoints
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+
+          root_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/?cb=$RANDOM")"
+          player_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/?cb=$RANDOM")"
+          admin_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/?cb=$RANDOM")"
+          canonical_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/canonical-entry.js?cb=$RANDOM")"
+          menu_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/packages/ui-assets/unified-portal-shell.js?cb=$RANDOM")"
+
+          grep -Fq 'data-canonical-router="1"' <<<"$root_html"
+          grep -Fq 'currentSurface()' <<<"$root_html"
+          grep -Fq '/packages/ui-assets/canonical-entry.js' <<<"$player_html"
+          grep -Fq '/packages/ui-assets/canonical-entry.js' <<<"$admin_html"
+          grep -Fq 'window.location.replace' <<<"$canonical_js"
+          grep -Fq '#admin/' <<<"$menu_js"
+          grep -Fq 'rootRoute("player"' <<<"$menu_js"
+
+          echo "CANONICAL_ROOT_SMOKE_OK=yes"
