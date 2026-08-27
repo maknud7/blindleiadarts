@@ -22,7 +22,7 @@
   </main>
 
   <script type="module">
-    const VERSION = "20260827-1745";
+    const VERSION = "20260827-1900";
     const app = (await import(`./packages/ui-assets/app-core.js?v=${VERSION}`)).default;
     const bootText = document.getElementById("portalBootText");
     const rootPath = window.location.pathname.endsWith("/")
@@ -39,11 +39,9 @@
         history.replaceState(null, "", next);
         return { surface: "player", view: "profile", hash: "#profile" };
       }
-      if (route.surface === "admin" && !route.view) {
-        history.replaceState(null, "", `${rootPath}#admin/overview`);
-        return { surface: "admin", view: "overview", hash: "#admin/overview" };
-      }
-      return route;
+      const canonical = app.router.href(route.surface, route.view);
+      if (window.location.hash !== canonical) history.replaceState(null, "", `${rootPath}${canonical}`);
+      return { ...route, hash: canonical };
     }
 
     function rewriteChildHtml(html, surface) {
@@ -63,8 +61,8 @@
           .replaceAll(`href='${rootPrefix}player/'`, `href='${rootPrefix}#home'`);
       } else {
         output = output
-          .replaceAll(`href="${rootPrefix}admin/#overview"`, `href="${rootPrefix}#admin/overview"`)
-          .replaceAll(`href='${rootPrefix}admin/#overview'`, `href='${rootPrefix}#admin/overview'`);
+          .replaceAll(`href="${rootPrefix}admin/#overview"`, `href="${rootPrefix}#club"`)
+          .replaceAll(`href='${rootPrefix}admin/#overview'`, `href='${rootPrefix}#club'`);
       }
 
       const sharedStyles = [
@@ -83,7 +81,6 @@
       const initial = requestedRoute();
       if (bootText) bootText.textContent = initial.surface === "admin" ? "Kontrollerer tilgang …" : "Åpner portalen …";
 
-      // Root owns session resolution. Child feature bundles consume the same cached session.
       const user = await app.session.resolve();
       const route = normalizeRoute(initial, user);
       const surface = route.surface;
