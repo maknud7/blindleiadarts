@@ -21,12 +21,12 @@ jobs:
           for attempt in $(seq 1 50); do
             status="$(curl -sS -o /tmp/season.json -w '%{http_code}' --max-time 60 "$url" || true)"
             echo "Season probe attempt $attempt: HTTP ${status:-unknown}"
-            if [[ "$status" == '200' ]] && grep -Fq '"source_status": 200' /tmp/season.json; then
+            if [[ "$status" == '200' ]] && grep -Fq 'atlas-season-probe-v2' /tmp/season.json && grep -Fq 'Mandagsserien #3' /tmp/season.json; then
               cat /tmp/season.json
               exit 0
             fi
             [[ -f /tmp/season.json ]] && cat /tmp/season.json || true
             sleep 10
           done
-          echo 'DartsAtlas season probe never became available through TEST' >&2
+          echo 'Expanded DartsAtlas season probe never exposed Mandagsserien #3' >&2
           exit 1
