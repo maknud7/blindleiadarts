@@ -87,8 +87,8 @@ final class ActivityApplication
         $clubId = (int) ($m[1] ?? 0);
         $user = $this->authenticatedUser($request, $users);
         if ($user instanceof JsonResponse) return $user;
-        if (!$this->canManageClub($user, $clubId)) {
-            return JsonResponse::error(403, 'club_access_denied', 'Du har ikke tilgang til aktivitetsdata for denne klubben.');
+        if ((string) ($user['role'] ?? '') !== 'super_admin') {
+            return JsonResponse::error(403, 'super_admin_required', 'Superadmin-tilgang kreves for aktivitetslogger.');
         }
 
         $days = isset($_GET['days']) && is_numeric($_GET['days']) ? (int) $_GET['days'] : 30;
@@ -118,14 +118,5 @@ final class ActivityApplication
             return JsonResponse::error(401, 'invalid_session', 'Innloggingen er utløpt eller ugyldig.');
         }
         return $user;
-    }
-
-    /** @param array<string,mixed> $user */
-    private function canManageClub(array $user, int $clubId): bool
-    {
-        if ((string) ($user['role'] ?? '') === 'super_admin') return true;
-        if ((string) ($user['role'] ?? '') !== 'club_admin') return false;
-        $ids = array_values(array_filter(array_map('intval', explode(',', (string) ($user['admin_club_ids'] ?? '')))));
-        return in_array($clubId, $ids, true);
     }
 }
