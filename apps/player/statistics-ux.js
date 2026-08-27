@@ -5,50 +5,44 @@ document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
 const root = document.getElementById("statistics");
+const seasonRoot = document.getElementById("seasonStandings");
+const playerRoot = document.getElementById("playerDirectory");
+const profileRoot = document.getElementById("playerProfile");
 const search = document.getElementById("playerSearch");
-const seasonStandings = document.getElementById("seasonStandings");
-const playerProfile = document.getElementById("playerProfile");
 let currentView = "season";
-let applying = false;
-let observer = null;
-let profileObserver = null;
-let seasonItems = [];
+let seasons = [];
 let selectedSeasonId = 0;
 let seasonLoading = false;
-let seasonRenderQueued = false;
-let profileRequestId = 0;
+let seasonRepairQueued = false;
+let enhancing = false;
 const profileCache = new Map();
 
 function esc(value) {
   return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
-function normalizeName(value) {
+function norm(value) {
   return String(value || "").trim().toLocaleLowerCase("nb-NO").replace(/\s+/g, " ");
 }
 
 function formatDate(value) {
   if (!value) return "";
   const date = new Date(String(value).replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+  return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
 async function api(path) {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const timer = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(`${API_ROOT}${path}`, { cache: "no-store", signal: controller.signal });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
     return payload.data;
   } finally {
-    window.clearTimeout(timeout);
+    clearTimeout(timer);
   }
 }
 
@@ -65,100 +59,52 @@ function activate(view) {
   root.querySelectorAll("[data-statistics-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.statisticsPanel !== currentView));
 }
 
-function simplifyStatisticsTabs() {
+function prepareTabs() {
   root?.querySelector('[data-statistics-view="elo"]')?.remove();
   root?.querySelector('[data-statistics-panel="elo"]')?.remove();
   const tabs = root?.querySelector(".statistics-tabs");
   if (tabs) tabs.dataset.tabCount = String(tabs.querySelectorAll("[data-statistics-view]").length);
 }
 
-function numericCell(row, index) {
-  const raw = row.children[index]?.textContent?.replace(/[^0-9,.-]/g, "").replace(",", ".") || "0";
-  const number = Number(raw);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function dedupeRows(selector, keyFactory, qualityFactory) {
-  const rows = [...root.querySelectorAll(selector)];
-  const best = new Map();
-  rows.forEach((row) => {
-    const key = keyFactory(row);
-    if (!key) return;
-    const quality = qualityFactory(row);
-    const existing = best.get(key);
-    if (!existing || quality > existing.quality) {
-      if (existing) existing.row.remove();
-      best.set(key, { row, quality });
-    } else row.remove();
-  });
-}
-
-function cleanupDuplicatePublicRows() {
-  if (!root) return;
-  dedupeRows(
-    "#seasonStandings tbody tr",
-    (row) => `${normalizeName(row.children[1]?.textContent)}|${numericCell(row, 2)}|${numericCell(row, 8)}`,
-    (row) => numericCell(row, 3) * 1000 + numericCell(row, 9)
-  );
-  const cards = [...root.querySelectorAll("#playerDirectory .player-card")];
-  const seen = new Map();
-  cards.forEach((card) => {
-    const name = normalizeName(card.querySelector(".player-card-name")?.textContent);
-    const meta = normalizeName(card.querySelector(".player-card-meta")?.textContent);
-    const key = `${name}|${meta}`;
-    if (!name) return;
-    if (seen.has(key)) card.remove();
-    else seen.set(key, card);
-  });
-}
-
 function filterPlayers() {
-  if (!root || !search) return;
-  const query = normalizeName(search.value);
-  const cards = [...root.querySelectorAll("#playerDirectory .player-card")];
+  if (!playerRoot || !search) return;
+  const query = norm(search.value);
   let visible = 0;
-  cards.forEach((card) => {
-    const show = !query || normalizeName(card.textContent).includes(query);
+  playerRoot.querySelectorAll(".player-card").forEach((card) => {
+    const show = !query || norm(card.textContent).includes(query);
     card.hidden = !show;
     if (show) visible += 1;
   });
-  let empty = root.querySelector(".statistics-empty-search");
-  if (query && visible === 0) {
+  let empty = playerRoot.querySelector(".statistics-empty-search");
+  if (query && !visible) {
     if (!empty) {
       empty = document.createElement("div");
       empty.className = "statistics-empty-search";
       empty.textContent = "Ingen spillere matcher søket.";
-      document.getElementById("playerDirectory")?.appendChild(empty);
+      playerRoot.appendChild(empty);
     }
   } else empty?.remove();
 }
 
 function sortValue(cell, type) {
-  const text = cell?.dataset.sortValue ?? cell?.textContent ?? "";
-  if (type === "number") {
-    const normalized = String(text).replace(/\s/g, "").replace(",", ".").replace(/[^0-9.+-]/g, "");
-    const value = Number(normalized);
-    return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
-  }
-  return normalizeName(text);
+  const raw = cell?.dataset.sortValue ?? cell?.textContent ?? "";
+  if (type !== "number") return norm(raw);
+  const number = Number(String(raw).replace(/\s/g, "").replace(",", ".").replace(/[^0-9.+-]/g, ""));
+  return Number.isFinite(number) ? number : Number.NEGATIVE_INFINITY;
 }
 
-function sortTable(table, th) {
+function sortTable(table, header) {
   const tbody = table.tBodies?.[0];
   if (!tbody) return;
-  const headers = [...th.parentElement.children];
-  const column = headers.indexOf(th);
-  if (column < 0) return;
-  const type = th.dataset.sortType || "text";
-  const current = th.getAttribute("aria-sort");
-  const firstDirection = th.dataset.sortDefault || (type === "number" ? "descending" : "ascending");
-  const direction = current === "ascending" ? "descending" : current === "descending" ? "ascending" : firstDirection;
-  headers.forEach((header) => {
-    header.removeAttribute("aria-sort");
-    header.classList.remove("statistics-sorted");
-  });
-  th.setAttribute("aria-sort", direction);
-  th.classList.add("statistics-sorted");
+  const headers = [...header.parentElement.children];
+  const column = headers.indexOf(header);
+  const type = header.dataset.sortType || "text";
+  const current = header.getAttribute("aria-sort");
+  const first = header.dataset.sortDefault || (type === "number" ? "descending" : "ascending");
+  const direction = current === "ascending" ? "descending" : current === "descending" ? "ascending" : first;
+  headers.forEach((th) => { th.removeAttribute("aria-sort"); th.classList.remove("statistics-sorted"); });
+  header.setAttribute("aria-sort", direction);
+  header.classList.add("statistics-sorted");
   const rows = [...tbody.rows].map((row, index) => ({ row, index }));
   rows.sort((a, b) => {
     const av = sortValue(a.row.cells[column], type);
@@ -170,217 +116,199 @@ function sortTable(table, th) {
   rows.forEach(({ row }) => tbody.appendChild(row));
 }
 
-function bindSortableTables() {
-  root?.querySelectorAll("table.portal-table").forEach((table) => {
-    table.querySelectorAll("thead th").forEach((th) => {
-      if (th.dataset.sortBound === "1") return;
-      th.dataset.sortBound = "1";
-      th.tabIndex = 0;
-      th.classList.add("statistics-sortable");
-      th.setAttribute("role", "button");
-      const run = () => sortTable(table, th);
-      th.addEventListener("click", run);
-      th.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        run();
-      });
+function bindSorting() {
+  root?.querySelectorAll("table.portal-table").forEach((table) => table.querySelectorAll("thead th").forEach((th) => {
+    if (th.dataset.sortBound === "1") return;
+    th.dataset.sortBound = "1";
+    th.tabIndex = 0;
+    th.classList.add("statistics-sortable");
+    th.setAttribute("role", "button");
+    const run = () => sortTable(table, th);
+    th.addEventListener("click", run);
+    th.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      run();
     });
-  });
+  }));
 }
 
-function clubId() {
+function currentClubId() {
   return Number(localStorage.getItem("bd:playerClubId") || document.getElementById("clubSelect")?.value || 0);
 }
 
-function seasonLabel(season) {
-  const state = season.is_active ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong";
-  return `${season.name}${season.starts_on ? ` · ${formatDate(season.starts_on)}` : ""} · ${state}`;
+function ensureSeasonChooser() {
+  const head = root?.querySelector('[data-statistics-panel="season"] .statistics-panel-head');
+  if (!head) return null;
+  let label = head.querySelector(".statistics-season-chooser");
+  if (label) return label;
+  label = document.createElement("label");
+  label.className = "statistics-season-chooser";
+  label.innerHTML = `<span>Sesong</span><select aria-label="Velg sesong"></select>`;
+  head.appendChild(label);
+  label.querySelector("select")?.addEventListener("change", (event) => {
+    selectedSeasonId = Number(event.currentTarget.value || 0);
+    if (selectedSeasonId) localStorage.setItem("bd:statisticsSeasonId", String(selectedSeasonId));
+    renderSeason().catch(() => undefined);
+  });
+  return label;
 }
 
-function ensureSeasonChooser() {
-  const panel = root?.querySelector('[data-statistics-panel="season"]');
-  const head = panel?.querySelector(".statistics-panel-head");
-  if (!head) return null;
-  let chooser = head.querySelector(".statistics-season-chooser");
-  if (!chooser) {
-    chooser = document.createElement("label");
-    chooser.className = "statistics-season-chooser";
-    chooser.innerHTML = `<span>Sesong</span><select id="statisticsSeasonSelect" aria-label="Velg sesong"></select>`;
-    head.appendChild(chooser);
-    chooser.querySelector("select")?.addEventListener("change", (event) => {
-      selectedSeasonId = Number(event.currentTarget.value || 0);
-      if (selectedSeasonId) localStorage.setItem("bd:statisticsSeasonId", String(selectedSeasonId));
-      renderSelectedSeason().catch(() => undefined);
-    });
-  }
-  return chooser;
+function seasonOption(season) {
+  const status = season.is_active ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong";
+  return `${season.name}${season.starts_on ? ` · ${formatDate(season.starts_on)}` : ""} · ${status}`;
 }
 
 async function loadSeasons() {
-  const id = clubId();
-  if (!id) return;
-  const data = await api(`/clubs/${id}/seasons`);
-  seasonItems = data.items || [];
-  if (!seasonItems.length) return;
+  const clubId = currentClubId();
+  if (!clubId) return;
+  const data = await api(`/clubs/${clubId}/seasons`);
+  seasons = data.items || [];
+  if (!seasons.length) return;
   const remembered = Number(localStorage.getItem("bd:statisticsSeasonId") || 0);
-  const active = seasonItems.find((season) => season.is_active) || seasonItems[0];
-  selectedSeasonId = seasonItems.some((season) => Number(season.id) === remembered) ? remembered : Number(active.id);
+  const active = seasons.find((season) => season.is_active) || seasons[0];
+  selectedSeasonId = seasons.some((season) => Number(season.id) === remembered) ? remembered : Number(active.id);
   const chooser = ensureSeasonChooser();
   const select = chooser?.querySelector("select");
   if (select) {
-    select.innerHTML = seasonItems.map((season) => `<option value="${Number(season.id)}">${esc(seasonLabel(season))}</option>`).join("");
+    select.innerHTML = seasons.map((season) => `<option value="${Number(season.id)}">${esc(seasonOption(season))}</option>`).join("");
     select.value = String(selectedSeasonId);
   }
-  chooser?.classList.toggle("single-season", seasonItems.length === 1);
-  await renderSelectedSeason();
+  chooser?.classList.toggle("single-season", seasons.length === 1);
+  await renderSeason();
 }
 
 function pointsText(value) {
   return Number(value || 0).toLocaleString("nb-NO", { maximumFractionDigits: 2 });
 }
 
-async function renderSelectedSeason() {
-  if (!seasonStandings || !selectedSeasonId || seasonLoading) return;
+async function renderSeason() {
+  if (!seasonRoot || !selectedSeasonId || seasonLoading) return;
   seasonLoading = true;
-  seasonStandings.innerHTML = `<div class="statistics-loading"><span></span>Henter sesongtabell …</div>`;
+  seasonRoot.innerHTML = `<div class="statistics-loading"><span></span>Henter sesongtabell …</div>`;
   try {
     const data = await api(`/seasons/${selectedSeasonId}/standings`);
-    const season = data.season || seasonItems.find((item) => Number(item.id) === selectedSeasonId) || {};
-    const rows = data.items || [];
-    seasonStandings.innerHTML = `
-      <div class="season-table-heading">
-        <div><strong>${esc(season.name || "Sesong")}</strong><p class="tie-break-note">Offisiell rekkefølge: poeng → leg differanse → 3DA → innbyrdes.</p></div>
-        <span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span>
-      </div>
-      <div class="table-scroll"><table class="portal-table season-table combined-season-table" data-combined-season="${Number(selectedSeasonId)}">
-        <thead><tr>
-          <th data-sort-type="number" data-sort-default="ascending" title="Offisiell plassering">Plass</th>
-          <th data-sort-type="text" data-sort-default="ascending">Spiller</th>
-          <th data-sort-type="number">Poeng</th><th data-sort-type="number">ELO</th><th data-sort-type="number">K</th><th data-sort-type="number">V</th><th data-sort-type="number">U</th><th data-sort-type="number">T</th><th data-sort-type="number" title="Leg differanse">Leg +/−</th><th data-sort-type="number">3DA</th>
-        </tr></thead>
-        <tbody>${rows.map((row) => `<tr data-player-profile="${Number(row.id)}">
-          <td data-sort-value="${Number(row.position)}"><strong>${Number(row.position)}</strong></td>
-          <td data-sort-value="${esc(row.display_name)}"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td>
-          <td data-sort-value="${Number(row.points || 0)}"><strong>${pointsText(row.points)}</strong></td>
-          <td data-sort-value="${Number(row.elo_rating || 1000)}"><span class="elo-table-value">${Number(row.elo_rating || 1000).toFixed(1)}</span></td>
-          <td data-sort-value="${Number(row.matches_played || 0)}">${Number(row.matches_played || 0)}</td><td data-sort-value="${Number(row.wins || 0)}">${Number(row.wins || 0)}</td><td data-sort-value="${Number(row.draws || 0)}">${Number(row.draws || 0)}</td><td data-sort-value="${Number(row.losses || 0)}">${Number(row.losses || 0)}</td>
-          <td data-sort-value="${Number(row.leg_diff || 0)}"><span class="leg-diff ${Number(row.leg_diff || 0) > 0 ? "positive" : Number(row.leg_diff || 0) < 0 ? "negative" : ""}">${Number(row.leg_diff || 0) > 0 ? "+" : ""}${Number(row.leg_diff || 0)}</span></td>
-          <td data-sort-value="${Number(row.three_dart_average || 0)}">${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</td>
-        </tr>`).join("")}</tbody></table></div>`;
-    seasonStandings.querySelectorAll("[data-player-profile]").forEach((row) => row.addEventListener("click", () => {
-      const target = document.querySelector(`#playerDirectory [data-player-profile="${Number(row.dataset.playerProfile)}"]`);
+    const season = data.season || seasons.find((item) => Number(item.id) === selectedSeasonId) || {};
+    const primary = season.ranking_method === "elo" ? "ELO" : "poeng";
+    seasonRoot.innerHTML = `
+      <div class="season-table-heading"><div><strong>${esc(season.name || "Sesong")}</strong><p class="tie-break-note">Offisiell rekkefølge: ${primary} → leg differanse → 3DA → innbyrdes.</p></div><span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span></div>
+      <div class="table-scroll"><table class="portal-table season-table combined-season-table" data-combined-season="${selectedSeasonId}">
+        <thead><tr><th data-sort-type="number" data-sort-default="ascending">Plass</th><th data-sort-type="text" data-sort-default="ascending">Spiller</th><th data-sort-type="number">Poeng</th><th data-sort-type="number">ELO</th><th data-sort-type="number">K</th><th data-sort-type="number">V</th><th data-sort-type="number">U</th><th data-sort-type="number">T</th><th data-sort-type="number" title="Leg differanse">Leg +/−</th><th data-sort-type="number">3DA</th></tr></thead>
+        <tbody>${(data.items || []).map((row) => `<tr data-player-profile="${Number(row.id)}"><td data-sort-value="${Number(row.position)}"><strong>${Number(row.position)}</strong></td><td data-sort-value="${esc(row.display_name)}"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td><td data-sort-value="${Number(row.points || 0)}"><strong>${pointsText(row.points)}</strong></td><td data-sort-value="${Number(row.elo_rating || 1000)}"><span class="elo-table-value">${Number(row.elo_rating || 1000).toFixed(1)}</span></td><td data-sort-value="${Number(row.matches_played || 0)}">${Number(row.matches_played || 0)}</td><td data-sort-value="${Number(row.wins || 0)}">${Number(row.wins || 0)}</td><td data-sort-value="${Number(row.draws || 0)}">${Number(row.draws || 0)}</td><td data-sort-value="${Number(row.losses || 0)}">${Number(row.losses || 0)}</td><td data-sort-value="${Number(row.leg_diff || 0)}"><span class="leg-diff ${Number(row.leg_diff || 0) > 0 ? "positive" : Number(row.leg_diff || 0) < 0 ? "negative" : ""}">${Number(row.leg_diff || 0) > 0 ? "+" : ""}${Number(row.leg_diff || 0)}</span></td><td data-sort-value="${Number(row.three_dart_average || 0)}">${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</td></tr>`).join("")}</tbody>
+      </table></div>`;
+    seasonRoot.querySelectorAll("[data-player-profile]").forEach((row) => row.addEventListener("click", () => {
       activate("players");
-      target?.click();
+      document.querySelector(`#playerDirectory [data-player-profile="${Number(row.dataset.playerProfile)}"]`)?.click();
     }));
-    bindSortableTables();
+    bindSorting();
   } catch (error) {
-    seasonStandings.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message || "Kunne ikke hente sesongtabellen.")}</p></div>`;
+    seasonRoot.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message || "Kunne ikke hente sesongtabellen.")}</p></div>`;
   } finally {
     seasonLoading = false;
   }
 }
 
 function queueSeasonRepair() {
-  if (!seasonStandings || seasonLoading || !selectedSeasonId || seasonRenderQueued) return;
-  if (seasonStandings.querySelector(`[data-combined-season="${selectedSeasonId}"]`)) return;
-  seasonRenderQueued = true;
-  window.setTimeout(() => {
-    seasonRenderQueued = false;
-    if (!seasonStandings.querySelector(`[data-combined-season="${selectedSeasonId}"]`)) renderSelectedSeason().catch(() => undefined);
-  }, 80);
+  if (!seasonRoot || !selectedSeasonId || seasonLoading || seasonRepairQueued) return;
+  if (seasonRoot.querySelector(`[data-combined-season="${selectedSeasonId}"]`)) return;
+  seasonRepairQueued = true;
+  setTimeout(() => {
+    seasonRepairQueued = false;
+    if (!seasonRoot.querySelector(`[data-combined-season="${selectedSeasonId}"]`)) renderSeason().catch(() => undefined);
+  }, 100);
 }
 
-function buildEloMovements(profile) {
-  const history = (profile.elo_history || []).map((entry) => ({ ...entry, rating: Number(entry.rating), tournament_id: Number(entry.tournament_id || 0) })).filter((entry) => Number.isFinite(entry.rating));
-  const movements = history.map((entry, index) => {
-    const before = history[index + 1] && Number.isFinite(history[index + 1].rating) ? Number(history[index + 1].rating) : null;
-    const after = Number(entry.rating);
-    return { ...entry, before, after, delta: before === null ? null : Number((after - before).toFixed(1)), used: false };
+function buildMovements(profile) {
+  const history = (profile.elo_history || []).map((item) => ({ ...item, rating: Number(item.rating), tournament_id: Number(item.tournament_id || 0) })).filter((item) => Number.isFinite(item.rating));
+  const movements = history.map((item, index) => {
+    const before = history[index + 1]?.rating;
+    const after = item.rating;
+    return { ...item, before: Number.isFinite(before) ? Number(before) : null, after, delta: Number.isFinite(before) ? Number((after - before).toFixed(1)) : null, used: false };
   });
-  const byTournament = new Map();
-  movements.forEach((movement) => {
-    if (!movement.tournament_id) return;
-    if (!byTournament.has(movement.tournament_id)) byTournament.set(movement.tournament_id, []);
-    byTournament.get(movement.tournament_id).push(movement);
+  const grouped = new Map();
+  movements.forEach((item) => {
+    if (!item.tournament_id) return;
+    if (!grouped.has(item.tournament_id)) grouped.set(item.tournament_id, []);
+    grouped.get(item.tournament_id).push(item);
   });
-  const matchMap = new Map();
+  const byMatch = new Map();
   (profile.recent_matches || []).forEach((match) => {
-    const movement = (byTournament.get(Number(match.tournament_id || 0)) || []).find((candidate) => !candidate.used);
+    const movement = (grouped.get(Number(match.tournament_id || 0)) || []).find((item) => !item.used);
     if (!movement) return;
     movement.used = true;
     movement.match = match;
-    matchMap.set(Number(match.id), movement);
+    byMatch.set(Number(match.id), movement);
   });
-  return { movements, matchMap };
+  return { movements, byMatch };
 }
 
 function movementClass(delta) {
-  if (delta === null || delta === undefined || Math.abs(Number(delta)) < 0.05) return "neutral";
+  if (delta === null || Math.abs(Number(delta)) < .05) return "neutral";
   return Number(delta) > 0 ? "positive" : "negative";
 }
 
-function movementHtml(movement, compact = false) {
-  if (!movement || movement.before === null || movement.after === null) return "";
-  const delta = Number(movement.delta || 0);
+function movementHtml(item, compact = false) {
+  if (!item || item.before === null) return "";
+  const delta = Number(item.delta || 0);
   const deltaText = `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
-  return `<span class="elo-movement ${movementClass(delta)}${compact ? " compact" : ""}" aria-label="ELO fra ${movement.before.toFixed(1)} til ${movement.after.toFixed(1)}, endring ${deltaText}"><span class="elo-movement-label">ELO</span><span class="elo-before">${movement.before.toFixed(1)}</span><span class="elo-arrow">→</span><strong class="elo-after">${movement.after.toFixed(1)}</strong><b class="elo-delta">${deltaText}</b></span>`;
+  return `<span class="elo-movement ${movementClass(delta)}${compact ? " compact" : ""}"><span class="elo-movement-label">ELO</span><span class="elo-before">${item.before.toFixed(1)}</span><span class="elo-arrow">→</span><strong class="elo-after">${item.after.toFixed(1)}</strong><b class="elo-delta">${deltaText}</b></span>`;
 }
 
-function enrichProfileWithElo(profile) {
-  if (!playerProfile || playerProfile.classList.contains("hidden")) return;
-  const { movements, matchMap } = buildEloMovements(profile);
-  playerProfile.querySelectorAll(".profile-match-history [data-match-detail]").forEach((row) => {
-    const movement = matchMap.get(Number(row.dataset.matchDetail || 0));
-    if (!movement || row.querySelector(".elo-movement")) return;
+function renderProfileElo(profile, playerId) {
+  if (!profileRoot || profileRoot.classList.contains("hidden")) return;
+  const { movements, byMatch } = buildMovements(profile);
+  profileRoot.querySelectorAll(".profile-match-history [data-match-detail]").forEach((row) => {
+    if (row.querySelector(".elo-movement")) return;
+    const movement = byMatch.get(Number(row.dataset.matchDetail || 0));
+    if (!movement) return;
     const date = row.querySelector(":scope > span");
     if (date) date.insertAdjacentHTML("beforebegin", movementHtml(movement, true));
     else row.insertAdjacentHTML("beforeend", movementHtml(movement, true));
   });
-  const sections = [...playerProfile.querySelectorAll(".profile-section")];
-  const eloSection = sections.find((section) => normalizeName(section.querySelector("h3")?.textContent).includes("elo-historikk") || normalizeName(section.querySelector("h3")?.textContent).includes("elo-utvikling"));
-  if (!eloSection) return;
-  const usable = movements.filter((movement) => movement.before !== null).slice(0, 16);
-  eloSection.innerHTML = `<div class="section-head"><div><h3>ELO-utvikling</h3><p class="muted">Slik flyttet ratingen seg etter hver ferdig kamp.</p></div></div><div class="elo-timeline">${usable.length ? usable.map((movement) => {
-    const match = movement.match;
-    const context = match ? `${match.result === "win" ? "Seier" : match.result === "draw" ? "Uavgjort" : "Tap"} mot ${esc(match.opponent_name || "motstander")}` : esc(movement.tournament_name || "ELO-oppdatering");
-    return `<div class="elo-timeline-row"><div class="elo-timeline-context"><strong>${context}</strong><small>${esc(movement.tournament_name || "")}${movement.calculated_at ? ` · ${esc(formatDate(movement.calculated_at))}` : ""}</small></div>${movementHtml(movement)}</div>`;
+
+  const eloSection = [...profileRoot.querySelectorAll(".profile-section")].find((section) => norm(section.querySelector("h3")?.textContent).includes("elo-historikk") || norm(section.querySelector("h3")?.textContent).includes("elo-utvikling"));
+  if (!eloSection || eloSection.dataset.eloTimelinePlayer === String(playerId)) return;
+  eloSection.dataset.eloTimelinePlayer = String(playerId);
+  const usable = movements.filter((item) => item.before !== null).slice(0, 16);
+  eloSection.innerHTML = `<div class="section-head"><div><h3>ELO-utvikling</h3><p class="muted">Startverdi, ny rating og endring etter hver ferdig kamp.</p></div></div><div class="elo-timeline">${usable.length ? usable.map((item) => {
+    const match = item.match;
+    const result = match ? (match.result === "win" ? "Seier" : match.result === "draw" ? "Uavgjort" : "Tap") : "ELO-oppdatering";
+    const context = match ? `${result} mot ${esc(match.opponent_name || "motstander")}` : esc(item.tournament_name || result);
+    return `<div class="elo-timeline-row"><div class="elo-timeline-context"><strong>${context}</strong><small>${esc(item.tournament_name || "")}${item.calculated_at ? ` · ${esc(formatDate(item.calculated_at))}` : ""}</small></div>${movementHtml(item)}</div>`;
   }).join("") : `<p class="muted">Ingen kampvise ELO-endringer registrert ennå.</p>`}</div>`;
 }
 
-async function enhanceCurrentProfile() {
-  if (!playerProfile || playerProfile.classList.contains("hidden")) return;
-  const playerId = Number(playerProfile.querySelector(".profile-all-matches[data-player]")?.dataset.player || 0);
+async function enhanceProfile() {
+  if (!profileRoot || profileRoot.classList.contains("hidden")) return;
+  const playerId = Number(profileRoot.querySelector(".profile-all-matches[data-player]")?.dataset.player || 0);
   if (!playerId) return;
-  const requestId = ++profileRequestId;
   try {
     let profile = profileCache.get(playerId);
     if (!profile) {
       profile = await api(`/players/${playerId}/profile`);
       profileCache.set(playerId, profile);
     }
-    if (requestId === profileRequestId) enrichProfileWithElo(profile);
+    renderProfileElo(profile, playerId);
   } catch {}
 }
 
 function enhance() {
-  if (!root || applying) return;
-  applying = true;
+  if (!root || enhancing) return;
+  enhancing = true;
   try {
-    simplifyStatisticsTabs();
-    cleanupDuplicatePublicRows();
+    prepareTabs();
     filterPlayers();
-    bindSortableTables();
+    bindSorting();
     activate(currentView);
     queueSeasonRepair();
   } finally {
-    applying = false;
+    enhancing = false;
   }
 }
 
 function initialize() {
   if (!root) return;
-  simplifyStatisticsTabs();
+  prepareTabs();
   ensureSeasonChooser();
   root.querySelectorAll("[data-statistics-view]").forEach((button) => {
     button.addEventListener("click", () => activate(button.dataset.statisticsView));
@@ -388,35 +316,34 @@ function initialize() {
       if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       const buttons = [...root.querySelectorAll("[data-statistics-view]")];
       const index = buttons.indexOf(button);
-      const next = buttons[(index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length];
-      next?.focus();
-      next?.click();
+      buttons[(index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length]?.click();
     });
   });
   search?.addEventListener("input", filterPlayers);
-  observer = new MutationObserver(() => window.requestAnimationFrame(enhance));
-  [seasonStandings, document.getElementById("playerDirectory")].filter(Boolean).forEach((node) => observer.observe(node, { childList: true, subtree: true }));
-  if (playerProfile) {
-    profileObserver = new MutationObserver(() => window.requestAnimationFrame(enhanceCurrentProfile));
-    profileObserver.observe(playerProfile, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+
+  const contentObserver = new MutationObserver(() => requestAnimationFrame(enhance));
+  [seasonRoot, playerRoot].filter(Boolean).forEach((node) => contentObserver.observe(node, { childList: true, subtree: true }));
+  if (profileRoot) {
+    const profileObserver = new MutationObserver(() => requestAnimationFrame(enhanceProfile));
+    profileObserver.observe(profileRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   }
+
   window.addEventListener("bd:portal-view", (event) => {
-    if (event.detail?.target === "statistics") {
-      enhance();
-      if (!seasonItems.length) loadSeasons().catch(() => undefined);
-    }
+    if (event.detail?.target !== "statistics") return;
+    enhance();
+    if (!seasons.length) loadSeasons().catch(() => undefined);
   });
   window.addEventListener("storage", (event) => {
-    if (event.key === "bd:playerClubId") {
-      seasonItems = [];
-      selectedSeasonId = 0;
-      loadSeasons().catch(() => undefined);
-    }
+    if (event.key !== "bd:playerClubId") return;
+    seasons = [];
+    selectedSeasonId = 0;
+    loadSeasons().catch(() => undefined);
   });
+
   activate("season");
   enhance();
   loadSeasons().catch((error) => {
-    if (seasonStandings) seasonStandings.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message || "Kunne ikke hente sesongene.")}</p></div>`;
+    if (seasonRoot) seasonRoot.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message || "Kunne ikke hente sesongene.")}</p></div>`;
   });
 }
 
