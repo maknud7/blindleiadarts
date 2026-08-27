@@ -58,8 +58,8 @@ $fetch = static function (string $url): array {
 $base = 'https://www.dartsatlas.com/seasons/' . $seasonId;
 $candidates = [
     'root' => $base,
-    'results' => $base . '/results',
-    'calendar' => $base . '/calendar',
+    'results' => $base . '/tournaments/results',
+    'calendar' => $base . '/tournaments/calendar',
     'statistics' => $base . '/statistics',
 ];
 
@@ -95,7 +95,7 @@ foreach ($candidates as $label => $url) {
 http_response_code($anySuccess ? 200 : 502);
 echo json_encode([
     'ok' => $anySuccess,
-    'marker' => 'atlas-season-probe-v2',
+    'marker' => 'atlas-season-probe-v3',
     'season_external_id' => $seasonId,
     'tournaments' => $allTournaments,
     'pages' => $pages,
