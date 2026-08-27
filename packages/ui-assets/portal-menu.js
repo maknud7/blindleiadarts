@@ -1,3 +1,5 @@
+const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20260827-1745", import.meta.url).href)).default;
+
 function ensureStylesheet(url) {
   const href = new URL(url, import.meta.url).href;
   if ([...document.styleSheets].some((sheet) => sheet.href === href)) return;
@@ -10,7 +12,7 @@ function ensureStylesheet(url) {
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260827-1415");
+ensureStylesheet("./unified-portal-shell.css?v=20260827-1745");
 ensureStylesheet("./mobile-app-nav.css?v=20260827-1430");
 
 if (document.body.dataset.bdSurface === "admin") {
@@ -19,7 +21,7 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260827-1430", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260827-1745", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
@@ -39,13 +41,12 @@ function normalizeTarget(value) {
 
 function canonicalHash(target) {
   const next = normalizeTarget(target);
-  if (CANONICAL_ROOT && ADMIN_SURFACE) return `#admin/${next}`;
-  return `#${next}`;
+  if (CANONICAL_ROOT && ADMIN_SURFACE) return app.router.href("admin", next);
+  return app.router.href("player", next);
 }
 
 function hashRequestsAdmin() {
-  const raw = String(window.location.hash || "").replace(/^#/, "").trim();
-  return raw === "admin" || raw.startsWith("admin/");
+  return app.router.route(window.location.hash).surface === "admin";
 }
 
 function canonicalSurfaceMismatch() {
@@ -127,7 +128,7 @@ let lastRoleToken = null;
 async function syncRoleAccess() {
   const gated = [...document.querySelectorAll("#adminPortalLink,[data-role-access='admin']")];
   if (!gated.length) return;
-  const token = localStorage.getItem("bd:token") || "";
+  const token = app.session.token();
   if (!token) {
     gated.forEach((node) => node.classList.add("hidden"));
     lastRoleToken = null;
@@ -135,10 +136,8 @@ async function syncRoleAccess() {
   }
   if (lastRoleToken === token && gated.every((node) => node.dataset.roleResolved === "1")) return;
   try {
-    const response = await fetch("../api/v1/auth/me", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-    const payload = await response.json().catch(() => null);
-    const role = payload?.data?.user?.role || "";
-    const allowed = ["club_admin", "super_admin"].includes(role);
+    const user = await app.session.resolve();
+    const allowed = app.session.isAdmin(user);
     gated.forEach((node) => {
       node.classList.toggle("hidden", !allowed);
       node.dataset.roleResolved = "1";
@@ -183,6 +182,7 @@ window.addEventListener("hashchange", () => {
   activate(window.location.hash, { updateHash: false });
 });
 window.addEventListener("storage", () => syncRoleAccess().catch(() => undefined));
+window.addEventListener("bd:session", () => syncRoleAccess().catch(() => undefined));
 window.setInterval(() => syncRoleAccess().catch(() => undefined), 5000);
 
 let refreshQueued = false;
