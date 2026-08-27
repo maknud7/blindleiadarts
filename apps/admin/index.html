@@ -14,8 +14,18 @@
       if (legacy) {
         const raw = String(window.location.hash || "").replace(/^#/, "").trim();
         const normalized = raw.startsWith("admin/") ? raw.slice(6) : raw;
-        const target = /^[a-z0-9_-]+$/i.test(normalized) ? normalized : "overview";
-        window.location.replace(`${legacy[1] || "/"}#admin/${target}`);
+        const routes = {
+          overview: "club",
+          tournaments: "tournament-admin",
+          seasons: "seasons",
+          playerbase: "playerbase",
+          players: "members",
+          kiosks: "equipment",
+          integrations: "settings",
+          superadmin: "superadmin",
+        };
+        const target = routes[normalized] || "club";
+        window.location.replace(`${legacy[1] || "/"}#${target}`);
         return;
       }
       try {
@@ -31,7 +41,8 @@
   <link rel="stylesheet" href="./member-onboarding-admin.css?v=20260826-1845">
   <link rel="stylesheet" href="./equipment-admin-ux.css?v=20260826-1335">
   <link rel="stylesheet" href="./admin-ux.css?v=20260826-0915">
-  <link rel="stylesheet" href="./health-tracker.css?v=20260827-1200">
+  <link rel="stylesheet" href="./health-tracker.css?v=20260827-1900">
+  <link rel="stylesheet" href="./player-identity-admin.css?v=20260827-1900">
   <link rel="stylesheet" href="../packages/ui-assets/portal-brand.css?v=20260826-1300">
   <link rel="stylesheet" href="./brand-logo-fix.css?v=20260826-1420">
 </head>
@@ -42,7 +53,7 @@
       <div>
         <p class="eyebrow">Blindleia Darts</p>
         <h1>Logg inn</h1>
-        <p class="muted">Administrasjonen er adskilt fra spillerflyten. Du ser bare adminfunksjonene du har tilgang til.</p>
+        <p class="muted">Du ser bare funksjonene rollen din gir tilgang til.</p>
       </div>
       <form id="loginForm" class="login-form">
         <label><span>E-postadresse</span><input id="loginUsername" type="email" autocomplete="email" inputmode="email" required></label>
@@ -96,10 +107,10 @@
         </div>
         <div class="panel health-tracker">
           <div class="health-tracker-head">
-            <div><p class="eyebrow">Drift og selvdiagnose</p><h2>Helsesjekk</h2><p class="muted">Måler hele kjeden bak Min side, ikke bare om serveren svarer.</p></div>
+            <div><p class="eyebrow">Drift og selvdiagnose</p><h2>Helsesjekk</h2><p class="muted">Måler hele plattformkjeden og peker også ut uavklarte identitetskonflikter.</p></div>
             <button id="runHealthTracker" type="button" class="button secondary">Kjør helsesjekk</button>
           </div>
-          <div id="healthTrackerSummary" class="health-summary neutral"><div><strong>Ikke kjørt ennå</strong><p>Tester database, medlemskap, profiler, kamphistorikk og Min side-dashboard.</p></div><span class="health-overall">—</span></div>
+          <div id="healthTrackerSummary" class="health-summary neutral"><div><strong>Ikke kjørt ennå</strong><p>Tester database, profiler, kamphistorikk, identiteter og portal.</p></div><span class="health-overall">—</span></div>
           <div id="healthTrackerResults" class="health-results"><div class="empty">Helsesjekken starter automatisk.</div></div>
         </div>
       </section>
@@ -208,13 +219,16 @@
     })();
   </script>
   <script src="./app.js" type="module"></script>
-  <script src="./health-tracker.js?v=20260827-1200" type="module"></script>
+  <script src="./health-tracker.js?v=20260827-1900" type="module"></script>
   <script src="./pairing-claim.js?v=20260826-1345" type="module"></script>
   <script src="./board-admin.js?v=20260826-1435" type="module"></script>
   <script src="./member-onboarding-admin.js?v=20260826-2035" type="module"></script>
+  <script src="./player-identity-admin.js?v=20260827-1900" type="module"></script>
+  <script src="./activity-admin.js?v=20260827-1900" type="module"></script>
+  <script src="./superadmin-identity-audit.js?v=20260827-1900" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
   <script src="./checkin-admin-v2.js?v=20260826-1445" type="module"></script>
   <script src="./tournament-loader.js?v=20260826-1510" type="module"></script>
-  <script src="../packages/ui-assets/portal-menu.js" type="module"></script>
+  <script src="../packages/ui-assets/portal-menu.js?v=20260827-1900" type="module"></script>
 </body>
 </html>
