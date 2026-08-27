@@ -27,9 +27,10 @@ try {
     }
 
     // Use the database clock so the smoke test is independent of the GitHub runner timezone.
+    // Check-in belongs to the draft phase; ready means attendance has been finalized.
     $clock=$db->query('SELECT DATE_ADD(NOW(), INTERVAL 30 MINUTE) AS start1, DATE_ADD(NOW(), INTERVAL 3 HOUR) AS start2')->fetch_assoc();
     $start1=(string)$clock['start1']; $tn1='Venue Code '.$suffix; $ts1='venue-code-'.$suffix;
-    $s=$db->prepare(sprintf('INSERT INTO `%1$stournaments` (club_id,name,slug,status,start_at) VALUES (?,?,?,"ready",?)',$p)); $s->bind_param('isss',$ids['club'],$tn1,$ts1,$start1); $s->execute(); $ids['t1']=(int)$s->insert_id; $s->close();
+    $s=$db->prepare(sprintf('INSERT INTO `%1$stournaments` (club_id,name,slug,status,start_at) VALUES (?,?,?,"draft",?)',$p)); $s->bind_param('isss',$ids['club'],$tn1,$ts1,$start1); $s->execute(); $ids['t1']=(int)$s->insert_id; $s->close();
     $start2=(string)$clock['start2']; $tn2='Early '.$suffix; $ts2='early-'.$suffix;
     $s=$db->prepare(sprintf('INSERT INTO `%1$stournaments` (club_id,name,slug,status,start_at) VALUES (?,?,?,"draft",?)',$p)); $s->bind_param('isss',$ids['club'],$tn2,$ts2,$start2); $s->execute(); $ids['t2']=(int)$s->insert_id; $s->close();
     foreach ([[$ids['t1'],$ids['a']],[$ids['t1'],$ids['b']],[$ids['t2'],$ids['c']],[$ids['t1'],$ids['d']]] as [$t,$player]) {
