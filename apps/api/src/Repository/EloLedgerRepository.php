@@ -13,17 +13,12 @@ final class EloLedgerRepository
     private mysqli $connection;
     private string $tablePrefix;
     private EloCalculator $calculator;
-    /** @var array<string, array{rating:float,played:int}> */
-    private array $baseline = [];
-    private ?string $baselineFrom = null;
-    private ?string $baselineUntil = null;
 
     public function __construct(Database $database, ?EloCalculator $calculator = null)
     {
         $this->connection = $database->connection();
         $this->tablePrefix = $database->tablePrefix();
         $this->calculator = $calculator ?? new EloCalculator();
-        $this->loadBaseline();
     }
 
     public function applyCompletedMatch(int $matchId): void
@@ -123,57 +118,67 @@ final class EloLedgerRepository
     private function rebuildSeason(int $seasonId): void
     {
         $events = $this->listAppliedEvents($seasonId);
-        /** @var array<int, array{rating:float,played:int,last_event_id:?int}> $state */
+        $identityByPlayer = $this->buildIdentityMap($events);
+
+        /** @var array<string, array{rating:float,played:int,last_event_id:?int}> $state */
         $state = [];
+        /** @var array<string, array<int,true>> $aliases */
+        $aliases = [];
         $timeline = [];
 
         foreach ($events as $event) {
             $playerAId = (int) $event['player_a_id'];
             $playerBId = (int) $event['player_b_id'];
-            $startAt = is_string($event['tournament_start_at'] ?? null) ? $event['tournament_start_at'] : null;
+            $keyA = $identityByPlayer[$playerAId] ?? ('player:' . $playerAId);
+            $keyB = $identityByPlayer[$playerBId] ?? ('player:' . $playerBId);
 
-            if (!isset($state[$playerAId])) {
-                $initial = $this->initialPlayerState(
-                    $seasonId,
-                    $playerAId,
-                    (string) $event['player_a_name'],
-                    $startAt
-                );
-                $state[$playerAId] = ['rating' => $initial['rating'], 'played' => $initial['played'], 'last_event_id' => null];
+            if ($keyA === $keyB) {
+                throw new \RuntimeException(sprintf(
+                    'ELO identity collision in match %d: both sides resolve to %s.',
+                    (int) $event['match_id'],
+                    $keyA
+                ));
             }
-            if (!isset($state[$playerBId])) {
-                $initial = $this->initialPlayerState(
-                    $seasonId,
-                    $playerBId,
-                    (string) $event['player_b_name'],
-                    $startAt
-                );
-                $state[$playerBId] = ['rating' => $initial['rating'], 'played' => $initial['played'], 'last_event_id' => null];
-            }
+
+            $aliases[$keyA][$playerAId] = true;
+            $aliases[$keyB][$playerBId] = true;
+            $state[$keyA] ??= ['rating' => 1000.0, 'played' => 0, 'last_event_id' => null];
+            $state[$keyB] ??= ['rating' => 1000.0, 'played' => 0, 'last_event_id' => null];
 
             $calc = $this->calculator->calculate(
-                $state[$playerAId]['rating'],
-                $state[$playerBId]['rating'],
-                $state[$playerAId]['played'],
-                $state[$playerBId]['played'],
+                $state[$keyA]['rating'],
+                $state[$keyB]['rating'],
+                $state[$keyA]['played'],
+                $state[$keyB]['played'],
                 (float) $event['score_a']
             );
 
-            $this->updateEventCalculation((int) $event['id'], $calc);
-            $state[$playerAId] = [
+            $eventId = (int) $event['id'];
+            $this->updateEventCalculation($eventId, $calc);
+            $state[$keyA] = [
                 'rating' => $calc['rating_a_after'],
                 'played' => $calc['matches_after_a'],
-                'last_event_id' => (int) $event['id'],
+                'last_event_id' => $eventId,
             ];
-            $state[$playerBId] = [
+            $state[$keyB] = [
                 'rating' => $calc['rating_b_after'],
                 'played' => $calc['matches_after_b'],
-                'last_event_id' => (int) $event['id'],
+                'last_event_id' => $eventId,
             ];
             $timeline[] = ['event' => $event, 'calc' => $calc];
         }
 
-        $this->replaceCurrentRatings($seasonId, $state);
+        $rawState = [];
+        foreach ($aliases as $identityKey => $playerIds) {
+            if (!isset($state[$identityKey])) {
+                continue;
+            }
+            foreach (array_keys($playerIds) as $playerId) {
+                $rawState[(int) $playerId] = $state[$identityKey];
+            }
+        }
+
+        $this->replaceCurrentRatings($seasonId, $rawState);
         $this->replaceLedgerSnapshots($seasonId, $timeline);
     }
 
@@ -181,14 +186,43 @@ final class EloLedgerRepository
     private function listAppliedEvents(int $seasonId): array
     {
         $sql = sprintf(
-            'SELECT e.*, t.start_at AS tournament_start_at,
-                    pa.display_name AS player_a_name, pb.display_name AS player_b_name
+            'SELECT e.*,
+                    t.start_at AS tournament_start_at,
+                    m.round_label, m.round_number, m.bracket_label, m.tournament_group_id,
+                    COALESCE(m.finished_at, m.starts_at, t.start_at, m.created_at, e.applied_at) AS occurred_at,
+                    pa.display_name AS player_a_name, pa.member_id AS player_a_member_id,
+                    pb.display_name AS player_b_name, pb.member_id AS player_b_member_id,
+                    CASE
+                        WHEN m.tournament_group_id IS NOT NULL OR LOWER(COALESCE(m.bracket_label, ""))="group" THEN 0
+                        WHEN pn.id IS NOT NULL OR LOWER(COALESCE(m.bracket_label, "")) IN ("single_elimination","playoff","knockout") THEN 2
+                        ELSE 1
+                    END AS phase_order,
+                    CASE
+                        WHEN m.tournament_group_id IS NOT NULL OR LOWER(COALESCE(m.bracket_label, ""))="group"
+                            THEN COALESCE(m.round_number, 32767)
+                        WHEN pn.id IS NOT NULL
+                            THEN COALESCE(pn.round_number, m.round_number, 32767)
+                        ELSE COALESCE(m.round_number, 32767)
+                    END AS logical_round,
+                    COALESCE(tg.sort_order, 0) AS group_order,
+                    COALESCE(pn.position, 0) AS playoff_position
              FROM `%1$selo_match_events` e
+             INNER JOIN `%1$smatches` m ON m.id=e.match_id
              INNER JOIN `%1$stournaments` t ON t.id=e.tournament_id
              INNER JOIN `%1$splayers` pa ON pa.id=e.player_a_id
              INNER JOIN `%1$splayers` pb ON pb.id=e.player_b_id
+             LEFT JOIN `%1$stournament_groups` tg ON tg.id=m.tournament_group_id
+             LEFT JOIN `%1$stournament_playoff_nodes` pn ON pn.match_id=m.id
              WHERE e.season_id=? AND e.status="applied"
-             ORDER BY e.applied_at ASC, e.id ASC',
+             ORDER BY COALESCE(t.start_at, m.created_at, e.applied_at) ASC,
+                      t.id ASC,
+                      phase_order ASC,
+                      logical_round ASC,
+                      group_order ASC,
+                      playoff_position ASC,
+                      occurred_at ASC,
+                      m.id ASC,
+                      e.id ASC',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
@@ -197,6 +231,53 @@ final class EloLedgerRepository
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
         return $rows;
+    }
+
+    /**
+     * Resolve duplicate player rows into one ELO identity without merging two known members
+     * who happen to share a display name. A null-member alias is attached to a name group only
+     * when that group has zero or exactly one known member id.
+     *
+     * @param array<int,array<string,mixed>> $events
+     * @return array<int,string>
+     */
+    private function buildIdentityMap(array $events): array
+    {
+        $groups = [];
+        foreach ($events as $event) {
+            foreach (['a', 'b'] as $side) {
+                $playerId = (int) $event['player_' . $side . '_id'];
+                $memberValue = $event['player_' . $side . '_member_id'] ?? null;
+                $memberId = $memberValue !== null ? (int) $memberValue : null;
+                $name = mb_strtolower(trim((string) ($event['player_' . $side . '_name'] ?? '')), 'UTF-8');
+                $clubId = (int) ($event['club_id'] ?? 0);
+                $groupKey = $name !== '' ? ($clubId . ':' . $name) : ('player:' . $playerId);
+                $groups[$groupKey]['players'][$playerId] = $memberId;
+                if ($memberId !== null && $memberId > 0) {
+                    $groups[$groupKey]['members'][$memberId] = true;
+                }
+            }
+        }
+
+        $map = [];
+        foreach ($groups as $groupKey => $group) {
+            $memberIds = array_map('intval', array_keys($group['members'] ?? []));
+            $singleMemberId = count($memberIds) === 1 ? $memberIds[0] : null;
+            foreach ($group['players'] as $playerId => $memberId) {
+                $playerId = (int) $playerId;
+                $memberId = $memberId !== null ? (int) $memberId : null;
+                if ($memberId !== null && $memberId > 0) {
+                    $map[$playerId] = 'member:' . $memberId;
+                } elseif ($singleMemberId !== null) {
+                    $map[$playerId] = 'member:' . $singleMemberId;
+                } elseif ($memberIds === []) {
+                    $map[$playerId] = 'name:' . $groupKey;
+                } else {
+                    $map[$playerId] = 'player:' . $playerId;
+                }
+            }
+        }
+        return $map;
     }
 
     /** @param array<string, mixed> $calc */
@@ -211,7 +292,7 @@ final class EloLedgerRepository
         );
         $stmt = $this->connection->prepare($sql);
         $stmt->bind_param(
-            'ddddddiidii',
+            'ddddddiiddi',
             $calc['rating_a_before'],
             $calc['rating_b_before'],
             $calc['rating_a_after'],
@@ -249,10 +330,11 @@ final class EloLedgerRepository
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
+        ksort($state);
         foreach ($state as $playerId => $row) {
-            $rating = $row['rating'];
-            $played = $row['played'];
-            $lastEventId = $row['last_event_id'];
+            $rating = (float) $row['rating'];
+            $played = (int) $row['played'];
+            $lastEventId = $row['last_event_id'] !== null ? (int) $row['last_event_id'] : null;
             $stmt->bind_param('iidii', $seasonId, $playerId, $rating, $played, $lastEventId);
             $stmt->execute();
         }
@@ -291,7 +373,7 @@ final class EloLedgerRepository
             $eventId = (int) $event['id'];
             $tournamentId = (int) $event['tournament_id'];
             $matchId = (int) $event['match_id'];
-            $calculatedAt = substr((string) $event['applied_at'], 0, 19);
+            $calculatedAt = substr((string) ($event['occurred_at'] ?? $event['applied_at']), 0, 19);
 
             foreach ([
                 [
@@ -325,64 +407,14 @@ final class EloLedgerRepository
                     'matches_before' => $player['matches_before'],
                     'matches_after' => $player['matches_after'],
                     'k' => $player['k'],
+                    'phase_order' => (int) ($event['phase_order'] ?? 1),
+                    'logical_round' => (int) ($event['logical_round'] ?? 0),
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 $insert->bind_param('iiidss', $seasonId, $tournamentId, $playerId, $points, $context, $calculatedAt);
                 $insert->execute();
             }
         }
         $insert->close();
-    }
-
-    /** @return array{rating:float,played:int,source:string} */
-    private function initialPlayerState(int $seasonId, int $playerId, string $displayName, ?string $tournamentStartAt): array
-    {
-        $key = mb_strtolower(trim($displayName), 'UTF-8');
-        if ($this->baselineApplies($tournamentStartAt) && isset($this->baseline[$key])) {
-            return [
-                'rating' => $this->baseline[$key]['rating'],
-                'played' => $this->baseline[$key]['played'],
-                'source' => 'mandagsserien_2026_08_24',
-            ];
-        }
-
-        $sql = sprintf(
-            'SELECT points, context_json FROM `%1$sranking_snapshots`
-             WHERE season_id=? AND player_id=? AND ranking_type="elo"
-               AND (context_json IS NULL
-                    OR JSON_UNQUOTE(JSON_EXTRACT(context_json, "$.source")) IS NULL
-                    OR JSON_UNQUOTE(JSON_EXTRACT(context_json, "$.source"))<>"elo_ledger")
-             ORDER BY calculated_at DESC, id DESC LIMIT 1',
-            $this->tablePrefix
-        );
-        $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('ii', $seasonId, $playerId);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc() ?: null;
-        $stmt->close();
-        if ($row !== null) {
-            $played = 0;
-            if (is_string($row['context_json'] ?? null) && $row['context_json'] !== '') {
-                $context = json_decode($row['context_json'], true);
-                if (is_array($context)) {
-                    $played = (int) ($context['matches_after'] ?? $context['matches_played'] ?? $context['played'] ?? 0);
-                }
-            }
-            return ['rating' => (float) $row['points'], 'played' => $played, 'source' => 'ranking_snapshot'];
-        }
-
-        return ['rating' => 1000.0, 'played' => 0, 'source' => 'default_1000'];
-    }
-
-    private function baselineApplies(?string $startAt): bool
-    {
-        if ($startAt === null || $this->baselineFrom === null) {
-            return false;
-        }
-        $date = substr($startAt, 0, 10);
-        if ($date < $this->baselineFrom) {
-            return false;
-        }
-        return $this->baselineUntil === null || $date <= $this->baselineUntil;
     }
 
     /** @return array<string, mixed>|null */
@@ -412,26 +444,5 @@ final class EloLedgerRepository
         $stmt->execute();
         $stmt->get_result()->fetch_assoc();
         $stmt->close();
-    }
-
-    private function loadBaseline(): void
-    {
-        $path = dirname(__DIR__, 2) . '/data/mandagsserien-elo-2026-08-24.php';
-        if (!is_file($path)) {
-            return;
-        }
-        $data = require $path;
-        $this->baselineFrom = isset($data['effective_from_date']) ? (string) $data['effective_from_date'] : null;
-        $this->baselineUntil = isset($data['effective_until_date']) ? (string) $data['effective_until_date'] : '2026-12-31';
-        foreach ((array) ($data['players'] ?? []) as $player) {
-            $name = mb_strtolower(trim((string) ($player['display_name'] ?? '')), 'UTF-8');
-            if ($name === '') {
-                continue;
-            }
-            $this->baseline[$name] = [
-                'rating' => (float) ($player['rating'] ?? 1000.0),
-                'played' => (int) ($player['played'] ?? 0),
-            ];
-        }
     }
 }
