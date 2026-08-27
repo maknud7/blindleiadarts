@@ -31,6 +31,25 @@ $exists = static function (mysqli $db, string $table): bool {
     return $ok;
 };
 
+$columns = static function (mysqli $db, string $table): array {
+    $stmt = $db->prepare('SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? ORDER BY ordinal_position');
+    $stmt->bind_param('s', $table);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return array_map(static fn (array $row): string => (string) $row['column_name'], $rows);
+};
+
+$selectExisting = static function (array $available, array $wanted, string $alias = ''): array {
+    $result = [];
+    foreach ($wanted as $name) {
+        if (in_array($name, $available, true)) {
+            $result[] = ($alias !== '' ? $alias . '.' : '') . '`' . $name . '`';
+        }
+    }
+    return $result;
+};
+
 $printRows = static function (string $label, mysqli_result $result): void {
     echo "\n=== {$label} ===\n";
     foreach ($result->fetch_all(MYSQLI_ASSOC) as $row) {
@@ -38,53 +57,74 @@ $printRows = static function (string $label, mysqli_result $result): void {
     }
 };
 
-$printRows('seasons', $db->query(sprintf(
-    'SELECT id,name,starts_on,ends_on,is_active,status,ranking_method FROM `%1$sseasons` ORDER BY starts_on DESC,id DESC LIMIT 15',
-    $p
-)));
+$seasonTable = $p . 'seasons';
+if ($exists($db, $seasonTable)) {
+    $seasonCols = $columns($db, $seasonTable);
+    echo 'SEASON_COLUMNS ' . implode(',', $seasonCols) . "\n";
+    $select = $selectExisting($seasonCols, ['id','club_id','name','starts_on','ends_on','is_active','status','ranking_method','points_win','points_draw','points_loss','created_at','updated_at']);
+    $order = in_array('starts_on', $seasonCols, true) ? '`starts_on` DESC,`id` DESC' : '`id` DESC';
+    $printRows('seasons', $db->query('SELECT ' . implode(',', $select) . " FROM `{$seasonTable}` ORDER BY {$order} LIMIT 15"));
+}
 
-$printRows('tournaments', $db->query(sprintf(
-    'SELECT t.id,t.season_id,t.name,t.slug,t.provider_system,t.status,t.start_at,t.end_at,
-            COUNT(DISTINCT m.id) matches,
-            COUNT(DISTINCT l.id) legs,
-            COUNT(DISTINCT v.id) visits
-     FROM `%1$stournaments` t
-     LEFT JOIN `%1$smatches` m ON m.tournament_id=t.id
-     LEFT JOIN `%1$slegs` l ON l.match_id=m.id
-     LEFT JOIN `%1$svisits` v ON v.match_id=m.id
-     GROUP BY t.id,t.season_id,t.name,t.slug,t.provider_system,t.status,t.start_at,t.end_at
-     ORDER BY t.start_at DESC,t.id DESC LIMIT 40',
-    $p
-)));
+$tournamentTable = $p . 'tournaments';
+if ($exists($db, $tournamentTable)) {
+    $tournamentCols = $columns($db, $tournamentTable);
+    echo 'TOURNAMENT_COLUMNS ' . implode(',', $tournamentCols) . "\n";
+    $select = $selectExisting($tournamentCols, ['id','club_id','season_id','name','slug','provider_system','status','start_at','end_at','created_at','updated_at'], 't');
+    $joins = [];
+    $group = $select;
+    if ($exists($db, $p . 'matches')) {
+        $joins[] = sprintf('LEFT JOIN `%1$smatches` m ON m.tournament_id=t.id', $p);
+        $select[] = 'COUNT(DISTINCT m.id) AS matches';
+        if ($exists($db, $p . 'legs')) {
+            $joins[] = sprintf('LEFT JOIN `%1$slegs` l ON l.match_id=m.id', $p);
+            $select[] = 'COUNT(DISTINCT l.id) AS legs';
+        }
+        if ($exists($db, $p . 'visits')) {
+            $joins[] = sprintf('LEFT JOIN `%1$svisits` v ON v.match_id=m.id', $p);
+            $select[] = 'COUNT(DISTINCT v.id) AS visits';
+        }
+    }
+    $order = in_array('start_at', $tournamentCols, true) ? 't.`start_at` DESC,t.`id` DESC' : 't.`id` DESC';
+    $sql = 'SELECT ' . implode(',', $select) . " FROM `{$tournamentTable}` t " . implode(' ', $joins);
+    if ($joins !== []) $sql .= ' GROUP BY ' . implode(',', $group);
+    $sql .= " ORDER BY {$order} LIMIT 50";
+    $printRows('tournaments', $db->query($sql));
+}
 
 if ($exists($db, $p . 'external_references')) {
+    $externalTable = $p . 'external_references';
+    $externalCols = $columns($db, $externalTable);
+    echo 'EXTERNAL_REFERENCE_COLUMNS ' . implode(',', $externalCols) . "\n";
     $provider = 'darts' . 'atlas';
-    $stmt = $db->prepare(sprintf(
-        'SELECT external_system,external_entity_type,internal_entity_type,COUNT(*) refs,
-                MIN(external_id) sample_external_id,MAX(last_synced_at) last_synced_at
-         FROM `%1$sexternal_references`
-         WHERE external_system=? OR external_system LIKE "%%atlas%%"
-         GROUP BY external_system,external_entity_type,internal_entity_type
-         ORDER BY refs DESC',
-        $p
-    ));
-    $stmt->bind_param('s', $provider);
-    $stmt->execute();
-    $printRows('legacy external references', $stmt->get_result());
-    $stmt->close();
+    if (in_array('external_system', $externalCols, true)) {
+        $stmt = $db->prepare(sprintf(
+            'SELECT external_system,external_entity_type,internal_entity_type,COUNT(*) refs,
+                    MIN(external_id) sample_external_id,MAX(last_synced_at) last_synced_at
+             FROM `%1$sexternal_references`
+             WHERE external_system=? OR external_system LIKE "%%atlas%%"
+             GROUP BY external_system,external_entity_type,internal_entity_type
+             ORDER BY refs DESC',
+            $p
+        ));
+        $stmt->bind_param('s', $provider);
+        $stmt->execute();
+        $printRows('legacy external references', $stmt->get_result());
+        $stmt->close();
+    }
 }
 
 if ($exists($db, $p . 'connector_sync_jobs')) {
-    $provider = 'darts' . 'atlas';
-    $stmt = $db->prepare(sprintf(
-        'SELECT id,external_system,job_type,scope_entity_type,scope_entity_id,status,started_at,finished_at,error_message
-         FROM `%1$sconnector_sync_jobs`
-         WHERE external_system=? OR external_system LIKE "%%atlas%%"
-         ORDER BY id DESC LIMIT 25',
-        $p
-    ));
-    $stmt->bind_param('s', $provider);
-    $stmt->execute();
-    $printRows('legacy connector jobs', $stmt->get_result());
-    $stmt->close();
+    $jobTable = $p . 'connector_sync_jobs';
+    $jobCols = $columns($db, $jobTable);
+    echo 'CONNECTOR_JOB_COLUMNS ' . implode(',', $jobCols) . "\n";
+    if (in_array('external_system', $jobCols, true)) {
+        $provider = 'darts' . 'atlas';
+        $select = $selectExisting($jobCols, ['id','external_system','job_type','scope_entity_type','scope_entity_id','status','summary_json','error_message','started_at','finished_at','created_at']);
+        $stmt = $db->prepare('SELECT ' . implode(',', $select) . " FROM `{$jobTable}` WHERE external_system=? OR external_system LIKE \"%atlas%\" ORDER BY id DESC LIMIT 30");
+        $stmt->bind_param('s', $provider);
+        $stmt->execute();
+        $printRows('legacy connector jobs', $stmt->get_result());
+        $stmt->close();
+    }
 }
