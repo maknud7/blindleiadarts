@@ -12,7 +12,7 @@ Use this skill whenever old tournament/season data is copied from DartsAtlas int
 1. Never migrate a new tournament to PROD before the exact same migration path is green in TEST.
 2. Never continue with additional TEST tournaments while the Atlas history QA workflow is red for already-imported tournaments.
 3. Never mark a historical tournament `completed` merely because the structural rows exist. Completion is a post-condition after matches, legs, visits, statistics, playoff state, ranking events and external references have been verified.
-4. A canonical completed tournament must match the platform lifecycle: `tournaments.status='completed'` **and** `tournaments.end_at IS NOT NULL`. A completed playoff must have `status='completed'`, a champion, and completed nodes. The normal playoff lifecycle in `TournamentPlayoffRepository` is the reference behavior.
+4. A canonical completed tournament must match the platform lifecycle: `tournaments.status='completed'` **and** `tournaments.end_at IS NOT NULL`. A completed playoff must have `status='completed'`, a champion, and completed nodes. Completed legs must have winner and finish markers. For single-elimination tournaments, non-champions must be `eliminated` while the champion remains the sole checked-in participant, matching the normal playoff lifecycle.
 5. Import one full match atomically. Never leave half a match in the database. Visits may be fetched sequentially, but the database write for a match must be one transaction.
 6. Resolve players canonically. Prefer existing member-linked/active player IDs and retain DartsAtlas external references. Do not create a second local player only because an old Atlas identity exists.
 7. Never infer dart segments, busts, checkout darts or other data not present in the source. Aggregate data must remain aggregate data.
@@ -20,9 +20,11 @@ Use this skill whenever old tournament/season data is copied from DartsAtlas int
 9. New migrations must be manifest/config driven. Do not create future tournament importers by runtime text replacement of a previous tournament-specific PHP file. The old #1/#2 importers may remain as migration history, but they are not the model for PROD promotion.
 10. Before any write, fetch current `develop` and inspect current schema/import files. Concurrent development is normal in this repository.
 
-## Known lifecycle bug to guard against
+## Known lifecycle bugs to guard against
 
-The legacy Atlas structural importer writes `status='completed'` on `tournaments`, but historically did not populate `end_at`. The normal Blindleia playoff lifecycle completes a tournament with both `status='completed'` and a non-null `end_at`. Missing `end_at` must therefore fail QA and be repaired/finalized before PROD.
+The legacy Atlas structural importer writes `status='completed'` on `tournaments`, but historically did not populate `end_at`. It also registered all historical participants as `checked_in`, even after a completed playoff, and the detailed visit importer created completed legs without `finished_at`. Those rows contain valid historical match data but do not fully match the canonical Blindleia lifecycle. All three conditions must fail lifecycle QA and be finalized before PROD.
+
+Use `infra/sql/atlas_history_finalize.php` only after data-phase QA is green. It repairs lifecycle markers without inventing dart data: completed legs inherit the already stored match finish marker, playoff losers become eliminated, the champion remains checked in, and tournament `end_at` uses the latest already stored match finish marker. Outside TEST it requires the explicit `ALLOW_PROD_ATLAS_FINALIZE=yes` gate.
 
 ## Required migration phases
 
@@ -58,32 +60,47 @@ For each Atlas match:
 - commit only after the complete match validates;
 - on any error, roll back that match and stop/retry safely.
 
-### 4. Strict TEST verification
+### 4. Verify data before finalization
 
-Run:
+Run the strict verifier with `--phase=data` before changing lifecycle state:
+
+`php infra/sql/atlas_history_verify.php --external=<ATLAS_TOURNAMENT_ID> --expected-matches=<N> --expected-players=<N> --phase=data`
+
+This must prove source/result/leg/visit/statistics/playoff/ranking completeness first.
+
+### 5. Finalize and run strict TEST verification
+
+Finalize only after data QA is green:
+
+`php infra/sql/atlas_history_finalize.php --external=<ATLAS_TOURNAMENT_ID>`
+
+Then run both final gates:
 
 `php infra/sql/atlas_history_verify.php --external=<ATLAS_TOURNAMENT_ID> --expected-matches=<N> --expected-players=<N> --phase=final`
 
-The verifier is a release gate, not an informational inventory. It must fail on lifecycle or data inconsistencies, including:
+`php infra/sql/atlas_history_lifecycle_verify.php --external=<ATLAS_TOURNAMENT_ID>`
+
+The verifiers are release gates, not informational inventories. They must fail on lifecycle or data inconsistencies, including:
 
 - wrong participant/match count;
-- tournament not completed or missing `end_at` in final phase;
-- participant without a match;
-- missing group assignment;
+- tournament not completed or missing `end_at`;
+- participant without a match or missing group assignment;
 - non-completed match, missing winner/finished timestamp or missing Atlas match reference;
 - source result differing from imported leg winners/statistics;
 - incomplete/missing legs or visits;
+- completed legs missing canonical finish markers;
 - missing canonical Atlas player reference;
 - incomplete playoff/champion/final node;
+- participant lifecycle inconsistent with completed playoff;
 - missing season ranking events.
 
-`history_inventory.php` is useful context, but it is **not** a substitute for this verifier.
+`history_inventory.php` is useful context, but it is **not** a substitute for these verifiers.
 
-### 5. Idempotency test in TEST
+### 6. Idempotency test in TEST
 
-Before PROD, rerun the same import once against TEST and run the strict verifier again. The second run must not create extra tournaments, matches, players, legs, visits, ranking events or external references, and must not change the winner/standings.
+Before PROD, rerun the same import/finalization once against TEST and run both strict verifiers again. The second run must not create extra tournaments, matches, players, legs, visits, ranking events or external references, and must not change winner/standings/lifecycle.
 
-### 6. API/UX smoke in TEST
+### 7. API/UX smoke in TEST
 
 After DB verification, inspect the deployed TEST UI/API as a user would:
 
@@ -97,7 +114,7 @@ After DB verification, inspect the deployed TEST UI/API as a user would:
 
 Do not promote because the SQL rows merely “look plausible”.
 
-### 7. PROD promotion
+### 8. PROD promotion
 
 PROD is a separate explicit operation. Before writing PROD:
 
@@ -107,7 +124,7 @@ PROD is a separate explicit operation. Before writing PROD:
 - no TEST-only hard guard has been casually removed from an old script; use a deliberate PROD-safe importer/finalizer;
 - the exact expected deltas are known in advance.
 
-After PROD import, run the same strict verifier with the PROD table prefix, then verify the public/player UI. If verification fails, stop further imports and repair/roll back the affected tournament before continuing.
+After PROD import, run the same strict verifiers with the PROD table prefix, then verify the public/player UI. If verification fails, stop further imports and repair/roll back the affected tournament before continuing.
 
 ## What to report after each migration
 

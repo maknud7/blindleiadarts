@@ -1,27 +1,27 @@
-name: Atlas History QA Test
+name: Repair Atlas History Lifecycle Test
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - develop
     paths:
-      - infra/sql/run-atlas-history-qa-test.flag
+      - infra/sql/run-atlas-history-repair-test.flag
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: atlas-history-qa-test
-  cancel-in-progress: true
+  group: atlas-history-repair-test
+  cancel-in-progress: false
 
 jobs:
-  verify:
-    name: Verify ${{ matrix.name }}
+  repair:
+    name: Repair ${{ matrix.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 1
       matrix:
         include:
@@ -45,13 +45,40 @@ jobs:
           extensions: mysqli, mbstring
           coverage: none
 
-      - name: Lint Atlas history QA tools
+      - name: Lint Atlas history tools
         run: |
           php -l infra/sql/atlas_history_verify.php
-          php -l infra/sql/atlas_history_lifecycle_verify.php
           php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_history_lifecycle_verify.php
 
-      - name: Strictly verify imported tournament data in TEST
+      - name: Verify complete source data before lifecycle repair
+        run: >-
+          php infra/sql/atlas_history_verify.php
+          --external='${{ matrix.external_id }}'
+          --expected-matches='${{ matrix.expected_matches }}'
+          --expected-players='${{ matrix.expected_players }}'
+          --phase=data
+          --require-visits=1
+          --require-playoff=1
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Finalize historical tournament lifecycle
+        run: php infra/sql/atlas_history_finalize.php --external='${{ matrix.external_id }}'
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Strictly verify data after repair
         run: >-
           php infra/sql/atlas_history_verify.php
           --external='${{ matrix.external_id }}'
@@ -68,7 +95,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
-      - name: Verify canonical completed lifecycle in TEST
+      - name: Verify canonical lifecycle after repair
         run: php infra/sql/atlas_history_lifecycle_verify.php --external='${{ matrix.external_id }}'
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
