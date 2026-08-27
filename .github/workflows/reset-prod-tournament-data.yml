@@ -1,0 +1,40 @@
+name: Reset Production Tournament Data
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-reset-prod-tournament-data.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reset-production-tournament-data
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Reset production tournament and season data
+        run: php infra/sql/reset_prod_tournament_runtime.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          CONFIRM_PROD_RESET: DELETE_TOURNAMENT_DATA
