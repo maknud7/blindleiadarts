@@ -52,10 +52,15 @@ function ensureNowCard() {
   nav.insertAdjacentElement("afterend", card);
 }
 
-function fmtDate(value) {
-  if (!value) return "";
+function parseDate(value) {
+  if (!value) return null;
   const date = new Date(String(value).replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return String(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function fmtDate(value) {
+  const date = parseDate(value);
+  if (!date) return value ? String(value) : "";
   return new Intl.DateTimeFormat("nb-NO", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
@@ -63,24 +68,48 @@ function findTournament(tournaments, id) {
   return tournaments.find((item) => Number(item.id) === Number(id)) || null;
 }
 
+function isTournamentRelevant(tournament, registrationStatus = "") {
+  if (!tournament) return false;
+  const status = String(tournament.status || tournament.tournament_status || "").toLowerCase();
+  if (["completed", "cancelled"].includes(status)) return false;
+
+  const now = Date.now();
+  const start = parseDate(tournament.start_at)?.getTime() ?? null;
+  const end = parseDate(tournament.end_at)?.getTime() ?? null;
+
+  if (end !== null && end < now) return false;
+  if (end !== null && end >= now && (start === null || start <= now)) return true;
+
+  const liveRegistration = ["checked_in", "paused"].includes(String(registrationStatus));
+  if (start === null) return !liveRegistration;
+
+  const graceMs = 18 * 60 * 60 * 1000;
+  return start >= now - graceMs;
+}
+
 function bestRegistration(registrations, tournaments) {
-  const priority = { checked_in: 0, registered: 1, waitlisted: 2, eliminated: 4, withdrawn: 9, no_show: 9 };
+  const priority = { checked_in: 0, paused: 0, registered: 1, waitlisted: 2, eliminated: 4, withdrawn: 9, no_show: 9 };
   return [...registrations]
-    .filter((item) => (priority[String(item.status)] ?? 5) < 9)
+    .filter((item) => {
+      const regStatus = String(item.status || "");
+      if ((priority[regStatus] ?? 5) >= 9) return false;
+      const tournament = findTournament(tournaments, item.tournament_id) || item;
+      return isTournamentRelevant(tournament, regStatus);
+    })
     .sort((a, b) => {
       const pa = priority[String(a.status)] ?? 5;
       const pb = priority[String(b.status)] ?? 5;
       if (pa !== pb) return pa - pb;
-      const ta = findTournament(tournaments, a.tournament_id);
-      const tb = findTournament(tournaments, b.tournament_id);
-      return new Date(String(ta?.start_at || "2999-01-01")).getTime() - new Date(String(tb?.start_at || "2999-01-01")).getTime();
+      const ta = findTournament(tournaments, a.tournament_id) || a;
+      const tb = findTournament(tournaments, b.tournament_id) || b;
+      return (parseDate(ta?.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseDate(tb?.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER);
     })[0] || null;
 }
 
 function bestOpenTournament(tournaments) {
   return [...tournaments]
-    .filter((item) => String(item.registration_state) === "open" && !["completed", "cancelled"].includes(String(item.status)))
-    .sort((a, b) => new Date(String(a.start_at || "2999-01-01")).getTime() - new Date(String(b.start_at || "2999-01-01")).getTime())[0] || null;
+    .filter((item) => String(item.registration_state) === "open" && isTournamentRelevant(item))
+    .sort((a, b) => (parseDate(a.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseDate(b.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0] || null;
 }
 
 function go(hash) { window.location.hash = hash; }
@@ -115,9 +144,9 @@ function renderNow({ me, dashboard, tournaments }) {
     const tournament = findTournament(tournaments, registration.tournament_id) || registration;
     const regStatus = String(registration.status || "");
     const meta = [fmtDate(tournament.start_at), tournament.registration_state === "open" ? "Påmelding åpen" : ""].filter(Boolean);
-    if (regStatus === "checked_in") {
-      status.textContent = "Klar";
-      body.innerHTML = `<div><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du er checket inn. Følg opprop og Live for neste kamp og board.</p><div class="player-now-meta">${meta.map((item) => `<span>${pxEsc(item)}</span>`).join("")}</div></div><div class="player-now-actions"><button type="button" data-px-tournament>Se turneringen</button><a class="ghost" href="../live/" target="_blank" rel="noopener">Åpne Live</a></div>`;
+    if (["checked_in", "paused"].includes(regStatus)) {
+      status.textContent = regStatus === "paused" ? "Pause" : "Klar";
+      body.innerHTML = `<div><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">${regStatus === "paused" ? "Du er satt på pause og blir ikke sendt til ny skive før pausen er ferdig." : "Du er checket inn. Følg opprop og Live for neste kamp og board."}</p><div class="player-now-meta">${meta.map((item) => `<span>${pxEsc(item)}</span>`).join("")}</div></div><div class="player-now-actions"><button type="button" data-px-tournament>Se turneringen</button><a class="ghost" href="../live/" target="_blank" rel="noopener">Åpne Live</a></div>`;
       body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
       return;
     }
