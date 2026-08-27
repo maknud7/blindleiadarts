@@ -24,6 +24,7 @@ final class CanonicalScoringService
     private MatchScoringRepository $scoring;
     private EloLedgerService $elo;
     private PlayoffReconciliationService $playoffs;
+    private LinearRankingService $linearRanking;
 
     public function __construct(
         Database $database,
@@ -34,6 +35,7 @@ final class CanonicalScoringService
         $this->scoring = new MatchScoringRepository($database);
         $this->elo = new EloLedgerService($database);
         $this->playoffs = new PlayoffReconciliationService($database);
+        $this->linearRanking = new LinearRankingService($database);
     }
 
     public function startMatch(int $kioskId, string $source = 'manual'): void
@@ -65,7 +67,10 @@ final class CanonicalScoringService
             $this->elo->applyCompletedMatch($matchId);
         }
 
+        // Playoff reconciliation can complete the whole tournament. Linear season
+        // points are therefore reconciled only after the bracket lifecycle is current.
         $this->playoffs->afterMutation($matchId, false);
+        $this->linearRanking->reconcileByMatchId($matchId);
         $this->publishRefresh($kioskId, $matchId, $source, 'visit_recorded');
     }
 
@@ -81,6 +86,7 @@ final class CanonicalScoringService
         }
 
         $this->playoffs->afterMutation($matchId, true);
+        $this->linearRanking->reconcileByMatchId($matchId);
         $this->publishRefresh($kioskId, $matchId, $source, 'visit_undone');
     }
 
