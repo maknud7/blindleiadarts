@@ -8,17 +8,43 @@ const ROUTES = Object.freeze({
     { id: "profile", label: "Min profil", hash: "#profile", surface: "player", mobile: false },
   ]),
   clubAdmin: Object.freeze([
-    { id: "overview", label: "Klubboversikt", hash: "#admin/overview", surface: "admin" },
-    { id: "tournaments", label: "Turneringsadmin", hash: "#admin/tournaments", surface: "admin" },
-    { id: "seasons", label: "Sesonger", hash: "#admin/seasons", surface: "admin" },
-    { id: "playerbase", label: "Spillere", hash: "#admin/playerbase", surface: "admin" },
-    { id: "players", label: "Medlemmer", hash: "#admin/players", surface: "admin" },
-    { id: "kiosks", label: "Utstyr", hash: "#admin/kiosks", surface: "admin" },
-    { id: "integrations", label: "Innstillinger", hash: "#admin/integrations", surface: "admin" },
+    { id: "overview", label: "Klubboversikt", hash: "#club", surface: "admin" },
+    { id: "tournaments", label: "Turneringsadmin", hash: "#tournament-admin", surface: "admin" },
+    { id: "seasons", label: "Sesonger", hash: "#seasons", surface: "admin" },
+    { id: "playerbase", label: "Spillere", hash: "#playerbase", surface: "admin" },
+    { id: "players", label: "Medlemmer", hash: "#members", surface: "admin" },
+    { id: "kiosks", label: "Utstyr", hash: "#equipment", surface: "admin" },
+    { id: "integrations", label: "Innstillinger", hash: "#settings", surface: "admin" },
   ]),
   superAdmin: Object.freeze([
-    { id: "superadmin", label: "Systemstatus", hash: "#admin/superadmin", surface: "admin" },
+    { id: "superadmin", label: "Superadmin", hash: "#superadmin", surface: "admin" },
   ]),
+});
+
+const ADMIN_HASH_TO_VIEW = Object.freeze({
+  club: "overview",
+  "tournament-admin": "tournaments",
+  seasons: "seasons",
+  playerbase: "playerbase",
+  members: "players",
+  equipment: "kiosks",
+  settings: "integrations",
+  superadmin: "superadmin",
+});
+
+const ADMIN_VIEW_TO_HASH = Object.freeze(Object.fromEntries(
+  Object.entries(ADMIN_HASH_TO_VIEW).map(([hash, view]) => [view, hash])
+));
+
+const LEGACY_ADMIN_VIEW = Object.freeze({
+  overview: "overview",
+  tournaments: "tournaments",
+  seasons: "seasons",
+  playerbase: "playerbase",
+  players: "players",
+  kiosks: "kiosks",
+  integrations: "integrations",
+  superadmin: "superadmin",
 });
 
 let resolvedToken = null;
@@ -76,8 +102,6 @@ async function resolve({ force = false } = {}) {
       emit();
       return resolvedUser;
     } catch {
-      // Keep a valid-looking local session during a temporary network error.
-      // Feature requests will surface the actual connection problem later.
       resolvedToken = currentToken;
       if (resolvedUser === undefined) resolvedUser = null;
       return resolvedUser;
@@ -111,20 +135,28 @@ function subscribe(listener) {
 function normalizeHash(hash = window.location.hash) {
   const value = String(hash || "").replace(/^#/, "").trim();
   if (!value) return "home";
-  if (value === "admin") return "admin/overview";
+  if (value === "admin") return "club";
+  if (value.startsWith("admin/")) {
+    const legacyView = value.slice(6) || "overview";
+    const mappedView = LEGACY_ADMIN_VIEW[legacyView] || "overview";
+    return ADMIN_VIEW_TO_HASH[mappedView] || "club";
+  }
   return value;
 }
 
 function route(hash = window.location.hash) {
   const value = normalizeHash(hash);
-  if (value.startsWith("admin/")) {
-    return { surface: "admin", view: value.slice(6) || "overview", hash: `#${value}` };
+  if (Object.prototype.hasOwnProperty.call(ADMIN_HASH_TO_VIEW, value)) {
+    return { surface: "admin", view: ADMIN_HASH_TO_VIEW[value], hash: `#${value}` };
   }
   return { surface: "player", view: value || "home", hash: `#${value || "home"}` };
 }
 
 function href(surface, view) {
-  if (surface === "admin") return `#admin/${view || "overview"}`;
+  if (surface === "admin") {
+    const hash = ADMIN_VIEW_TO_HASH[view || "overview"] || "club";
+    return `#${hash}`;
+  }
   return `#${view || "home"}`;
 }
 
