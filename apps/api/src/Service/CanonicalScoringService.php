@@ -22,7 +22,7 @@ final class CanonicalScoringService
     private mysqli $connection;
     private string $tablePrefix;
     private MatchScoringRepository $scoring;
-    private EloReconciliationService $elo;
+    private EloLedgerService $elo;
     private PlayoffReconciliationService $playoffs;
 
     public function __construct(
@@ -32,7 +32,7 @@ final class CanonicalScoringService
         $this->connection = $database->connection();
         $this->tablePrefix = $database->tablePrefix();
         $this->scoring = new MatchScoringRepository($database);
-        $this->elo = new EloReconciliationService($database);
+        $this->elo = new EloLedgerService($database);
         $this->playoffs = new PlayoffReconciliationService($database);
     }
 
@@ -48,7 +48,9 @@ final class CanonicalScoringService
             return;
         }
 
-        $this->afterMutation($kioskId, (int) $before['id'], false, $source, 'match_started');
+        $matchId = (int) $before['id'];
+        $this->playoffs->afterMutation($matchId, false);
+        $this->publishRefresh($kioskId, $matchId, $source, 'match_started');
     }
 
     /** @param array<string,mixed> $payload */
@@ -56,14 +58,30 @@ final class CanonicalScoringService
     {
         $matchId = $this->playoffs->targetMatchIdForKiosk($kioskId, false);
         $this->scoring->recordVisit($kioskId, $payload);
-        $this->afterMutation($kioskId, $matchId, false, $source, 'visit_recorded');
+
+        // ELO is a match result, never live match state. It is therefore applied
+        // only after the canonical match has actually reached completed status.
+        if ($matchId !== null && $this->matchIsCompleted($matchId)) {
+            $this->elo->applyCompletedMatch($matchId);
+        }
+
+        $this->playoffs->afterMutation($matchId, false);
+        $this->publishRefresh($kioskId, $matchId, $source, 'visit_recorded');
     }
 
     public function undoLastVisit(int $kioskId, string $source = 'manual'): void
     {
         $matchId = $this->playoffs->assertUndoAllowed($kioskId);
         $this->scoring->undoLastVisit($kioskId);
-        $this->afterMutation($kioskId, $matchId, true, $source, 'visit_undone');
+
+        // If the undo reopens a previously completed match, remove its already
+        // applied ELO result. No new ELO is calculated until the match completes again.
+        if ($matchId !== null) {
+            $this->elo->revertMatch($matchId);
+        }
+
+        $this->playoffs->afterMutation($matchId, true);
+        $this->publishRefresh($kioskId, $matchId, $source, 'visit_undone');
     }
 
     /** @return array{id:int,status:string,has_open_leg:int}|null */
@@ -96,17 +114,17 @@ final class CanonicalScoringService
         ];
     }
 
-    private function afterMutation(
-        int $kioskId,
-        ?int $matchId,
-        bool $wasUndo,
-        string $source,
-        string $reason
-    ): void {
-        // All derived competition state is reconciled from canonical match state.
-        $this->elo->reconcileKiosk($kioskId);
-        $this->playoffs->afterMutation($matchId, $wasUndo);
-        $this->publishRefresh($kioskId, $matchId, $source, $reason);
+    private function matchIsCompleted(int $matchId): bool
+    {
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT status FROM `%1$smatches` WHERE id=? LIMIT 1',
+            $this->tablePrefix
+        ));
+        $stmt->bind_param('i', $matchId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        return $row !== null && (string) ($row['status'] ?? '') === 'completed';
     }
 
     private function publishRefresh(int $kioskId, ?int $matchId, string $source, string $reason): void
