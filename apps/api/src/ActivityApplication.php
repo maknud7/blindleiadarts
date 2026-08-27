@@ -26,8 +26,10 @@ final class ActivityApplication
         $path = trim($request->path(), '/');
         $method = $request->method();
 
-        if (!(($method === 'POST' && $path === 'v1/activity')
-            || ($method === 'GET' && preg_match('#^v1/clubs/\d+/activity$#', $path) === 1))) {
+        $record = $method === 'POST' && $path === 'v1/activity';
+        $clubSummary = $method === 'GET' && preg_match('#^v1/clubs/\d+/activity$#', $path) === 1;
+        $platformSummary = $method === 'GET' && $path === 'v1/platform/activity';
+        if (!$record && !$clubSummary && !$platformSummary) {
             return false;
         }
 
@@ -37,9 +39,13 @@ final class ActivityApplication
             $database = new Database($config);
             $events = new ActivityRepository($database);
             $users = new UserAccountRepository($database);
-            $response = $method === 'POST'
-                ? $this->record($request, $events, $users)
-                : $this->summary($request, $path, $events, $users);
+            if ($record) {
+                $response = $this->record($request, $events, $users);
+            } elseif ($platformSummary) {
+                $response = $this->platformSummary($request, $events, $users);
+            } else {
+                $response = $this->summary($request, $path, $events, $users);
+            }
         } catch (mysqli_sql_exception $error) {
             $response = JsonResponse::error(500, 'activity_database_error', 'Aktivitetslogging er midlertidig utilgjengelig.', [
                 'details' => $config instanceof Config && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
@@ -79,6 +85,30 @@ final class ActivityApplication
     {
         preg_match('#^v1/clubs/(\d+)/activity$#', $path, $m);
         $clubId = (int) ($m[1] ?? 0);
+        $user = $this->authenticatedUser($request, $users);
+        if ($user instanceof JsonResponse) return $user;
+        if (!$this->canManageClub($user, $clubId)) {
+            return JsonResponse::error(403, 'club_access_denied', 'Du har ikke tilgang til aktivitetsdata for denne klubben.');
+        }
+
+        $days = isset($_GET['days']) && is_numeric($_GET['days']) ? (int) $_GET['days'] : 30;
+        return JsonResponse::ok($events->summaryByClub($clubId, $days));
+    }
+
+    private function platformSummary(Request $request, ActivityRepository $events, UserAccountRepository $users): JsonResponse
+    {
+        $user = $this->authenticatedUser($request, $users);
+        if ($user instanceof JsonResponse) return $user;
+        if ((string) ($user['role'] ?? '') !== 'super_admin') {
+            return JsonResponse::error(403, 'super_admin_required', 'Superadmin-tilgang kreves for plattformlogger.');
+        }
+        $days = isset($_GET['days']) && is_numeric($_GET['days']) ? (int) $_GET['days'] : 30;
+        return JsonResponse::ok($events->summaryAll($days));
+    }
+
+    /** @return array<string,mixed>|JsonResponse */
+    private function authenticatedUser(Request $request, UserAccountRepository $users): array|JsonResponse
+    {
         $token = $request->bearerToken();
         if ($token === null) {
             return JsonResponse::error(401, 'authentication_required', 'Innlogging kreves.');
@@ -87,12 +117,7 @@ final class ActivityApplication
         if ($user === null) {
             return JsonResponse::error(401, 'invalid_session', 'Innloggingen er utløpt eller ugyldig.');
         }
-        if (!$this->canManageClub($user, $clubId)) {
-            return JsonResponse::error(403, 'club_access_denied', 'Du har ikke tilgang til aktivitetsdata for denne klubben.');
-        }
-
-        $days = isset($_GET['days']) && is_numeric($_GET['days']) ? (int) $_GET['days'] : 30;
-        return JsonResponse::ok($events->summaryByClub($clubId, $days));
+        return $user;
     }
 
     /** @param array<string,mixed> $user */
