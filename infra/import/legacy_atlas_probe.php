@@ -14,7 +14,26 @@ if ($seasonId === '') {
 $host = 'www.' . 'darts' . 'atlas' . '.com';
 $base = 'https://' . $host;
 
-$get = static function (string $url): string {
+$getWithBrowser = static function (string $url): ?string {
+    foreach (['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'] as $candidate) {
+        $path = trim((string) shell_exec('command -v ' . escapeshellarg($candidate) . ' 2>/dev/null'));
+        if ($path === '') continue;
+        $command = escapeshellarg($path)
+            . ' --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --virtual-time-budget=5000 --dump-dom '
+            . escapeshellarg($url) . ' 2>/dev/null';
+        $output = [];
+        $exit = 0;
+        exec($command, $output, $exit);
+        $body = implode("\n", $output);
+        if ($exit === 0 && strlen($body) > 500 && stripos($body, '<html') !== false) {
+            echo 'BROWSER ' . strlen($body) . " bytes {$url}\n";
+            return $body;
+        }
+    }
+    return null;
+};
+
+$get = static function (string $url) use ($getWithBrowser): string {
     $ch = curl_init($url);
     if ($ch === false) throw new RuntimeException('Could not initialize curl.');
     curl_setopt_array($ch, [
@@ -23,7 +42,7 @@ $get = static function (string $url): string {
         CURLOPT_MAXREDIRS => 5,
         CURLOPT_CONNECTTIMEOUT => 8,
         CURLOPT_TIMEOUT => 20,
-        CURLOPT_USERAGENT => 'BlindleiaDarts-HistoryImport/1.0',
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36',
         CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml', 'Accept-Language: en-GB,en;q=0.8'],
         CURLOPT_ENCODING => '',
     ]);
@@ -32,11 +51,16 @@ $get = static function (string $url): string {
     $effective = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
     $error = curl_error($ch);
     curl_close($ch);
-    if ($body === false || $status < 200 || $status >= 300) {
-        throw new RuntimeException("Legacy HTTP failed ({$status}) {$effective}: {$error}");
+    if ($body !== false && $status >= 200 && $status < 300) {
+        echo "FETCH {$status} " . strlen((string) $body) . " bytes {$effective}\n";
+        return (string) $body;
     }
-    echo "FETCH {$status} " . strlen((string) $body) . " bytes {$effective}\n";
-    return (string) $body;
+
+    $browserBody = $getWithBrowser($url);
+    if ($browserBody !== null) {
+        return $browserBody;
+    }
+    throw new RuntimeException("Legacy HTTP failed ({$status}) {$effective}: {$error}");
 };
 
 $links = static function (string $html): array {
@@ -75,7 +99,7 @@ foreach ($links($tournamentHtml) as $href) {
     if (preg_match('~^/tournaments/' . preg_quote($firstTournament, '~') . '/.+~', $path)) $subpages[$path] = true;
 }
 
-foreach (array_slice(array_keys($subpages), 0, 20) as $path) {
+foreach (array_slice(array_keys($subpages), 0, 8) as $path) {
     try {
         $html = $get($base . $path);
         foreach ($links($html) as $href) {
@@ -103,7 +127,7 @@ if (preg_match_all('/<script\b([^>]*)>(.*?)<\/script>/isu', $matchHtml, $scripts
         if (preg_match('/src=["\']([^"\']+)/iu', $attrs, $src)) echo "SCRIPT_SRC {$src[1]}\n";
         if ($text !== '' && preg_match('/visit|throw|dart|remaining|score|leg/iu', $text)) {
             $clean = preg_replace('/\s+/u', ' ', $text) ?? $text;
-            echo 'SCRIPT_SIGNAL ' . $index . ' ' . mb_substr($clean, 0, 1800) . "\n";
+            echo 'SCRIPT_SIGNAL ' . $index . ' ' . mb_substr($clean, 0, 3000) . "\n";
         }
     }
 }
@@ -111,9 +135,9 @@ if (preg_match_all('/<script\b([^>]*)>(.*?)<\/script>/isu', $matchHtml, $scripts
 $visible = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $matchHtml) ?? $matchHtml;
 $visible = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $visible) ?? $visible;
 $visible = trim((string) preg_replace('/\s+/u', ' ', strip_tags($visible)));
-echo 'VISIBLE ' . mb_substr($visible, 0, 5000) . "\n";
+echo 'VISIBLE ' . mb_substr($visible, 0, 8000) . "\n";
 
-foreach (['data-score', 'data-remaining', 'data-dart', 'data-visit', 'data-player-id', 'phx-value', 'wire:'] as $needle) {
+foreach (['data-score', 'data-remaining', 'data-dart', 'data-visit', 'data-player-id', 'phx-value', 'wire:', 'checkout', 'first-nine'] as $needle) {
     $count = substr_count(strtolower($matchHtml), strtolower($needle));
     echo 'SIGNAL ' . $needle . '=' . $count . "\n";
 }
