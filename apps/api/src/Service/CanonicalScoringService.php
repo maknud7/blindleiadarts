@@ -68,10 +68,10 @@ final class CanonicalScoringService
         // All derived competition state is reconciled from canonical match state.
         $this->elo->reconcileKiosk($kioskId);
         $this->playoffs->afterMutation($matchId, $wasUndo);
-        $this->publishRefresh($kioskId, $source, $reason);
+        $this->publishRefresh($kioskId, $matchId, $source, $reason);
     }
 
-    private function publishRefresh(int $kioskId, string $source, string $reason): void
+    private function publishRefresh(int $kioskId, ?int $matchId, string $source, string $reason): void
     {
         if ($this->config === null || !$this->config->realtimePublishEnabled()) {
             return;
@@ -108,7 +108,7 @@ final class CanonicalScoringService
             'reason' => $reason,
             'source' => $this->normalizeSource($source),
             'kiosk_id' => $kioskId,
-            'match_id' => $matchId ?? null,
+            'match_id' => $matchId,
         ]);
     }
 
