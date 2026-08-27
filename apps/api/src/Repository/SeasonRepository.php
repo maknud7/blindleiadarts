@@ -172,6 +172,14 @@ final class SeasonRepository
                     COUNT(DISTINCT CASE WHEN m.winner_player_id IS NOT NULL AND m.winner_player_id<>p.id THEN m.id END) AS losses,
                     (SELECT COUNT(*) FROM `%1$slegs` lw INNER JOIN `%1$smatches` mw ON mw.id=lw.match_id INNER JOIN `%1$stournaments` tw ON tw.id=mw.tournament_id WHERE tw.season_id=? AND lw.status="completed" AND lw.winner_player_id=p.id) AS legs_won,
                     (SELECT COUNT(*) FROM `%1$slegs` ll INNER JOIN `%1$smatches` ml ON ml.id=ll.match_id INNER JOIN `%1$stournaments` tl ON tl.id=ml.tournament_id WHERE tl.season_id=? AND ll.status="completed" AND ll.winner_player_id IS NOT NULL AND ll.winner_player_id<>p.id AND (ml.player_a_id=p.id OR ml.player_b_id=p.id)) AS legs_lost,
+                    COALESCE((SELECT ROUND(COALESCE(
+                        SUM(ms.average * COALESCE(ms.darts_thrown,0)) / NULLIF(SUM(COALESCE(ms.darts_thrown,0)),0),
+                        AVG(ms.average)
+                    ),2)
+                        FROM `%1$smatch_statistics` ms
+                        INNER JOIN `%1$smatches` sm ON sm.id=ms.match_id
+                        INNER JOIN `%1$stournaments` st ON st.id=sm.tournament_id
+                        WHERE st.season_id=? AND sm.status="completed" AND ms.player_id=p.id AND ms.average IS NOT NULL),0) AS three_dart_average,
                     e.rating AS elo_rating,e.matches_played AS elo_matches_played
              FROM `%1$splayers` p
              INNER JOIN `%1$stournament_players` tp ON tp.player_id=p.id AND tp.status<>"withdrawn"
@@ -182,7 +190,7 @@ final class SeasonRepository
             $this->prefix
         );
         $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('iiii', $seasonId, $seasonId, $seasonId, $seasonId);
+        $stmt->bind_param('iiiii', $seasonId, $seasonId, $seasonId, $seasonId, $seasonId);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
@@ -197,26 +205,16 @@ final class SeasonRepository
                 $row[$field] = (int) ($row[$field] ?? 0);
             }
             $row['leg_diff'] = $row['legs_won'] - $row['legs_lost'];
+            $row['three_dart_average'] = round((float) ($row['three_dart_average'] ?? 0), 2);
             $row['points'] = $method === 'linear'
                 ? round((float) ($linearPoints[(int) $row['id']] ?? 0), 2)
                 : round(($row['wins'] * $winPoints) + ($row['draws'] * $drawPoints) + ($row['losses'] * $lossPoints), 2);
             $row['elo_rating'] = $row['elo_rating'] !== null ? (float) $row['elo_rating'] : 1000.0;
+            $row['head_to_head_points'] = 0;
         }
         unset($row);
 
-        usort($rows, static function (array $a, array $b) use ($method): int {
-            if ($method === 'elo') {
-                $cmp = ((float) $b['elo_rating']) <=> ((float) $a['elo_rating']);
-                if ($cmp !== 0) return $cmp;
-            } else {
-                $cmp = ((float) $b['points']) <=> ((float) $a['points']);
-                if ($cmp !== 0) return $cmp;
-            }
-            $cmp = ((int) $b['wins']) <=> ((int) $a['wins']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);
-            return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
-        });
+        $rows = $this->sortStandingsWithTieBreak($rows, $seasonId, $method);
         foreach ($rows as $index => &$row) $row['position'] = $index + 1;
         unset($row);
         return $rows;
@@ -236,6 +234,84 @@ final class SeasonRepository
         $stmt->execute();
         $stmt->close();
         return $this->find($seasonId) ?? [];
+    }
+
+    /** @param list<array<string,mixed>> $rows @return list<array<string,mixed>> */
+    private function sortStandingsWithTieBreak(array $rows, int $seasonId, string $method): array
+    {
+        $primary = static fn (array $row): float => $method === 'elo' ? (float) $row['elo_rating'] : (float) $row['points'];
+        usort($rows, static function (array $a, array $b) use ($primary): int {
+            $cmp = $primary($b) <=> $primary($a);
+            if ($cmp !== 0) return $cmp;
+            $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);
+            if ($cmp !== 0) return $cmp;
+            $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);
+            return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
+        });
+
+        $ranked = [];
+        for ($index = 0, $count = count($rows); $index < $count;) {
+            $bucket = [$rows[$index]];
+            $cursor = $index + 1;
+            while ($cursor < $count
+                && abs($primary($rows[$cursor]) - $primary($rows[$index])) < 0.0001
+                && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']
+                && abs((float) $rows[$cursor]['three_dart_average'] - (float) $rows[$index]['three_dart_average']) < 0.0001) {
+                $bucket[] = $rows[$cursor];
+                $cursor++;
+            }
+
+            if (count($bucket) > 1) {
+                $points = $this->seasonHeadToHeadPoints(
+                    $seasonId,
+                    array_map(static fn (array $row): int => (int) $row['id'], $bucket)
+                );
+                foreach ($bucket as &$row) {
+                    $row['head_to_head_points'] = (int) ($points[(int) $row['id']] ?? 0);
+                }
+                unset($row);
+                usort($bucket, static function (array $a, array $b): int {
+                    $cmp = ((int) $b['head_to_head_points']) <=> ((int) $a['head_to_head_points']);
+                    return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
+                });
+            }
+
+            array_push($ranked, ...$bucket);
+            $index = $cursor;
+        }
+        return $ranked;
+    }
+
+    /** @param list<int> $playerIds @return array<int,int> */
+    private function seasonHeadToHeadPoints(int $seasonId, array $playerIds): array
+    {
+        $playerIds = array_values(array_unique(array_filter(array_map('intval', $playerIds), static fn (int $id): bool => $id > 0)));
+        if (count($playerIds) < 2) return [];
+        $ids = implode(',', $playerIds);
+        $sql = sprintf(
+            'SELECT m.player_a_id,m.player_b_id,m.winner_player_id
+             FROM `%1$smatches` m
+             INNER JOIN `%1$stournaments` t ON t.id=m.tournament_id
+             WHERE t.season_id=%2$d AND m.status="completed"
+               AND m.player_a_id IN (%3$s) AND m.player_b_id IN (%3$s)',
+            $this->prefix,
+            $seasonId,
+            $ids
+        );
+        $matches = $this->connection->query($sql)->fetch_all(MYSQLI_ASSOC);
+        $points = array_fill_keys($playerIds, 0);
+        foreach ($matches as $match) {
+            $a = (int) $match['player_a_id'];
+            $b = (int) $match['player_b_id'];
+            if ($match['winner_player_id'] === null) {
+                $points[$a] = ($points[$a] ?? 0) + 1;
+                $points[$b] = ($points[$b] ?? 0) + 1;
+            } else {
+                $winner = (int) $match['winner_player_id'];
+                $points[$winner] = ($points[$winner] ?? 0) + 2;
+            }
+        }
+        return $points;
     }
 
     /** @return array<int,float> */

@@ -50,8 +50,9 @@ final class PlayerPortalApplication
     private function handles(string $method, string $path): bool
     {
         return ($method === 'GET' && preg_match('#^v1/clubs/\d+/(?:player-directory|elo|summaries)$#', $path) === 1)
-            || ($method === 'GET' && preg_match('#^v1/players/\d+/profile$#', $path) === 1)
-            || ($method === 'GET' && preg_match('#^v1/tournaments/\d+/(?:tables|summary|summary/admin)$#', $path) === 1)
+            || ($method === 'GET' && preg_match('#^v1/players/\d+/(?:profile|matches)$#', $path) === 1)
+            || ($method === 'GET' && preg_match('#^v1/matches/\d+/detail$#', $path) === 1)
+            || ($method === 'GET' && preg_match('#^v1/tournaments/\d+/(?:tables|results|summary|summary/admin)$#', $path) === 1)
             || (in_array($method, ['PUT', 'PATCH'], true) && preg_match('#^v1/tournaments/\d+/summary/admin$#', $path) === 1);
     }
 
@@ -83,8 +84,31 @@ final class PlayerPortalApplication
             return JsonResponse::ok($profile);
         }
 
+        if ($method === 'GET' && preg_match('#^v1/players/(\d+)/matches$#', $path, $m) === 1) {
+            return JsonResponse::ok([
+                'player_id' => (int) $m[1],
+                'items' => $portal->listPlayerMatches((int) $m[1], 200),
+            ]);
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/matches/(\d+)/detail$#', $path, $m) === 1) {
+            $detail = $portal->getMatchDetail((int) $m[1]);
+            if ($detail === null) {
+                return JsonResponse::error(404, 'match_not_found', 'Match was not found.');
+            }
+            return JsonResponse::ok($detail);
+        }
+
         if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)/tables$#', $path, $m) === 1) {
             return JsonResponse::ok($portal->getTournamentTables((int) $m[1]));
+        }
+
+        if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)/results$#', $path, $m) === 1) {
+            $tables = $portal->getTournamentTables((int) $m[1]);
+            return JsonResponse::ok([
+                'tournament' => $tables['tournament'],
+                'items' => $portal->listTournamentMatches((int) $m[1]),
+            ]);
         }
 
         if ($method === 'GET' && preg_match('#^v1/tournaments/(\d+)/summary$#', $path, $m) === 1) {

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Blindleia Darts</title>
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./player-ux.css">
+  <link rel="stylesheet" href="./styles.css?v=20260827-1015">
+  <link rel="stylesheet" href="./player-ux.css?v=20260827-1015">
   <script>if(new URLSearchParams(window.location.search).has('reset_token')){window.location.hash='#profile';}</script>
 </head>
 <body data-portal-default="home">
@@ -46,6 +46,11 @@
 
     <section data-portal-section="home" class="card stack"><div class="section-head"><div><p class="eyebrow">Mine tall</p><h2>Statistikk og ranking</h2></div></div><div id="statsGrid" class="stats-grid"></div><div id="rankingList" class="stack"></div></section>
 
+    <section id="myMatches" data-portal-section="home" class="card stack">
+      <div class="section-head"><div><p class="eyebrow">Historikk</p><h2>Mine siste kamper</h2></div></div>
+      <div id="myMatchList" class="stack"><p class="muted">Henter kamphistorikk …</p></div>
+    </section>
+
     <section id="signup" data-portal-section="tournaments" class="card stack">
       <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmelding og innsjekk</h2></div></div>
       <div class="mini-card"><strong>Innsjekk i lokalet</strong><p class="muted">Turneringsleder kan sjekke deg inn, eller du kan taste koden som vises på Live-skjermen når innsjekk åpner. Du kan fortsatt melde deg av fram til turneringen startes.</p></div>
@@ -57,26 +62,37 @@
     <section id="summaries" data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><div id="summaryList" class="stack"></div></section>
 
     <section id="tables" data-portal-section="tournaments" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Turnering</p><h2>Tabeller og sluttspill</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow">Turnering</p><h2>Resultater og tabeller</h2></div></div>
       <select id="tableTournamentSelect" aria-label="Velg turnering"></select>
-      <div id="groupTables" class="stack"></div>
-      <div class="section-head content-subhead"><div><h2>Sluttspill</h2></div></div><div id="portalPlayoff"></div>
+      <div class="tournament-view-tabs" role="tablist" aria-label="Turneringsvisning">
+        <button type="button" class="active" data-tournament-view="table">Tabell</button>
+        <button type="button" data-tournament-view="matches">Kamper</button>
+        <button type="button" data-tournament-view="playoff">Sluttspill</button>
+      </div>
+      <div id="groupTables" class="stack" data-tournament-panel="table"></div>
+      <div id="tournamentMatches" class="match-result-list hidden" data-tournament-panel="matches"></div>
+      <div id="portalPlayoffPanel" class="hidden" data-tournament-panel="playoff"><div id="portalPlayoff"></div></div>
     </section>
 
     <section id="statistics" data-portal-section="statistics" class="card stack">
       <div class="section-head"><div><p class="eyebrow">Klubben</p><h2>Statistikk</h2></div></div>
       <p class="muted">Bare spillere med registrerte kamper eller statistikk vises.</p>
+      <div class="section-head content-subhead"><div><h2>Sesongtabell</h2></div></div><div id="seasonStandings" class="table-card"><p class="muted">Henter sesongtabell …</p></div>
       <div class="section-head content-subhead"><div><h2>ELO</h2></div></div><div id="eloTable" class="table-card"></div>
       <div class="section-head content-subhead"><div><h2>Spillere</h2></div></div><div id="playerDirectory" class="player-directory"></div>
       <article id="playerProfile" class="profile-card hidden"></article>
     </section>
   </div>
 
+  <dialog id="matchDetailDialog" class="match-detail-dialog">
+    <div id="matchDetailContent" class="match-detail-content"><p class="muted">Henter kamp …</p></div>
+  </dialog>
+
   <script src="./checkin-runtime.js" type="module"></script>
   <script src="./app.js" type="module"></script>
   <script src="./tournament-registration-ux.js" type="module"></script>
   <script src="./member-account.js" type="module"></script>
-  <script src="./portal-content.js?v=20260826-1545" type="module"></script>
+  <script src="./portal-content.js?v=20260827-1015" type="module"></script>
   <script src="./portal-playoffs.js" type="module"></script>
   <script src="./player-breaks.js" type="module"></script>
   <script src="./player-ux.js" type="module"></script>
