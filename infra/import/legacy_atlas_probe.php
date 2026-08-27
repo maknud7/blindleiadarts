@@ -19,7 +19,7 @@ $getWithBrowser = static function (string $url): ?string {
         $path = trim((string) shell_exec('command -v ' . escapeshellarg($candidate) . ' 2>/dev/null'));
         if ($path === '') continue;
         $command = escapeshellarg($path)
-            . ' --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --virtual-time-budget=5000 --dump-dom '
+            . ' --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --virtual-time-budget=8000 --dump-dom '
             . escapeshellarg($url) . ' 2>/dev/null';
         $output = [];
         $exit = 0;
@@ -57,20 +57,21 @@ $get = static function (string $url) use ($getWithBrowser): string {
     }
 
     $browserBody = $getWithBrowser($url);
-    if ($browserBody !== null) {
-        return $browserBody;
-    }
+    if ($browserBody !== null) return $browserBody;
     throw new RuntimeException("Legacy HTTP failed ({$status}) {$effective}: {$error}");
 };
 
 $links = static function (string $html): array {
     $out = [];
     if (preg_match_all('/<a\b[^>]*href=["\']([^"\']+)["\']/iu', $html, $matches)) {
-        foreach ($matches[1] as $href) {
-            $out[] = html_entity_decode((string) $href, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        }
+        foreach ($matches[1] as $href) $out[] = html_entity_decode((string) $href, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
     return array_values(array_unique($out));
+};
+$visibleText = static function (string $html): string {
+    $html = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $html) ?? $html;
+    $html = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $html) ?? $html;
+    return trim((string) preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
 };
 
 $seasonUrl = $base . '/seasons/' . rawurlencode($seasonId);
@@ -79,14 +80,17 @@ $tournamentIds = [];
 foreach ([$seasonHtml, $get($seasonUrl . '/tournaments/results'), $get($seasonUrl . '/tournaments/calendar')] as $html) {
     foreach ($links($html) as $href) {
         $path = (string) (parse_url($href, PHP_URL_PATH) ?: $href);
-        if (preg_match('~^/tournaments/([^/?#]+)$~', rtrim($path, '/'), $m)) {
-            $tournamentIds[$m[1]] = true;
-        }
+        if (preg_match('~^/tournaments/([^/?#]+)$~', rtrim($path, '/'), $m)) $tournamentIds[$m[1]] = true;
     }
 }
 
 echo 'TOURNAMENTS ' . count($tournamentIds) . ': ' . implode(', ', array_keys($tournamentIds)) . "\n";
-if ($tournamentIds === []) exit(0);
+if ($tournamentIds === []) {
+    if (preg_match('/<title[^>]*>(.*?)<\/title>/isu', $seasonHtml, $m)) echo 'SEASON_TITLE ' . trim(strip_tags($m[1])) . "\n";
+    echo 'SEASON_VISIBLE ' . mb_substr($visibleText($seasonHtml), 0, 5000) . "\n";
+    echo 'SEASON_LINKS ' . implode(' | ', array_slice($links($seasonHtml), 0, 60)) . "\n";
+    exit(0);
+}
 
 $firstTournament = (string) array_key_first($tournamentIds);
 $tournamentUrl = $base . '/tournaments/' . rawurlencode($firstTournament);
@@ -112,7 +116,10 @@ foreach (array_slice(array_keys($subpages), 0, 8) as $path) {
 }
 
 echo 'FIRST TOURNAMENT ' . $firstTournament . '; MATCHES ' . count($matchIds) . ': ' . implode(', ', array_slice(array_keys($matchIds), 0, 12)) . "\n";
-if ($matchIds === []) exit(0);
+if ($matchIds === []) {
+    echo 'TOURNAMENT_VISIBLE ' . mb_substr($visibleText($tournamentHtml), 0, 5000) . "\n";
+    exit(0);
+}
 
 $matchId = (string) array_key_first($matchIds);
 $matchHtml = $get($base . '/matches/' . rawurlencode($matchId));
@@ -132,12 +139,7 @@ if (preg_match_all('/<script\b([^>]*)>(.*?)<\/script>/isu', $matchHtml, $scripts
     }
 }
 
-$visible = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $matchHtml) ?? $matchHtml;
-$visible = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $visible) ?? $visible;
-$visible = trim((string) preg_replace('/\s+/u', ' ', strip_tags($visible)));
-echo 'VISIBLE ' . mb_substr($visible, 0, 8000) . "\n";
-
+echo 'VISIBLE ' . mb_substr($visibleText($matchHtml), 0, 8000) . "\n";
 foreach (['data-score', 'data-remaining', 'data-dart', 'data-visit', 'data-player-id', 'phx-value', 'wire:', 'checkout', 'first-nine'] as $needle) {
-    $count = substr_count(strtolower($matchHtml), strtolower($needle));
-    echo 'SIGNAL ' . $needle . '=' . $count . "\n";
+    echo 'SIGNAL ' . $needle . '=' . substr_count(strtolower($matchHtml), strtolower($needle)) . "\n";
 }
