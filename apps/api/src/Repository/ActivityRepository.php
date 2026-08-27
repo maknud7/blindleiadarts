@@ -139,16 +139,80 @@ final class ActivityRepository
         $recent = $recentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $recentStmt->close();
 
-        foreach ($surfaces as &$row) {
-            $row['events'] = (int) $row['events'];
-            $row['page_views'] = (int) $row['page_views'];
+        return $this->normalizeSummary($days, $totals, $surfaces, $paths, $recent, []);
+    }
+
+    /** @return array<string,mixed> */
+    public function summaryAll(int $days = 30): array
+    {
+        $days = max(1, min(365, $days));
+        $table = $this->dataPrefix . 'activity_events';
+        $users = $this->identityPrefix . 'user_accounts';
+        $clubs = $this->dataPrefix . 'clubs';
+
+        $totals = $this->connection->query(
+            "SELECT COUNT(*) AS events,
+                    SUM(event_name='page_view') AS page_views,
+                    COUNT(DISTINCT CASE WHEN user_account_id IS NOT NULL THEN user_account_id END) AS logged_in_users
+             FROM `{$table}`
+             WHERE occurred_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)"
+        )->fetch_assoc() ?: [];
+
+        $surfaces = $this->connection->query(
+            "SELECT surface, COUNT(*) AS events, SUM(event_name='page_view') AS page_views
+             FROM `{$table}`
+             WHERE occurred_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)
+             GROUP BY surface ORDER BY events DESC, surface"
+        )->fetch_all(MYSQLI_ASSOC);
+
+        $paths = $this->connection->query(
+            "SELECT path, COUNT(*) AS page_views
+             FROM `{$table}`
+             WHERE event_name='page_view' AND occurred_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)
+             GROUP BY path ORDER BY page_views DESC, path LIMIT 30"
+        )->fetch_all(MYSQLI_ASSOC);
+
+        $recent = $this->connection->query(
+            "SELECT ae.id,ae.occurred_at,ae.user_account_id,ae.club_id,ae.surface,ae.event_name,ae.path,ae.tournament_id,
+                    ua.display_name,ua.email,c.name AS club_name
+             FROM `{$table}` ae
+             LEFT JOIN `{$users}` ua ON ua.id=ae.user_account_id
+             LEFT JOIN `{$clubs}` c ON c.id=ae.club_id
+             ORDER BY ae.occurred_at DESC,ae.id DESC LIMIT 150"
+        )->fetch_all(MYSQLI_ASSOC);
+
+        $clubRows = $this->connection->query(
+            "SELECT ae.club_id,c.name AS club_name,COUNT(*) AS events,SUM(ae.event_name='page_view') AS page_views
+             FROM `{$table}` ae
+             LEFT JOIN `{$clubs}` c ON c.id=ae.club_id
+             WHERE ae.occurred_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)
+             GROUP BY ae.club_id,c.name ORDER BY events DESC"
+        )->fetch_all(MYSQLI_ASSOC);
+
+        foreach ($clubRows as &$row) {
+            $row['club_id'] = $row['club_id'] !== null ? (int) $row['club_id'] : null;
+            $row['events'] = (int) ($row['events'] ?? 0);
+            $row['page_views'] = (int) ($row['page_views'] ?? 0);
         }
         unset($row);
-        foreach ($paths as &$row) $row['page_views'] = (int) $row['page_views'];
+
+        return $this->normalizeSummary($days, $totals, $surfaces, $paths, $recent, $clubRows);
+    }
+
+    /** @param array<string,mixed> $totals @param array<int,array<string,mixed>> $surfaces @param array<int,array<string,mixed>> $paths @param array<int,array<string,mixed>> $recent @param array<int,array<string,mixed>> $clubs */
+    private function normalizeSummary(int $days, array $totals, array $surfaces, array $paths, array $recent, array $clubs): array
+    {
+        foreach ($surfaces as &$row) {
+            $row['events'] = (int) ($row['events'] ?? 0);
+            $row['page_views'] = (int) ($row['page_views'] ?? 0);
+        }
+        unset($row);
+        foreach ($paths as &$row) $row['page_views'] = (int) ($row['page_views'] ?? 0);
         unset($row);
         foreach ($recent as &$row) {
             $row['id'] = (int) $row['id'];
             $row['user_account_id'] = $row['user_account_id'] !== null ? (int) $row['user_account_id'] : null;
+            $row['club_id'] = isset($row['club_id']) && $row['club_id'] !== null ? (int) $row['club_id'] : null;
             $row['tournament_id'] = $row['tournament_id'] !== null ? (int) $row['tournament_id'] : null;
         }
         unset($row);
@@ -163,6 +227,7 @@ final class ActivityRepository
             'surfaces' => $surfaces,
             'top_paths' => $paths,
             'recent' => $recent,
+            'clubs' => $clubs,
         ];
     }
 
