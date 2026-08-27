@@ -3,6 +3,7 @@
 .statistics-page-head h2{font-size:30px}
 .statistics-page-head .muted{margin-top:5px;max-width:680px;line-height:1.45}
 .statistics-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:5px;border:1px solid var(--line);border-radius:12px;background:#f5f7fa}
+.statistics-tabs[data-tab-count="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
 body .statistics-tabs button{min-height:42px;padding:9px 12px!important;border:0!important;border-radius:9px!important;background:transparent!important;color:#51677f!important;box-shadow:none!important;font-weight:800!important}
 body .statistics-tabs button:hover{background:#fff!important;color:var(--ink)!important}
 body .statistics-tabs button.active{background:#fff!important;color:var(--accent)!important;box-shadow:0 1px 5px rgba(17,42,73,.09)!important}
@@ -10,13 +11,28 @@ body .statistics-tabs button.active{background:#fff!important;color:var(--accent
 .statistics-panel-head{display:flex;justify-content:space-between;align-items:end;gap:16px;padding:4px 1px 0}
 .statistics-panel-head h3{font-size:20px}
 .statistics-panel-head .muted{margin-top:3px;font-size:13px}
+.statistics-season-chooser{display:grid;gap:5px;min-width:min(340px,48%);margin:0}
+.statistics-season-chooser>span{font-size:10px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.statistics-season-chooser select{width:100%;min-height:42px;padding:.55rem .75rem;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font-weight:750}
+.statistics-season-chooser.single-season select{appearance:none;pointer-events:none;background:#f7f9fc;color:#51677f}
 .statistics-table-card{padding:0!important;overflow:hidden;box-shadow:none!important}
-.statistics-table-card .season-table-heading{padding:14px 14px 8px;margin:0;border-bottom:1px solid var(--line)}
+.statistics-table-card .season-table-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 14px 8px;margin:0;border-bottom:1px solid var(--line)}
 .statistics-table-card .table-scroll{max-width:100%}
 .statistics-table-card .portal-table th{position:sticky;top:0;z-index:2}
 .statistics-table-card .portal-table th,.statistics-table-card .portal-table td{padding:.62rem .7rem}
 .statistics-table-card .portal-table tbody tr:last-child td{border-bottom:0}
 .statistics-table-card .portal-table tbody tr:hover{background:#f3f7ff}
+.combined-season-table{min-width:820px}
+.combined-season-table td:nth-child(2) small{display:block;margin-top:2px;color:var(--muted);font-size:10px;font-weight:600}
+.elo-table-value{font-variant-numeric:tabular-nums;font-weight:850;color:#153b67}
+.leg-diff{font-variant-numeric:tabular-nums;font-weight:760}.leg-diff.positive{color:#148653}.leg-diff.negative{color:#bb3946}
+.statistics-sortable{cursor:pointer;user-select:none;white-space:nowrap;padding-right:1.45rem!important;transition:background .12s ease,color .12s ease}
+.statistics-sortable::after{content:"↕";position:absolute;right:.45rem;top:50%;transform:translateY(-50%);font-size:10px;opacity:.38}
+.statistics-sortable:hover,.statistics-sortable:focus-visible{background:#eef4ff!important;color:var(--accent)!important;outline:none}
+.statistics-sortable[aria-sort="ascending"]::after{content:"↑";opacity:1}.statistics-sortable[aria-sort="descending"]::after{content:"↓";opacity:1}
+.statistics-sortable.statistics-sorted{color:var(--accent)!important}
+.statistics-loading{min-height:120px;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:13px}
+.statistics-loading span{width:15px;height:15px;border:2px solid #d8e2ef;border-top-color:var(--accent);border-radius:50%;animation:statisticsSpin .7s linear infinite}@keyframes statisticsSpin{to{transform:rotate(360deg)}}
 .player-directory-head{align-items:center}
 .player-search{width:min(300px,40%);margin:0}
 .player-search input{width:100%;min-height:42px;padding:.7rem .85rem}
@@ -28,14 +44,30 @@ body #statistics .player-card:focus-visible{outline:none!important;border-color:
 #statistics .player-card-meta{font-size:12px!important;color:var(--muted)!important;line-height:1.35}
 #statistics .profile-card{margin-top:4px;scroll-margin-top:88px}
 .statistics-empty-search{grid-column:1/-1;padding:18px;border:1px dashed var(--line);border-radius:11px;text-align:center;color:var(--muted);background:#fbfcfe}
+.elo-movement{display:inline-flex;align-items:center;gap:6px;min-width:max-content;padding:7px 9px;border:1px solid #d9e4f0;border-radius:10px;background:#f7faff;color:#435a73;font-size:11px;font-variant-numeric:tabular-nums;line-height:1}
+.elo-movement-label{font-size:8px;font-weight:900;letter-spacing:.08em;color:#7b8da2}
+.elo-movement .elo-before{color:#6d7f94}.elo-movement .elo-arrow{color:#a0aec0}.elo-movement .elo-after{font-size:12px;color:#183b64}
+.elo-movement .elo-delta{margin-left:2px;padding:4px 5px;border-radius:6px;font-size:10px;background:#eaf0f7;color:#52677e}
+.elo-movement.positive{border-color:#cbe9da;background:#f4fbf7}.elo-movement.positive .elo-delta{background:#def4e8;color:#13784b}
+.elo-movement.negative{border-color:#f0d0d4;background:#fff7f8}.elo-movement.negative .elo-delta{background:#f9e4e7;color:#b52f3e}
+.elo-movement.compact{margin-left:auto;padding:6px 8px}
+.elo-timeline{display:grid;gap:7px;margin-top:8px}
+.elo-timeline-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;padding:10px 11px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.elo-timeline-context{min-width:0;display:grid;gap:2px}.elo-timeline-context strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.elo-timeline-context small{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#statistics .history-row-button{grid-template-columns:minmax(0,1fr) auto auto!important;align-items:center!important;column-gap:8px!important}
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 
 @media(max-width:680px){
   .statistics-page-head h2{font-size:26px}
-  .statistics-tabs{grid-template-columns:repeat(3,minmax(0,1fr));position:sticky;top:0;z-index:8;background:#f5f7fa}
+  .statistics-tabs{grid-template-columns:repeat(2,minmax(0,1fr));position:sticky;top:0;z-index:8;background:#f5f7fa}
   body .statistics-tabs button{font-size:12px!important;padding:8px 5px!important}
   .statistics-panel-head{display:grid;align-items:start}
+  .statistics-season-chooser{width:100%;min-width:0}
   .player-directory-head{gap:10px}
   .player-search{width:100%}
   .statistics-table-card{margin-left:-2px;margin-right:-2px}
+  .combined-season-table{min-width:760px}
+  #statistics .history-row-button{grid-template-columns:minmax(0,1fr) auto!important;row-gap:7px!important}
+  #statistics .history-row-button>.elo-movement{grid-column:1/-1;grid-row:2;margin-left:0;justify-self:start}
+  .elo-timeline-row{grid-template-columns:1fr;gap:7px}.elo-timeline-row .elo-movement{justify-self:start}
 }
