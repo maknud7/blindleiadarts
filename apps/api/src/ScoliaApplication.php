@@ -7,10 +7,10 @@ namespace Blindleia\Dartkiosk\Api;
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
-use Blindleia\Dartkiosk\Api\Repository\MatchScoringRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
+use Blindleia\Dartkiosk\Api\Service\CanonicalScoringService;
 use Blindleia\Dartkiosk\Api\Service\Dart501Rules;
 use Blindleia\Dartkiosk\Api\Service\ScoliaScoringService;
 use Blindleia\Dartkiosk\Api\Support\Config;
@@ -34,7 +34,11 @@ final class ScoliaApplication
             $config = Config::load($this->rootPath);
             $database = new Database($config);
             $repo = new ScoliaRepository($database);
-            $service = new ScoliaScoringService($repo, new MatchScoringRepository($database), new Dart501Rules());
+            $service = new ScoliaScoringService(
+                $repo,
+                new CanonicalScoringService($database, $config),
+                new Dart501Rules()
+            );
             $users = new UserAccountRepository($database);
             $kiosks = new KioskRepository($database);
             $response = $this->dispatch($request, $path, $config, $repo, $service, $users, $kiosks);
