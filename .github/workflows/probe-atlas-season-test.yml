@@ -1,0 +1,51 @@
+name: Probe Atlas Season In Test
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-probe-atlas-season-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-atlas-season-test
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for season probe on TEST
+        run: |
+          set -Eeuo pipefail
+          url='https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=x'
+          for attempt in $(seq 1 80); do
+            status="$(curl -sS -o /tmp/check.json -w '%{http_code}' --max-time 20 "$url" || true)"
+            if [[ "$status" == '400' ]] && grep -Fq 'invalid_season_id' /tmp/check.json; then exit 0; fi
+            sleep 5
+          done
+          echo 'Season probe endpoint did not become available' >&2
+          exit 1
+
+      - name: Fetch Mandagsserien season source
+        run: |
+          set -Eeuo pipefail
+          url='https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq'
+          for attempt in $(seq 1 8); do
+            status="$(curl -sS -o /tmp/season.json -w '%{http_code}' --max-time 90 "$url" || true)"
+            echo "attempt=${attempt} status=${status}"
+            if [[ "$status" == '200' ]]; then break; fi
+            sleep 90
+          done
+          php -r '
+            $d=json_decode(file_get_contents("/tmp/season.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($d["season_external_id"]??"")!=="rFByCgOqI1rq") throw new RuntimeException("Wrong season");
+            foreach(($d["tournaments"]??[]) as $id=>$name) echo "TOURNAMENT {$id} {$name}".PHP_EOL;
+            echo "VISIBLE ".($d["visible_text"]??"").PHP_EOL;
+            $found=false;
+            foreach(($d["tournaments"]??[]) as $id=>$name){ if(stripos($name,"Mandagsserien #3")!==false){ echo "SERIES3 {$id} {$name}".PHP_EOL; $found=true; } }
+            if(!$found && stripos((string)($d["visible_text"]??""),"Mandagsserien #3")===false) throw new RuntimeException("Mandagsserien #3 not found in season source");
+          '
