@@ -68,6 +68,6 @@ jobs:
           grep -Fq 'data-bd-surface="live"' <<<"$(curl -fsS "$base/live/?cb=$RANDOM")"
           grep -Fq 'data-bd-surface="screen"' <<<"$(curl -fsS "$base/screen/?cb=$RANDOM")"
           grep -Fq 'data-bd-surface="onboarding"' <<<"$(curl -fsS "$base/onboarding/?cb=$RANDOM")"
-          grep -Fq '.bd-card' <<<"$design_css"
+          grep -Fq 'Canonical visual system for every Blindleia Darts surface' <<<"$design_css"
 
           echo "CANONICAL_ROOT_SMOKE_OK=yes"
