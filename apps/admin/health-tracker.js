@@ -53,6 +53,60 @@ async function fetchHealth() {
   }
 }
 
+async function authenticatedProbe(name, label, relativeUrl) {
+  const token = localStorage.getItem("bd:token") || "";
+  if (!token) {
+    return { name, label, status: "fail", ms: 0, detail: { error: "ingen innlogget sesjon" } };
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const started = performance.now();
+  try {
+    const url = new URL(relativeUrl, window.location.href);
+    url.searchParams.set("cb", String(Date.now()));
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    const elapsed = Math.round(performance.now() - started);
+    const ok = response.ok && payload?.ok;
+    return {
+      name,
+      label,
+      status: ok ? (elapsed >= 1500 ? "warn" : "ok") : "fail",
+      ms: elapsed,
+      detail: ok ? { http: response.status } : {
+        http: response.status,
+        error: payload?.error?.code || payload?.error?.message || "ugyldig svar",
+      },
+    };
+  } catch (error) {
+    const elapsed = Math.round(performance.now() - started);
+    return {
+      name,
+      label,
+      status: "fail",
+      ms: elapsed,
+      detail: { error: error?.name === "AbortError" ? "timeout etter 12 sekunder" : error?.message || "nettverksfeil" },
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function authenticatedDiagnostics() {
+  if (!localStorage.getItem("bd:token")) return [];
+  return Promise.all([
+    authenticatedProbe("auth_me", "Innlogget sesjon", "../api/v1/auth/me"),
+    authenticatedProbe("me_dashboard", "Min side-dashboard med din sesjon", "../api/v1/me/dashboard"),
+    authenticatedProbe("member_self", "Ditt medlemskap og kontingent", "../api/member-onboarding.php?action=self"),
+    authenticatedProbe("break_context", "Spillerpause-kontekst", "../api/v1/me/break-context"),
+  ]);
+}
+
 function renderHealth(payload, responseOk) {
   if (!healthRoot || !healthSummary) return;
   const diagnostics = Array.isArray(payload?.diagnostics) ? payload.diagnostics : [];
@@ -69,7 +123,7 @@ function renderHealth(payload, responseOk) {
   healthSummary.innerHTML = `
     <div>
       <strong>${healthEsc(title)}</strong>
-      <p>${healthEsc(`Kjørt ${healthTime(payload?.generated_at)} · ${Number(payload?.duration_ms || 0).toFixed(0)} ms totalt${release ? ` · release ${release.slice(0, 8)}` : ""}`)}</p>
+      <p>${healthEsc(`Kjørt ${healthTime(payload?.generated_at)} · ${Number(payload?.duration_ms || 0).toFixed(0)} ms serverdiagnose${release ? ` · release ${release.slice(0, 8)}` : ""}`)}</p>
     </div>
     <span class="health-overall">${overallOk ? (warnings.length ? "OBS" : "OK") : "FEIL"}</span>`;
 
@@ -96,11 +150,15 @@ async function runHealthTracker() {
     healthRunButton.textContent = "Diagnostiserer …";
   }
   healthSummary.className = "health-summary neutral";
-  healthSummary.innerHTML = `<div><strong>Kjører selvdiagnose</strong><p>Tester database, medlemskap, spillerprofil, kamphistorikk og Min side-dashboard.</p></div><span class="health-overall">…</span>`;
+  healthSummary.innerHTML = `<div><strong>Kjører selvdiagnose</strong><p>Tester både serveren og de samme innloggede kallene som Min side bruker.</p></div><span class="health-overall">…</span>`;
   healthRoot.innerHTML = `<div class="empty">Henter målinger …</div>`;
 
   try {
-    const { response, payload } = await fetchHealth();
+    const [{ response, payload }, authenticated] = await Promise.all([
+      fetchHealth(),
+      authenticatedDiagnostics(),
+    ]);
+    payload.diagnostics = [...(Array.isArray(payload.diagnostics) ? payload.diagnostics : []), ...authenticated];
     renderHealth(payload, response.ok);
   } catch (error) {
     healthSummary.className = "health-summary bad";
