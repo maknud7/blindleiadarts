@@ -38,9 +38,17 @@ final class CanonicalScoringService
 
     public function startMatch(int $kioskId, string $source = 'manual'): void
     {
-        $matchId = $this->playoffs->targetMatchIdForKiosk($kioskId, false);
+        $before = $this->startState($kioskId);
         $this->scoring->startMatch($kioskId);
-        $this->afterMutation($kioskId, $matchId, false, $source, 'match_started');
+
+        // startMatch is intentionally idempotent. Scolia may call it while a visit
+        // is being assembled, so only reconcile/publish when it actually starts a
+        // match or opens a new leg.
+        if ($before === null || ((string) $before['status'] === 'in_progress' && (int) $before['has_open_leg'] === 1)) {
+            return;
+        }
+
+        $this->afterMutation($kioskId, (int) $before['id'], false, $source, 'match_started');
     }
 
     /** @param array<string,mixed> $payload */
@@ -56,6 +64,36 @@ final class CanonicalScoringService
         $matchId = $this->playoffs->assertUndoAllowed($kioskId);
         $this->scoring->undoLastVisit($kioskId);
         $this->afterMutation($kioskId, $matchId, true, $source, 'visit_undone');
+    }
+
+    /** @return array{id:int,status:string,has_open_leg:int}|null */
+    private function startState(int $kioskId): ?array
+    {
+        $sql = sprintf(
+            'SELECT m.id, m.status,
+                    EXISTS(
+                        SELECT 1 FROM `%1$slegs` l
+                        WHERE l.match_id=m.id AND l.status IN ("pending","in_progress")
+                    ) AS has_open_leg
+             FROM `%1$smatches` m
+             WHERE m.kiosk_id=? AND m.status IN ("in_progress","assigned")
+             ORDER BY FIELD(m.status,"in_progress","assigned"), m.id ASC
+             LIMIT 1',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $kioskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row === null) {
+            return null;
+        }
+        return [
+            'id' => (int) $row['id'],
+            'status' => (string) $row['status'],
+            'has_open_leg' => (int) $row['has_open_leg'],
+        ];
     }
 
     private function afterMutation(
