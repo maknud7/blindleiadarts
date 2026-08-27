@@ -10,6 +10,7 @@ use Blindleia\Dartkiosk\Api\EquipmentApplication;
 use Blindleia\Dartkiosk\Api\MatchScoringApplication;
 use Blindleia\Dartkiosk\Api\PasswordResetApplication;
 use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
+use Blindleia\Dartkiosk\Api\PlayerIdentityApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\ScoliaApplication;
 use Blindleia\Dartkiosk\Api\SeasonApplication;
@@ -109,6 +110,11 @@ if ($seasons->run()) {
 
 $elo = new EloApplication(__DIR__);
 if ($elo->run()) {
+    return;
+}
+
+$playerIdentity = new PlayerIdentityApplication(__DIR__);
+if ($playerIdentity->run()) {
     return;
 }
 
