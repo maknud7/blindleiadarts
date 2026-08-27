@@ -2,6 +2,11 @@ const isAdminSurface = document.body.dataset.bdSurface === "admin";
 
 if (isAdminSurface) {
   const API_ROOT = "../api/v1";
+  const legacyRootMatch = window.location.pathname.match(/^(.*\/)admin\/(?:index\.html)?$/i);
+  const canonicalRootPath = document.body.dataset.canonicalRoot === "1"
+    ? (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname.replace(/[^/]*$/, ""))
+    : (legacyRootMatch?.[1] || "/");
+  const playerRoute = (view = "home") => `${canonicalRootPath}#${view}`;
 
   const esc = (value) => String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -44,7 +49,7 @@ if (isAdminSurface) {
       section.innerHTML = `
         <div class="panel-head">
           <div><p class="eyebrow">Spillerbase</p><h2>Spillere</h2><p class="muted">Spillerprofiler og dartstatistikk er skilt fra medlemskap og kontingent.</p></div>
-          <a class="button secondary" href="../player/#statistics" target="_blank" rel="noopener">Åpne spillerstatistikk</a>
+          <a class="button secondary" href="${playerRoute("statistics")}" target="_blank" rel="noopener">Åpne spillerstatistikk</a>
         </div>
         <div class="subsection-head"><h3>Klubbens spillere</h3><span id="adminPlayerBaseCount" class="pill">0</span></div>
         <div id="adminPlayerBase" class="admin-player-grid"><div class="empty">Laster spillere …</div></div>`;
@@ -73,7 +78,7 @@ if (isAdminSurface) {
     tools.dataset.roleAccess = "admin";
     tools.innerHTML = `
       <span class="admin-tools-label">Adminverktøy</span>
-      <a href="../player/" data-admin-icon="player">Spillerportal</a>
+      <a href="${playerRoute("home")}" data-admin-icon="player">Spillerportal</a>
       <a href="../live/" target="_blank" rel="noopener" data-admin-icon="live">Live-skjerm</a>
       <a href="../screen/" target="_blank" rel="noopener" data-admin-icon="screen">Venue-skjerm</a>
       <a href="../kiosk/" target="_blank" rel="noopener" data-admin-icon="terminal">Kiosk / terminal</a>`;
@@ -144,7 +149,7 @@ if (isAdminSurface) {
             <div class="admin-player-stat"><strong>${formatAverage(player.three_dart_average ?? player.recorded_average)}</strong><span>3DA</span></div>
             <div class="admin-player-stat"><strong>${Number(player.score_180 || 0)}</strong><span>180</span></div>
           </div>
-          <div class="admin-player-actions"><a href="../player/#statistics" target="_blank" rel="noopener">Se i spillerportalen</a></div>
+          <div class="admin-player-actions"><a href="${playerRoute("statistics")}" target="_blank" rel="noopener">Se i spillerportalen</a></div>
         </article>`).join("");
     } catch (error) {
       root.innerHTML = `<div class="empty">Kunne ikke hente spillerbasen: ${esc(error.message)}</div>`;
