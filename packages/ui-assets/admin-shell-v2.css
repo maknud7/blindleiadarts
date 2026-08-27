@@ -1,0 +1,159 @@
+/* Unified Blindleia admin shell. Desktop gets the full left rail; mobile keeps the existing compact portal UX. */
+body[data-bd-surface="admin"]{
+  --admin-rail:230px;
+  --admin-navy:#0b2b50;
+  --admin-navy-deep:#071f3b;
+  --admin-gold:#f0bd42;
+}
+
+body[data-bd-surface="admin"] .panel,
+body[data-bd-surface="admin"] .claim-admin-card,
+body[data-bd-surface="admin"] .integration-card,
+body[data-bd-surface="admin"] .create-card,
+body[data-bd-surface="admin"] .list-row,
+body[data-bd-surface="admin"] .table-wrap{
+  border-color:var(--bd-border,#dbe3ed)!important;
+  background:#fff!important;
+  color:var(--bd-text,#0c2340)!important;
+}
+
+body[data-bd-surface="admin"] .panel{
+  border-radius:14px!important;
+  box-shadow:0 5px 16px rgba(17,42,73,.055)!important;
+}
+
+body[data-bd-surface="admin"] .panel-head h2,
+body[data-bd-surface="admin"] .subsection-head h3{
+  color:var(--bd-text,#0c2340)!important;
+}
+
+body[data-bd-surface="admin"] .admin-player-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+body[data-bd-surface="admin"] .admin-player-card{
+  min-width:0;
+  display:grid;
+  gap:10px;
+  padding:15px;
+  border:1px solid var(--bd-border,#dbe3ed);
+  border-radius:13px;
+  background:#fff;
+}
+body[data-bd-surface="admin"] .admin-player-card-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+body[data-bd-surface="admin"] .admin-player-card strong{font-size:15px;overflow-wrap:anywhere}
+body[data-bd-surface="admin"] .admin-player-card .player-nick{font-size:12px;color:var(--bd-muted,#697c94)}
+body[data-bd-surface="admin"] .admin-player-stats{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+body[data-bd-surface="admin"] .admin-player-stat{
+  padding:8px;
+  border-radius:9px;
+  background:#f5f8fc;
+  text-align:center;
+}
+body[data-bd-surface="admin"] .admin-player-stat strong{display:block;font-size:17px}
+body[data-bd-surface="admin"] .admin-player-stat span{display:block;margin-top:2px;font-size:10px;color:var(--bd-muted,#697c94);text-transform:uppercase;letter-spacing:.04em}
+body[data-bd-surface="admin"] .admin-player-actions{display:flex;gap:8px;flex-wrap:wrap}
+body[data-bd-surface="admin"] .admin-player-actions a{font-size:12px;text-decoration:none;font-weight:750;color:var(--bd-blue-700,#245acb)}
+
+@media(min-width:981px){
+  body[data-bd-surface="admin"] .section-nav.portal-menu{
+    padding-bottom:18px!important;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu a[href="#playerbase"]::before{
+    content:""!important;
+    flex:0 0 19px!important;
+    width:19px!important;
+    height:19px!important;
+    border:0!important;
+    background:center/19px 19px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d8e5f3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21a8 8 0 0 1 16 0'/%3E%3C/svg%3E")!important;
+  }
+  body[data-bd-surface="admin"] .admin-tool-section{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    margin-top:14px;
+    padding-top:13px;
+    border-top:1px solid rgba(255,255,255,.13);
+  }
+  body[data-bd-surface="admin"] .admin-tools-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:28px;
+    padding:0 10px;
+    color:var(--admin-gold);
+    font-size:10px;
+    font-weight:850;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+  }
+  body[data-bd-surface="admin"] .admin-tools-label::before{content:"♛";font-size:14px;line-height:1}
+  body[data-bd-surface="admin"] .section-nav.portal-menu .admin-tool-section a{
+    color:#d8e5f3!important;
+    background:transparent!important;
+  }
+  body[data-bd-surface="admin"] .section-nav.portal-menu .admin-tool-section a::before{
+    content:""!important;
+    flex:0 0 18px!important;
+    width:18px!important;
+    height:18px!important;
+    border:0!important;
+    background:center/18px 18px no-repeat!important;
+    opacity:.95!important;
+  }
+  body[data-bd-surface="admin"] .admin-tool-section a[data-admin-icon="player"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23f0bd42' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21a8 8 0 0 1 16 0'/%3E%3C/svg%3E")!important;
+  }
+  body[data-bd-surface="admin"] .admin-tool-section a[data-admin-icon="live"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23f0bd42' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='4' width='20' height='14' rx='2'/%3E%3Cpath d='M8 22h8M12 18v4'/%3E%3C/svg%3E")!important;
+  }
+  body[data-bd-surface="admin"] .admin-tool-section a[data-admin-icon="screen"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23f0bd42' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='13' rx='2'/%3E%3Cpath d='M7 21h10M12 16v5'/%3E%3C/svg%3E")!important;
+  }
+  body[data-bd-surface="admin"] .admin-tool-section a[data-admin-icon="terminal"]::before{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23f0bd42' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='2' width='14' height='20' rx='2'/%3E%3Cpath d='M9 18h6'/%3E%3C/svg%3E")!important;
+  }
+  body[data-bd-surface="admin"] .admin-sidebar-account{
+    margin-top:auto;
+    padding:15px 8px 0;
+    border-top:1px solid rgba(255,255,255,.13);
+    display:grid;
+    grid-template-columns:34px 1fr;
+    align-items:center;
+    gap:9px;
+    color:#fff;
+  }
+  body[data-bd-surface="admin"] .admin-sidebar-avatar{
+    width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    border:1px solid rgba(255,255,255,.45);font-size:11px;font-weight:850;color:#fff;
+  }
+  body[data-bd-surface="admin"] .admin-sidebar-account strong{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  body[data-bd-surface="admin"] .admin-sidebar-account span{display:block;margin-top:2px;font-size:10px;color:#b8cbe0}
+  body[data-bd-surface="admin"] .topbar-actions > a.button.secondary{display:none!important}
+  body[data-bd-surface="admin"] .portal-shortcuts{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+
+@media(max-width:1100px) and (min-width:981px){
+  body[data-bd-surface="admin"] .admin-player-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:980px){
+  body[data-bd-surface="admin"] .admin-tool-section,
+  body[data-bd-surface="admin"] .admin-sidebar-account{display:none!important}
+  body[data-bd-surface="admin"] .admin-player-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:640px){
+  body[data-bd-surface="admin"] .admin-player-grid{grid-template-columns:1fr}
+  body[data-bd-surface="admin"] .admin-player-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
