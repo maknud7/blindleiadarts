@@ -83,8 +83,15 @@ final class UserAccountRepository
             return null;
         }
 
+        // Playerportalen har flere små, periodiske lesekall. Tidligere skrev hvert
+        // eneste kall til samme auth_sessions-rad for å forlenge 180-dagerssesjonen.
+        // Det gir unødvendig radlåsing når flere moduler oppdaterer samtidig.
+        // En touch hvert femte minutt er mer enn nok for samme sesjonssemantikk.
         $sessionId = (int) ($row['session_id'] ?? 0);
-        if ($sessionId > 0) {
+        $lastUsedAt = isset($row['last_used_at']) && is_string($row['last_used_at'])
+            ? (strtotime($row['last_used_at']) ?: 0)
+            : 0;
+        if ($sessionId > 0 && ($lastUsedAt === 0 || $lastUsedAt <= time() - 300)) {
             $sessions = $this->identityPrefix . 'auth_sessions';
             $touch = $this->connection->prepare(
                 "UPDATE `{$sessions}`
@@ -173,7 +180,7 @@ final class UserAccountRepository
         }
 
         $sessionSelect = $withSession
-            ? ', s.id AS session_id, s.expires_at, s.revoked_at'
+            ? ', s.id AS session_id, s.expires_at, s.revoked_at, s.last_used_at'
             : '';
         $sessionJoin = $withSession
             ? "INNER JOIN `{$sessions}` s ON s.user_account_id = ua.id"
