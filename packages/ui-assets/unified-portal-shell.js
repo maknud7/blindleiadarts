@@ -135,7 +135,8 @@ function buildCommonGroup() {
     const link = makeLink(href, text, "unified-generated");
     nav.insertBefore(link, firstLocal);
   });
-  if (label && firstLocal) nav.insertBefore(label, nav.querySelector(`a[href="../player/#home"]`));
+  const firstCommon = nav.querySelector('a[href="../player/#home"]');
+  if (label && firstCommon) nav.insertBefore(label, firstCommon);
 }
 
 function adminAllowed() {
@@ -212,7 +213,7 @@ async function resolveRole() {
     const payload = await response.json().catch(() => null);
     const user = payload?.data?.user || {};
     currentRole = String(user.role || "");
-    currentUserLabel = String(user.display_name || user.name || user.username || user.email || "Innlogget");
+    currentUserLabel = String(user.player?.display_name || user.display_name || user.name || user.username || user.email || "Innlogget");
   } catch {
     currentRole = "";
     currentUserLabel = "Innlogget";
@@ -224,24 +225,18 @@ function initialize() {
   ensurePlayerTopbar();
   syncMenu();
   resolveRole().catch(() => undefined);
+  if (surface === "admin") {
+    window.setTimeout(syncMenu, 250);
+    window.setTimeout(syncMenu, 900);
+    window.setTimeout(syncMenu, 1800);
+  }
 }
-
-let observerQueued = false;
-const observer = new MutationObserver(() => {
-  if (syncing || observerQueued) return;
-  observerQueued = true;
-  requestAnimationFrame(() => {
-    observerQueued = false;
-    if (surface === "admin") syncMenu();
-  });
-});
-if (nav) observer.observe(nav, { childList: true });
 
 window.addEventListener("storage", (event) => {
   if (event.key === "bd:token") resolveRole().catch(() => undefined);
 });
 window.addEventListener("bd:portal-view", () => {
-  if (surface === "admin") syncMenu();
+  if (surface === "admin") window.setTimeout(syncMenu, 0);
 });
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });
