@@ -1,0 +1,68 @@
+name: Player Portal Smoke
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy Test
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: player-portal-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify player portal APIs
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+
+          request() {
+            local label="$1"
+            local url="$2"
+            echo "SMOKE: $label -> $url"
+            local tmp
+            tmp="$(mktemp)"
+            local status
+            status="$(curl -sS --connect-timeout 5 --max-time 15 -o "$tmp" -w '%{http_code}' "$url" || true)"
+            echo "HTTP $status"
+            cat "$tmp"
+            echo
+            if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
+              rm -f "$tmp"
+              echo "Smoke failed: $label returned HTTP $status" >&2
+              exit 1
+            fi
+            if ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' "$tmp"; then
+              rm -f "$tmp"
+              echo "Smoke failed: $label did not return ok=true" >&2
+              exit 1
+            fi
+            cat "$tmp" > /tmp/player-portal-last.json
+            rm -f "$tmp"
+          }
+
+          request "clubs" "$base/api/v1/clubs"
+          club_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); echo (int)($j["data"]["items"][0]["id"] ?? 0);')"
+          test "$club_id" -gt 0
+
+          request "player directory" "$base/api/v1/clubs/$club_id/player-directory"
+          player_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); echo (int)($j["data"]["items"][0]["id"] ?? 0);')"
+          test "$player_id" -gt 0
+
+          request "elo" "$base/api/v1/clubs/$club_id/elo"
+          request "seasons" "$base/api/v1/clubs/$club_id/seasons"
+          request "registration tournaments" "$base/api/v1/clubs/$club_id/registration-tournaments"
+          request "player profile" "$base/api/v1/players/$player_id/profile"
+          request "player matches" "$base/api/v1/players/$player_id/matches"
+
+          echo "PLAYER_PORTAL_SMOKE_OK=yes"
