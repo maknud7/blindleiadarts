@@ -1,6 +1,11 @@
 const surface = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview" ? "admin" : "player";
 const nav = document.querySelector(".portal-menu");
 const token = () => localStorage.getItem("bd:token") || "";
+const canonicalRoot = document.body.dataset.canonicalRoot === "1";
+const rootPathMatch = window.location.pathname.match(/^(.*\/)(?:player|admin)\/(?:index\.html)?$/i);
+const rootPath = canonicalRoot
+  ? (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname.replace(/[^/]*$/, ""))
+  : (rootPathMatch?.[1] || "/");
 let currentRole = "";
 let currentUserLabel = "";
 let syncing = false;
@@ -25,6 +30,12 @@ function initials(value) {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "BD";
 }
 
+function rootRoute(targetSurface, view) {
+  const base = rootPath || "/";
+  if (targetSurface === "admin") return `${base}#admin/${view || "overview"}`;
+  return view ? `${base}#${view}` : base;
+}
+
 function ensurePlayerTopbar() {
   if (surface !== "player" || document.getElementById("unifiedPlayerTopbar")) return;
   const shell = document.querySelector(".shell");
@@ -45,11 +56,19 @@ function ensurePlayerTopbar() {
   if (context) topbar.querySelector(".unified-topbar-actions")?.appendChild(context);
 }
 
-function makeLink(href, label, className = "") {
+function makeLink(href, label, className = "", targetSurface = surface) {
   const link = document.createElement("a");
   link.href = href;
   link.textContent = label;
+  link.dataset.surfaceTarget = targetSurface;
   if (className) link.className = className;
+  if (canonicalRoot && targetSurface !== surface) {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      history.replaceState(null, "", href);
+      window.location.reload();
+    });
+  }
   return link;
 }
 
@@ -126,16 +145,16 @@ function buildCommonGroup() {
   const firstLocal = getAdminLocalLinks()[0] || null;
   const label = addGroupLabel("Portal", false, firstLocal);
   const common = [
-    ["../player/#home", "Hjem"],
-    ["../player/#tournaments", "Turneringer"],
-    ["../player/#statistics", "Statistikk"],
-    ["../player/#profile", "Min profil"],
+    ["home", "Hjem"],
+    ["tournaments", "Turneringer"],
+    ["statistics", "Statistikk"],
+    ["profile", "Min profil"],
   ];
-  common.forEach(([href, text]) => {
-    const link = makeLink(href, text, "unified-generated");
+  common.forEach(([view, text]) => {
+    const link = makeLink(rootRoute("player", view), text, "unified-generated", "player");
     nav.insertBefore(link, firstLocal);
   });
-  const firstCommon = nav.querySelector('a[href="../player/#home"]');
+  const firstCommon = nav.querySelector('[data-surface-target="player"].unified-generated');
   if (label && firstCommon) nav.insertBefore(label, firstCommon);
 }
 
@@ -156,16 +175,16 @@ function buildAdminGroup() {
 
   const adminLabel = addGroupLabel(currentRole === "super_admin" ? "Superadmin / klubbdrift" : "Klubbadmin", true);
   const items = [
-    ["../admin/#overview", "Adminoversikt"],
-    ["../admin/#tournaments", "Turneringsadmin"],
-    ["../admin/#seasons", "Sesonger"],
-    ["../admin/#playerbase", "Spillere"],
-    ["../admin/#players", "Medlemmer"],
-    ["../admin/#kiosks", "Utstyr"],
-    ["../admin/#integrations", "Innstillinger"],
+    ["overview", "Adminoversikt"],
+    ["tournaments", "Turneringsadmin"],
+    ["seasons", "Sesonger"],
+    ["playerbase", "Spillere"],
+    ["players", "Medlemmer"],
+    ["kiosks", "Utstyr"],
+    ["integrations", "Innstillinger"],
   ];
-  items.forEach(([href, text]) => {
-    const link = makeLink(href, text, "unified-generated unified-admin-link");
+  items.forEach(([view, text]) => {
+    const link = makeLink(rootRoute("admin", view), text, "unified-generated unified-admin-link", "admin");
     nav.appendChild(link);
   });
   if (adminLabel) adminLabel.dataset.roleAccess = "admin";
