@@ -97,14 +97,49 @@ async function authenticatedProbe(name, label, relativeUrl) {
   }
 }
 
+async function identityHealthProbe() {
+  const token = localStorage.getItem("bd:token") || "";
+  if (!token) return null;
+  const started = performance.now();
+  try {
+    const me = await window.BlindleiaApp?.session?.resolve?.();
+    if (me?.role !== "super_admin") return null;
+    const response = await fetch("../api/v1/player-identities/health", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => null);
+    const elapsed = Math.round(performance.now() - started);
+    if (!response.ok || !payload?.ok) {
+      return { name: "identity_health", label: "Canonical spiller- og medlemsidentitet", status: "fail", ms: elapsed, detail: { error: payload?.error?.message || `HTTP ${response.status}` } };
+    }
+    const data = payload.data || {};
+    const groups = Number(data.duplicate_groups || 0);
+    const ids = Number(data.duplicate_player_ids || 0);
+    return {
+      name: "identity_health",
+      label: "Canonical spiller- og medlemsidentitet",
+      status: groups > 0 ? "fail" : "ok",
+      ms: elapsed,
+      detail: groups > 0
+        ? { duplikatgrupper: groups, spiller_IDer: ids, sammenslåinger: Number(data.merge_count || 0) }
+        : { duplikatgrupper: 0, sammenslåinger: Number(data.merge_count || 0) },
+    };
+  } catch (error) {
+    return { name: "identity_health", label: "Canonical spiller- og medlemsidentitet", status: "fail", ms: Math.round(performance.now() - started), detail: { error: error.message || "ukjent feil" } };
+  }
+}
+
 async function authenticatedDiagnostics() {
   if (!localStorage.getItem("bd:token")) return [];
-  return Promise.all([
+  const probes = await Promise.all([
     authenticatedProbe("auth_me", "Innlogget sesjon", "../api/v1/auth/me"),
     authenticatedProbe("me_dashboard", "Min side-dashboard med din sesjon", "../api/v1/me/dashboard"),
     authenticatedProbe("member_self", "Ditt medlemskap og kontingent", "../api/member-onboarding.php?action=self"),
     authenticatedProbe("break_context", "Spillerpause-kontekst", "../api/v1/me/break-context"),
+    identityHealthProbe(),
   ]);
+  return probes.filter(Boolean);
 }
 
 function renderHealth(payload, responseOk) {
@@ -150,7 +185,7 @@ async function runHealthTracker() {
     healthRunButton.textContent = "Diagnostiserer …";
   }
   healthSummary.className = "health-summary neutral";
-  healthSummary.innerHTML = `<div><strong>Kjører selvdiagnose</strong><p>Tester både serveren og de samme innloggede kallene som Min side bruker.</p></div><span class="health-overall">…</span>`;
+  healthSummary.innerHTML = `<div><strong>Kjører selvdiagnose</strong><p>Tester server, portal og canonical identiteter.</p></div><span class="health-overall">…</span>`;
   healthRoot.innerHTML = `<div class="empty">Henter målinger …</div>`;
 
   try {
@@ -175,8 +210,12 @@ async function runHealthTracker() {
 
 healthRunButton?.addEventListener("click", runHealthTracker);
 healthRefreshButton?.addEventListener("click", () => window.setTimeout(runHealthTracker, 100));
-window.addEventListener("focus", () => {
-  const app = document.getElementById("adminApp");
-  if (app && !app.classList.contains("hidden")) runHealthTracker();
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "superadmin") runHealthTracker();
 });
-window.setTimeout(runHealthTracker, 1200);
+window.addEventListener("focus", () => {
+  if (document.body.dataset.portalActive === "superadmin") runHealthTracker();
+});
+window.setTimeout(() => {
+  if (document.body.dataset.portalActive === "superadmin" || window.BlindleiaApp?.router?.route?.().view === "superadmin") runHealthTracker();
+}, 1200);
