@@ -72,7 +72,7 @@ jobs:
       - name: UX information architecture check
         run: |
           set -Eeuo pipefail
-          grep -Fq '>Personer</a>' apps/admin/index.html
+          grep -Fq '>Medlemmer</a>' apps/admin/index.html
           grep -Fq '>Utstyr</a>' apps/admin/index.html
           grep -Fq '>Innstillinger</a>' apps/admin/index.html
           if grep -Fq 'href="#screens"' apps/admin/index.html; then
@@ -80,10 +80,11 @@ jobs:
             exit 1
           fi
           grep -Fq '>Min profil</a>' apps/player/index.html
-          grep -Fq '>Ranking</a>' apps/player/index.html
-          grep -Fq 'data-tr-view="matches"' apps/admin/admin-ux.js
-          grep -Fq 'Neste anbefalte steg' apps/admin/admin-ux.js
+          grep -Fq '>Statistikk</a>' apps/player/index.html
+          grep -Fq 'data-tournament-view="matches"' apps/player/index.html
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
+          grep -Fq './tournament-leader-v2.js' apps/admin/tournament-loader.js
+          grep -Fq 'data-leader-step=' apps/admin/tournament-leader-v2.js
 
       - name: Public live and first-party activity check
         run: |
@@ -152,6 +153,9 @@ jobs:
           test -f dist/test/admin/admin-ux.js
           test -f dist/test/admin/admin-ux.css
           test -f dist/test/admin/activity-admin.js
+          test -f dist/test/admin/tournament-leader-v2.js
+          test -f dist/test/admin/tournament-leader-v2-board-state.js
+          test -f dist/test/admin/tournament-leader-v2.css
           test -f dist/test/player/player-ux.js
           test -f dist/test/player/player-ux.css
           test -f dist/test/onboarding/index.html
