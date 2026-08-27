@@ -31,12 +31,21 @@ function portalToken() { return localStorage.getItem("bd:token") || ""; }
 async function api(path, { auth = false } = {}) {
   const headers = {};
   if (auth && portalToken()) headers.Authorization = `Bearer ${portalToken()}`;
-  const response = await fetch(`${API_ROOT}${path}`, { headers, cache: "no-store" });
-  const payload = await response.json();
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(`${API_ROOT}${path}`, { headers, cache: "no-store", signal: controller.signal });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    }
+    return payload.data;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Hentingen tok for lang tid. Trykk Oppdater for å prøve igjen.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return payload.data;
 }
 
 function esc(value) {
@@ -108,7 +117,7 @@ async function loadPortalContent() {
   renderSummaries();
   renderTournamentPicker();
   bindTournamentTabs();
-  await Promise.all([loadTournamentTable(), loadSeasonStandings(), loadMyMatches()]);
+  await Promise.all([loadTournamentTable(), loadSeasonStandings()]);
 }
 
 function renderElo() {
@@ -344,10 +353,9 @@ async function loadMyMatches() {
     const first = matches.slice(0, 5);
     el.myMatchList.innerHTML = `${renderHistoryRows(first)}${matches.length > 5 ? `<button type="button" class="ghost my-matches-all">Vis alle ${matches.length} kamper</button>` : ""}`;
     bindMatchDetailLinks(el.myMatchList);
-    el.myMatchList.querySelector(".my-matches-all")?.addEventListener("click", (event) => {
+    el.myMatchList.querySelector(".my-matches-all")?.addEventListener("click", () => {
       el.myMatchList.innerHTML = renderHistoryRows(matches);
       bindMatchDetailLinks(el.myMatchList);
-      event.currentTarget?.remove();
     });
   } catch (error) {
     el.myMatchList.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message)}</p></div>`;
@@ -440,16 +448,26 @@ function bindTournamentTabs() {
   });
 }
 
+function renderPortalLoadError(error) {
+  const message = esc(error?.message || "Kunne ikke hente portaldata.");
+  if (el.playerDirectory) el.playerDirectory.innerHTML = `<div class="mini-card"><p class="muted">${message}</p></div>`;
+  if (el.eloTable && !el.eloTable.textContent.trim()) el.eloTable.innerHTML = `<div class="mini-card"><p class="muted">${message}</p></div>`;
+  if (el.seasonStandings?.textContent.includes("Henter")) el.seasonStandings.innerHTML = `<div class="mini-card"><p class="muted">${message}</p></div>`;
+  if (el.summaryList && !el.summaryList.textContent.trim()) el.summaryList.innerHTML = `<div class="mini-card"><p class="muted">${message}</p></div>`;
+}
+
 el.tableTournamentSelect?.addEventListener("change", loadTournamentTable);
 el.clubSelect?.addEventListener("change", () => {
   state.clubId = Number(el.clubSelect.value || 0);
-  setTimeout(() => loadPortalContent().catch(() => {}), 0);
+  setTimeout(() => loadPortalContent().catch(renderPortalLoadError), 0);
 });
-el.refreshButton?.addEventListener("click", () => setTimeout(() => loadPortalContent().catch(() => {}), 0));
+el.refreshButton?.addEventListener("click", () => setTimeout(() => {
+  loadMyMatches().catch(() => {});
+  loadPortalContent().catch(renderPortalLoadError);
+}, 0));
 el.matchDetailDialog?.addEventListener("click", (event) => {
   if (event.target === el.matchDetailDialog) el.matchDetailDialog.close?.();
 });
 
-loadPortalContent().catch((error) => {
-  if (el.playerDirectory) el.playerDirectory.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message)}</p></div>`;
-});
+loadMyMatches().catch(() => {});
+loadPortalContent().catch(renderPortalLoadError);
