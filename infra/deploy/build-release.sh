@@ -110,6 +110,26 @@ screen|$OUT_DIR/screen/index.html
 onboarding|$OUT_DIR/onboarding/index.html
 EOF
 
+# Canonical identity management belongs to the common admin shell, but remains
+# a separate feature bundle so it can be retired independently after the legacy
+# admin bundle is fully decomposed.
+if [[ -f "$OUT_DIR/admin/index.html" ]]; then
+  php -r '
+    $path = $argv[1];
+    $html = file_get_contents($path);
+    if ($html === false) { exit(1); }
+    if (strpos($html, "player-identity-admin.css") === false) {
+      $html = str_replace("</head>", "  <link rel=\"stylesheet\" href=\"/admin/player-identity-admin.css?v=20260827-1745\">\n</head>", $html, $count);
+      if ($count !== 1) { fwrite(STDERR, "Could not inject player identity CSS.\n"); exit(1); }
+    }
+    if (strpos($html, "player-identity-admin.js") === false) {
+      $html = str_replace("</body>", "  <script type=\"module\" src=\"/admin/player-identity-admin.js?v=20260827-1745\"></script>\n</body>", $html, $count);
+      if ($count !== 1) { fwrite(STDERR, "Could not inject player identity JS.\n"); exit(1); }
+    }
+    file_put_contents($path, $html);
+  ' "$OUT_DIR/admin/index.html"
+fi
+
 # First-party activity telemetry is injected into every browser surface in the
 # release. It does not create an analytics cookie or persistent anonymous ID.
 for html in \
