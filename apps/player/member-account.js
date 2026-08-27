@@ -17,10 +17,19 @@ function date(value) {
 }
 
 async function json(url, options = {}) {
-  const response = await fetch(url, { cache: "no-store", ...options });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
-  return payload.data;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url, { cache: "no-store", ...options, signal: controller.signal });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    return payload.data;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Hentingen tok for lang tid. Trykk Oppdater for å prøve igjen.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function empty(message) {
@@ -53,7 +62,7 @@ function renderStats(profile) {
     <div class="stats-grid">
       <div class="stat-card"><small>ELO</small><strong>${number(elo.rating || 1000, 1)}</strong></div>
       <div class="stat-card"><small>Kamper</small><strong>${Number(stats.matches_played || 0)}</strong></div>
-      <div class="stat-card"><small>Snitt</small><strong>${number(stats.recorded_average || stats.visit_average || 0, 2)}</strong></div>
+      <div class="stat-card"><small>3-dart snitt</small><strong>${number(stats.three_dart_average || stats.recorded_average || stats.visit_average || 0, 2)}</strong></div>
       <div class="stat-card"><small>Høy checkout</small><strong>${Number(stats.highest_checkout || 0)}</strong></div>
       <div class="stat-card"><small>Checkout %</small><strong>${stats.checkout_percentage === null || stats.checkout_percentage === undefined ? "—" : `${number(stats.checkout_percentage, 1)}%`}</strong></div>
       <div class="stat-card"><small>180</small><strong>${Number(stats.visits_180 || 0)}</strong></div>
@@ -91,5 +100,5 @@ async function load(force = false) {
 refreshButton?.addEventListener("click", () => setTimeout(() => load(true), 50));
 window.addEventListener("focus", () => load(true));
 window.addEventListener("storage", () => load(true));
-setInterval(() => load(false), 1200);
+setInterval(() => load(false), 10000);
 load(true);
