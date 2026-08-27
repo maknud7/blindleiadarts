@@ -22,7 +22,7 @@ jobs:
           set -Eeuo pipefail
           removed_provider="$(printf '%s%s' 'darts' 'atlas')"
           matches="$(git grep -n -i -E "${removed_provider}(\.com)?" -- . || true)"
-          unexpected="$(printf '%s\n' "$matches" | grep -Ev '^(\.agents/skills/[^:]*history-migration/|\.github/workflows/(atlas-history-|atlas-discover-|import-atlas-)[^:]*:|apps/api/atlas-(import-probe|match-visits|season-probe|tournament-probe)\.php:|infra/sql/(atlas_history_|atlas_discover_|import_atlas_|run-atlas-discover-)[^:]*:)' || true)"
+          unexpected="$(printf '%s\n' "$matches" | grep -Ev '^(\.agents/skills/[^:]*history-migration/|\.github/workflows/(atlas-|import-atlas-)[^:]*:|apps/api/atlas-(import-probe|match-visits|season-probe|tournament-probe)\.php:|infra/atlas/[^:]*:|infra/import/legacy_atlas_probe\.php:|infra/sql/(atlas_|import_atlas_|run-(atlas-|import-atlas-|probe-atlas-))[^:]*:)' || true)"
           if [[ -n "$unexpected" ]]; then
             printf '%s\n' "$unexpected"
             echo "Removed provider reference found outside historical migration tooling."
