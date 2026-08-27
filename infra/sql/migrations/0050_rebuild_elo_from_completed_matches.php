@@ -113,7 +113,7 @@ return static function (mysqli $mysqli, string $prefix): void {
                 $ratingBAfter = $ratingBBefore + $deltaB;
 
                 $eventInsert->bind_param(
-                    'iiiiiiidddddddddiidds',
+                    'iiiiiiiddddddddiidds',
                     $matchId,
                     $tournamentId,
                     $seasonId,
