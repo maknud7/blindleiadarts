@@ -71,7 +71,7 @@ final class PlayerIdentityApplication
                 }
             }
         } catch (ValidationException $error) {
-            $response = JsonResponse::error(422, 'player_identity_conflict', $error->getMessage());
+            $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception $error) {
             $response = JsonResponse::error(500, 'player_identity_database_error', 'Spilleridentitet er midlertidig utilgjengelig.', [
                 'details' => $config instanceof Config && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
