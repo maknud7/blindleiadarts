@@ -78,4 +78,68 @@ while ($row = $result->fetch_assoc()) {
 }
 $assert($uniqueMatchIndex, 'elo_match_events.match_id must be unique.');
 
-echo "ELO ledger schema OK\n";
+$eligibleSql = "
+    SELECT COUNT(*) AS c
+    FROM `{$prefix}matches` m
+    INNER JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+    WHERE m.status='completed' AND t.elo_enabled=1 AND t.season_id IS NOT NULL";
+$eligible = (int) (($db->query($eligibleSql)->fetch_assoc()['c'] ?? 0));
+
+$missingSql = "
+    SELECT COUNT(*) AS c
+    FROM `{$prefix}matches` m
+    INNER JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+    LEFT JOIN `{$prefix}elo_match_events` e ON e.match_id=m.id
+    WHERE m.status='completed' AND t.elo_enabled=1 AND t.season_id IS NOT NULL
+      AND (
+        e.id IS NULL OR e.status<>'applied'
+        OR NOT (e.winner_player_id <=> m.winner_player_id)
+        OR e.season_id<>t.season_id
+        OR e.player_a_id<>m.player_a_id
+        OR e.player_b_id<>m.player_b_id
+      )";
+$missing = (int) (($db->query($missingSql)->fetch_assoc()['c'] ?? 0));
+$assert($missing === 0, "ELO ledger is missing or inconsistent for {$missing} completed match(es).");
+
+$incompleteSql = "
+    SELECT COUNT(*) AS c
+    FROM `{$prefix}elo_match_events` e
+    INNER JOIN `{$prefix}matches` m ON m.id=e.match_id
+    INNER JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+    WHERE m.status='completed' AND t.elo_enabled=1 AND t.season_id IS NOT NULL AND e.status='applied'
+      AND (
+        e.rating_a_before IS NULL OR e.rating_b_before IS NULL
+        OR e.rating_a_after IS NULL OR e.rating_b_after IS NULL
+        OR e.delta_a IS NULL OR e.delta_b IS NULL
+        OR e.matches_before_a IS NULL OR e.matches_before_b IS NULL
+        OR e.k_a IS NULL OR e.k_b IS NULL
+      )";
+$incomplete = (int) (($db->query($incompleteSql)->fetch_assoc()['c'] ?? 0));
+$assert($incomplete === 0, "ELO calculation fields are incomplete for {$incomplete} match(es).");
+
+$snapshotMissingSql = "
+    SELECT COUNT(*) AS c
+    FROM `{$prefix}matches` m
+    INNER JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+    WHERE m.status='completed' AND t.elo_enabled=1 AND t.season_id IS NOT NULL
+      AND (
+        SELECT COUNT(*)
+        FROM `{$prefix}ranking_snapshots` rs
+        WHERE rs.ranking_type='elo'
+          AND rs.season_id=t.season_id
+          AND JSON_UNQUOTE(JSON_EXTRACT(rs.context_json, '$.source'))='elo_ledger'
+          AND CAST(JSON_UNQUOTE(JSON_EXTRACT(rs.context_json, '$.match_id')) AS UNSIGNED)=m.id
+      ) <> 2";
+$snapshotMissing = (int) (($db->query($snapshotMissingSql)->fetch_assoc()['c'] ?? 0));
+$assert($snapshotMissing === 0, "Match-level ELO snapshots are missing for {$snapshotMissing} completed match(es).");
+
+$seasonCountSql = "
+    SELECT COUNT(DISTINCT t.season_id) AS c
+    FROM `{$prefix}matches` m
+    INNER JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+    WHERE m.status='completed' AND t.elo_enabled=1 AND t.season_id IS NOT NULL";
+$seasonCount = (int) (($db->query($seasonCountSql)->fetch_assoc()['c'] ?? 0));
+
+$currentCount = (int) (($db->query("SELECT COUNT(*) AS c FROM `{$prefix}elo_current_ratings`")->fetch_assoc()['c'] ?? 0));
+
+echo "ELO ledger OK: {$eligible} completed matches, {$seasonCount} season(s), {$currentCount} current player ratings.\n";
