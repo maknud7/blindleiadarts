@@ -152,8 +152,60 @@ foreach ($candidates as $label => $url) {
     ];
 }
 
+$matchDetails = [];
+foreach (['XeROeLgL56iJ', 'J7VpnjGVpHXn', 'fYzxmWVPjODw'] as $matchId) {
+    $response = $fetch('https://www.dartsatlas.com/matches/' . $matchId);
+    $body = $response['body'];
+    $visible = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $body) ?? $body;
+    $visible = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $visible) ?? $visible;
+
+    $dataTags = [];
+    if (preg_match_all('/<[^>]+\bdata-[^>]+>/iu', $body, $m)) {
+        foreach ($m[0] as $tag) {
+            if (preg_match('/(?:dart|throw|visit|leg|score|checkout|average|player)/i', $tag)) {
+                $dataTags[] = mb_substr($tag, 0, 1200);
+                if (count($dataTags) >= 120) break;
+            }
+        }
+    }
+
+    $interestingScripts = [];
+    if (preg_match_all('~<script\b[^>]*>(.*?)</script>~isu', $body, $m)) {
+        foreach ($m[1] as $script) {
+            if (!preg_match('/(?:dart|throw|visit|checkout|leg|score)/i', $script)) continue;
+            $compact = trim((string) preg_replace('/\s+/u', ' ', $script));
+            $interestingScripts[] = mb_substr($compact, 0, 8000);
+            if (count($interestingScripts) >= 20) break;
+        }
+    }
+
+    $detailLinks = [];
+    if (preg_match_all('~<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>~is', $body, $m, PREG_SET_ORDER)) {
+        foreach ($m as $row) {
+            $href = html_entity_decode((string) $row[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text = $clean((string) $row[2]);
+            if (preg_match('/(?:dart|throw|visit|leg|score|detail|stat)/i', $href . ' ' . $text)) {
+                $detailLinks[$href] = $text;
+            }
+        }
+    }
+
+    $matchDetails[$matchId] = [
+        'status' => $response['status'],
+        'effective_url' => $response['effective_url'],
+        'body_bytes' => strlen($body),
+        'cloudflare' => stripos($body, 'cloudflare') !== false || stripos($body, 'cf-chl-') !== false,
+        'visible_text' => mb_substr($clean($visible), 0, 20000),
+        'data_tags' => $dataTags,
+        'interesting_scripts' => $interestingScripts,
+        'detail_links' => $detailLinks,
+        'curl_error' => $response['error'],
+    ];
+}
+
 echo json_encode([
     'ok' => true,
     'tournament_external_id' => $tournamentId,
     'pages' => $pages,
+    'match_details' => $matchDetails,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
