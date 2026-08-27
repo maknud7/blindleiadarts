@@ -90,18 +90,19 @@ $parseNumericLeg = static function (string $segment, string $playerA, string $pl
         if ($tailStart % 3 !== 0 || $numbers[$tailStart] !== 1) {
             continue;
         }
-        $rowCount = $totalNumbers - $tailStart;
-        if ($rowCount < 1 || $rowCount > 60) {
-            continue;
-        }
-        $sequenceOk = true;
-        for ($i = 0; $i < $rowCount; $i++) {
-            if ($numbers[$tailStart + $i] !== $i + 1) {
-                $sequenceOk = false;
+
+        // DartsAtlas renders row numbers (1,2,3...) after the visit triplets. On the
+        // final leg, player/tournament summary statistics can follow those row numbers.
+        // Only consume the consecutive row-number sequence and ignore the footer.
+        $rowCount = 0;
+        for ($j = $tailStart; $j < $totalNumbers && $rowCount < 60; $j++) {
+            $expected = $rowCount + 1;
+            if ($numbers[$j] !== $expected) {
                 break;
             }
+            $rowCount++;
         }
-        if (!$sequenceOk) {
+        if ($rowCount < 1) {
             continue;
         }
 
