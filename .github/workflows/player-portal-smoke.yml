@@ -87,4 +87,20 @@ jobs:
           request "player profile" "$base/api/v1/players/$player_id/profile"
           request "player matches" "$base/api/v1/players/$player_id/matches"
 
+          echo "DEEP HEALTH: $base/api/health.php?deep=1"
+          health_file="$(mktemp)"
+          health_status="$(curl -sS --connect-timeout 5 --max-time 30 -o "$health_file" -w '%{http_code}' "$base/api/health.php?deep=1&cb=$RANDOM" || true)"
+          echo "HTTP $health_status"
+          php -r '
+            $j=json_decode(file_get_contents($argv[1]),true);
+            if (!is_array($j)) { fwrite(STDERR,"Invalid deep health JSON\n"); exit(1); }
+            echo "overall=".(($j["ok"]??false)?"ok":"fail")." total_ms=".($j["duration_ms"]??"?").PHP_EOL;
+            foreach (($j["diagnostics"]??[]) as $d) {
+              echo ($d["status"]??"?")."\t".($d["name"]??"?")."\t".($d["ms"]??"?")."ms\t".json_encode($d["detail"]??null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+            }
+            if (!($j["ok"]??false)) exit(2);
+          ' "$health_file"
+          test "$health_status" = "200"
+          rm -f "$health_file"
+
           echo "PLAYER_PORTAL_SMOKE_OK=yes"
