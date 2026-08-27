@@ -11,6 +11,7 @@ ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
 ensureStylesheet("./unified-portal-shell.css?v=20260827-1415");
+ensureStylesheet("./mobile-app-nav.css?v=20260827-1430");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
@@ -18,7 +19,7 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260827-1408", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260827-1430", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
