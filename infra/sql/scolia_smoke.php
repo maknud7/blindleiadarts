@@ -32,23 +32,24 @@ try{
   $scoring=new CanonicalScoringService($database); $repo=new ScoliaRepository($database); $service=new ScoliaScoringService($repo,$scoring,new Dart501Rules());
   $scoring->startMatch($ids['kiosk'],'manual');
   $event=function(string $id,string $type,array $payload=[])use($repo,$serial,$eventId):string{$providerId=$eventId($id);$repo->enqueueEvent($serial,['id'=>$providerId,'type'=>$type,'payload'=>$payload]);return $providerId;};
-  $drainOwn=function(array $providerIds,string $label)use($service,$db,$p,$assert):void{
+  $eventState=function(string $providerId)use($db,$p):array{
+    $stmt=$db->prepare(sprintf('SELECT processing_status,last_error,processing_meta_json FROM `%1$sscolia_events` WHERE provider_event_id=? LIMIT 1',$p));
+    $stmt->bind_param('s',$providerId);$stmt->execute();$row=$stmt->get_result()->fetch_assoc()?:[];$stmt->close();
+    return ['status'=>(string)($row['processing_status']??'missing'),'error'=>(string)($row['last_error']??''),'meta'=>json_decode((string)($row['processing_meta_json']??'{}'),true)?:[]];
+  };
+  $drainOwn=function(array $providerIds,string $label)use($service,$eventState,$assert):void{
     $remaining=array_fill_keys($providerIds,true);
-    $statusStmt=$db->prepare(sprintf('SELECT processing_status,last_error FROM `%1$sscolia_events` WHERE provider_event_id=? LIMIT 1',$p));
-    try{
-      for($attempt=1;$attempt<=20 && $remaining!==[];$attempt++){
-        $service->drain(100);
-        foreach(array_keys($remaining) as $providerId){
-          $statusStmt->bind_param('s',$providerId);$statusStmt->execute();$row=$statusStmt->get_result()->fetch_assoc()?:[];
-          $status=(string)($row['processing_status']??'missing');
-          if(in_array($status,['processed','ignored'],true)){unset($remaining[$providerId]);continue;}
-          if(in_array($status,['failed','dead_letter'],true)){
-            $error=trim((string)($row['last_error']??''));
-            throw new RuntimeException("{$label} event {$providerId} failed: ".($error!==''?$error:$status));
-          }
+    for($attempt=1;$attempt<=20 && $remaining!==[];$attempt++){
+      $service->drain(100);
+      foreach(array_keys($remaining) as $providerId){
+        $state=$eventState($providerId);$status=$state['status'];
+        if(in_array($status,['processed','ignored'],true)){unset($remaining[$providerId]);continue;}
+        if(in_array($status,['failed','dead_letter'],true)){
+          $error=trim((string)$state['error']);
+          throw new RuntimeException("{$label} event {$providerId} failed: ".($error!==''?$error:$status));
         }
       }
-    }finally{$statusStmt->close();}
+    }
     $assert($remaining===[],"{$label} events were not drained from the shared Scolia queue: ".implode(',',array_keys($remaining)));
   };
 
@@ -69,7 +70,7 @@ try{
   $scoring->recordVisit($ids['kiosk'],['input_mode'=>'sum','score'=>60,'darts_used'=>3,'request_id'=>'manual-fallback-'.$suffix],'manual');
   $s=$db->prepare(sprintf('SELECT COUNT(*) c FROM `%1$svisits` WHERE match_id=?',$p));$s->bind_param('i',$ids['match']);$s->execute();$assert((int)($s->get_result()->fetch_assoc()['c']??0)===2,'Manual scoring did not continue during Scolia fallback.');$s->close();
   $ignoredId=$event('ignored-1','THROW_DETECTED',['sector'=>'T20']);$drainOwn([$ignoredId],'Fallback ignore');
-  $s=$db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE provider_event_id=?',$p));$s->bind_param('s',$ignoredId);$s->execute();$assert(($s->get_result()->fetch_assoc()['processing_status']??'')==='ignored','Scolia event was not ignored during manual fallback.');$s->close();
+  $ignoredState=$eventState($ignoredId);$assert($ignoredState['status']==='ignored','Scolia event was not ignored during manual fallback.');
 
   $db->query(sprintf('UPDATE `%1$sscolia_board_runtime` SET fallback_active=0,needs_reconciliation=0,turn_locked_until_takeout=0 WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
   $db->query(sprintf('UPDATE `%1$sscolia_board_settings` SET mode="shadow" WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
@@ -80,6 +81,13 @@ try{
     $event('s4','TAKEOUT_FINISHED',['falseTakeout'=>false]),
   ];
   $drainOwn($shadowEvents,'Shadow Scolia');
+  foreach(array_slice($shadowEvents,0,3) as $index=>$providerId){
+    $state=$eventState($providerId);$meta=$state['meta'];
+    $assert($state['status']==='processed',sprintf('Shadow throw %d was %s: %s', $index+1, $state['status'], json_encode($meta,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)));
+  }
+  $shadowFinal=$eventState($shadowEvents[2]);
+  $assert((int)($shadowFinal['meta']['shadow_visit_id']??0)>0,'Third shadow throw did not create a shadow visit: '.json_encode($shadowFinal['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
+  $assert((int)($shadowFinal['meta']['score']??0)===171,'Third shadow throw produced wrong meta score: '.json_encode($shadowFinal['meta'],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
   $s=$db->prepare(sprintf('SELECT score FROM `%1$sscolia_shadow_visits` WHERE match_id=? ORDER BY id DESC LIMIT 1',$p));$s->bind_param('i',$ids['match']);$s->execute();$shadow=$s->get_result()->fetch_assoc()?:[];$s->close();$shadowScore=(int)($shadow['score']??0);$assert($shadowScore===171,"Shadow visit score wrong: {$shadowScore}.");
   $s=$db->prepare(sprintf('SELECT COUNT(*) c FROM `%1$svisits` WHERE match_id=?',$p));$s->bind_param('i',$ids['match']);$s->execute();$assert((int)($s->get_result()->fetch_assoc()['c']??0)===2,'Shadow scoring changed canonical visits.');$s->close();
   echo "Scolia live/shadow/fallback canonical scoring smoke OK\n";
