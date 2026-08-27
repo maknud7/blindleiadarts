@@ -15,16 +15,29 @@ function escapeHtml(value) {
 async function api(path, { method = "GET" } = {}) {
   const auth = token();
   if (!auth) throw Object.assign(new Error("not_logged_in"), { status: 401 });
-  const response = await fetch(`${API_ROOT}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${auth}` },
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.ok) {
-    throw Object.assign(new Error(payload?.error?.message || "Kunne ikke oppdatere pause."), { status: response.status });
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(`${API_ROOT}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${auth}` },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw Object.assign(new Error(payload?.error?.message || "Kunne ikke oppdatere pause."), { status: response.status });
+    }
+    return payload.data;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw Object.assign(new Error(`API-kallet ${path} brukte mer enn 12 sekunder.`), { status: 408 });
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return payload.data;
 }
 
 function remainingSeconds() {
@@ -58,6 +71,9 @@ function patchPortalRendering() {
   const name = String(context?.tournament_name || "");
   if (!name) return;
   const label = context.registration_status === "paused" ? "Pause" : "Checket inn";
+  const noteText = context.registration_status === "paused"
+    ? "Du er midlertidig satt på pause og blir ikke sendt til ny skive."
+    : "Du er checket inn og klar for board-tildeling.";
 
   for (const root of [document.getElementById("registrationList"), document.getElementById("tournamentList")]) {
     if (!root) continue;
@@ -67,7 +83,7 @@ function patchPortalRendering() {
 
       if (root.id === "registrationList") {
         const pill = item.querySelector(".pill");
-        if (pill) pill.textContent = label;
+        if (pill && pill.textContent !== label) pill.textContent = label;
       }
 
       item.querySelectorAll("[data-register], [data-checkin], [data-withdraw]").forEach((button) => {
@@ -78,11 +94,11 @@ function patchPortalRendering() {
       if (!note) {
         note = document.createElement("p");
         note.className = "muted pause-managed-note";
+        note.textContent = noteText;
         item.appendChild(note);
+      } else if (note.textContent !== noteText) {
+        note.textContent = noteText;
       }
-      note.textContent = context.registration_status === "paused"
-        ? "Du er midlertidig satt på pause og blir ikke sendt til ny skive."
-        : "Du er checket inn og klar for board-tildeling.";
     });
   }
 }
