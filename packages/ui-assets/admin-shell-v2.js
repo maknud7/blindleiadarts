@@ -161,7 +161,7 @@ if (isAdminSurface) {
     if (!select || select.querySelector('option[value="linear"]')) return;
     const option = document.createElement("option");
     option.value = "linear";
-    option.textContent = "Lineær (DartsAtlas)";
+    option.textContent = "Lineær";
     select.prepend(option);
   }
 
