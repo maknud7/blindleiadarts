@@ -46,9 +46,6 @@ copy_dir "$ROOT_DIR/apps/live" "$OUT_DIR/live"
 copy_dir "$ROOT_DIR/apps/onboarding" "$OUT_DIR/onboarding"
 copy_dir "$ROOT_DIR/packages" "$OUT_DIR/packages"
 
-# Static assets are runtime dependencies too. Previously these directories were
-# created empty, which meant logo URLs were valid in CSS/HTML but returned 404
-# after deployment.
 mkdir -p "$OUT_DIR/static"
 copy_dir "$ROOT_DIR/static/club-logos" "$OUT_DIR/static/club-logos"
 copy_dir "$ROOT_DIR/static/sponsors" "$OUT_DIR/static/sponsors"
@@ -63,8 +60,7 @@ if [[ -f "$ROOT_DIR/index.html" ]]; then
 fi
 
 # / is the canonical browser entry. /player/ and /admin/ remain deployed as
-# implementation bundles, but direct browser visits are redirected back to the
-# root while preserving the requested view.
+# compatibility bundles only; direct browser visits return to the root.
 for html in "$OUT_DIR/player/index.html" "$OUT_DIR/admin/index.html"; do
   [[ -f "$html" ]] || continue
   if ! grep -Fq '/packages/ui-assets/canonical-entry.js' "$html"; then
@@ -72,13 +68,47 @@ for html in "$OUT_DIR/player/index.html" "$OUT_DIR/admin/index.html"; do
       $path = $argv[1];
       $html = file_get_contents($path);
       if ($html === false) { exit(1); }
-      $tag = "\n  <script src=\"/packages/ui-assets/canonical-entry.js?v=20260827-1340\"></script>";
+      $tag = "\n  <script src=\"/packages/ui-assets/canonical-entry.js?v=20260827-1745\"></script>";
       $updated = preg_replace("/<head>/", "<head>" . $tag, $html, 1, $count);
       if ($updated === null || $count !== 1) { fwrite(STDERR, "Could not inject canonical entry into {$path}\n"); exit(1); }
       file_put_contents($path, $updated);
     ' "$html"
   fi
 done
+
+# Phase 1 UI foundation: every browser surface receives the same tokens and
+# component vocabulary. Surface-specific CSS keeps kiosk/venue geometry intact.
+while IFS='|' read -r surface html; do
+  [[ -n "$surface" && -f "$html" ]] || continue
+  php -r '
+    $path = $argv[1];
+    $surface = $argv[2];
+    $html = file_get_contents($path);
+    if ($html === false) { exit(1); }
+    if (strpos($html, "/packages/ui-assets/blindleia-system.css") === false) {
+      $tags = "  <link rel=\"stylesheet\" href=\"/packages/ui-assets/brand-tokens.css?v=20260827-1745\">\n"
+            . "  <link rel=\"stylesheet\" href=\"/packages/ui-assets/blindleia-system.css?v=20260827-1745\">\n";
+      $html = str_replace("</head>", $tags . "</head>", $html, $count);
+      if ($count !== 1) { fwrite(STDERR, "Could not inject design system into {$path}\n"); exit(1); }
+    }
+    if (preg_match("/<body([^>]*)>/i", $html, $match)) {
+      $attrs = $match[1];
+      if (stripos($attrs, "data-bd-surface=") === false) {
+        $replacement = "<body" . $attrs . " data-bd-surface=\"" . htmlspecialchars($surface, ENT_QUOTES) . "\">";
+        $html = preg_replace("/<body([^>]*)>/i", $replacement, $html, 1, $count);
+        if ($html === null || $count !== 1) { fwrite(STDERR, "Could not mark surface in {$path}\n"); exit(1); }
+      }
+    }
+    file_put_contents($path, $html);
+  ' "$html" "$surface"
+done <<EOF
+admin|$OUT_DIR/admin/index.html
+player|$OUT_DIR/player/index.html
+kiosk|$OUT_DIR/kiosk/index.html
+live|$OUT_DIR/live/index.html
+screen|$OUT_DIR/screen/index.html
+onboarding|$OUT_DIR/onboarding/index.html
+EOF
 
 # First-party activity telemetry is injected into every browser surface in the
 # release. It does not create an analytics cookie or persistent anonymous ID.
@@ -104,9 +134,8 @@ for html in \
   fi
 done
 
-# Make the deployed kiosk environment explicit in the release itself.
-# Runtime UI can then distinguish test/prod without relying on an extra
-# health request that may fail or be cached independently of the page.
+# Make the deployed kiosk environment explicit without dropping the canonical
+# surface marker added above.
 if [[ -f "$OUT_DIR/kiosk/index.html" ]]; then
   php -r '
     $path = $argv[1];
@@ -116,8 +145,11 @@ if [[ -f "$OUT_DIR/kiosk/index.html" ]]; then
         fwrite(STDERR, "Could not read kiosk index.\n");
         exit(1);
     }
-    $replacement = "<body data-app-env=\"" . htmlspecialchars($env, ENT_QUOTES) . "\">";
-    $updated = preg_replace("/<body(?:\\s[^>]*)?>/", $replacement, $html, 1, $count);
+    $updated = preg_replace_callback("/<body([^>]*)>/i", static function (array $m) use ($env): string {
+        $attrs = $m[1];
+        $attrs = preg_replace("/\\sdata-app-env=([\"\x27]).*?\\1/i", "", $attrs) ?? $attrs;
+        return "<body" . $attrs . " data-app-env=\"" . htmlspecialchars($env, ENT_QUOTES) . "\">";
+    }, $html, 1, $count);
     if ($updated === null || $count !== 1) {
         fwrite(STDERR, "Could not embed kiosk app environment.\n");
         exit(1);
