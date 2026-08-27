@@ -17,11 +17,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Reject removed provider references
+      - name: Reject removed provider runtime references
         run: |
+          set -Eeuo pipefail
           removed_provider="$(printf '%s%s' 'darts' 'atlas')"
-          if git grep -n -i -E "${removed_provider}(\.com)?" -- .; then
-            echo "Removed provider reference found in repository."
+          matches="$(git grep -n -i -E "${removed_provider}(\.com)?" -- . || true)"
+          unexpected="$(printf '%s\n' "$matches" | grep -Ev '^(​?\.agents/skills/[^:]*history-migration/|\.github/workflows/(atlas-history-|import-atlas-)[^:]*:|apps/api/atlas-(import-probe|match-visits|season-probe|tournament-probe)\.php:|infra/sql/(atlas_history_|import_atlas_)[^:]*:)' || true)"
+          if [[ -n "$unexpected" ]]; then
+            printf '%s\n' "$unexpected"
+            echo "Removed provider reference found outside historical migration tooling."
             exit 1
           fi
 
@@ -136,6 +140,7 @@ jobs:
 
       - name: Release package smoke test
         run: |
+          set -Eeuo pipefail
           bash infra/deploy/build-release.sh test
           test -f dist/test/api/src/EmailAuthApplication.php
           test -f dist/test/api/src/PasswordResetApplication.php
@@ -175,3 +180,21 @@ jobs:
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
           grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
+
+          # Historical probes remain available in TEST for controlled migration work.
+          test -f dist/test/api/atlas-import-probe.php
+          test -f dist/test/api/atlas-match-visits.php
+          test -f dist/test/api/atlas-season-probe.php
+          test -f dist/test/api/atlas-tournament-probe.php
+
+          # Production must contain no historical provider runtime surface at all.
+          bash infra/deploy/build-release.sh prod
+          test ! -e dist/prod/api/atlas-import-probe.php
+          test ! -e dist/prod/api/atlas-match-visits.php
+          test ! -e dist/prod/api/atlas-season-probe.php
+          test ! -e dist/prod/api/atlas-tournament-probe.php
+          removed_provider="$(printf '%s%s' 'darts' 'atlas')"
+          if grep -R -n -i -E "${removed_provider}(\.com)?" dist/prod; then
+            echo 'Historical provider reference leaked into the production release.'
+            exit 1
+          fi
