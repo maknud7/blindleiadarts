@@ -1,3 +1,4 @@
+const app = window.BlindleiaApp;
 const surface = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview" ? "admin" : "player";
 const nav = document.querySelector(".portal-menu");
 const token = () => localStorage.getItem("bd:token") || "";
@@ -34,8 +35,8 @@ function initials(value) {
 
 function rootRoute(targetSurface, view) {
   const base = rootPath || "/";
-  if (targetSurface === "admin") return `${base}#admin/${view || "overview"}`;
-  return view ? `${base}#${view}` : base;
+  const hash = app?.router?.href ? app.router.href(targetSurface, view) : (targetSurface === "admin" ? "#club" : `#${view || "home"}`);
+  return `${base}${hash}`;
 }
 
 function ensureRuntimeStyles() {
@@ -51,6 +52,8 @@ function ensureRuntimeStyles() {
     .unified-superadmin-link::after{background:var(--unified-gold,#f0bd42)!important;opacity:1!important}
     #unifiedPlayerTopbar .portal-context.unified-single-club label[for="clubSelect"],
     #unifiedPlayerTopbar .portal-context.unified-single-club #clubSelect{display:none!important}
+    #superadmin{display:grid;gap:16px}
+    #superadmin .superadmin-stack{display:grid;gap:16px}
   `;
   document.head.appendChild(style);
 }
@@ -228,13 +231,16 @@ function ensureSuperAdminSection() {
         <div>
           <p class="eyebrow">Plattform</p>
           <h1>Superadmin</h1>
-          <p class="muted">Systemstatus og funksjoner som gjelder hele Blindleia Darts-plattformen, uavhengig av klubb.</p>
+          <p class="muted">Plattformhelse, identitetsopprydding, revisjon og logger som gjelder hele Blindleia Darts.</p>
         </div>
-      </div>`;
+      </div>
+      <div id="superadminIdentityAuditHost" class="superadmin-stack"></div>
+      <div id="superadminActivityHost" class="superadmin-stack"></div>`;
     main.appendChild(section);
   }
-  if (health && health.parentElement !== section) section.appendChild(health);
+  if (health && health.parentElement !== section) section.insertBefore(health, document.getElementById("superadminIdentityAuditHost"));
   health?.classList.remove("hidden");
+  window.dispatchEvent(new CustomEvent("bd:superadmin-ready"));
   return section;
 }
 
@@ -267,7 +273,7 @@ function buildAdminGroup() {
     if (currentRole === "super_admin") {
       ensureSuperAdminSection();
       addGroupLabel("Superadmin", true, null, "super-admin");
-      nav.appendChild(makeLink("#superadmin", "Systemstatus", "unified-generated unified-admin-link unified-superadmin-link", "admin"));
+      nav.appendChild(makeLink("#superadmin", "Superadmin", "unified-generated unified-admin-link unified-superadmin-link", "admin"));
     }
     return;
   }
@@ -280,7 +286,7 @@ function buildAdminGroup() {
 
   if (currentRole === "super_admin") {
     addGroupLabel("Superadmin", true, null, "super-admin");
-    nav.appendChild(makeLink(rootRoute("admin", "superadmin"), "Systemstatus", "unified-generated unified-admin-link unified-superadmin-link", "admin"));
+    nav.appendChild(makeLink(rootRoute("admin", "superadmin"), "Superadmin", "unified-generated unified-admin-link unified-superadmin-link", "admin"));
   }
 }
 
@@ -322,6 +328,8 @@ function mobileQuickItems() {
 }
 
 function normalizedCurrentView() {
+  const route = app?.router?.route ? app.router.route(window.location.hash) : null;
+  if (route && route.surface === surface) return route.view;
   let hash = String(window.location.hash || "").replace(/^#/, "").trim();
   if (hash.startsWith("admin/")) hash = hash.slice(6);
   if (!hash || hash === "admin") return surface === "admin" ? "overview" : "home";
@@ -480,14 +488,9 @@ async function resolveRole() {
     return;
   }
   try {
-    const response = await fetch("../api/v1/auth/me", {
-      headers: { Authorization: `Bearer ${value}` },
-      cache: "no-store",
-    });
-    const payload = await response.json().catch(() => null);
-    const user = payload?.data?.user || {};
-    currentRole = String(user.role || "");
-    currentUserLabel = String(user.player?.display_name || user.display_name || user.name || user.username || user.email || "Innlogget");
+    const user = app?.session?.resolve ? await app.session.resolve() : null;
+    currentRole = String(user?.role || "");
+    currentUserLabel = String(user?.player?.display_name || user?.display_name || user?.name || user?.username || user?.email || "Innlogget");
   } catch {
     currentRole = "";
     currentUserLabel = "Innlogget";
@@ -515,6 +518,7 @@ function initialize() {
 window.addEventListener("storage", (event) => {
   if (event.key === "bd:token") resolveRole().catch(() => undefined);
 });
+window.addEventListener("bd:session", () => resolveRole().catch(() => undefined));
 window.addEventListener("bd:portal-view", () => {
   if (surface === "admin") window.setTimeout(syncMenu, 0);
   syncMobileBottomNav();
