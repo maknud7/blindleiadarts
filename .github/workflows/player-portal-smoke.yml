@@ -82,7 +82,19 @@ jobs:
           test "$player_id" -gt 0
 
           request "elo" "$base/api/v1/clubs/$club_id/elo"
+          non_default_elo="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); $c=0; foreach(($j["data"]["items"]??[]) as $r){ if(abs((float)($r["elo_rating"]??1000)-1000.0)>0.01)$c++; } echo $c;')"
+          echo "Non-default club ELO rows: $non_default_elo"
+          test "$non_default_elo" -gt 0
+
           request "seasons" "$base/api/v1/clubs/$club_id/seasons"
+          season_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); $items=$j["data"]["items"]??[]; $id=0; foreach($items as $r){ if(($r["is_active"]??false)){ $id=(int)($r["id"]??0); break; } } if(!$id) $id=(int)($items[0]["id"]??0); echo $id;')"
+          test "$season_id" -gt 0
+
+          request "season standings" "$base/api/v1/seasons/$season_id/standings"
+          non_default_season_elo="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); $c=0; foreach(($j["data"]["items"]??[]) as $r){ if(abs((float)($r["elo_rating"]??1000)-1000.0)>0.01)$c++; } echo $c;')"
+          echo "Non-default season ELO rows: $non_default_season_elo"
+          test "$non_default_season_elo" -gt 0
+
           request "registration tournaments" "$base/api/v1/clubs/$club_id/registration-tournaments"
           request "player profile" "$base/api/v1/players/$player_id/profile"
           request "player matches" "$base/api/v1/players/$player_id/matches"
