@@ -14,15 +14,19 @@ jobs:
   discover:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup PHP 8.3
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: curl, mbstring
-          coverage: none
-      - name: Lint discovery tool
-        run: php -l infra/sql/atlas_discover_season.php
-      - name: Discover Mandagsserien tournaments
-        run: php infra/sql/atlas_discover_season.php --season='rFByCgOqI1rq'
+      - name: Discover Mandagsserien tournaments through TEST proxy
+        run: |
+          set -Eeuo pipefail
+          url='https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq'
+          for attempt in $(seq 1 50); do
+            status="$(curl -sS -o /tmp/season.json -w '%{http_code}' --max-time 60 "$url" || true)"
+            echo "Season probe attempt $attempt: HTTP ${status:-unknown}"
+            if [[ "$status" == '200' ]] && grep -Fq '"source_status": 200' /tmp/season.json; then
+              cat /tmp/season.json
+              exit 0
+            fi
+            [[ -f /tmp/season.json ]] && cat /tmp/season.json || true
+            sleep 10
+          done
+          echo 'DartsAtlas season probe never became available through TEST' >&2
+          exit 1
