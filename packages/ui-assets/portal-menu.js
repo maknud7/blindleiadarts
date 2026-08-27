@@ -10,7 +10,7 @@ function ensureStylesheet(url) {
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260827-1248");
+ensureStylesheet("./unified-portal-shell.css?v=20260827-1340");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
@@ -18,15 +18,38 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260827-1248", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260827-1340", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
 const NAV_SELECTOR = "[data-portal-nav], .section-nav a[href^='#'], .portal-nav a[href^='#']";
 const SECTION_SELECTOR = "[data-portal-section], main > section[id], .shell > section[id]";
+const CANONICAL_ROOT = document.body.dataset.canonicalRoot === "1";
+const ADMIN_SURFACE = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview";
 
 function normalizeTarget(value) {
-  return String(value || "").replace(/^#/, "").trim();
+  let target = String(value || "").replace(/^#/, "").trim();
+  if (CANONICAL_ROOT && ADMIN_SURFACE) {
+    if (target === "admin") return "";
+    if (target.startsWith("admin/")) target = target.slice(6);
+  }
+  return target;
+}
+
+function canonicalHash(target) {
+  const next = normalizeTarget(target);
+  if (CANONICAL_ROOT && ADMIN_SURFACE) return `#admin/${next}`;
+  return `#${next}`;
+}
+
+function hashRequestsAdmin() {
+  const raw = String(window.location.hash || "").replace(/^#/, "").trim();
+  return raw === "admin" || raw.startsWith("admin/");
+}
+
+function canonicalSurfaceMismatch() {
+  if (!CANONICAL_ROOT) return false;
+  return hashRequestsAdmin() !== ADMIN_SURFACE;
 }
 
 function links() {
@@ -76,11 +99,9 @@ function activate(target, { updateHash = true } = {}) {
   });
 
   document.body.dataset.portalActive = next;
-  if (updateHash && window.location.hash !== `#${next}`) history.replaceState(null, "", `#${next}`);
+  const nextHash = canonicalHash(next);
+  if (updateHash && window.location.hash !== nextHash) history.replaceState(null, "", nextHash);
 
-  // This event means that the user actually changed portal view. DOM rendering
-  // inside the active view must never re-emit it; doing so creates fetch/render
-  // feedback loops in modules that load data when a view is entered.
   if (changed) {
     window.dispatchEvent(new CustomEvent("bd:portal-view", { detail: { target: next, previous } }));
   }
@@ -128,6 +149,10 @@ async function syncRoleAccess() {
 }
 
 function refresh() {
+  if (canonicalSurfaceMismatch()) {
+    window.location.reload();
+    return;
+  }
   bindLinks();
   const requested = normalizeTarget(window.location.hash);
   const current = normalizeTarget(document.body.dataset.portalActive);
@@ -149,7 +174,13 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-window.addEventListener("hashchange", () => activate(window.location.hash, { updateHash: false }));
+window.addEventListener("hashchange", () => {
+  if (canonicalSurfaceMismatch()) {
+    window.location.reload();
+    return;
+  }
+  activate(window.location.hash, { updateHash: false });
+});
 window.addEventListener("storage", () => syncRoleAccess().catch(() => undefined));
 window.setInterval(() => syncRoleAccess().catch(() => undefined), 5000);
 
