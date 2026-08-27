@@ -14,6 +14,7 @@ $root=dirname(__DIR__,2); require $root.'/apps/api/bootstrap.php';
 $config=Config::load($root.'/apps/api'); $database=new Database($config); $db=$database->connection(); $p=$database->tablePrefix();
 $assert=static function(bool $ok,string $msg):void{if(!$ok)throw new RuntimeException($msg);};
 $suffix=strtolower(substr(bin2hex(random_bytes(6)),0,12));
+$eventId=static fn(string $base):string=>$base.'-'.$suffix;
 $ids=['club'=>0,'tournament'=>0,'kiosk'=>0,'a'=>0,'b'=>0,'match'=>0];
 try{
   $name='Scolia Smoke '.$suffix;$slug='scolia-smoke-'.$suffix;$s=$db->prepare(sprintf('INSERT INTO `%1$sclubs` (name,slug) VALUES (?,?)',$p));$s->bind_param('ss',$name,$slug);$s->execute();$ids['club']=(int)$s->insert_id;$s->close();
@@ -27,9 +28,9 @@ try{
 
   $scoring=new CanonicalScoringService($database); $repo=new ScoliaRepository($database); $service=new ScoliaScoringService($repo,$scoring,new Dart501Rules());
   $scoring->startMatch($ids['kiosk'],'manual');
-  $event=function(string $id,string $type,array $payload=[])use($repo,$serial):void{$repo->enqueueEvent($serial,['id'=>$id,'type'=>$type,'payload'=>$payload]);};
+  $event=function(string $id,string $type,array $payload=[])use($repo,$serial,$eventId):void{$repo->enqueueEvent($serial,['id'=>$eventId($id),'type'=>$type,'payload'=>$payload]);};
   $event('e1','THROW_DETECTED',['sector'=>'T20','bounceout'=>false]);$event('e2','THROW_DETECTED',['sector'=>'T20','bounceout'=>false]);$event('e3','THROW_DETECTED',['sector'=>'T20','bounceout'=>false]);$event('e4','TAKEOUT_FINISHED',['falseTakeout'=>false]);
-  $duplicate=$repo->enqueueEvent($serial,['id'=>'e3','type'=>'THROW_DETECTED','payload'=>['sector'=>'T20','bounceout'=>false]]);$assert($duplicate['duplicate']===true,'Provider event dedupe failed.');
+  $duplicate=$repo->enqueueEvent($serial,['id'=>$eventId('e3'),'type'=>'THROW_DETECTED','payload'=>['sector'=>'T20','bounceout'=>false]]);$assert($duplicate['duplicate']===true,'Provider event dedupe failed.');
   $drain=$service->drain(20);$assert($drain['failed']===0,'Live Scolia queue had failures.');
   $s=$db->prepare(sprintf('SELECT score,darts_used,request_key FROM `%1$svisits` WHERE match_id=? ORDER BY id',$p));$s->bind_param('i',$ids['match']);$s->execute();$visits=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
   $assert(count($visits)===1,'Live Scolia should create exactly one canonical visit.');$assert((int)$visits[0]['score']===180,'Live Scolia 180 score wrong.');$assert(str_starts_with((string)$visits[0]['request_key'],'scolia-'),'Canonical Scolia request key missing.');
@@ -40,12 +41,12 @@ try{
   $scoring->recordVisit($ids['kiosk'],['input_mode'=>'sum','score'=>60,'darts_used'=>3,'request_id'=>'manual-fallback-'.$suffix],'manual');
   $s=$db->prepare(sprintf('SELECT COUNT(*) c FROM `%1$svisits` WHERE match_id=?',$p));$s->bind_param('i',$ids['match']);$s->execute();$assert((int)($s->get_result()->fetch_assoc()['c']??0)===2,'Manual scoring did not continue during Scolia fallback.');$s->close();
   $event('ignored-1','THROW_DETECTED',['sector'=>'T20']);$service->drain(10);
-  $s=$db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE provider_event_id="ignored-1"',$p));$s->execute();$assert(($s->get_result()->fetch_assoc()['processing_status']??'')==='ignored','Scolia event was not ignored during manual fallback.');$s->close();
+  $ignoredId=$eventId('ignored-1');$s=$db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE provider_event_id=?',$p));$s->bind_param('s',$ignoredId);$s->execute();$assert(($s->get_result()->fetch_assoc()['processing_status']??'')==='ignored','Scolia event was not ignored during manual fallback.');$s->close();
 
   $db->query(sprintf('UPDATE `%1$sscolia_board_runtime` SET fallback_active=0,needs_reconciliation=0,turn_locked_until_takeout=0 WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
   $db->query(sprintf('UPDATE `%1$sscolia_board_settings` SET mode="shadow" WHERE kiosk_id=%2$d',$p,$ids['kiosk']));
   $event('s1','THROW_DETECTED',['sector'=>'T20']);$event('s2','THROW_DETECTED',['sector'=>'T19']);$event('s3','THROW_DETECTED',['sector'=>'T18']);$event('s4','TAKEOUT_FINISHED',['falseTakeout'=>false]);$drain=$service->drain(20);$assert($drain['failed']===0,'Shadow Scolia queue had failures.');
-  $s=$db->prepare(sprintf('SELECT score FROM `%1$sscolia_shadow_visits` WHERE match_id=? ORDER BY id DESC LIMIT 1',$p));$s->bind_param('i',$ids['match']);$s->execute();$shadow=$s->get_result()->fetch_assoc()?:[];$s->close();$assert((int)($shadow['score']??0)===171,'Shadow visit score wrong.');
+  $s=$db->prepare(sprintf('SELECT score FROM `%1$sscolia_shadow_visits` WHERE match_id=? ORDER BY id DESC LIMIT 1',$p));$s->bind_param('i',$ids['match']);$s->execute();$shadow=$s->get_result()->fetch_assoc()?:[];$s->close();$shadowScore=(int)($shadow['score']??0);$assert($shadowScore===171,"Shadow visit score wrong: {$shadowScore}.");
   $s=$db->prepare(sprintf('SELECT COUNT(*) c FROM `%1$svisits` WHERE match_id=?',$p));$s->bind_param('i',$ids['match']);$s->execute();$assert((int)($s->get_result()->fetch_assoc()['c']??0)===2,'Shadow scoring changed canonical visits.');$s->close();
   echo "Scolia live/shadow/fallback canonical scoring smoke OK\n";
 }finally{
