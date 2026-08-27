@@ -1,0 +1,28 @@
+name: Discover DartsAtlas Series Three
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-atlas-discover-series-three.flag
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring
+          coverage: none
+      - name: Lint discovery tool
+        run: php -l infra/sql/atlas_discover_season.php
+      - name: Discover Mandagsserien tournaments
+        run: php infra/sql/atlas_discover_season.php --season='rFByCgOqI1rq'
