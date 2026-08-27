@@ -9,6 +9,7 @@ const rootPath = canonicalRoot
 let currentRole = "";
 let currentUserLabel = "";
 let syncing = false;
+let clubObserver = null;
 
 function esc(value) {
   return String(value ?? "")
@@ -36,6 +37,23 @@ function rootRoute(targetSurface, view) {
   return view ? `${base}#${view}` : base;
 }
 
+function ensureRuntimeStyles() {
+  if (document.getElementById("unifiedRuntimeStyles")) return;
+  const style = document.createElement("style");
+  style.id = "unifiedRuntimeStyles";
+  style.textContent = `
+    .unified-group-label.admin.club-admin{color:#b8cbe0!important}
+    .unified-group-label.admin.club-admin::before{content:"◆"!important;font-size:8px!important;color:#7fb2e8!important}
+    .unified-group-label.admin.super-admin{color:var(--unified-gold,#f0bd42)!important}
+    .unified-group-label.admin.super-admin::before{content:"♛"!important}
+    .unified-clubadmin-link::after{background:#7fb2e8!important;opacity:.55!important}
+    .unified-superadmin-link::after{background:var(--unified-gold,#f0bd42)!important;opacity:1!important}
+    #unifiedPlayerTopbar .portal-context.unified-single-club label[for="clubSelect"],
+    #unifiedPlayerTopbar .portal-context.unified-single-club #clubSelect{display:none!important}
+  `;
+  document.head.appendChild(style);
+}
+
 function ensurePlayerTopbar() {
   if (surface !== "player" || document.getElementById("unifiedPlayerTopbar")) return;
   const shell = document.querySelector(".shell");
@@ -54,6 +72,26 @@ function ensurePlayerTopbar() {
 
   const context = shell.querySelector(".portal-context");
   if (context) topbar.querySelector(".unified-topbar-actions")?.appendChild(context);
+}
+
+function syncSingleClubChooser() {
+  if (surface !== "player") return;
+  const select = document.getElementById("clubSelect");
+  const context = select?.closest(".portal-context");
+  if (!select || !context) return;
+  const actualClubs = [...select.options].filter((option) => String(option.value || "").trim() !== "");
+  context.classList.toggle("unified-single-club", actualClubs.length === 1);
+}
+
+function watchClubChooser() {
+  if (surface !== "player") return;
+  const select = document.getElementById("clubSelect");
+  if (!select) return;
+  clubObserver?.disconnect();
+  clubObserver = new MutationObserver(syncSingleClubChooser);
+  clubObserver.observe(select, { childList: true, subtree: true });
+  select.addEventListener("change", syncSingleClubChooser);
+  syncSingleClubChooser();
 }
 
 function makeLink(href, label, className = "", targetSurface = surface) {
@@ -90,7 +128,7 @@ function normalizeLocalLabels() {
   if (!nav) return;
   if (surface === "admin") {
     const labels = {
-      "#overview": "Adminoversikt",
+      "#overview": "Klubboversikt",
       "#tournaments": "Turneringsadmin",
       "#seasons": "Sesonger",
       "#playerbase": "Spillere",
@@ -124,10 +162,10 @@ function ensureBrand() {
   nav.prepend(brand);
 }
 
-function addGroupLabel(text, admin = false, before = null) {
+function addGroupLabel(text, admin = false, before = null, level = "") {
   if (!nav) return null;
   const label = document.createElement("span");
-  label.className = `unified-group-label unified-generated${admin ? " admin" : ""}`;
+  label.className = `unified-group-label unified-generated${admin ? " admin" : ""}${level ? ` ${level}` : ""}`;
   label.textContent = text;
   if (before) nav.insertBefore(label, before);
   else nav.appendChild(label);
@@ -162,20 +200,55 @@ function adminAllowed() {
   return ["club_admin", "super_admin"].includes(currentRole);
 }
 
+function ensureSuperAdminSection() {
+  if (surface !== "admin") return null;
+  const main = document.querySelector("main.main");
+  const overview = document.getElementById("overview");
+  const health = document.querySelector(".health-tracker");
+  let section = document.getElementById("superadmin");
+
+  if (currentRole !== "super_admin") {
+    if (section) {
+      if (health && overview && health.parentElement === section) overview.appendChild(health);
+      section.remove();
+    }
+    health?.classList.add("hidden");
+    return null;
+  }
+
+  if (!main) return null;
+  if (!section) {
+    section = document.createElement("section");
+    section.id = "superadmin";
+    section.dataset.portalSection = "superadmin";
+    section.className = "portal-view";
+    section.innerHTML = `
+      <div class="hero">
+        <div>
+          <p class="eyebrow">Plattform</p>
+          <h1>Superadmin</h1>
+          <p class="muted">Systemstatus og funksjoner som gjelder hele Blindleia Darts-plattformen, uavhengig av klubb.</p>
+        </div>
+      </div>`;
+    main.appendChild(section);
+  }
+  if (health && health.parentElement !== section) section.appendChild(health);
+  health?.classList.remove("hidden");
+  return section;
+}
+
+function markClubAdminLinks(links) {
+  links.forEach((link) => {
+    link.classList.add("unified-admin-link", "unified-clubadmin-link");
+    link.classList.remove("unified-superadmin-link");
+  });
+}
+
 function buildAdminGroup() {
   if (!nav || !adminAllowed()) return;
 
-  if (surface === "admin") {
-    const localLinks = getAdminLocalLinks();
-    if (!localLinks.length) return;
-    addGroupLabel(currentRole === "super_admin" ? "Superadmin / klubbdrift" : "Klubbadmin", true, localLinks[0]);
-    localLinks.forEach((link) => link.classList.add("unified-admin-link"));
-    return;
-  }
-
-  const adminLabel = addGroupLabel(currentRole === "super_admin" ? "Superadmin / klubbdrift" : "Klubbadmin", true);
-  const items = [
-    ["overview", "Adminoversikt"],
+  const clubItems = [
+    ["overview", "Klubboversikt"],
     ["tournaments", "Turneringsadmin"],
     ["seasons", "Sesonger"],
     ["playerbase", "Spillere"],
@@ -183,11 +256,31 @@ function buildAdminGroup() {
     ["kiosks", "Utstyr"],
     ["integrations", "Innstillinger"],
   ];
-  items.forEach(([view, text]) => {
-    const link = makeLink(rootRoute("admin", view), text, "unified-generated unified-admin-link", "admin");
-    nav.appendChild(link);
+
+  if (surface === "admin") {
+    const localLinks = getAdminLocalLinks().filter((link) => link.getAttribute("href") !== "#superadmin");
+    if (localLinks.length) {
+      addGroupLabel("Klubbadmin", true, localLinks[0], "club-admin");
+      markClubAdminLinks(localLinks);
+    }
+    if (currentRole === "super_admin") {
+      ensureSuperAdminSection();
+      addGroupLabel("Superadmin", true, null, "super-admin");
+      nav.appendChild(makeLink("#superadmin", "Systemstatus", "unified-generated unified-admin-link unified-superadmin-link", "admin"));
+    }
+    return;
+  }
+
+  const clubLabel = addGroupLabel("Klubbadmin", true, null, "club-admin");
+  clubItems.forEach(([view, text]) => {
+    nav.appendChild(makeLink(rootRoute("admin", view), text, "unified-generated unified-admin-link unified-clubadmin-link", "admin"));
   });
-  if (adminLabel) adminLabel.dataset.roleAccess = "admin";
+  if (clubLabel) clubLabel.dataset.roleAccess = "admin";
+
+  if (currentRole === "super_admin") {
+    addGroupLabel("Superadmin", true, null, "super-admin");
+    nav.appendChild(makeLink(rootRoute("admin", "superadmin"), "Systemstatus", "unified-generated unified-admin-link unified-superadmin-link", "admin"));
+  }
 }
 
 function buildAccount() {
@@ -204,13 +297,17 @@ function syncMenu() {
   syncing = true;
   try {
     removeGenerated();
-    nav.querySelectorAll(".unified-admin-link").forEach((link) => link.classList.remove("unified-admin-link"));
+    nav.querySelectorAll(".unified-admin-link,.unified-clubadmin-link,.unified-superadmin-link").forEach((link) => {
+      link.classList.remove("unified-admin-link", "unified-clubadmin-link", "unified-superadmin-link");
+    });
     document.getElementById("adminToolSection")?.remove();
+    ensureSuperAdminSection();
     normalizeLocalLabels();
     ensureBrand();
     buildCommonGroup();
     buildAdminGroup();
     buildAccount();
+    syncSingleClubChooser();
   } finally {
     syncing = false;
   }
@@ -241,13 +338,18 @@ async function resolveRole() {
 }
 
 function initialize() {
+  ensureRuntimeStyles();
   ensurePlayerTopbar();
+  watchClubChooser();
   syncMenu();
   resolveRole().catch(() => undefined);
   if (surface === "admin") {
     window.setTimeout(syncMenu, 250);
     window.setTimeout(syncMenu, 900);
     window.setTimeout(syncMenu, 1800);
+  } else {
+    window.setTimeout(syncSingleClubChooser, 250);
+    window.setTimeout(syncSingleClubChooser, 900);
   }
 }
 
