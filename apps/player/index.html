@@ -76,28 +76,22 @@
 
     <section id="statistics" data-portal-section="statistics" class="card stack statistics-page">
       <div class="section-head statistics-page-head">
-        <div><p class="eyebrow">Klubben</p><h2>Statistikk</h2><p class="muted">Velg hva du vil se. Trykk på en spiller for kamp- og profilstatistikk.</p></div>
+        <div><p class="eyebrow">Klubben</p><h2>Statistikk</h2><p class="muted">Sesongtabellen samler poeng, ELO og nøkkeltall. Trykk på en spiller for kamp- og profilstatistikk.</p></div>
       </div>
 
-      <div class="statistics-tabs" role="tablist" aria-label="Statistikkvisning">
+      <div class="statistics-tabs" data-tab-count="2" role="tablist" aria-label="Statistikkvisning">
         <button type="button" class="active" role="tab" aria-selected="true" data-statistics-view="season">Sesong</button>
-        <button type="button" role="tab" aria-selected="false" data-statistics-view="elo">ELO</button>
         <button type="button" role="tab" aria-selected="false" data-statistics-view="players">Spillere</button>
       </div>
 
       <div class="statistics-panel" data-statistics-panel="season">
-        <div class="statistics-panel-head"><div><h3>Sesongtabell</h3><p class="muted">Poeng og resultater i aktiv sesong.</p></div></div>
+        <div class="statistics-panel-head"><div><h3>Sesongranking</h3><p class="muted">Poeng, ELO, leg differanse og 3DA i valgt sesong.</p></div></div>
         <div id="seasonStandings" class="table-card statistics-table-card"><p class="muted">Henter sesongtabell …</p></div>
-      </div>
-
-      <div class="statistics-panel hidden" data-statistics-panel="elo">
-        <div class="statistics-panel-head"><div><h3>ELO-ranking</h3><p class="muted">Ratingen oppdateres først når en kamp er ferdig.</p></div></div>
-        <div id="eloTable" class="table-card statistics-table-card"></div>
       </div>
 
       <div class="statistics-panel hidden" data-statistics-panel="players">
         <div class="statistics-panel-head player-directory-head">
-          <div><h3>Spillere</h3><p class="muted">Spillere med registrerte kamper eller statistikk.</p></div>
+          <div><h3>Spillere</h3><p class="muted">Trykk på en spiller for kampstatistikk og ELO-utvikling.</p></div>
           <label class="player-search"><span class="sr-only">Søk etter spiller</span><input id="playerSearch" type="search" placeholder="Søk spiller …" autocomplete="off"></label>
         </div>
         <div id="playerDirectory" class="player-directory"></div>
@@ -119,7 +113,7 @@
   <script src="./portal-playoffs.js" type="module"></script>
   <script src="./player-breaks.js?v=20260827-1225" type="module"></script>
   <script src="./player-ux.js?v=20260827-1235" type="module"></script>
-  <script src="./statistics-ux.js?v=20260827-1435" type="module"></script>
+  <script src="./statistics-ux.js?v=20260827-1510" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js" type="module"></script>
 </body>
 </html>
