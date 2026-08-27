@@ -213,6 +213,54 @@ try {
             ];
         }, 750.0);
 
+        $measure('stale_player_checkin', 'Gamle innsjekkinger står fortsatt aktive', static function () use ($connection, $prefix): array {
+            $tournaments = $prefix . 'tournaments';
+            $registrations = $prefix . 'tournament_players';
+            $players = $prefix . 'players';
+            $matches = $prefix . 'matches';
+            $sql = "SELECT tp.player_id, p.display_name, t.id AS tournament_id, t.name AS tournament_name,
+                           t.status AS tournament_status, t.start_at, tp.status AS registration_status
+                      FROM `{$registrations}` tp
+                      INNER JOIN `{$tournaments}` t ON t.id=tp.tournament_id
+                      INNER JOIN `{$players}` p ON p.id=tp.player_id
+                     WHERE tp.status IN ('checked_in','paused')
+                       AND (
+                            t.status IN ('completed','cancelled')
+                            OR (
+                                t.start_at IS NULL
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM `{$matches}` m0
+                                     WHERE m0.tournament_id=t.id
+                                       AND (m0.player_a_id=tp.player_id OR m0.player_b_id=tp.player_id)
+                                       AND m0.status IN ('assigned','in_progress')
+                                )
+                            )
+                            OR (
+                                t.start_at IS NOT NULL
+                                AND t.start_at < DATE_SUB(NOW(), INTERVAL 18 HOUR)
+                                AND (t.end_at IS NULL OR t.end_at < NOW())
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM `{$matches}` m1
+                                     WHERE m1.tournament_id=t.id
+                                       AND (m1.player_a_id=tp.player_id OR m1.player_b_id=tp.player_id)
+                                       AND m1.status IN ('assigned','in_progress')
+                                )
+                            )
+                       )
+                     ORDER BY COALESCE(t.start_at,'1000-01-01') ASC, t.id ASC, p.display_name ASC
+                     LIMIT 10";
+            $rows = $connection->query($sql)->fetch_all(MYSQLI_ASSOC);
+            return [
+                '__health_status' => $rows === [] ? 'ok' : 'warn',
+                'count' => count($rows),
+                'sample_player' => $rows[0]['display_name'] ?? null,
+                'sample_tournament' => $rows[0]['tournament_name'] ?? null,
+                'sample_start_at' => $rows[0]['start_at'] ?? null,
+                'sample_tournament_status' => $rows[0]['tournament_status'] ?? null,
+                'sample_registration_status' => $rows[0]['registration_status'] ?? null,
+            ];
+        }, 750.0);
+
         $samplePlayerId = 0;
         $measure('player_profile', 'Spillerprofil', static function () use ($connection, $prefix, $database, &$samplePlayerId): array {
             $players = $prefix . 'players';
