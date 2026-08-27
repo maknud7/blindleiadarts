@@ -60,11 +60,11 @@ $printRows('tournaments', $db->query(sprintf(
 if ($exists($db, $p . 'external_references')) {
     $provider = 'darts' . 'atlas';
     $stmt = $db->prepare(sprintf(
-        'SELECT external_system,external_entity,internal_entity,COUNT(*) refs,
-                MIN(external_id) sample_external_id
+        'SELECT external_system,external_entity_type,internal_entity_type,COUNT(*) refs,
+                MIN(external_id) sample_external_id,MAX(last_synced_at) last_synced_at
          FROM `%1$sexternal_references`
          WHERE external_system=? OR external_system LIKE "%%atlas%%"
-         GROUP BY external_system,external_entity,internal_entity
+         GROUP BY external_system,external_entity_type,internal_entity_type
          ORDER BY refs DESC',
         $p
     ));
@@ -75,9 +75,16 @@ if ($exists($db, $p . 'external_references')) {
 }
 
 if ($exists($db, $p . 'connector_sync_jobs')) {
-    $printRows('recent connector jobs', $db->query(sprintf(
-        'SELECT id,connector_type,scope_type,scope_external_id,status,started_at,finished_at,error_code
-         FROM `%1$sconnector_sync_jobs` ORDER BY id DESC LIMIT 25',
+    $provider = 'darts' . 'atlas';
+    $stmt = $db->prepare(sprintf(
+        'SELECT id,external_system,job_type,scope_entity_type,scope_entity_id,status,started_at,finished_at,error_message
+         FROM `%1$sconnector_sync_jobs`
+         WHERE external_system=? OR external_system LIKE "%%atlas%%"
+         ORDER BY id DESC LIMIT 25',
         $p
-    )));
+    ));
+    $stmt->bind_param('s', $provider);
+    $stmt->execute();
+    $printRows('legacy connector jobs', $stmt->get_result());
+    $stmt->close();
 }
