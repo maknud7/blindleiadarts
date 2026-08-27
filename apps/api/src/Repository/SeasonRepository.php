@@ -191,12 +191,15 @@ final class SeasonRepository
         $drawPoints = (float) $season['points_draw'];
         $lossPoints = (float) $season['points_loss'];
         $method = (string) $season['ranking_method'];
+        $linearPoints = $method === 'linear' ? $this->linearPoints($seasonId) : [];
         foreach ($rows as &$row) {
             foreach (['tournaments','matches_played','wins','draws','losses','legs_won','legs_lost','elo_matches_played'] as $field) {
                 $row[$field] = (int) ($row[$field] ?? 0);
             }
             $row['leg_diff'] = $row['legs_won'] - $row['legs_lost'];
-            $row['points'] = round(($row['wins'] * $winPoints) + ($row['draws'] * $drawPoints) + ($row['losses'] * $lossPoints), 2);
+            $row['points'] = $method === 'linear'
+                ? round((float) ($linearPoints[(int) $row['id']] ?? 0), 2)
+                : round(($row['wins'] * $winPoints) + ($row['draws'] * $drawPoints) + ($row['losses'] * $lossPoints), 2);
             $row['elo_rating'] = $row['elo_rating'] !== null ? (float) $row['elo_rating'] : 1000.0;
         }
         unset($row);
@@ -235,6 +238,27 @@ final class SeasonRepository
         return $this->find($seasonId) ?? [];
     }
 
+    /** @return array<int,float> */
+    private function linearPoints(int $seasonId): array
+    {
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT player_id,SUM(points) AS points
+             FROM `%1$sseason_ranking_events`
+             WHERE season_id=? AND ruleset="linear_v1" AND status="applied"
+             GROUP BY player_id',
+            $this->prefix
+        ));
+        $stmt->bind_param('i', $seasonId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int) $row['player_id']] = (float) $row['points'];
+        }
+        return $result;
+    }
+
     /** @param array<string,mixed> $row @return array<string,mixed> */
     private function formatSeason(array $row): array
     {
@@ -249,7 +273,7 @@ final class SeasonRepository
     private function rankingMethod(mixed $value): string
     {
         $value = trim((string) $value);
-        if (!in_array($value, ['match_points','elo'], true)) throw new InvalidArgumentException('Ugyldig metode for sesongtabellen.');
+        if (!in_array($value, ['match_points','linear','elo'], true)) throw new InvalidArgumentException('Ugyldig metode for sesongtabellen.');
         return $value;
     }
 
