@@ -1,0 +1,199 @@
+name: Import Atlas Series Two To Test
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-import-atlas-series-two-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas-series-two-test-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Wait for Atlas probes on TEST
+        run: |
+          set -Eeuo pipefail
+          for url in \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=x' \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=x'; do
+            ready=no
+            for attempt in $(seq 1 80); do
+              status="$(curl -sS -o /tmp/probe-check.json -w '%{http_code}' --max-time 20 "$url" || true)"
+              if [[ "$status" == '400' ]]; then ready=yes; break; fi
+              sleep 5
+            done
+            [[ "$ready" == yes ]]
+          done
+
+      - name: Cool down Atlas
+        run: sleep 90
+
+      - name: Fetch and normalize Mandagsserien two source
+        run: |
+          set -Eeuo pipefail
+          url='https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=FHHAnnuO8txa'
+          for attempt in $(seq 1 8); do
+            status="$(curl -sS -o /tmp/series-two-raw.json -w '%{http_code}' --max-time 120 "$url" || true)"
+            echo "Source attempt ${attempt}: HTTP ${status}"
+            if [[ "$status" == '200' ]]; then break; fi
+            sleep 90
+          done
+          php -r '
+            $d=json_decode(file_get_contents("/tmp/series-two-raw.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($d["tournament_external_id"]??"")!=="FHHAnnuO8txa") throw new RuntimeException("Wrong tournament");
+            foreach($d["pages"] as &$p){
+              $players=[];
+              foreach(($p["players"]??[]) as $id=>$name){ $players["/player_stats/".$id]=$name; }
+              $links=[];
+              foreach(($p["matches"]??[]) as $id=>$label){ $links["/matches/".$id]=$label; }
+              $p["players"]=$players;
+              $p["links"]=$links;
+            }
+            unset($p);
+            file_put_contents("/tmp/series-two.json",json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+            $ids=[];
+            foreach(["group-1","group-2","results"] as $page){
+              foreach(($d["pages"][$page]["links"]??[]) as $href=>$label){
+                if(preg_match("~^/matches/([^/?#]+)$~",$href,$m)) $ids[$m[1]]=true;
+              }
+            }
+            if(count($ids)!==49) throw new RuntimeException("Expected 49 matches, got ".count($ids));
+            file_put_contents("/tmp/series-two-match-ids.txt",implode(PHP_EOL,array_keys($ids)).PHP_EOL);
+            echo "Source ready: players=".count($d["pages"]["groups"]["players"])." matches=".count($ids).PHP_EOL;
+          '
+
+      - name: Prepare structural importer for series two
+        run: |
+          set -Eeuo pipefail
+          cp infra/sql/import_atlas_series_one_test.php /tmp/import_atlas_series_two_test.php
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/import_atlas_series_two_test.php')
+          s=p.read_text()
+          replacements={
+            "fpC4m4hIZdjZ":"FHHAnnuO8txa",
+            "Mandagsserien #1":"Mandagsserien #2",
+            "2026-08-10 18:30:00":"2026-08-17 18:30:00",
+            "$tournamentDate = '2026-08-10';":"$tournamentDate = '2026-08-17';",
+            "$slug = 'mandagsserien-1-2026';":"$slug = 'mandagsserien-2-2026';",
+            "count($externalPlayers) !== 16 || count($groupExternalOrder[1]) !== 8 || count($groupExternalOrder[2]) !== 8":"count($externalPlayers) !== 14 || count($groupExternalOrder[1]) !== 7 || count($groupExternalOrder[2]) !== 7",
+            "Expected exactly 16 players split 8+8":"Expected exactly 14 players split 7+7",
+            "count($matches) !== 63":"count($matches) !== 49",
+            "Expected 63 completed matches for Mandagsserien #2":"Expected 49 completed matches for Mandagsserien #2",
+            "Atlas-style linear Order of Merit points for a 16-player event.":"Atlas-style linear Order of Merit points for a 14-player event.",
+            "$entrants = 16":"$entrants = 14",
+            "ATLAS_IMPORT_SERIES_ONE_OK=yes":"ATLAS_IMPORT_SERIES_TWO_OK=yes",
+          }
+          for old,new in replacements.items():
+            if old not in s:
+              raise SystemExit(f'Expected patch target missing: {old}')
+            s=s.replace(old,new)
+          old="$rankingInsert->bind_param('iiiiidssss', $seasonId, $tournamentId, $playerId, $entrants = 14, $stage, $stageNumber, $points, $sourceRef, $rankingMeta, $tournamentStartAt);"
+          new="$entrants = 14;\n        $rankingInsert->bind_param('iiiisidsss', $seasonId, $tournamentId, $playerId, $entrants, $stage, $stageNumber, $points, $sourceRef, $rankingMeta, $tournamentStartAt);"
+          if old not in s:
+            raise SystemExit('Ranking bind patch target missing')
+          s=s.replace(old,new)
+          p.write_text(s)
+          PY
+          php -l /tmp/import_atlas_series_two_test.php
+
+      - name: Import Mandagsserien two structure to TEST
+        run: php /tmp/import_atlas_series_two_test.php /tmp/series-two.json
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Prepare atomic visit importer for series two
+        run: |
+          set -Eeuo pipefail
+          cp infra/sql/import_atlas_visits_test.php /tmp/import_atlas_visits_series_two_test.php
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/import_atlas_visits_series_two_test.php')
+          s=p.read_text()
+          for old,new in {
+            'fpC4m4hIZdjZ':'FHHAnnuO8txa',
+            'Mandagsserien #1':'Mandagsserien #2',
+            '2026-08-10':'2026-08-17',
+          }.items():
+            if old not in s:
+              raise SystemExit(f'Visit importer patch target missing: {old}')
+            s=s.replace(old,new)
+          p.write_text(s)
+          PY
+          php -l /tmp/import_atlas_visits_series_two_test.php
+
+      - name: Cool down before match pages
+        run: sleep 60
+
+      - name: Fetch and import all 49 matches atomically
+        run: |
+          set -Eeuo pipefail
+          total="$(wc -l < /tmp/series-two-match-ids.txt | tr -d ' ')"
+          [[ "$total" == '49' ]]
+          current=0
+          while IFS= read -r match_id; do
+            current=$((current + 1))
+            target="/tmp/series-two-${match_id}.json"
+            url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=${match_id}"
+            ok=no
+            for attempt in $(seq 1 10); do
+              status="$(curl -sS -o "$target" -w '%{http_code}' --max-time 45 "$url" || true)"
+              if [[ "$status" == '200' ]] && MATCH_ID="$match_id" TARGET="$target" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); exit(($d["ok"]??false) && ($d["external_id"]??"")===getenv("MATCH_ID") ? 0 : 1);'; then
+                ok=yes
+                break
+              fi
+              echo "Retry ${attempt}/10 for ${match_id}: HTTP ${status:-unknown}"
+              [[ -s "$target" ]] && cat "$target" || true
+              if [[ -s "$target" ]] && grep -Fq '"status":429' "$target"; then
+                case "$attempt" in 1) delay=60;; 2) delay=90;; 3) delay=120;; *) delay=180;; esac
+                sleep "$delay"
+              else
+                sleep 10
+              fi
+            done
+            [[ "$ok" == yes ]]
+            MATCH_ID="$match_id" TARGET="$target" CURRENT="$current" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); echo getenv("CURRENT")."/49 fetched ".getenv("MATCH_ID").": legs=".$d["leg_count"]." visits=".$d["visit_count"]." darts=".$d["darts_count"].PHP_EOL;'
+            php /tmp/import_atlas_visits_series_two_test.php "$target"
+            echo "${current}/49 committed ${match_id} to TEST"
+            sleep 12
+          done < /tmp/series-two-match-ids.txt
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Verify TEST history totals
+        run: php infra/sql/history_inventory.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
