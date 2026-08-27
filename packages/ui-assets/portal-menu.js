@@ -1,4 +1,4 @@
-const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20260827-1745", import.meta.url).href)).default;
+const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20260827-1900", import.meta.url).href)).default;
 
 function ensureStylesheet(url) {
   const href = new URL(url, import.meta.url).href;
@@ -12,7 +12,7 @@ function ensureStylesheet(url) {
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260827-1745");
+ensureStylesheet("./unified-portal-shell.css?v=20260827-1900");
 ensureStylesheet("./mobile-app-nav.css?v=20260827-1430");
 
 if (document.body.dataset.bdSurface === "admin") {
@@ -21,7 +21,7 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260827-1745", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260827-1900", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
@@ -29,12 +29,23 @@ const NAV_SELECTOR = "[data-portal-nav], .section-nav a[href^='#'], .portal-nav 
 const SECTION_SELECTOR = "[data-portal-section], main > section[id], .shell > section[id]";
 const CANONICAL_ROOT = document.body.dataset.canonicalRoot === "1";
 const ADMIN_SURFACE = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview";
+const ADMIN_CANONICAL_TO_LOCAL = Object.freeze({
+  club: "overview",
+  "tournament-admin": "tournaments",
+  seasons: "seasons",
+  playerbase: "playerbase",
+  members: "players",
+  equipment: "kiosks",
+  settings: "integrations",
+  superadmin: "superadmin",
+});
 
 function normalizeTarget(value) {
   let target = String(value || "").replace(/^#/, "").trim();
   if (CANONICAL_ROOT && ADMIN_SURFACE) {
-    if (target === "admin") return "";
+    if (target === "admin") return "overview";
     if (target.startsWith("admin/")) target = target.slice(6);
+    target = ADMIN_CANONICAL_TO_LOCAL[target] || target;
   }
   return target;
 }
