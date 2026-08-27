@@ -1,0 +1,178 @@
+/* Neutral, readable player/profile cards. Loaded last so global button styles cannot turn them solid blue. */
+
+body #statistics .player-directory{
+  gap:10px!important;
+}
+
+body #statistics .player-card{
+  position:relative!important;
+  min-height:74px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  gap:5px!important;
+  padding:13px 15px!important;
+  border:1px solid #dce5ef!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  color:#0c2340!important;
+  box-shadow:0 3px 12px rgba(17,42,73,.045)!important;
+  text-align:left!important;
+}
+body #statistics .player-card::after{
+  content:'›';
+  position:absolute;
+  right:14px;
+  top:50%;
+  transform:translateY(-50%);
+  color:#8a9aae;
+  font-size:24px;
+  font-weight:500;
+}
+body #statistics .player-card:hover{
+  background:#f9fbfe!important;
+  border-color:#c5d4e5!important;
+  box-shadow:0 5px 15px rgba(17,42,73,.07)!important;
+}
+body #statistics .player-card-name{
+  padding-right:28px;
+  color:#0c2340!important;
+  font-size:15px!important;
+  font-weight:850!important;
+  line-height:1.2!important;
+}
+body #statistics .player-card-meta{
+  padding-right:28px;
+  color:#6d7f94!important;
+  font-size:12px!important;
+  line-height:1.35!important;
+}
+
+body #statistics .profile-card{
+  overflow:hidden!important;
+  padding:0!important;
+  border:1px solid #dce5ef!important;
+  border-radius:16px!important;
+  background:#fff!important;
+  color:#0c2340!important;
+  box-shadow:0 6px 22px rgba(17,42,73,.06)!important;
+}
+body #statistics .profile-card .profile-head{
+  padding:18px 18px 14px!important;
+  border-bottom:1px solid #e5ebf2!important;
+  background:#fbfcfe!important;
+  color:#0c2340!important;
+}
+body #statistics .profile-card .profile-head h2,
+body #statistics .profile-card h3,
+body #statistics .profile-card strong{
+  color:#0c2340!important;
+}
+body #statistics .profile-card .profile-close{
+  width:auto!important;
+  min-width:0!important;
+  padding:7px 11px!important;
+  border:1px solid #d9e2ec!important;
+  border-radius:9px!important;
+  background:#fff!important;
+  color:#24415f!important;
+  box-shadow:none!important;
+}
+
+body #statistics .profile-stats{
+  margin:0!important;
+  padding:16px 18px 4px!important;
+  gap:10px!important;
+  background:#fff!important;
+}
+body #statistics .profile-stats .stat-card,
+body #statistics .profile-stats .stat-card-accent{
+  border:1px solid #e0e7ef!important;
+  border-radius:12px!important;
+  background:#f8fafc!important;
+  color:#0c2340!important;
+  box-shadow:none!important;
+}
+body #statistics .profile-stats .stat-card small{
+  color:#718399!important;
+}
+body #statistics .profile-stats .stat-card strong{
+  color:#0c2340!important;
+}
+
+body #statistics .profile-section{
+  margin:0 18px!important;
+  padding:16px 0!important;
+  border-top:1px solid #e7ecf2!important;
+  background:#fff!important;
+}
+body #statistics .profile-section:first-of-type{
+  margin-top:8px!important;
+}
+body #statistics .profile-match-history{
+  overflow:hidden;
+  border:1px solid #e2e8ef;
+  border-radius:12px;
+  background:#fff!important;
+}
+body #statistics .profile-match-history .history-row-button{
+  margin:0!important;
+  padding:11px 12px!important;
+  border:0!important;
+  border-bottom:1px solid #edf1f5!important;
+  border-radius:0!important;
+  background:#fff!important;
+  color:#0c2340!important;
+  box-shadow:none!important;
+}
+body #statistics .profile-match-history .history-row-button:last-child{
+  border-bottom:0!important;
+}
+body #statistics .profile-match-history .history-row-button:hover{
+  background:#f8fafc!important;
+}
+body #statistics .profile-match-history .history-row-button strong{
+  color:#0c2340!important;
+}
+body #statistics .profile-match-history .history-row-button small,
+body #statistics .profile-match-history .history-row-button>span{
+  color:#77889c!important;
+}
+
+body #statistics .elo-timeline-row{
+  border:1px solid #e2e8ef!important;
+  background:#fff!important;
+  color:#0c2340!important;
+  box-shadow:none!important;
+}
+body #statistics .elo-movement{
+  border-color:#dfe7ef!important;
+  background:#f7f9fc!important;
+  color:#40566f!important;
+}
+body #statistics .elo-movement.positive{
+  border-color:#d5eadf!important;
+  background:#f6fbf8!important;
+}
+body #statistics .elo-movement.negative{
+  border-color:#eed9dc!important;
+  background:#fff8f9!important;
+}
+
+@media(max-width:680px){
+  body #statistics .player-card{
+    min-height:68px!important;
+    padding:12px 14px!important;
+  }
+  body #statistics .profile-card .profile-head{
+    padding:15px 14px 12px!important;
+  }
+  body #statistics .profile-stats{
+    padding:14px 14px 2px!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  body #statistics .profile-section{
+    margin:0 14px!important;
+    padding:14px 0!important;
+  }
+}
