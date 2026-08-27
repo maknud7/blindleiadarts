@@ -40,10 +40,18 @@ try {
         try {
             $detail = $callback();
             $elapsed = round((microtime(true) - $started) * 1000, 1);
+            $semanticStatus = null;
+            if (is_array($detail) && isset($detail['__health_status'])) {
+                $candidate = (string) $detail['__health_status'];
+                if (in_array($candidate, ['ok', 'warn'], true)) {
+                    $semanticStatus = $candidate;
+                }
+                unset($detail['__health_status']);
+            }
             $diagnostics[] = [
                 'name' => $name,
                 'label' => $label,
-                'status' => $elapsed >= $warnAfterMs ? 'warn' : 'ok',
+                'status' => $semanticStatus ?? ($elapsed >= $warnAfterMs ? 'warn' : 'ok'),
                 'ms' => $elapsed,
                 'detail' => is_array($detail) ? $detail : null,
             ];
@@ -177,6 +185,31 @@ try {
             return [
                 'auth_session_token' => $sessionIndex,
                 'membership_number' => $paymentIndex,
+            ];
+        }, 750.0);
+
+        $measure('stale_tournament_state', 'Gamle turneringer merket aktive', static function () use ($connection, $prefix): array {
+            $tournaments = $prefix . 'tournaments';
+            $matches = $prefix . 'matches';
+            $sql = "SELECT t.id, t.name, t.status, t.start_at
+                      FROM `{$tournaments}` t
+                     WHERE t.status IN ('ready','in_progress')
+                       AND t.start_at IS NOT NULL
+                       AND t.start_at < DATE_SUB(NOW(), INTERVAL 18 HOUR)
+                       AND (t.end_at IS NULL OR t.end_at < NOW())
+                       AND NOT EXISTS (
+                            SELECT 1 FROM `{$matches}` m
+                             WHERE m.tournament_id=t.id
+                               AND m.status IN ('assigned','in_progress')
+                       )
+                     ORDER BY t.start_at ASC
+                     LIMIT 10";
+            $rows = $connection->query($sql)->fetch_all(MYSQLI_ASSOC);
+            return [
+                '__health_status' => $rows === [] ? 'ok' : 'warn',
+                'count' => count($rows),
+                'sample' => $rows[0]['name'] ?? null,
+                'sample_start_at' => $rows[0]['start_at'] ?? null,
             ];
         }, 750.0);
 
