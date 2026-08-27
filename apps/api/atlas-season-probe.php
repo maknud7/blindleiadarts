@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 $configPath = __DIR__ . '/config.php';
 if (!is_file($configPath)) {
@@ -29,52 +30,73 @@ $clean = static function (string $value): string {
     $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     return trim((string) preg_replace('/\s+/u', ' ', $value));
 };
+$fetch = static function (string $url): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_ENCODING => '',
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
+        CURLOPT_HTTPHEADER => [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: nb-NO,nb;q=0.9,en-GB;q=0.8,en;q=0.7',
+            'Cache-Control: no-cache',
+            'Pragma: no-cache',
+        ],
+    ]);
+    $body = curl_exec($ch);
+    $error = $body === false ? curl_error($ch) : null;
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $effective = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    curl_close($ch);
+    return ['status' => $status, 'effective_url' => $effective, 'body' => $body === false ? '' : (string) $body, 'error' => $error];
+};
 
-$url = 'https://www.dartsatlas.com/seasons/' . $seasonId;
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_MAXREDIRS => 5,
-    CURLOPT_CONNECTTIMEOUT => 8,
-    CURLOPT_TIMEOUT => 30,
-    CURLOPT_ENCODING => '',
-    CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
-    CURLOPT_HTTPHEADER => [
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language: nb-NO,nb;q=0.9,en-GB;q=0.8,en;q=0.7',
-        'Cache-Control: no-cache',
-        'Pragma: no-cache',
-    ],
-]);
-$body = curl_exec($ch);
-$error = $body === false ? curl_error($ch) : null;
-$status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-$effective = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-curl_close($ch);
-$body = $body === false ? '' : (string) $body;
+$base = 'https://www.dartsatlas.com/seasons/' . $seasonId;
+$candidates = [
+    'root' => $base,
+    'results' => $base . '/results',
+    'calendar' => $base . '/calendar',
+    'statistics' => $base . '/statistics',
+];
 
-$tournaments = [];
-if (preg_match_all('~<a\b[^>]*href=["\'](?:https?://www\.dartsatlas\.com)?/tournaments/([A-Za-z0-9_-]+)(?:[^"\']*)["\'][^>]*>(.*?)</a>~is', $body, $matches, PREG_SET_ORDER)) {
-    foreach ($matches as $row) {
-        $id = (string) $row[1];
-        $label = $clean((string) $row[2]);
-        if ($label === '') continue;
-        $tournaments[$id] = $label;
+$pages = [];
+$allTournaments = [];
+$anySuccess = false;
+foreach ($candidates as $label => $url) {
+    $response = $fetch($url);
+    $body = $response['body'];
+    $anySuccess = $anySuccess || ($response['status'] >= 200 && $response['status'] < 300);
+    $tournaments = [];
+    if (preg_match_all('~<a\b[^>]*href=["\'](?:https?://www\.dartsatlas\.com)?/tournaments/([A-Za-z0-9_-]+)(?:[^"\']*)["\'][^>]*>(.*?)</a>~is', $body, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $row) {
+            $id = (string) $row[1];
+            $text = $clean((string) $row[2]);
+            if ($text === '') continue;
+            $tournaments[$id] = $text;
+            $allTournaments[$id] = $text;
+        }
     }
+    $visible = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $body) ?? $body;
+    $visible = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $visible) ?? $visible;
+    $pages[$label] = [
+        'source_status' => $response['status'],
+        'effective_url' => $response['effective_url'],
+        'body_bytes' => strlen($body),
+        'tournaments' => $tournaments,
+        'visible_text' => mb_substr($clean($visible), 0, 30000),
+        'curl_error' => $response['error'],
+    ];
 }
 
-$visible = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', ' ', $body) ?? $body;
-$visible = preg_replace('/<style\b[^>]*>.*?<\/style>/isu', ' ', $visible) ?? $visible;
-
-http_response_code($status >= 200 && $status < 300 ? 200 : 502);
+http_response_code($anySuccess ? 200 : 502);
 echo json_encode([
-    'ok' => $status >= 200 && $status < 300,
+    'ok' => $anySuccess,
+    'marker' => 'atlas-season-probe-v2',
     'season_external_id' => $seasonId,
-    'source_status' => $status,
-    'effective_url' => $effective,
-    'body_bytes' => strlen($body),
-    'tournaments' => $tournaments,
-    'visible_text' => mb_substr($clean($visible), 0, 30000),
-    'curl_error' => $error,
+    'tournaments' => $allTournaments,
+    'pages' => $pages,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
