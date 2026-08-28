@@ -1,0 +1,93 @@
+(() => {
+  const liveV2State = {
+    tournamentId: 0,
+    highlights: null,
+    loading: false,
+    lastLoadedAt: 0,
+  };
+
+  function fmtV2(value, decimals = 2) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed.toFixed(decimals) : "—";
+  }
+
+  function renderRankList(title, rows, valueFor, emptyText) {
+    const items = Array.isArray(rows) ? rows.slice(0, 3) : [];
+    return `<section class="live-top3-block">
+      <h3>${esc(title)}</h3>
+      <div class="live-top3-list">
+        ${items.length ? items.map((row, index) => `<div class="live-top3-row">
+          <span class="live-top3-rank">${index + 1}</span>
+          <strong>${esc(row.display_name || "Spiller")}</strong>
+          <em>${esc(valueFor(row))}</em>
+        </div>`).join("") : `<div class="live-top3-empty">${esc(emptyText)}</div>`}
+      </div>
+    </section>`;
+  }
+
+  function paintHighlights() {
+    if (!el?.highlights) return;
+    const data = liveV2State.highlights;
+    if (!data) {
+      el.highlights.innerHTML = `<div class="live-top3-loading">Henter høydepunkter …</div>`;
+      return;
+    }
+
+    el.highlights.innerHTML = [
+      renderRankList("Topp 3 visits", data.top_visits, (row) => String(Number(row.score || 0)), "Ingen visits ennå"),
+      renderRankList("Topp 3 checkout", data.top_checkouts, (row) => String(Number(row.checkout || 0)), "Ingen checkout ennå"),
+      renderRankList("Topp 3 3DA", data.top_three_dart_averages, (row) => fmtV2(row.three_dart_average), "Ingen 3DA ennå"),
+    ].join("");
+  }
+
+  async function loadHighlightsForCurrentTournament(force = false) {
+    const tournamentId = Number(state?.payload?.tournament?.id || 0);
+    if (!tournamentId) {
+      liveV2State.tournamentId = 0;
+      liveV2State.highlights = null;
+      paintHighlights();
+      return;
+    }
+
+    const now = Date.now();
+    if (!force && liveV2State.loading) return;
+    if (!force && liveV2State.tournamentId === tournamentId && liveV2State.highlights && now - liveV2State.lastLoadedAt < 2500) {
+      paintHighlights();
+      return;
+    }
+
+    liveV2State.loading = true;
+    try {
+      const data = await api(`/tournaments/${tournamentId}/live-highlights`);
+      if (Number(state?.payload?.tournament?.id || 0) !== tournamentId) return;
+      liveV2State.tournamentId = tournamentId;
+      liveV2State.highlights = data;
+      liveV2State.lastLoadedAt = Date.now();
+      paintHighlights();
+    } catch (error) {
+      console.warn("Kunne ikke hente live-høydepunkter", error);
+      if (!liveV2State.highlights) {
+        el.highlights.innerHTML = `<div class="live-top3-loading">Høydepunkter oppdateres …</div>`;
+      }
+    } finally {
+      liveV2State.loading = false;
+    }
+  }
+
+  renderTables = function renderTablesV2(data = {}) {
+    const groups = Array.isArray(data.groups) ? data.groups : [];
+    el.tables.innerHTML = groups.length ? groups.map((group) => `<article class="table-card"><h3>${esc(group.name)}</h3><div class="table-scroll"><table class="portal-table live-table-v2"><thead><tr><th>#</th><th>Spiller</th><th>K</th><th>V</th><th>U</th><th>T</th><th>Leg</th><th class="three-da-col" title="3-dart average · tiebreaker">3DA</th><th>P</th></tr></thead><tbody>${(group.rows || []).map((row) => `<tr><td>${Number(row.position)}</td><td><strong>${esc(row.display_name)}</strong></td><td>${Number(row.played)}</td><td>${Number(row.wins)}</td><td>${Number(row.draws)}</td><td>${Number(row.losses)}</td><td>${Number(row.leg_diff) >= 0 ? "+" : ""}${Number(row.leg_diff)}</td><td class="three-da-col"><strong>${fmtV2(row.three_dart_average)}</strong></td><td><strong>${Number(row.points)}</strong></td></tr>`).join("")}</tbody></table></div></article>`).join("") : `<div class="empty">Tabellen kommer når kampene er i gang.</div>`;
+  };
+
+  renderHighlights = function renderHighlightsV2() {
+    paintHighlights();
+    loadHighlightsForCurrentTournament().catch(() => undefined);
+  };
+
+  const originalRender = render;
+  render = function renderPublicLiveV2(payload) {
+    originalRender(payload);
+    document.body.dataset.publicLiveV2 = "3da-top3";
+    loadHighlightsForCurrentTournament().catch(() => undefined);
+  };
+})();
