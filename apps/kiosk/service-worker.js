@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v21";
+const SHELL_CACHE = "bd-kiosk-shell-v22";
 const SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const SHELL = [
   "./mobile.css",
   "./club-tablet-ux.css",
   "./state-visibility-fix.css",
+  "./tablet-action-row-fix.css",
   "../packages/ui-assets/brand-tokens.css",
   "../packages/ui-assets/blindleia-system.css",
   "./realtime-refresh-compat.js",
