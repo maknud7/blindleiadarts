@@ -55,7 +55,7 @@ $phpMigrationWorker = $root . DIRECTORY_SEPARATOR . 'infra' . DIRECTORY_SEPARATO
 $prefix = required_env('DB_TABLE_PREFIX');
 
 if (!is_dir($migrationsDir)) {
-    fwrite(STDOUT, "No migrations directory found at {$migrationsDir}" . PHP_EOL);
+    fwrite(STDOUT, "No migrations directory found at {$migrationsDir}." . PHP_EOL);
     exit(0);
 }
 
@@ -92,6 +92,19 @@ while ($row = $result->fetch_assoc()) {
     $applied[$row['migration_name']] = true;
 }
 
+// These migrations explicitly do nothing outside bd_test_. Running their PHP
+// worker in PROD still opens an extra database connection, which is unnecessary
+// and can exhaust the hosted database's short connection burst allowance during
+// a long catch-up migration. Record them as applied no-ops instead.
+$testOnlyNoopMigrations = [
+    '0046_reset_test_tournament_runtime.php',
+    '0055_canonicalize_safe_test_player_duplicates.php',
+    '0056_reconcile_test_elo_after_identity_cleanup.php',
+    '0057_rebuild_test_elo_after_history_import.php',
+    '0058_reconcile_test_elo_after_historical_import.php',
+    '0059_reconcile_test_elo_for_prod_readiness.php',
+];
+
 $appliedCount = 0;
 
 foreach ($files as $file) {
@@ -99,6 +112,19 @@ foreach ($files as $file) {
 
     if (isset($applied[$name])) {
         fwrite(STDOUT, "Skipping already applied migration: {$name}" . PHP_EOL);
+        continue;
+    }
+
+    if ($prefix !== 'bd_test_' && in_array($name, $testOnlyNoopMigrations, true)) {
+        fwrite(STDOUT, "Recording TEST-only no-op migration for {$prefix}: {$name}" . PHP_EOL);
+        $statement = $mysqli->prepare(
+            "INSERT INTO `{$migrationsTable}` (`migration_name`) VALUES (?)"
+        );
+        $statement->bind_param('s', $name);
+        $statement->execute();
+        $statement->close();
+        $applied[$name] = true;
+        $appliedCount++;
         continue;
     }
 
@@ -126,6 +152,7 @@ foreach ($files as $file) {
     $statement->execute();
     $statement->close();
 
+    $applied[$name] = true;
     $appliedCount++;
 }
 
