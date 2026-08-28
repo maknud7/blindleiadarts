@@ -1,0 +1,135 @@
+/*
+ * Keep the primary dart actions visible on shorter portrait tablet viewports.
+ * The physical club tablets can have substantially less CSS height than their
+ * panel resolution suggests. Action buttons therefore get reserved height
+ * before the score grid is allowed to consume the remaining space.
+ */
+@media (orientation: portrait) and (min-width: 480px) and (min-height: 720px) {
+  .kiosk-ux-v2 .match-layout,
+  .match-layout {
+    grid-template-rows: clamp(124px, 17dvh, 146px) minmax(0, 1fr) 64px !important;
+    gap: 5px !important;
+  }
+
+  .kiosk-ux-v2 .scoring-card,
+  .scoring-card {
+    padding: 6px !important;
+  }
+
+  .kiosk-ux-v2 .scoring-head,
+  .scoring-head {
+    min-height: 36px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .kiosk-ux-v2 .dart-mode,
+  .dart-mode {
+    height: calc(100% - 40px) !important;
+    grid-template-rows: 38px minmax(0, 1fr) 54px !important;
+    gap: 4px !important;
+    overflow: hidden !important;
+  }
+
+  .kiosk-ux-v2 .dart-summary,
+  .dart-summary {
+    height: 38px !important;
+    gap: 4px !important;
+  }
+
+  .kiosk-ux-v2 .dart-controls,
+  .dart-controls {
+    min-height: 0 !important;
+    overflow: hidden !important;
+    gap: 5px !important;
+  }
+
+  .kiosk-ux-v2 .multipliers,
+  .multipliers {
+    min-height: 0 !important;
+    gap: 4px !important;
+  }
+
+  .kiosk-ux-v2 .dart-controls > div:last-child {
+    min-height: 0 !important;
+    grid-template-rows: 42px minmax(0, 1fr) !important;
+    gap: 4px !important;
+    overflow: hidden !important;
+  }
+
+  .kiosk-ux-v2 .dart-controls .special-grid,
+  .special-grid {
+    height: 42px !important;
+    gap: 4px !important;
+  }
+
+  .kiosk-ux-v2 .dart-controls .number-grid,
+  .number-grid {
+    min-height: 0 !important;
+    height: 100% !important;
+    grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    overflow: hidden !important;
+  }
+
+  .kiosk-ux-v2 .number-grid button,
+  .number-grid button,
+  .kiosk-ux-v2 .multipliers button,
+  .multipliers button {
+    min-height: 0 !important;
+    padding: 2px !important;
+  }
+
+  .kiosk-ux-v2 .number-grid button,
+  .number-grid button {
+    font-size: clamp(17px, 3.5vw, 22px) !important;
+  }
+
+  .kiosk-ux-v2 .dart-actions,
+  .dart-actions {
+    height: 54px !important;
+    min-height: 54px !important;
+    position: relative !important;
+    z-index: 3 !important;
+    gap: 6px !important;
+  }
+
+  .kiosk-ux-v2 .dart-actions button,
+  .dart-actions button {
+    height: 54px !important;
+    min-height: 54px !important;
+    font-size: 14px !important;
+  }
+
+  .kiosk-ux-v2 #dartSubmitButton,
+  #dartSubmitButton {
+    font-size: 18px !important;
+    font-weight: 950 !important;
+  }
+
+  .kiosk-ux-v2 .activity-card,
+  .activity-card {
+    height: 64px !important;
+    min-height: 64px !important;
+    padding: 5px 7px !important;
+  }
+
+  .kiosk-ux-v2 button.visit-row,
+  .kiosk-ux-v2 .visit-row {
+    height: 50px !important;
+    min-height: 50px !important;
+  }
+}
+
+/* Installed/full-screen tablets have more room, but the action row still wins. */
+@media (orientation: portrait) and (min-width: 650px) and (min-height: 900px) {
+  .kiosk-ux-v2 .match-layout,
+  .match-layout {
+    grid-template-rows: clamp(136px, 17dvh, 158px) minmax(0, 1fr) 70px !important;
+  }
+
+  .kiosk-ux-v2 .activity-card,
+  .activity-card {
+    height: 70px !important;
+    min-height: 70px !important;
+  }
+}
