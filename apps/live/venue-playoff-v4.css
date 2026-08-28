@@ -1,0 +1,440 @@
+/*
+ * Venue Playoff Wall v4
+ * Dedicated knockout-stage layout for the clubhouse TV.
+ * Target: 16:9 / 1366x768 and larger, one viewport, no scrolling.
+ * Priorities: live boards -> bracket -> next/results/highlights.
+ */
+@media (min-width:1180px) and (min-height:650px) {
+  /* Activate only while a playoff bracket is actually present. */
+  body.phase-live:has(#playoffSection:not(.hidden)) #tournamentMeta::before {
+    content:"Sluttspill · ";
+    font-weight:800;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) {
+    grid-template-columns:minmax(320px,.86fr) minmax(500px,1.28fr) minmax(292px,.72fr);
+    grid-template-rows:54px minmax(0,.62fr) minmax(0,.38fr);
+    gap:7px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #progressCards {
+    grid-column:1 / -1;
+    grid-row:1;
+  }
+
+  /* LEFT: live boards. This column owns the full content height. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .priority-section {
+    grid-column:1;
+    grid-row:2 / 4;
+    padding:9px;
+    border:1px solid #d5e0eb;
+    border-radius:12px;
+    background:#fff;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .priority-section .section-head {
+    min-height:31px;
+    margin-bottom:6px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .priority-section .section-head .eyebrow {
+    display:none;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .priority-section .section-head h2 {
+    font-size:.9rem;
+    font-weight:950;
+    text-transform:uppercase;
+    letter-spacing:.035em;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) #updatedAt {
+    font-size:.52rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid {
+    height:calc(100% - 37px);
+    min-height:0;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:repeat(2,minmax(0,1fr));
+    gap:7px;
+  }
+
+  /* One/two live boards should look deliberate rather than leave a tiny card
+     floating in a four-board matrix. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) {
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,1fr);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:nth-child(2):last-child) {
+    grid-template-columns:1fr;
+    grid-template-rows:repeat(2,minmax(0,1fr));
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .board-card,
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .board-card {
+    min-height:0;
+    height:100%;
+    padding:8px 10px;
+    grid-template-rows:24px minmax(0,1fr) 18px;
+    border:1px solid #cad8e7;
+    border-radius:10px;
+    box-shadow:0 2px 6px rgba(7,31,59,.055);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .board-card {
+    padding:13px 15px;
+    grid-template-rows:30px minmax(0,1fr) 22px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .board-number {
+    font-size:1rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .player-line {
+    grid-template-columns:minmax(0,1fr) 102px 34px;
+    gap:10px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .player-line strong {
+    font-size:clamp(1rem,1.22vw,1.4rem);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .remaining {
+    font-size:clamp(2.5rem,3.1vw,3.8rem);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .legs {
+    height:38px;
+    font-size:1.12rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .boards-grid:has(> .board-card:only-child) .player-line.active::after {
+    right:145px;
+    padding:3px 6px;
+    font-size:.52rem;
+  }
+
+  /* CENTER: bracket is the hero of knockout mode. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection {
+    grid-column:2;
+    grid-row:2 / 4;
+    min-width:0;
+    min-height:0;
+    height:100%;
+    margin:0;
+    padding:10px 11px;
+    display:grid;
+    grid-template-rows:34px minmax(0,1fr);
+    border:1px solid #cad8e7;
+    border-radius:12px;
+    background:linear-gradient(180deg,#fff 0%,#f8fbff 100%);
+    box-shadow:0 3px 10px rgba(7,31,59,.08);
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection .section-head {
+    min-height:0;
+    margin:0;
+    padding:0 2px 7px;
+    border-bottom:1px solid #e3eaf2;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection .section-head .eyebrow {
+    display:none;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection .section-head h2 {
+    position:relative;
+    padding-left:23px;
+    font-size:1rem;
+    font-weight:950;
+    text-transform:uppercase;
+    letter-spacing:.035em;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection .section-head h2::before {
+    content:"🏆";
+    position:absolute;
+    left:0;
+    top:-2px;
+    font-size:.95rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) #playoffChampion {
+    max-width:48%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    color:#0b4fb2;
+    background:#edf5ff;
+    border-color:#b8d2f4;
+    font-size:.58rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket {
+    height:100%;
+    min-height:0;
+    min-width:0;
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(0,1fr);
+    align-items:stretch;
+    gap:14px;
+    padding:8px 1px 2px;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round {
+    min-width:0;
+    min-height:0;
+    display:grid;
+    grid-template-rows:30px minmax(0,1fr);
+    gap:5px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round h3 {
+    margin:0;
+    padding:6px 5px 5px;
+    border-bottom:2px solid #dbe7f4;
+    color:#123c69;
+    font-size:.72rem;
+    line-height:1;
+    font-weight:950;
+    text-align:center;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-matches {
+    min-height:0;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-around;
+    gap:8px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-match {
+    position:relative;
+    min-width:0;
+    padding:7px 8px 22px;
+    border:1px solid #cfdbe7;
+    border-radius:9px;
+    background:#fff;
+    box-shadow:0 2px 5px rgba(7,31,59,.055);
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-player {
+    min-width:0;
+    padding:5px 4px;
+    border-bottom:1px solid #e9eef4;
+    color:#1b2d41;
+    font-size:.68rem;
+    line-height:1.05;
+    font-weight:780;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-player:last-of-type {
+    border-bottom:0;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-player.winner {
+    color:#083e88;
+    background:#edf5ff;
+    font-weight:950;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-match small {
+    position:absolute;
+    left:8px;
+    bottom:5px;
+    margin:0;
+    color:#577089;
+    font-size:.52rem;
+    line-height:1;
+    font-weight:850;
+    text-transform:uppercase;
+    letter-spacing:.035em;
+  }
+
+  /* Highlight live/assigned bracket matches without requiring extra markup. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-match:has(small:first-letter) {
+    transition:none;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child {
+    max-width:88%;
+    width:88%;
+    justify-self:center;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child .live-bracket-matches {
+    justify-content:center;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child .live-bracket-match {
+    padding:18px 18px 35px;
+    border:2px solid #9fc2ef;
+    border-radius:13px;
+    box-shadow:0 8px 24px rgba(17,78,160,.11);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child .live-bracket-player {
+    padding:13px 8px;
+    font-size:clamp(.95rem,1.2vw,1.35rem);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child .live-bracket-match small {
+    left:18px;
+    bottom:11px;
+    color:#0b4fb2;
+    font-size:.62rem;
+  }
+
+  /* RIGHT TOP: queue and recent results. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#queue) {
+    grid-column:3;
+    grid-row:2;
+    min-height:0;
+    display:grid;
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,.48fr) minmax(0,.52fr);
+    gap:7px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#queue) .panel {
+    min-height:0;
+    height:100%;
+    padding:7px 9px;
+    grid-template-rows:24px minmax(0,1fr);
+    border:1px solid #d6e0ea;
+    border-radius:10px;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#queue) .list-row strong {
+    font-size:.64rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#queue) .list-row small {
+    font-size:.49rem;
+  }
+
+  /* RIGHT BOTTOM: highlights only. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#elo) {
+    grid-column:3;
+    grid-row:3;
+    min-height:0;
+    display:grid;
+    grid-template-columns:1fr;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#elo) > .panel:has(#elo) {
+    display:none !important;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .two-column:has(#elo) > .panel:has(#highlights) {
+    min-height:0;
+    height:100%;
+    display:grid;
+    grid-template-rows:25px minmax(0,1fr);
+    padding:7px 8px;
+    border:1px solid #d6e0ea;
+    border-radius:10px;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) #highlights.highlight-grid {
+    min-height:0;
+    height:100%;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr);
+    gap:5px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-top3-block {
+    padding:5px 5px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-top3-block h3 {
+    font-size:.49rem;
+    white-space:nowrap;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-top3-row {
+    grid-template-columns:13px minmax(0,1fr) auto;
+    gap:3px;
+    font-size:.48rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-top3-row strong {
+    font-size:.49rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-top3-row em {
+    font-size:.54rem;
+  }
+
+  /* Group standings are intentionally removed from the wall once knockout
+     starts. They remain available in the public/player views. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .section:has(#tables) {
+    display:none !important;
+  }
+}
+
+/* 1366x768 / lower-height TVs: tighten decoration, preserve information. */
+@media (min-width:1180px) and (max-height:800px) {
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) {
+    grid-template-rows:44px minmax(0,.62fr) minmax(0,.38fr);
+    gap:5px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .priority-section,
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection {
+    padding:6px 7px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection {
+    grid-template-rows:29px minmax(0,1fr);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket {
+    gap:9px;
+    padding-top:5px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round {
+    grid-template-rows:25px minmax(0,1fr);
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round h3 {
+    padding-top:5px;
+    font-size:.62rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-match {
+    padding:5px 6px 19px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-player {
+    padding:4px 3px;
+    font-size:.59rem;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child .live-bracket-match {
+    padding:14px 14px 30px;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) .live-bracket-round:only-child .live-bracket-player {
+    padding:10px 6px;
+    font-size:1rem;
+  }
+}
