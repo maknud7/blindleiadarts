@@ -1,0 +1,140 @@
+name: Promote Leif Atle Club Admin
+
+on:
+  push:
+    branches:
+      - ops/promote-leif-atle-club-admin
+    paths:
+      - '.github/ops-promote-leif-atle.request'
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Promote exact linked account in production
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          TARGET_PLAYER_NAME: Leif Atle Franksson
+          TARGET_CLUB_SLUG: blindleia-dartklubb
+        run: |
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+          $prefix = (string) getenv('DB_TABLE_PREFIX');
+          if ($prefix !== 'bd_prod_') {
+              throw new RuntimeException('Refusing to run outside bd_prod_.');
+          }
+          $targetName = trim((string) getenv('TARGET_PLAYER_NAME'));
+          $clubSlug = trim((string) getenv('TARGET_CLUB_SLUG'));
+
+          $db = new mysqli(
+              (string) getenv('DB_HOST'),
+              (string) getenv('DB_USERNAME'),
+              (string) getenv('DB_PASSWORD'),
+              (string) getenv('DB_NAME'),
+              (int) ((string) getenv('DB_PORT') ?: '3306')
+          );
+          $db->set_charset('utf8mb4');
+
+          $clubs = $prefix . 'clubs';
+          $players = $prefix . 'players';
+          $users = $prefix . 'user_accounts';
+          $clubRoles = $prefix . 'club_user_roles';
+
+          $clubStmt = $db->prepare("SELECT id, name, slug FROM `{$clubs}` WHERE slug=? LIMIT 2");
+          $clubStmt->bind_param('s', $clubSlug);
+          $clubStmt->execute();
+          $clubRows = $clubStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+          $clubStmt->close();
+          if (count($clubRows) !== 1) {
+              throw new RuntimeException('Expected exactly one target club; found ' . count($clubRows) . '.');
+          }
+          $clubId = (int) $clubRows[0]['id'];
+
+          $sql = "SELECT DISTINCT
+                         ua.id AS user_account_id,
+                         ua.display_name AS account_display_name,
+                         ua.account_status,
+                         ua.is_active,
+                         p.id AS player_id,
+                         p.display_name AS player_display_name,
+                         p.club_id
+                    FROM `{$players}` p
+                    INNER JOIN `{$users}` ua
+                            ON ua.player_id = p.id
+                            OR (ua.member_id IS NOT NULL AND p.member_id IS NOT NULL AND ua.member_id = p.member_id)
+                   WHERE LOWER(TRIM(p.display_name)) = LOWER(TRIM(?))";
+          $userStmt = $db->prepare($sql);
+          $userStmt->bind_param('s', $targetName);
+          $userStmt->execute();
+          $candidates = $userStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+          $userStmt->close();
+
+          if (count($candidates) !== 1) {
+              throw new RuntimeException('Expected exactly one linked user account for target player; found ' . count($candidates) . '.');
+          }
+          $candidate = $candidates[0];
+          if ((int) $candidate['club_id'] !== $clubId) {
+              throw new RuntimeException('Target player is not linked to the expected club.');
+          }
+          $userId = (int) $candidate['user_account_id'];
+          if ($userId <= 0) {
+              throw new RuntimeException('Target user account is invalid.');
+          }
+
+          $db->begin_transaction();
+          try {
+              $insert = $db->prepare(
+                  "INSERT INTO `{$clubRoles}` (club_id, user_account_id, role)
+                   VALUES (?, ?, 'club_admin')
+                   ON DUPLICATE KEY UPDATE updated_at=NOW()"
+              );
+              $insert->bind_param('ii', $clubId, $userId);
+              $insert->execute();
+              $insert->close();
+
+              $verify = $db->prepare(
+                  "SELECT COUNT(*) AS cnt FROM `{$clubRoles}`
+                    WHERE club_id=? AND user_account_id=? AND role='club_admin'"
+              );
+              $verify->bind_param('ii', $clubId, $userId);
+              $verify->execute();
+              $count = (int) ($verify->get_result()->fetch_assoc()['cnt'] ?? 0);
+              $verify->close();
+              if ($count !== 1) {
+                  throw new RuntimeException('Club-admin role verification failed.');
+              }
+              $db->commit();
+          } catch (Throwable $error) {
+              $db->rollback();
+              throw $error;
+          }
+
+          echo 'CLUB_ADMIN_PROMOTION_OK=yes' . PHP_EOL;
+          echo 'PLAYER_NAME=' . $candidate['player_display_name'] . PHP_EOL;
+          echo 'USER_ACCOUNT_ID=' . $userId . PHP_EOL;
+          echo 'CLUB_ID=' . $clubId . PHP_EOL;
+          echo 'ACCOUNT_ACTIVE=' . (int) $candidate['is_active'] . PHP_EOL;
+          echo 'ACCOUNT_STATUS=' . $candidate['account_status'] . PHP_EOL;
+          PHP
