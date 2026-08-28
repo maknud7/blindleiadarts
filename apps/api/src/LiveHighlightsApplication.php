@@ -185,15 +185,17 @@ final class LiveHighlightsApplication
     private function topThreeDartAverages(mysqli $connection, string $prefix, int $tournamentId): array
     {
         $sql = sprintf(
-            'SELECT m.id AS match_id,p.id AS player_id,p.display_name,m.round_label,m.bracket_label,
-                    ROUND(SUM(CASE WHEN v.is_bust=0 THEN v.score ELSE 0 END) * 3 / NULLIF(SUM(v.darts_used),0),2) AS three_dart_average,
-                    SUM(v.darts_used) AS darts_thrown
-             FROM `%1$svisits` v
-             INNER JOIN `%1$smatches` m ON m.id=v.match_id
-             INNER JOIN `%1$splayers` p ON p.id=v.player_id
-             WHERE m.tournament_id=?
-             GROUP BY m.id,p.id,p.display_name,m.round_label,m.bracket_label
-             HAVING SUM(v.darts_used)>0
+            'SELECT p.id AS player_id,p.display_name,
+                    ROUND(COALESCE(
+                        SUM(ms.average * COALESCE(ms.darts_thrown,0)) / NULLIF(SUM(COALESCE(ms.darts_thrown,0)),0),
+                        AVG(ms.average)
+                    ),2) AS three_dart_average,
+                    SUM(COALESCE(ms.darts_thrown,0)) AS darts_thrown
+             FROM `%1$smatch_statistics` ms
+             INNER JOIN `%1$smatches` m ON m.id=ms.match_id
+             INNER JOIN `%1$splayers` p ON p.id=ms.player_id
+             WHERE m.tournament_id=? AND m.status="completed" AND ms.average IS NOT NULL
+             GROUP BY p.id,p.display_name
              ORDER BY three_dart_average DESC,darts_thrown DESC,p.display_name ASC
              LIMIT 3',
             $prefix
