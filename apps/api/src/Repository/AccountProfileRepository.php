@@ -53,6 +53,69 @@ final class AccountProfileRepository
         ];
     }
 
+    /** @param array<string,mixed> $user @return array<string,mixed> */
+    public function membershipAndPayments(array $user): array
+    {
+        $profile = $this->profileForUser($user);
+        $memberId = (int) ($profile['member_id'] ?? 0);
+        $clubId = (int) ($profile['club_id'] ?? 0);
+        $membership = null;
+
+        if ($memberId > 0) {
+            $memberStmt = $this->connection->prepare(
+                'SELECT id, medlemsnummer, navn, innmeldingsdato, rolle, betalingsstatus_override, kontingent_start, kontingent_slutt, maanedsbelop
+                   FROM `medlemmer` WHERE id = ? LIMIT 1'
+            );
+            $memberStmt->bind_param('i', $memberId);
+            $memberStmt->execute();
+            $member = $memberStmt->get_result()->fetch_assoc() ?: null;
+            $memberStmt->close();
+
+            if ($member !== null) {
+                $memberNumber = (int) ($member['medlemsnummer'] ?? 0);
+                $payments = [];
+                if ($memberNumber > 0) {
+                    $paymentStmt = $this->connection->prepare(
+                        'SELECT dato, periode, belop, kilde
+                           FROM `kontingentbetalinger`
+                          WHERE medlemsnummer = ?
+                          ORDER BY dato DESC, id DESC'
+                    );
+                    $paymentStmt->bind_param('i', $memberNumber);
+                    $paymentStmt->execute();
+                    $rows = $paymentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $paymentStmt->close();
+                    $payments = array_map(static fn (array $row): array => [
+                        'date' => $row['dato'],
+                        'period' => $row['periode'],
+                        'amount' => $row['belop'] !== null ? (float) $row['belop'] : null,
+                        'source' => $row['kilde'],
+                    ], $rows);
+                }
+
+                $membership = [
+                    'member_id' => (int) $member['id'],
+                    'member_number' => $memberNumber,
+                    'member_name' => $member['navn'],
+                    'joined_at' => $member['innmeldingsdato'],
+                    'role' => $member['rolle'],
+                    'status_override' => $member['betalingsstatus_override'],
+                    'dues_start' => $member['kontingent_start'],
+                    'dues_end' => $member['kontingent_slutt'],
+                    'monthly_amount' => $member['maanedsbelop'] !== null ? (float) $member['maanedsbelop'] : null,
+                    'latest_payment' => $payments[0] ?? null,
+                    'payments' => $payments,
+                    'payment_count' => count($payments),
+                ];
+            }
+        }
+
+        return [
+            'membership' => $membership,
+            'payment_options' => $this->paymentOptions($clubId),
+        ];
+    }
+
     /** @return array<string,mixed> */
     public function updateProfile(array $user, string $displayName, ?string $nickname): array
     {
@@ -172,6 +235,49 @@ final class AccountProfileRepository
             $this->connection->rollback();
             throw $error;
         }
+    }
+
+    /** @return array<string,mixed> */
+    private function paymentOptions(int $clubId): array
+    {
+        $clubName = null;
+        $settings = [];
+        if ($clubId > 0) {
+            $clubs = $this->dataPrefix . 'clubs';
+            $clubStmt = $this->connection->prepare("SELECT name FROM `{$clubs}` WHERE id = ? LIMIT 1");
+            $clubStmt->bind_param('i', $clubId);
+            $clubStmt->execute();
+            $clubName = $clubStmt->get_result()->fetch_assoc()['name'] ?? null;
+            $clubStmt->close();
+
+            $settingsTable = $this->dataPrefix . 'settings';
+            $settingsStmt = $this->connection->prepare(
+                "SELECT setting_key, setting_value FROM `{$settingsTable}` WHERE club_id = ?"
+            );
+            $settingsStmt->bind_param('i', $clubId);
+            $settingsStmt->execute();
+            foreach ($settingsStmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $settings[(string) $row['setting_key']] = $row['setting_value'];
+            }
+            $settingsStmt->close();
+        }
+
+        $value = static function (array $settings, string $key): ?string {
+            $raw = trim((string) ($settings[$key] ?? ''));
+            return $raw !== '' ? $raw : null;
+        };
+
+        return [
+            'club_name' => $clubName,
+            'vipps_name' => $value($settings, 'membership.vipps_name') ?? $clubName,
+            'vipps_number' => $value($settings, 'membership.vipps_number'),
+            'one_time_url' => $value($settings, 'membership.vipps_one_time_url'),
+            'recurring_url' => $value($settings, 'membership.vipps_recurring_url'),
+            'payment_contact' => $value($settings, 'membership.payment_contact'),
+            'configured' => $value($settings, 'membership.vipps_number') !== null
+                || $value($settings, 'membership.vipps_one_time_url') !== null
+                || $value($settings, 'membership.vipps_recurring_url') !== null,
+        ];
     }
 
     private function safePrefix(string $prefix): string
