@@ -78,3 +78,4 @@ if ("serviceWorker" in navigator) {
 }
 
 ensureInstallCard();
+import("./player-now.js?v=20260828-1145").catch((error) => console.warn("Akkurat nå-modulen kunne ikke lastes", error));

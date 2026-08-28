@@ -1,4 +1,4 @@
-const CACHE_NAME = "blindleia-player-v1";
+const CACHE_NAME = "blindleia-player-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./styles.css",
   "./player-ux.css",
   "./account-pwa.css",
+  "./player-now.js",
   "../static/club-logos/blindleia-dartklubb-logo.svg",
   "../static/club-logos/blindleia-dartklubb-logo.png"
 ];

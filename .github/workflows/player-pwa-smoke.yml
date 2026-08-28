@@ -32,7 +32,7 @@ jobs:
           echo "PWA smoke failed: expected release did not become live." >&2
           exit 1
 
-      - name: Verify PWA and onboarding UX
+      - name: Verify PWA, onboarding and player call-up UX
         env:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
         run: |
@@ -54,11 +54,21 @@ jobs:
           sw="$(curl -fsS "$base/player/service-worker.js?cb=$RANDOM")"
           grep -Fq 'url.pathname.includes("/api/")' <<<"$sw"
           grep -Fq 'Authorization' <<<"$sw"
+          grep -Fq './player-now.js' <<<"$sw"
 
           pwa_js="$(curl -fsS "$base/player/pwa-install.js?cb=$RANDOM")"
           grep -Fq 'beforeinstallprompt' <<<"$pwa_js"
           grep -Fq 'Legg til på Hjem-skjerm' <<<"$pwa_js"
           grep -Fq 'blindleia-dartklubb-logo.png' <<<"$pwa_js"
+          grep -Fq 'player-now.js' <<<"$pwa_js"
+
+          player_now_js="$(curl -fsS "$base/player/player-now.js?cb=$RANDOM")"
+          grep -Fq '/match-calls' <<<"$player_now_js"
+          grep -Fq 'status === "in_progress"' <<<"$player_now_js"
+          grep -Fq 'status) === "assigned"' <<<"$player_now_js"
+          grep -Fq 'Venter på oppkalling' <<<"$player_now_js"
+          grep -Fq 'Gå til ${boardLabel}' <<<"$player_now_js"
+          grep -Fq 'blindleia-dartklubb-logo.png' <<<"$player_now_js"
 
           account_js="$(curl -fsS "$base/player/account-onboarding-ux.js?cb=$RANDOM")"
           grep -Fq 'Jeg har spilt her før' <<<"$account_js"
