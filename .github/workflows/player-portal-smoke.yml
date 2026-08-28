@@ -49,8 +49,8 @@ jobs:
           grep -Eq 'portal-content\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
 
           member_account_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/member-account.js?cb=$RANDOM")"
-          grep -Fq 'Fast betaling med Stripe' <<<"$member_account_js"
-          grep -Fq 'Betal én kontingent manuelt med Vipps' <<<"$member_account_js"
+          grep -Fq 'Start fast betaling via Stripe' <<<"$member_account_js"
+          grep -Fq 'Enkeltbetaling med Vipps' <<<"$member_account_js"
 
           admin_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/?cb=$RANDOM")"
           grep -Eq 'payment-settings\.js(\?v=[^"[:space:]]+)?' <<<"$admin_html"
