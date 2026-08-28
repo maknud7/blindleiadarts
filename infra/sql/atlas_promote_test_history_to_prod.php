@@ -82,11 +82,50 @@ $fetchById = static function (mysqli $db, string $table, int $id) use ($ident): 
     return $row;
 };
 
-$insertRow = static function (mysqli $db, string $table, array $row) use ($ident): int {
+$targetColumnCache = [];
+$reportedSchemaProjection = [];
+$insertRow = static function (mysqli $db, string $table, array $row) use ($ident, &$targetColumnCache, &$reportedSchemaProjection): int {
     unset($row['id']);
     if ($row === []) {
         throw new RuntimeException("Cannot insert empty row into {$table}");
     }
+
+    if (!isset($targetColumnCache[$table])) {
+        $columnStmt = $db->prepare(
+            'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY ORDINAL_POSITION'
+        );
+        $columnStmt->bind_param('s', $table);
+        $columnStmt->execute();
+        $targetColumns = [];
+        $result = $columnStmt->get_result();
+        while ($column = $result->fetch_assoc()) {
+            $name = (string) $column['COLUMN_NAME'];
+            $ident($name);
+            $targetColumns[$name] = true;
+        }
+        $columnStmt->close();
+        if ($targetColumns === []) {
+            throw new RuntimeException("Target table has no readable columns: {$table}");
+        }
+        $targetColumnCache[$table] = $targetColumns;
+    }
+
+    $targetColumns = $targetColumnCache[$table];
+    $sourceOnly = array_values(array_diff(array_keys($row), array_keys($targetColumns)));
+    if ($sourceOnly !== [] && !isset($reportedSchemaProjection[$table])) {
+        fwrite(
+            STDOUT,
+            'ATLAS_PROD_SCHEMA_PROJECTION table=' . $table
+            . ' source_only=' . implode(',', $sourceOnly)
+            . PHP_EOL
+        );
+        $reportedSchemaProjection[$table] = true;
+    }
+    $row = array_intersect_key($row, $targetColumns);
+    if ($row === []) {
+        throw new RuntimeException("No target-compatible columns remain for {$table}");
+    }
+
     foreach (array_keys($row) as $column) {
         $ident((string) $column);
     }
