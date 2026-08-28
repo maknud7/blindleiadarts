@@ -8,42 +8,141 @@
   <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.png" type="image/png">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./screen-ux.css">
+  <link rel="stylesheet" href="./phase3.css?v=20260828-01">
 </head>
 <body>
   <div class="screen-shell">
     <section id="connectView" class="connect-view">
       <div class="connect-card">
-        <p class="eyebrow">Blindleia Darts</p><h1>Koble til live-skjermen</h1>
+        <p class="eyebrow">Blindleia Darts</p>
+        <h1>Koble til live-skjermen</h1>
         <p class="connect-copy">Tast inn skjermkoden fra Utstyr i admin. Denne skjermen husker klubben etterpå.</p>
-        <form id="connectForm" class="connect-form"><input id="connectCode" name="code" type="text" inputmode="text" autocomplete="one-time-code" placeholder="Skjermkode" maxlength="32"><button type="submit">Koble til</button></form><p id="connectStatus" class="connect-status"></p>
+        <form id="connectForm" class="connect-form">
+          <input id="connectCode" name="code" type="text" inputmode="text" autocomplete="one-time-code" placeholder="Skjermkode" maxlength="32">
+          <button type="submit">Koble til</button>
+        </form>
+        <p id="connectStatus" class="connect-status"></p>
       </div>
     </section>
 
     <div id="screenView" class="screen-view hidden">
-      <header class="screen-header">
-        <div class="brandline"><div class="brand-badge"><img id="brandLogo" class="brand-logo hidden" alt="Klubblogo"><span id="brandFallback" class="brand-fallback">KL</span></div><div class="brand-copy"><p class="eyebrow">Blindleia Darts</p><h1 id="brandTitle">Dartklubb</h1><p id="tournamentLabel" class="tournament-label">Ingen aktiv turnering</p></div></div>
-        <div class="header-side"><div class="screen-device device-admin-meta"><span class="device-label">Skjerm</span><strong id="screenDeviceLabel">Live-skjerm</strong></div><div id="headerMeta" class="header-meta"></div><div class="header-actions"><button id="refreshButton" class="ghost-button" type="button">Oppdater</button><button id="changeClubButton" class="ghost-button" type="button">Bytt klubb</button></div></div>
+      <header class="screen-header phase3-header">
+        <div class="brandline">
+          <div class="brand-badge">
+            <img id="brandLogo" class="brand-logo hidden" alt="Klubblogo">
+            <span id="brandFallback" class="brand-fallback">KL</span>
+          </div>
+          <div class="brand-copy">
+            <p class="eyebrow">Blindleia Darts · Live</p>
+            <h1 id="brandTitle">Dartklubb</h1>
+            <p id="tournamentLabel" class="tournament-label">Ingen aktiv turnering</p>
+          </div>
+        </div>
+
+        <div class="phase3-tournament-state">
+          <div class="phase3-stage-line">
+            <span id="stageLabel" class="phase3-stage-chip">Venter</span>
+            <strong id="progressText">0 / 0 kamper</strong>
+          </div>
+          <div class="phase3-progress-track" aria-label="Turneringsfremdrift">
+            <span id="progressBar" style="width:0%"></span>
+          </div>
+          <div id="headerMeta" class="header-meta"></div>
+        </div>
+
+        <div class="header-side">
+          <div class="screen-device device-admin-meta">
+            <span class="device-label">Skjerm</span>
+            <strong id="screenDeviceLabel">Live-skjerm</strong>
+          </div>
+          <div id="screenClock" class="phase3-clock">--:--</div>
+          <div class="header-actions">
+            <button id="refreshButton" class="ghost-button" type="button">Oppdater</button>
+            <button id="changeClubButton" class="ghost-button" type="button">Bytt klubb</button>
+          </div>
+        </div>
       </header>
 
-      <main class="screen-layout">
-        <section class="screen-panel live-panel"><div class="panel-head"><div><h2>Kamper på skivene</h2><p class="panel-subtitle">Dette spilles akkurat nå</p></div></div><div id="boardsGrid" class="boards-grid"></div></section>
-        <aside class="screen-sidebar">
-          <section class="screen-panel side-module"><div class="panel-head compact"><h2>Neste kamper</h2><p class="panel-subtitle">Spillerne som står for tur</p></div><div id="nextMatches" class="stack"></div></section>
-          <section class="screen-panel side-module standings-module"><div class="panel-head compact"><h2>Tabell</h2><p class="panel-subtitle">Status i gruppespillet</p></div><div id="standingsList" class="stack compact-stack"></div></section>
-        </aside>
-        <section class="screen-panel stats-panel"><div class="stats-grid">
-          <section class="stat-module"><div class="panel-head compact"><h3>ELO</h3><p class="panel-subtitle">Topp 5 i klubben</p></div><div id="eloList" class="stack compact-stack"></div></section>
-          <section class="stat-module"><div class="panel-head compact"><h3>Sesong</h3><p class="panel-subtitle">Sesongtabellen</p></div><div id="oomList" class="stack compact-stack"></div></section>
-          <section class="stat-module"><div class="panel-head compact"><h3>Høydepunkter</h3><p class="panel-subtitle">180, checkout og toppscoringer</p></div><div id="topVisitsList" class="stack compact-stack"></div></section>
-          <section class="stat-module"><div class="panel-head compact"><h3>Beste matchsnitt</h3><p class="panel-subtitle">Høyeste 3-darts average</p></div><div id="bestAverageList" class="stack compact-stack"></div></section>
-        </div></section>
+      <main class="screen-layout phase3-layout">
+        <section class="screen-panel live-panel phase3-boards-panel">
+          <div class="panel-head phase3-panel-head">
+            <div>
+              <p class="eyebrow">Nå</p>
+              <h2>Kamper på skivene</h2>
+              <p class="panel-subtitle">Se hvem som spiller, stillingen og hvem som kaster.</p>
+            </div>
+            <span id="liveCount" class="phase3-live-count">0 live</span>
+          </div>
+          <div id="boardsGrid" class="boards-grid phase3-boards-grid"></div>
+        </section>
+
+        <section class="screen-panel queue-panel phase3-queue-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">Neste opp</p>
+              <h2>Spillerne som står for tur</h2>
+            </div>
+          </div>
+          <div id="nextMatches" class="stack phase3-queue-list"></div>
+        </section>
+
+        <section class="screen-panel context-panel phase3-context-panel">
+          <div class="panel-head compact phase3-context-head">
+            <div>
+              <p class="eyebrow">Turneringen</p>
+              <h2 id="contextTitle">Tabell</h2>
+              <p id="contextSubtitle" class="panel-subtitle">Status akkurat nå</p>
+            </div>
+          </div>
+          <div id="contextContent" class="phase3-context-body"></div>
+        </section>
+
+        <section class="screen-panel results-panel phase3-results-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">Sist ferdig</p>
+              <h2>Resultater</h2>
+            </div>
+          </div>
+          <div id="recentResults" class="stack compact-stack phase3-results-list"></div>
+        </section>
+
+        <section class="screen-panel pulse-panel phase3-pulse-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">Kvelden</p>
+              <h2>Livepuls</h2>
+            </div>
+          </div>
+          <div id="pulseMetrics" class="phase3-pulse-metrics"></div>
+          <div class="phase3-elo-block">
+            <span class="phase3-mini-label">ELO topp 3</span>
+            <div id="phase3EloList" class="stack compact-stack"></div>
+          </div>
+        </section>
       </main>
 
-      <section id="fallbackPanel" class="fallback-panel hidden"><div class="fallback-card"><img id="fallbackLogo" class="fallback-logo hidden" alt="Klubblogo"><div id="fallbackLogoMark" class="fallback-mark">KL</div><h2 id="fallbackTitle">Velkommen</h2><p id="fallbackMessage">Ingen aktiv turnering akkurat nå.</p></div></section>
+      <section id="fallbackPanel" class="fallback-panel hidden">
+        <div class="fallback-card">
+          <img id="fallbackLogo" class="fallback-logo hidden" alt="Klubblogo">
+          <div id="fallbackLogoMark" class="fallback-mark">KL</div>
+          <h2 id="fallbackTitle">Velkommen</h2>
+          <p id="fallbackMessage">Ingen aktiv turnering akkurat nå.</p>
+        </div>
+      </section>
     </div>
   </div>
 
-  <script src="./app.js" type="module"></script>
+  <div class="legacy-screen-sinks hidden" aria-hidden="true">
+    <div id="standingsList"></div>
+    <div id="eloList"></div>
+    <div id="oomList"></div>
+    <div id="topVisitsList"></div>
+    <div id="bestAverageList"></div>
+  </div>
+
+  <script src="./app.js?v=20260827-01" type="module"></script>
+  <script src="./phase3.js?v=20260828-01" type="module"></script>
   <script src="./checkin-display.js" type="module"></script>
 </body>
 </html>
