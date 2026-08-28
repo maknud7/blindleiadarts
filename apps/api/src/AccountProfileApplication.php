@@ -28,9 +28,10 @@ final class AccountProfileApplication
         $method = $request->method();
 
         $isProfileRead = $method === 'GET' && $path === 'v1/me/profile';
+        $isPaymentsRead = $method === 'GET' && $path === 'v1/me/payments';
         $isProfileUpdate = in_array($method, ['PUT', 'PATCH'], true) && $path === 'v1/me/profile';
         $isPasswordUpdate = $method === 'POST' && $path === 'v1/me/password';
-        if (!$isProfileRead && !$isProfileUpdate && !$isPasswordUpdate) {
+        if (!$isProfileRead && !$isPaymentsRead && !$isProfileUpdate && !$isPasswordUpdate) {
             return false;
         }
 
@@ -48,6 +49,8 @@ final class AccountProfileApplication
             $profiles = new AccountProfileRepository($database);
             if ($isProfileRead) {
                 $response = JsonResponse::ok(['profile' => $profiles->profileForUser($user)]);
+            } elseif ($isPaymentsRead) {
+                $response = JsonResponse::ok($profiles->membershipAndPayments($user));
             } elseif ($isProfileUpdate) {
                 $payload = $request->jsonBody();
                 $profile = $profiles->updateProfile(
