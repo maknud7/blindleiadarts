@@ -13,7 +13,7 @@ header('Service-Worker-Allowed: /');
 $config = Config::load(__DIR__);
 $env = strtolower($config->appEnv()) === 'test' ? 'test' : 'prod';
 $releaseSha = 'dev';
-$releasePath = dirname(__DIR__) . '/release.json';
+$releasePath = dirname(__DIR__, 2) . '/release.json';
 if (is_file($releasePath)) {
     $release = json_decode((string) file_get_contents($releasePath), true);
     if (is_array($release) && is_string($release['sha'] ?? null) && trim($release['sha']) !== '') {
