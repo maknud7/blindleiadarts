@@ -6,6 +6,7 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\AuthAuditRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
@@ -43,8 +44,9 @@ final class EmailAuthApplication
             $config = Config::load($this->rootPath);
             $database = new Database($config);
             $users = new UserAccountRepository($database);
+            $audit = new AuthAuditRepository($database);
             $response = $isLogin
-                ? $this->login($request, $users)
+                ? $this->login($request, $users, $audit)
                 : $this->me($request, $users);
         } catch (mysqli_sql_exception $error) {
             $response = JsonResponse::error(
@@ -66,7 +68,7 @@ final class EmailAuthApplication
         return true;
     }
 
-    private function login(Request $request, UserAccountRepository $users): JsonResponse
+    private function login(Request $request, UserAccountRepository $users, AuthAuditRepository $audit): JsonResponse
     {
         $payload = $request->jsonBody();
 
@@ -76,18 +78,42 @@ final class EmailAuthApplication
         $password = (string) ($payload['password'] ?? '');
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
+            $this->recordAudit($audit, null, null, 'login_failed_credentials_required');
             return JsonResponse::error(422, 'credentials_required', 'Skriv inn gyldig e-postadresse og passord.');
         }
 
         $user = $users->findByEmail($email);
+        $userAccountId = $user !== null ? (int) ($user['id'] ?? 0) : 0;
+        $clubId = $user !== null && isset($user['player_club_id']) && $user['player_club_id'] !== null
+            ? (int) $user['player_club_id']
+            : 0;
+
         if ($user === null || !password_verify($password, (string) ($user['password_hash'] ?? ''))) {
+            $this->recordAudit(
+                $audit,
+                $userAccountId > 0 ? $userAccountId : null,
+                $clubId > 0 ? $clubId : null,
+                'login_failed_invalid_credentials'
+            );
             return JsonResponse::error(401, 'invalid_credentials', 'Ugyldig e-post eller passord.');
         }
         if ((int) ($user['is_active'] ?? 0) !== 1 || (string) ($user['account_status'] ?? 'active') !== 'active') {
+            $this->recordAudit(
+                $audit,
+                $userAccountId > 0 ? $userAccountId : null,
+                $clubId > 0 ? $clubId : null,
+                'login_failed_account_inactive'
+            );
             return JsonResponse::error(403, 'account_inactive', 'Denne kontoen er ikke aktiv.');
         }
 
         $session = $users->createSession((int) $user['id']);
+        $this->recordAudit(
+            $audit,
+            $userAccountId > 0 ? $userAccountId : null,
+            $clubId > 0 ? $clubId : null,
+            'login_success'
+        );
         return JsonResponse::ok([
             'token_type' => 'Bearer',
             'access_token' => $session['token'],
@@ -107,6 +133,16 @@ final class EmailAuthApplication
             return JsonResponse::error(401, 'invalid_session', 'Innloggingen er utløpt eller ugyldig.');
         }
         return JsonResponse::ok(['user' => $this->formatUser($user)]);
+    }
+
+    private function recordAudit(AuthAuditRepository $audit, ?int $userAccountId, ?int $clubId, string $eventName): void
+    {
+        try {
+            $audit->record($userAccountId, $clubId, $eventName);
+        } catch (Throwable) {
+            // Authentication must never fail because auxiliary audit logging is
+            // temporarily unavailable.
+        }
     }
 
     /** @param array<string,mixed> $user @return array<string,mixed> */
