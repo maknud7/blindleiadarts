@@ -185,6 +185,35 @@ function focusUpcomingTournaments(tournaments) {
   tournamentList.appendChild(control);
 }
 
+function applyMembershipEligibility(eligibility) {
+  if (!tournamentList) return;
+  const blocked = eligibility?.can_register === false;
+  tournamentList.querySelectorAll(".membership-registration-note").forEach((node) => node.remove());
+
+  tournamentList.querySelectorAll("[data-payment-locked]").forEach((button) => {
+    if (blocked) return;
+    const tournamentId = button.dataset.paymentTournament;
+    if (tournamentId) button.dataset.register = tournamentId;
+    delete button.dataset.paymentLocked;
+    delete button.dataset.paymentTournament;
+    button.textContent = "Meld meg på";
+  });
+
+  if (!blocked) return;
+  tournamentList.querySelectorAll("[data-register]").forEach((button) => {
+    const tournamentId = String(button.dataset.register || "");
+    if (!tournamentId) return;
+    delete button.dataset.register;
+    button.dataset.paymentLocked = "1";
+    button.dataset.paymentTournament = tournamentId;
+    button.textContent = "Påmelding låst · kontingent";
+    const note = document.createElement("p");
+    note.className = "muted membership-registration-note";
+    note.textContent = eligibility.message || "Kontingenten må ordnes før du kan melde deg på nye turneringer.";
+    button.parentElement?.insertBefore(note, button);
+  });
+}
+
 function disconnectObserver() {
   observer?.disconnect();
 }
@@ -202,12 +231,14 @@ async function enhance() {
   try {
     prepareSectionCopy();
     const currentClubId = clubId();
-    const [dashboard, tournamentData] = await Promise.all([
+    const [dashboard, tournamentData, eligibilityData] = await Promise.all([
       token() ? api("/me/dashboard", { auth: true }).catch(() => null) : Promise.resolve(null),
       currentClubId ? api(`/clubs/${currentClubId}/registration-tournaments`).catch(() => null) : Promise.resolve(null),
+      token() ? api("/me/eligibility", { auth: true }).catch(() => null) : Promise.resolve(null),
     ]);
     const registrations = dashboard?.dashboard?.registrations || [];
     const tournaments = tournamentData?.items || [];
+    const eligibility = eligibilityData?.eligibility || null;
 
     for (const registration of registrations) {
       if (String(registration.status) !== "checked_in") continue;
@@ -221,6 +252,7 @@ async function enhance() {
 
     focusRegistrations(registrations);
     if (tournamentData) focusUpcomingTournaments(tournaments);
+    applyMembershipEligibility(eligibility);
   } finally {
     enhancing = false;
     connectObserver();
@@ -236,4 +268,10 @@ observer = new MutationObserver(() => scheduleEnhance());
 connectObserver();
 refreshButton?.addEventListener("click", () => scheduleEnhance(350));
 document.getElementById("clubSelect")?.addEventListener("change", () => scheduleEnhance(350));
+tournamentList?.addEventListener("click", (event) => {
+  const locked = event.target.closest("[data-payment-locked]");
+  if (!locked) return;
+  window.location.hash = "#profile";
+  window.setTimeout(() => document.getElementById("memberAccountSection")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+});
 window.setTimeout(enhance, 400);

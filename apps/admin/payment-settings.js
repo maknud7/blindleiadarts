@@ -11,6 +11,20 @@ function token() { return localStorage.getItem("bd:token") || ""; }
 function clubId() { return Number(clubSelect?.value || localStorage.getItem("bd:selectedClubId") || 0); }
 function safe(value) { return String(value ?? "").trim(); }
 
+function ensurePolicyField() {
+  if (!form || document.getElementById("paymentRegistrationBlockMonths")) return;
+  const actions = form.querySelector(".payment-settings-actions");
+  const card = document.createElement("section");
+  card.className = "payment-settings-card payment-policy-card";
+  card.style.marginTop = "14px";
+  card.innerHTML = `
+    <div><p class="eyebrow">Påmelding</p><h3>Kontingent og turneringer</h3></div>
+    <p class="muted">Spilleren får først et varsel om manglende betaling. Ny påmelding låses bare når det har gått for langt.</p>
+    <label><span>Blokker ny påmelding etter antall avsluttede måneder helt uten betaling</span><input id="paymentRegistrationBlockMonths" type="number" min="0" max="12" step="1" value="3" inputmode="numeric"></label>
+    <p class="payment-settings-note">Standard er 3 måneder, samme terskel som medlemsoppfølgingen i Blindleia admin. Sett 0 hvis betalingsrestanse aldri skal blokkere påmelding.</p>`;
+  if (actions) form.insertBefore(card, actions); else form.appendChild(card);
+}
+
 function setStatus(message, tone = "info") {
   if (!status) return;
   status.textContent = message;
@@ -33,6 +47,7 @@ async function request(path, options = {}) {
 }
 
 function fill(settings = {}) {
+  ensurePolicyField();
   const map = {
     paymentStripeStartUrl: settings.stripe_start_url,
     paymentStripePortalUrl: settings.stripe_portal_url,
@@ -40,10 +55,11 @@ function fill(settings = {}) {
     paymentVippsNumber: settings.vipps_number,
     paymentVippsUrl: settings.vipps_one_time_url,
     paymentContact: settings.payment_contact,
+    paymentRegistrationBlockMonths: settings.registration_block_after_missed_months ?? 3,
   };
   Object.entries(map).forEach(([id, value]) => {
     const node = document.getElementById(id);
-    if (node) node.value = value || "";
+    if (node) node.value = value ?? "";
   });
   if (effectiveStripeStart) {
     const effective = safe(settings.stripe_start_url_effective);
@@ -54,6 +70,7 @@ function fill(settings = {}) {
 }
 
 async function load(force = false) {
+  ensurePolicyField();
   if (!form || loading || !token()) return;
   const id = clubId();
   if (!id || (!force && id === loadedClubId)) return;
@@ -90,6 +107,7 @@ form?.addEventListener("submit", async (event) => {
         vipps_number: safe(document.getElementById("paymentVippsNumber")?.value),
         vipps_one_time_url: safe(document.getElementById("paymentVippsUrl")?.value),
         payment_contact: safe(document.getElementById("paymentContact")?.value),
+        registration_block_after_missed_months: safe(document.getElementById("paymentRegistrationBlockMonths")?.value || "3"),
       },
     });
     fill(data.settings || {});
@@ -111,4 +129,5 @@ window.addEventListener("bd:portal-view", (event) => {
 });
 window.addEventListener("bd:session", () => load(true));
 window.addEventListener("storage", () => load(true));
+ensurePolicyField();
 window.setTimeout(() => load(true), 700);

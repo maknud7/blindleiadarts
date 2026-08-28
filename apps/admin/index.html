@@ -207,6 +207,12 @@
             <label><span>Kontaktinfo ved spørsmål om betaling (valgfritt)</span><input id="paymentContact" maxlength="255" placeholder="E-post eller annen kort kontaktinfo"></label>
             <div class="payment-settings-note"><strong>Hvor ligger resten?</strong><br>Stripe-abonnement, webhook, medlemskobling og faktiske betalinger finnes allerede i Blindleia admin og de eksisterende Stripe-tabellene. Denne siden styrer bare hva spillerportalen skal vise og hvor knappene skal gå.</div>
           </div>
+          <section class="payment-settings-card payment-policy-card" style="margin-top:14px">
+            <div><p class="eyebrow">Påmelding</p><h3>Kontingent og turneringer</h3></div>
+            <p class="muted">Spilleren får først et varsel om manglende betaling. Ny påmelding låses bare når det har gått for langt.</p>
+            <label><span>Blokker ny påmelding etter antall avsluttede måneder helt uten betaling</span><input id="paymentRegistrationBlockMonths" type="number" min="0" max="12" step="1" value="3" inputmode="numeric"></label>
+            <p class="payment-settings-note">Standard er 3 måneder, samme terskel som medlemsoppfølgingen i Blindleia admin. Sett 0 hvis betalingsrestanse aldri skal blokkere påmelding.</p>
+          </section>
           <div class="payment-settings-actions"><button type="submit" class="button">Lagre betalingsoppsett</button><div id="paymentSettingsStatus" class="message hidden"></div></div>
         </form>
       </section>
@@ -257,7 +263,7 @@
   <script src="./activity-admin.js?v=20260827-1900" type="module"></script>
   <script src="./superadmin-identity-audit.js?v=20260827-1900" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
-  <script src="./payment-settings.js?v=20260828-1040" type="module"></script>
+  <script src="./payment-settings.js?v=20260828-1200" type="module"></script>
   <script src="./checkin-admin-v2.js?v=20260826-1445" type="module"></script>
   <script src="./tournament-loader.js?v=20260826-1510" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js?v=20260827-1900" type="module"></script>
