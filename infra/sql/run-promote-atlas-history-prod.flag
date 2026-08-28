@@ -1,2 +1,2 @@
 PROMOTE_VERIFIED_ATLAS_HISTORY_TO_PROD=yes
-# retry-after-prod-migrator-fix=d40bfbea91729ce93a1164bfea96645aa077b851
+# retry-after-schema-projection-fix=c687c860a38076b58ac07db6fa45c4dac426fc26
