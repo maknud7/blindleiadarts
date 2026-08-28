@@ -47,11 +47,6 @@
 
     <section data-portal-section="home" class="card stack"><div class="section-head"><div><p class="eyebrow">Mine tall</p><h2>Statistikk og ranking</h2></div></div><div id="statsGrid" class="stats-grid"></div><div id="rankingList" class="stack"></div></section>
 
-    <section id="myMatches" data-portal-section="home" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Historikk</p><h2>Mine siste kamper</h2></div></div>
-      <div id="myMatchList" class="stack"><p class="muted">Henter kamphistorikk …</p></div>
-    </section>
-
     <section id="signup" data-portal-section="tournaments" class="card stack">
       <div class="section-head"><div><p class="eyebrow">Mine turneringer</p><h2>Påmelding og innsjekk</h2></div></div>
       <div class="mini-card"><strong>Innsjekk i lokalet</strong><p class="muted">Turneringsleder kan sjekke deg inn, eller du kan taste koden som vises på Live-skjermen når innsjekk åpner. Du kan fortsatt melde deg av fram til turneringen startes.</p></div>
@@ -62,43 +57,52 @@
 
     <section id="summaries" data-portal-section="tournaments" class="card stack"><div class="section-head"><div><p class="eyebrow">Etter kampen</p><h2>Oppsummeringer</h2></div></div><div id="summaryList" class="stack"></div></section>
 
-    <section id="tables" data-portal-section="tournaments" class="card stack">
-      <div class="section-head"><div><p class="eyebrow">Turnering</p><h2>Resultater og tabeller</h2></div></div>
-      <select id="tableTournamentSelect" aria-label="Velg turnering"></select>
-      <div class="tournament-view-tabs" role="tablist" aria-label="Turneringsvisning">
-        <button type="button" class="active" data-tournament-view="table">Tabell</button>
-        <button type="button" data-tournament-view="matches">Kamper</button>
-        <button type="button" data-tournament-view="playoff">Sluttspill</button>
-      </div>
-      <div id="groupTables" class="stack" data-tournament-panel="table"></div>
-      <div id="tournamentMatches" class="match-result-list hidden" data-tournament-panel="matches"></div>
-      <div id="portalPlayoffPanel" class="hidden" data-tournament-panel="playoff"><div id="portalPlayoff"></div></div>
-    </section>
-
     <section id="statistics" data-portal-section="statistics" class="card stack statistics-page">
       <div class="section-head statistics-page-head">
-        <div><p class="eyebrow">Klubben</p><h2>Statistikk</h2><p class="muted">Sesongtabellen samler poeng, ELO og nøkkeltall. Trykk på en spiller for kamp- og profilstatistikk.</p></div>
+        <div><p class="eyebrow">Historikk og prestasjon</p><h2>Statistikk</h2><p class="muted">Velg nivå: sesong for totalbildet, turnering for tabell og alle resultater, spiller for profil og kamphistorikk, eller Mine kamper for din egen historikk.</p></div>
       </div>
 
-      <div class="statistics-tabs" data-tab-count="2" role="tablist" aria-label="Statistikkvisning">
+      <div class="statistics-tabs" data-tab-count="4" role="tablist" aria-label="Statistikkvisning">
         <button type="button" class="active" role="tab" aria-selected="true" data-statistics-view="season">Sesong</button>
+        <button type="button" role="tab" aria-selected="false" data-statistics-view="tournament">Turnering</button>
         <button type="button" role="tab" aria-selected="false" data-statistics-view="players">Spillere</button>
+        <button type="button" role="tab" aria-selected="false" data-statistics-view="mine">Mine kamper</button>
       </div>
 
       <div class="statistics-panel" data-statistics-panel="season">
-        <div class="statistics-panel-head"><div><h3>Sesongranking</h3><p class="muted">Poeng, ELO, leg differanse og 3DA i valgt sesong.</p></div></div>
+        <div class="statistics-panel-head"><div><h3>Sesongranking</h3><p class="muted">Poeng, ELO, leg differanse og sesongsnitt (3DA) i valgt sesong.</p></div></div>
         <div id="seasonStandings" class="table-card statistics-table-card"><p class="muted">Henter sesongtabell …</p></div>
+      </div>
+
+      <div class="statistics-panel hidden" data-statistics-panel="tournament">
+        <div class="statistics-panel-head statistics-tournament-head">
+          <div><h3>Turneringshistorikk</h3><p class="muted">Velg en turnering. Tabellen viser turneringssnitt (3DA), og Kamper viser alle fullførte matcher med kampsnitt.</p></div>
+          <label class="statistics-tournament-chooser"><span>Turnering</span><select id="tableTournamentSelect" aria-label="Velg turnering"></select></label>
+        </div>
+        <div class="tournament-view-tabs statistics-tournament-tabs" role="tablist" aria-label="Turneringsvisning">
+          <button type="button" class="active" data-tournament-view="table">Tabell</button>
+          <button type="button" data-tournament-view="matches">Kamper</button>
+          <button type="button" data-tournament-view="playoff">Sluttspill</button>
+        </div>
+        <div id="groupTables" class="stack" data-tournament-panel="table"></div>
+        <div id="tournamentMatches" class="match-result-list hidden" data-tournament-panel="matches"></div>
+        <div id="portalPlayoffPanel" class="hidden" data-tournament-panel="playoff"><div id="portalPlayoff"></div></div>
       </div>
 
       <div id="eloTable" class="hidden" aria-hidden="true"></div>
 
       <div class="statistics-panel hidden" data-statistics-panel="players">
         <div class="statistics-panel-head player-directory-head">
-          <div><h3>Spillere</h3><p class="muted">Trykk på en spiller for kampstatistikk og ELO-utvikling.</p></div>
+          <div><h3>Spillere</h3><p class="muted">Trykk på en spiller for nøkkeltall, ELO-utvikling og tidligere kamper. Hver kamp kan åpnes helt ned på leg- og kastnivå.</p></div>
           <label class="player-search"><span class="sr-only">Søk etter spiller</span><input id="playerSearch" type="search" placeholder="Søk spiller …" autocomplete="off"></label>
         </div>
         <div id="playerDirectory" class="player-directory"></div>
         <article id="playerProfile" class="profile-card hidden"></article>
+      </div>
+
+      <div id="myMatches" class="statistics-panel hidden" data-statistics-panel="mine">
+        <div class="statistics-panel-head"><div><h3>Mine kamper</h3><p class="muted">Logg inn for å se din egen kamphistorikk. Trykk på en kamp for kampsnitt, leg-snitt og registrerte kast.</p></div></div>
+        <div id="myMatchList" class="stack"><p class="muted">Henter kamphistorikk …</p></div>
       </div>
     </section>
   </div>
@@ -113,11 +117,11 @@
   <script src="./tournament-registration-ux.js" type="module"></script>
   <script src="./member-account.js?v=20260827-1145" type="module"></script>
   <script src="./portal-content.js?v=20260827-1145" type="module"></script>
-  <script src="./match-detail-ux.js?v=20260827-1545" type="module"></script>
+  <script src="./match-detail-ux.js?v=20260828-0700" type="module"></script>
   <script src="./portal-playoffs.js" type="module"></script>
   <script src="./player-breaks.js?v=20260827-1225" type="module"></script>
   <script src="./player-ux.js?v=20260827-1235" type="module"></script>
-  <script src="./statistics-ux.js?v=20260827-1515" type="module"></script>
+  <script src="./statistics-ux.js?v=20260828-0700" type="module"></script>
   <script src="./home-dashboard-ux.js?v=20260827-1535" type="module"></script>
   <script src="./elo-history-exact.js?v=20260827-1705" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js" type="module"></script>
