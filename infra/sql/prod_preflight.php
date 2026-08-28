@@ -14,6 +14,12 @@ function required_env(string $key): string
     return $value;
 }
 
+function optional_env(string $key, ?string $default = null): ?string
+{
+    $value = getenv($key);
+    return $value === false || $value === '' ? $default : $value;
+}
+
 function table_exists(mysqli $db, string $table): bool
 {
     $stmt = $db->prepare(
@@ -45,6 +51,12 @@ function scalar_count(mysqli $db, string $table, string $where = '1=1'): ?int
 $prefix = required_env('DB_TABLE_PREFIX');
 if ($prefix !== 'bd_prod_') {
     fwrite(STDERR, "Production preflight refuses non-production prefix: {$prefix}" . PHP_EOL);
+    exit(1);
+}
+
+$hardwarePrefix = optional_env('HARDWARE_TABLE_PREFIX', 'bd_prod_') ?? 'bd_prod_';
+if ($hardwarePrefix !== 'bd_prod_') {
+    fwrite(STDERR, "Production preflight expects shared physical hardware in bd_prod_: {$hardwarePrefix}" . PHP_EOL);
     exit(1);
 }
 
@@ -89,11 +101,14 @@ try {
     // These migrations deliberately no-op outside bd_test_ and are safe to leave
     // pending from a production-readiness perspective.
     $testOnly = [
+        '0039_soften_domain_user_foreign_keys.php',
+        '0041_add_test_hardware_alias.php',
         '0046_reset_test_tournament_runtime.php',
         '0055_canonicalize_safe_test_player_duplicates.php',
         '0056_reconcile_test_elo_after_identity_cleanup.php',
         '0057_rebuild_test_elo_after_history_import.php',
         '0058_reconcile_test_elo_after_historical_import.php',
+        '0059_reconcile_test_elo_for_prod_readiness.php',
     ];
 
     // PHP migrations can contain arbitrary data rewrites. We therefore require a
@@ -105,7 +120,7 @@ try {
         }
     }
 
-    $counts = [];
+    $runtimeCounts = [];
     foreach ([
         'clubs',
         'seasons',
@@ -119,11 +134,16 @@ try {
         'elo_match_events',
         'elo_current_ratings',
         'ranking_snapshots',
-        'kiosks',
-        'screen_devices',
     ] as $suffix) {
-        $counts[$suffix] = scalar_count($db, $prefix . $suffix);
+        $runtimeCounts[$suffix] = scalar_count($db, $prefix . $suffix);
     }
+
+    // Physical boards/screens are canonical shared hardware. TEST is configured with
+    // HARDWARE_TABLE_PREFIX=bd_prod_, so these are not duplicate PROD-only devices.
+    $sharedHardwareCounts = [
+        'physical_boards' => scalar_count($db, $hardwarePrefix . 'kiosks'),
+        'screen_devices' => scalar_count($db, $hardwarePrefix . 'screen_devices'),
+    ];
 
     $activeTournaments = scalar_count(
         $db,
@@ -157,13 +177,16 @@ try {
 
     $report = [
         'database_prefix' => $prefix,
+        'hardware_table_prefix' => $hardwarePrefix,
+        'hardware_scope' => 'shared_test_and_prod',
         'read_only' => true,
         'migrations_total' => count($migrationNames),
         'migrations_applied' => count($applied),
         'migrations_pending' => $pending,
         'migrations_pending_effective_prod' => $effectivePending,
         'migrations_review_required' => $reviewRequired,
-        'counts' => $counts,
+        'runtime_counts' => $runtimeCounts,
+        'shared_hardware_counts' => $sharedHardwareCounts,
         'active_tournaments' => $activeTournaments,
         'active_matches' => $activeMatches,
         'demo_runtime_tournaments' => $demoRuntime,
@@ -171,6 +194,8 @@ try {
     ];
 
     echo "PROD_PREFLIGHT_READ_ONLY=yes" . PHP_EOL;
+    echo "HARDWARE_SCOPE=shared_test_and_prod" . PHP_EOL;
+    echo "HARDWARE_TABLE_PREFIX={$hardwarePrefix}" . PHP_EOL;
     echo "MIGRATIONS_TOTAL=" . count($migrationNames) . PHP_EOL;
     echo "MIGRATIONS_APPLIED=" . count($applied) . PHP_EOL;
     echo "MIGRATIONS_PENDING=" . count($pending) . PHP_EOL;
@@ -194,8 +219,13 @@ try {
         }
     }
 
-    echo "TABLE_COUNTS:" . PHP_EOL;
-    foreach ($counts as $name => $count) {
+    echo "PROD_RUNTIME_COUNTS:" . PHP_EOL;
+    foreach ($runtimeCounts as $name => $count) {
+        echo ' - ' . $name . '=' . ($count ?? 'missing/unavailable') . PHP_EOL;
+    }
+
+    echo "SHARED_PHYSICAL_HARDWARE_COUNTS:" . PHP_EOL;
+    foreach ($sharedHardwareCounts as $name => $count) {
         echo ' - ' . $name . '=' . ($count ?? 'missing/unavailable') . PHP_EOL;
     }
 
