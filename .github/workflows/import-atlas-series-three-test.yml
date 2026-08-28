@@ -1,0 +1,167 @@
+name: Import Atlas Series Three To Test
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-import-atlas-series-three-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas-series-three-test-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MANIFEST: infra/sql/atlas-manifests/mandagsserien-3.json
+      EXTERNAL_ID: PvGa73emrY6e
+      EXPECTED_PLAYERS: '9'
+      EXPECTED_MATCHES: '39'
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_test_
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Lint manifest migration tools
+        run: |
+          php -l infra/sql/import_atlas_manifest_test.php
+          php -l infra/sql/import_atlas_manifest_visits_test.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_history_lifecycle_verify.php
+          php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR); if(($m["tournament_external_id"]??"")!==getenv("EXTERNAL_ID")) throw new RuntimeException("Manifest ID mismatch"); echo "Manifest syntax OK\n";'
+
+      - name: Wait for TEST Atlas endpoints
+        run: |
+          set -Eeuo pipefail
+          for url in \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=x' \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=x'; do
+            ready=no
+            for attempt in $(seq 1 80); do
+              status="$(curl -sS -o /tmp/probe-check.json -w '%{http_code}' --max-time 20 "$url" || true)"
+              if [[ "$status" == '400' ]]; then ready=yes; break; fi
+              sleep 5
+            done
+            [[ "$ready" == yes ]]
+          done
+
+      - name: Cool down Atlas before frozen source read
+        run: sleep 90
+
+      - name: Fetch and validate frozen Mandagsserien #3 source
+        run: |
+          set -Eeuo pipefail
+          url="https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=${EXTERNAL_ID}"
+          ok=no
+          for attempt in $(seq 1 8); do
+            status="$(curl -sS -o /tmp/series-three.json -w '%{http_code}' --max-time 120 "$url" || true)"
+            echo "Source attempt ${attempt}: HTTP ${status:-unknown}"
+            if [[ "$status" == '200' ]]; then ok=yes; break; fi
+            case "$attempt" in 1) delay=60;; 2) delay=90;; 3) delay=120;; *) delay=180;; esac
+            sleep "$delay"
+          done
+          [[ "$ok" == yes ]]
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            $d=json_decode(file_get_contents("/tmp/series-three.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($d["tournament_external_id"]??"")!==getenv("EXTERNAL_ID")) throw new RuntimeException("Wrong source tournament");
+            $expected=[];
+            foreach($m["groups"] as $g) foreach($g["match_ids"] as $id) $expected[$id]=true;
+            foreach($m["playoff"]["match_ids"] as $id) $expected[$id]=true;
+            $actual=[];
+            foreach($m["groups"] as $g){$page="group-".$g["number"];if(($d["pages"][$page]["status"]??0)!==200)throw new RuntimeException("Missing {$page}");foreach(($d["pages"][$page]["matches"]??[]) as $id=>$label)$actual[$id]=true;}
+            if(($d["pages"]["results"]["status"]??0)!==200)throw new RuntimeException("Missing results");
+            foreach(($d["pages"]["results"]["matches"]??[]) as $id=>$label)$actual[$id]=true;
+            $missing=array_diff_key($expected,$actual);$extra=array_diff_key($actual,$expected);
+            if($missing||$extra||count($actual)!==(int)getenv("EXPECTED_MATCHES"))throw new RuntimeException("Source manifest drift: ".json_encode(["missing"=>array_keys($missing),"extra"=>array_keys($extra),"actual"=>count($actual)]));
+            file_put_contents("/tmp/series-three-match-ids.txt",implode(PHP_EOL,array_keys($expected)).PHP_EOL);
+            echo "Frozen source validated: players=".getenv("EXPECTED_PLAYERS")." matches=".count($actual).PHP_EOL;
+          '
+
+      - name: Import structure from manifest to TEST
+        run: php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/series-three.json
+
+      - name: Cool down before match pages
+        run: sleep 60
+
+      - name: Fetch and atomically import all 39 matches
+        run: |
+          set -Eeuo pipefail
+          total="$(wc -l < /tmp/series-three-match-ids.txt | tr -d ' ')"
+          [[ "$total" == "$EXPECTED_MATCHES" ]]
+          mkdir -p /tmp/series-three-matches
+          current=0
+          while IFS= read -r match_id; do
+            current=$((current + 1))
+            target="/tmp/series-three-matches/${match_id}.json"
+            url="https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=${match_id}"
+            ok=no
+            for attempt in $(seq 1 10); do
+              status="$(curl -sS -o "$target" -w '%{http_code}' --max-time 60 "$url" || true)"
+              if [[ "$status" == '200' ]] && MATCH_ID="$match_id" TARGET="$target" php -r '$d=json_decode(file_get_contents(getenv("TARGET")),true); exit(($d["ok"]??false) && ($d["external_id"]??"")===getenv("MATCH_ID") ? 0 : 1);'; then ok=yes; break; fi
+              echo "Retry ${attempt}/10 for ${match_id}: HTTP ${status:-unknown}"
+              if [[ -s "$target" ]] && grep -Fq '"status":429' "$target"; then case "$attempt" in 1) delay=60;; 2) delay=90;; 3) delay=120;; *) delay=180;; esac; else delay=10; fi
+              sleep "$delay"
+            done
+            [[ "$ok" == yes ]]
+            php infra/sql/import_atlas_manifest_visits_test.php "$MANIFEST" "$target"
+            echo "${current}/${EXPECTED_MATCHES} committed ${match_id}"
+            sleep 12
+          done < /tmp/series-three-match-ids.txt
+
+      - name: Strict data-phase QA before finalization
+        run: php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches="$EXPECTED_MATCHES" --expected-players="$EXPECTED_PLAYERS" --phase=data --require-visits=1 --require-playoff=1
+
+      - name: Finalize canonical historical lifecycle
+        run: php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+
+      - name: Strict final QA
+        run: |
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches="$EXPECTED_MATCHES" --expected-players="$EXPECTED_PLAYERS" --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+
+      - name: Snapshot final counts before idempotency rerun
+        run: |
+          php -r '
+            $p=getenv("DB_TABLE_PREFIX");$db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $e=getenv("EXTERNAL_ID");$s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");$s->bind_param("s",$e);$s->execute();$tid=(int)$s->get_result()->fetch_assoc()["internal_id"];
+            $q=["players"=>"SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}","matches"=>"SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}","legs"=>"SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}","visits"=>"SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}","ranking"=>"SELECT COUNT(*) c FROM `{$p}season_ranking_events` WHERE tournament_id={$tid} AND status=\"applied\"", "refs"=>"SELECT COUNT(*) c FROM `{$p}external_references` er JOIN `{$p}matches` m ON er.internal_entity_type=\"match\" AND er.internal_id=m.id WHERE er.external_system=\"dartsatlas\" AND m.tournament_id={$tid}"];
+            $out=[];foreach($q as $k=>$sql)$out[$k]=(int)$db->query($sql)->fetch_assoc()["c"];file_put_contents("/tmp/before-idempotency.json",json_encode($out));echo "before=".json_encode($out).PHP_EOL;
+          '
+
+      - name: Idempotency rerun from frozen source and cached match payloads
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/series-three.json
+          while IFS= read -r match_id; do php infra/sql/import_atlas_manifest_visits_test.php "$MANIFEST" "/tmp/series-three-matches/${match_id}.json"; done < /tmp/series-three-match-ids.txt
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches="$EXPECTED_MATCHES" --expected-players="$EXPECTED_PLAYERS" --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches="$EXPECTED_MATCHES" --expected-players="$EXPECTED_PLAYERS" --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+
+      - name: Prove idempotent counts and print inventory
+        run: |
+          php -r '
+            $before=json_decode(file_get_contents("/tmp/before-idempotency.json"),true,512,JSON_THROW_ON_ERROR);$p=getenv("DB_TABLE_PREFIX");$db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$e=getenv("EXTERNAL_ID");$s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");$s->bind_param("s",$e);$s->execute();$tid=(int)$s->get_result()->fetch_assoc()["internal_id"];
+            $q=["players"=>"SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}","matches"=>"SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}","legs"=>"SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}","visits"=>"SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}","ranking"=>"SELECT COUNT(*) c FROM `{$p}season_ranking_events` WHERE tournament_id={$tid} AND status=\"applied\"", "refs"=>"SELECT COUNT(*) c FROM `{$p}external_references` er JOIN `{$p}matches` m ON er.internal_entity_type=\"match\" AND er.internal_id=m.id WHERE er.external_system=\"dartsatlas\" AND m.tournament_id={$tid}"];
+            $after=[];foreach($q as $k=>$sql)$after[$k]=(int)$db->query($sql)->fetch_assoc()["c"];if($before!==$after)throw new RuntimeException("Idempotency count drift ".json_encode(["before"=>$before,"after"=>$after]));echo "ATLAS_SERIES_THREE_IDEMPOTENT=yes tournament_id={$tid} counts=".json_encode($after).PHP_EOL;
+          '
+          php infra/sql/history_inventory.php
