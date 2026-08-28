@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260827-2100";
+const MODULE_VERSION = "20260828-0813";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -86,6 +86,7 @@ async function loadModules() {
     await import(moduleUrl("./tournament-empty-state.js"));
     await import(moduleUrl("./tournament-leader-v2.js"));
     await import(moduleUrl("./tournament-leader-v2-board-state.js"));
+    await import(moduleUrl("./tournament-admin-focus.js"));
 
     host.dataset.tournamentModules = "ready";
     hideLoading();
