@@ -1,0 +1,39 @@
+{
+  "source_prefix": "bd_test_",
+  "target_prefix": "bd_prod_",
+  "club_slug": "blindleia-dartklubb",
+  "season_external_id": "rFByCgOqI1rq",
+  "tournaments": [
+    {
+      "external_id": "fpC4m4hIZdjZ",
+      "name": "Mandagsserien #1",
+      "expected_players": 16,
+      "expected_matches": 63,
+      "expected_legs": 72,
+      "expected_visits": 1783
+    },
+    {
+      "external_id": "FHHAnnuO8txa",
+      "name": "Mandagsserien #2",
+      "expected_players": 14,
+      "expected_matches": 49,
+      "expected_legs": 59,
+      "expected_visits": 1546
+    },
+    {
+      "external_id": "PvGa73emrY6e",
+      "name": "Mandagsserien #3",
+      "expected_players": 9,
+      "expected_matches": 39,
+      "expected_legs": 42,
+      "expected_visits": 926
+    }
+  ],
+  "expected_totals": {
+    "tournaments": 3,
+    "matches": 151,
+    "legs": 173,
+    "visits": 4255,
+    "atlas_player_references": 18
+  }
+}
