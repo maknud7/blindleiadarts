@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Blindleia\Dartkiosk\Api\AccountProfileApplication;
 use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\EloApplication;
@@ -50,6 +51,11 @@ if ($passwordReset->run()) {
 
 $emailAuth = new EmailAuthApplication(__DIR__);
 if ($emailAuth->run()) {
+    return;
+}
+
+$accountProfile = new AccountProfileApplication(__DIR__);
+if ($accountProfile->run()) {
     return;
 }
 

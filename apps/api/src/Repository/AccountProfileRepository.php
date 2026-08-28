@@ -1,0 +1,290 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Blindleia\Dartkiosk\Api\Repository;
+
+use Blindleia\Dartkiosk\Api\Support\Database;
+use mysqli;
+use RuntimeException;
+use Throwable;
+
+final class AccountProfileRepository
+{
+    private mysqli $connection;
+    private string $dataPrefix;
+    private string $identityPrefix;
+
+    public function __construct(Database $database)
+    {
+        $this->connection = $database->connection();
+        $this->dataPrefix = $this->safePrefix($database->tablePrefix());
+        $this->identityPrefix = $this->safePrefix($database->identityTablePrefix());
+    }
+
+    /** @param array<string,mixed> $user @return array<string,mixed> */
+    public function profileForUser(array $user): array
+    {
+        $playerId = (int) ($user['player_id'] ?? 0);
+        $player = null;
+        if ($playerId > 0) {
+            $players = $this->dataPrefix . 'players';
+            $statement = $this->connection->prepare(
+                "SELECT id, club_id, member_id, display_name, first_name, last_name, nickname, avatar_url
+                   FROM `{$players}` WHERE id = ? LIMIT 1"
+            );
+            $statement->bind_param('i', $playerId);
+            $statement->execute();
+            $player = $statement->get_result()->fetch_assoc() ?: null;
+            $statement->close();
+        }
+
+        return [
+            'user_id' => (int) ($user['id'] ?? 0),
+            'email' => (string) ($user['email'] ?? $user['contact_email'] ?? ''),
+            'display_name' => (string) ($player['display_name'] ?? $user['display_name'] ?? ''),
+            'nickname' => $player !== null ? ($player['nickname'] ?? null) : null,
+            'avatar_url' => $player !== null ? ($player['avatar_url'] ?? null) : null,
+            'player_id' => $playerId > 0 ? $playerId : null,
+            'club_id' => $player !== null && $player['club_id'] !== null ? (int) $player['club_id'] : null,
+            'member_id' => $player !== null && $player['member_id'] !== null
+                ? (int) $player['member_id']
+                : ((int) ($user['member_id'] ?? 0) ?: null),
+        ];
+    }
+
+    /** @param array<string,mixed> $user @return array<string,mixed> */
+    public function membershipAndPayments(array $user): array
+    {
+        $profile = $this->profileForUser($user);
+        $memberId = (int) ($profile['member_id'] ?? 0);
+        $clubId = (int) ($profile['club_id'] ?? 0);
+        $membership = null;
+
+        if ($memberId > 0) {
+            $memberStmt = $this->connection->prepare(
+                'SELECT id, medlemsnummer, navn, innmeldingsdato, rolle, betalingsstatus_override, kontingent_start, kontingent_slutt, maanedsbelop
+                   FROM `medlemmer` WHERE id = ? LIMIT 1'
+            );
+            $memberStmt->bind_param('i', $memberId);
+            $memberStmt->execute();
+            $member = $memberStmt->get_result()->fetch_assoc() ?: null;
+            $memberStmt->close();
+
+            if ($member !== null) {
+                $memberNumber = (int) ($member['medlemsnummer'] ?? 0);
+                $payments = [];
+                if ($memberNumber > 0) {
+                    $paymentStmt = $this->connection->prepare(
+                        'SELECT dato, periode, belop, kilde
+                           FROM `kontingentbetalinger`
+                          WHERE medlemsnummer = ?
+                          ORDER BY dato DESC, id DESC'
+                    );
+                    $paymentStmt->bind_param('i', $memberNumber);
+                    $paymentStmt->execute();
+                    $rows = $paymentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $paymentStmt->close();
+                    $payments = array_map(static fn (array $row): array => [
+                        'date' => $row['dato'],
+                        'period' => $row['periode'],
+                        'amount' => $row['belop'] !== null ? (float) $row['belop'] : null,
+                        'source' => $row['kilde'],
+                    ], $rows);
+                }
+
+                $membership = [
+                    'member_id' => (int) $member['id'],
+                    'member_number' => $memberNumber,
+                    'member_name' => $member['navn'],
+                    'joined_at' => $member['innmeldingsdato'],
+                    'role' => $member['rolle'],
+                    'status_override' => $member['betalingsstatus_override'],
+                    'dues_start' => $member['kontingent_start'],
+                    'dues_end' => $member['kontingent_slutt'],
+                    'monthly_amount' => $member['maanedsbelop'] !== null ? (float) $member['maanedsbelop'] : null,
+                    'latest_payment' => $payments[0] ?? null,
+                    'payments' => $payments,
+                    'payment_count' => count($payments),
+                ];
+            }
+        }
+
+        return [
+            'membership' => $membership,
+            'payment_options' => $this->paymentOptions($clubId),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    public function updateProfile(array $user, string $displayName, ?string $nickname): array
+    {
+        $displayName = preg_replace('/\s+/u', ' ', trim($displayName)) ?? '';
+        $nickname = $nickname !== null ? (preg_replace('/\s+/u', ' ', trim($nickname)) ?? '') : '';
+
+        if (mb_strlen($displayName, 'UTF-8') < 2 || mb_strlen($displayName, 'UTF-8') > 150) {
+            throw new ValidationException('profile_name_invalid', 'Navnet må være mellom 2 og 150 tegn.', 422);
+        }
+        if (mb_strlen($nickname, 'UTF-8') > 120) {
+            throw new ValidationException('profile_nickname_invalid', 'Kallenavnet kan være maks 120 tegn.', 422);
+        }
+
+        $userId = (int) ($user['id'] ?? 0);
+        $playerId = (int) ($user['player_id'] ?? 0);
+        if ($userId <= 0) {
+            throw new ValidationException('profile_account_missing', 'Brukerkontoen kunne ikke finnes.', 404);
+        }
+
+        $this->connection->begin_transaction();
+        try {
+            // PROD has one canonical data/identity prefix. TEST deliberately keeps
+            // production identity shared, so a profile preview in TEST must not
+            // silently rename the production account record.
+            if ($this->identityPrefix === $this->dataPrefix) {
+                $users = $this->identityPrefix . 'user_accounts';
+                $account = $this->connection->prepare("UPDATE `{$users}` SET display_name = ?, updated_at = NOW() WHERE id = ?");
+                $account->bind_param('si', $displayName, $userId);
+                $account->execute();
+                $account->close();
+            }
+
+            if ($playerId > 0) {
+                $players = $this->dataPrefix . 'players';
+                $nicknameValue = $nickname !== '' ? $nickname : null;
+                $player = $this->connection->prepare(
+                    "UPDATE `{$players}` SET display_name = ?, nickname = ?, updated_at = NOW() WHERE id = ?"
+                );
+                $player->bind_param('ssi', $displayName, $nicknameValue, $playerId);
+                $player->execute();
+                $player->close();
+            }
+
+            $this->connection->commit();
+        } catch (Throwable $error) {
+            $this->connection->rollback();
+            throw $error;
+        }
+
+        $updated = $user;
+        $updated['display_name'] = $displayName;
+        if ($playerId > 0) {
+            $updated['player_display_name'] = $displayName;
+        }
+        $profile = $this->profileForUser($updated);
+        $profile['nickname'] = $nickname !== '' ? $nickname : null;
+        return $profile;
+    }
+
+    public function changePassword(array $user, string $currentPassword, string $newPassword): void
+    {
+        $userId = (int) ($user['id'] ?? 0);
+        $sessionId = (int) ($user['session_id'] ?? 0);
+        if ($userId <= 0) {
+            throw new ValidationException('profile_account_missing', 'Brukerkontoen kunne ikke finnes.', 404);
+        }
+        if ($currentPassword === '') {
+            throw new ValidationException('current_password_required', 'Skriv inn nåværende passord.', 422);
+        }
+        if (mb_strlen($newPassword, 'UTF-8') < 8) {
+            throw new ValidationException('password_too_short', 'Det nye passordet må være minst 8 tegn.', 422);
+        }
+        if (hash_equals($currentPassword, $newPassword)) {
+            throw new ValidationException('password_unchanged', 'Velg et annet passord enn det du bruker nå.', 422);
+        }
+
+        $users = $this->identityPrefix . 'user_accounts';
+        $sessions = $this->identityPrefix . 'auth_sessions';
+        $lookup = $this->connection->prepare("SELECT password_hash FROM `{$users}` WHERE id = ? AND is_active = 1 LIMIT 1");
+        $lookup->bind_param('i', $userId);
+        $lookup->execute();
+        $row = $lookup->get_result()->fetch_assoc() ?: null;
+        $lookup->close();
+        if ($row === null || !password_verify($currentPassword, (string) ($row['password_hash'] ?? ''))) {
+            throw new ValidationException('current_password_invalid', 'Nåværende passord er ikke riktig.', 422);
+        }
+
+        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+        if (!is_string($hash) || $hash === '') {
+            throw new RuntimeException('Could not hash password.');
+        }
+
+        $this->connection->begin_transaction();
+        try {
+            $update = $this->connection->prepare("UPDATE `{$users}` SET password_hash = ?, updated_at = NOW() WHERE id = ?");
+            $update->bind_param('si', $hash, $userId);
+            $update->execute();
+            $update->close();
+
+            if ($sessionId > 0) {
+                $revoke = $this->connection->prepare(
+                    "UPDATE `{$sessions}` SET revoked_at = NOW()
+                      WHERE user_account_id = ? AND id <> ? AND revoked_at IS NULL"
+                );
+                $revoke->bind_param('ii', $userId, $sessionId);
+            } else {
+                $revoke = $this->connection->prepare(
+                    "UPDATE `{$sessions}` SET revoked_at = NOW()
+                      WHERE user_account_id = ? AND revoked_at IS NULL"
+                );
+                $revoke->bind_param('i', $userId);
+            }
+            $revoke->execute();
+            $revoke->close();
+            $this->connection->commit();
+        } catch (Throwable $error) {
+            $this->connection->rollback();
+            throw $error;
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function paymentOptions(int $clubId): array
+    {
+        $clubName = null;
+        $settings = [];
+        if ($clubId > 0) {
+            $clubs = $this->dataPrefix . 'clubs';
+            $clubStmt = $this->connection->prepare("SELECT name FROM `{$clubs}` WHERE id = ? LIMIT 1");
+            $clubStmt->bind_param('i', $clubId);
+            $clubStmt->execute();
+            $clubName = $clubStmt->get_result()->fetch_assoc()['name'] ?? null;
+            $clubStmt->close();
+
+            $settingsTable = $this->dataPrefix . 'settings';
+            $settingsStmt = $this->connection->prepare(
+                "SELECT setting_key, setting_value FROM `{$settingsTable}` WHERE club_id = ?"
+            );
+            $settingsStmt->bind_param('i', $clubId);
+            $settingsStmt->execute();
+            foreach ($settingsStmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $settings[(string) $row['setting_key']] = $row['setting_value'];
+            }
+            $settingsStmt->close();
+        }
+
+        $value = static function (array $settings, string $key): ?string {
+            $raw = trim((string) ($settings[$key] ?? ''));
+            return $raw !== '' ? $raw : null;
+        };
+
+        return [
+            'club_name' => $clubName,
+            'vipps_name' => $value($settings, 'membership.vipps_name') ?? $clubName,
+            'vipps_number' => $value($settings, 'membership.vipps_number'),
+            'one_time_url' => $value($settings, 'membership.vipps_one_time_url'),
+            'recurring_url' => $value($settings, 'membership.vipps_recurring_url'),
+            'payment_contact' => $value($settings, 'membership.payment_contact'),
+            'configured' => $value($settings, 'membership.vipps_number') !== null
+                || $value($settings, 'membership.vipps_one_time_url') !== null
+                || $value($settings, 'membership.vipps_recurring_url') !== null,
+        ];
+    }
+
+    private function safePrefix(string $prefix): string
+    {
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $prefix)) {
+            throw new RuntimeException('Invalid database table prefix.');
+        }
+        return $prefix;
+    }
+}
