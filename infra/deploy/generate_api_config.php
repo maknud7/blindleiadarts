@@ -35,7 +35,7 @@ $identityPrefix = env_optional('IDENTITY_TABLE_PREFIX', $dataPrefix) ?? $dataPre
 $hardwarePrefix = env_optional('HARDWARE_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
 $baseUrl = getenv('BASE_URL') ?: '';
 $defaultIdentityBaseUrl = $identityPrefix === 'bd_prod_'
-    ? 'https://blindleiadarts.ingenting.org'
+    ? 'https://blindleiadart.ingenting.org'
     : $baseUrl;
 
 $config = [

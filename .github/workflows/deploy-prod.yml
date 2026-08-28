@@ -3,15 +3,30 @@ name: Deploy Production
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: Git ref to deploy
+      release_sha:
+        description: Exact 40-character commit SHA already verified on TEST
         required: true
-        default: main
+      backup_confirmed:
+        description: Confirm that a fresh production database backup exists
+        required: true
+        type: choice
+        default: 'NO'
+        options:
+          - 'NO'
+          - 'YES'
+      migration_review_confirmed:
+        description: Confirm reviewed pending PHP/data migrations if preflight requires it
+        required: true
+        type: choice
+        default: 'NO'
+        options:
+          - 'NO'
+          - 'YES'
   push:
     branches:
       - develop
     paths:
-      - '.github/prod-deploy-trigger-20260825'
+      - '.github/prod-release-request'
 
 permissions:
   contents: read
@@ -24,10 +39,61 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout deployment request
+        uses: actions/checkout@v4
+
+      - name: Resolve and validate release request
+        id: request
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RELEASE_SHA: ${{ inputs.release_sha }}
+          INPUT_BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+          INPUT_MIGRATION_REVIEW_CONFIRMED: ${{ inputs.migration_review_confirmed }}
+        run: |
+          set -Eeuo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_sha="$INPUT_RELEASE_SHA"
+            backup_confirmed="$INPUT_BACKUP_CONFIRMED"
+            migration_review_confirmed="$INPUT_MIGRATION_REVIEW_CONFIRMED"
+          else
+            test -f .github/prod-release-request
+            release_sha="$(awk -F= '$1=="release_sha" {print $2}' .github/prod-release-request | tail -1 | tr -d '[:space:]')"
+            backup_confirmed="$(awk -F= '$1=="backup_confirmed" {print $2}' .github/prod-release-request | tail -1 | tr -d '[:space:]')"
+            migration_review_confirmed="$(awk -F= '$1=="migration_review_confirmed" {print $2}' .github/prod-release-request | tail -1 | tr -d '[:space:]')"
+          fi
+
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Production deployment requires an exact 40-character release SHA."
+            exit 1
+          fi
+          if [[ "$backup_confirmed" != "YES" ]]; then
+            echo "::error::Production deployment blocked: fresh database backup has not been confirmed."
+            exit 1
+          fi
+          if [[ "$migration_review_confirmed" != "YES" && "$migration_review_confirmed" != "NO" ]]; then
+            echo "::error::migration_review_confirmed must be YES or NO."
+            exit 1
+          fi
+
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "migration_review_confirmed=$migration_review_confirmed" >> "$GITHUB_OUTPUT"
+          echo "Production release request accepted for $release_sha."
+
+      - name: Checkout exact release candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ steps.request.outputs.release_sha }}
+          fetch-depth: 1
+
+      - name: Verify exact checkout
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+          echo "Exact release candidate checked out: $actual"
 
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -36,9 +102,54 @@ jobs:
           extensions: mysqli, mbstring, curl, dom
           coverage: none
 
+      - name: Read-only production preflight gate
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          MIGRATION_REVIEW_CONFIRMED: ${{ steps.request.outputs.migration_review_confirmed }}
+        run: |
+          set -o pipefail
+          set +e
+          php infra/sql/prod_preflight.php 2>&1 | tee prod-preflight.txt
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [[ "$status" -eq 0 ]]; then
+            echo "Production preflight passed without migration review override."
+            exit 0
+          fi
+          if [[ "$status" -eq 2 && "$MIGRATION_REVIEW_CONFIRMED" == "YES" ]]; then
+            echo "Pending PHP/data migrations were explicitly reviewed and approved for this release."
+            exit 0
+          fi
+          echo "Production deployment blocked by preflight (exit $status)." >&2
+          exit "$status"
+
+      - name: Verify release candidate is the exact TEST release
+        env:
+          TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          release="$(curl --fail --silent --show-error --location --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "$TEST_BASE_URL/release.json?cb=$RANDOM")"
+          php -r '
+            $data=json_decode(stream_get_contents(STDIN),true);
+            $expected=getenv("EXPECTED_SHA");
+            if (!is_array($data) || ($data["environment"] ?? null)!=="test" || ($data["sha"] ?? null)!==$expected) {
+                fwrite(STDERR,"Production release candidate is not the exact release currently verified on canonical TEST.\n");
+                exit(1);
+            }
+            echo "TEST_RELEASE_MATCH=yes\n";
+          ' <<<"$release"
+
       - name: Validate production config and shared credentials
         env:
-          PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
+          PROD_BASE_URL: https://blindleiadart.ingenting.org
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -48,18 +159,14 @@ jobs:
           SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           for name in PROD_BASE_URL DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD SFTP_HOST SFTP_USERNAME SFTP_PASSWORD; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Repository is missing required production config/shared credential: ${name}"
               exit 1
             fi
           done
-          case "$PROD_BASE_URL" in
-            https://*) ;;
-            *) echo "::error::PROD_BASE_URL must be an https:// URL"; exit 1 ;;
-          esac
-          echo "Production config and shared repository credentials are present."
+          echo "Production credentials/config present; canonical origin is $PROD_BASE_URL."
 
       - name: Run production database migrations
         run: php infra/sql/migrate.php
@@ -74,13 +181,14 @@ jobs:
       - name: Build production release package
         run: bash infra/deploy/build-release.sh prod
 
-      - name: Generate API config
+      - name: Generate canonical production API config
         run: php infra/deploy/generate_api_config.php --output=dist/prod/api/config.php
         env:
           APP_ENV: prod
-          BASE_URL: ${{ vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
-          STATIC_BASE_URL: ${{ vars.PROD_STATIC_BASE_URL || vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
-          SCREEN_DEFAULT_CLUB_SLUG: ${{ vars.PROD_SCREEN_CLUB_SLUG || 'blindleia-dartklubb' }}
+          BASE_URL: https://blindleiadart.ingenting.org
+          IDENTITY_BASE_URL: https://blindleiadart.ingenting.org
+          STATIC_BASE_URL: https://blindleiadart.ingenting.org
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
           REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
@@ -92,18 +200,28 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_prod_
           IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
-          CHALLONGE_REDIRECT_URI: ${{ vars.PROD_CHALLONGE_REDIRECT_URI }}
+          CHALLONGE_REDIRECT_URI: https://blindleiadart.ingenting.org/api/v1/connectors/challonge/callback
 
-      - name: Validate production identity config
+      - name: Validate canonical production package
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          grep -Fq "'base_url' => 'https://blindleiadart.ingenting.org'" dist/prod/api/config.php
+          grep -Fq "'identity_base_url' => 'https://blindleiadart.ingenting.org'" dist/prod/api/config.php
           grep -Fq "'table_prefix' => 'bd_prod_'" dist/prod/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/prod/api/config.php
-          grep -Fq "'identity_base_url' => 'https://blindleiadarts.ingenting.org'" dist/prod/api/config.php
+          grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/prod/api/config.php
+          grep -Fq "$EXPECTED_SHA" dist/prod/release.json
+          test -f dist/prod/player/index.html
+          test -f dist/prod/admin/index.html
+          test -f dist/prod/kiosk/index.html
+          test -f dist/prod/live/index.html
 
       - name: Install sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
@@ -115,7 +233,7 @@ jobs:
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           REMOTE_ROOT: /www/blindleiadarts/prod
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           {
             echo "-mkdir ${REMOTE_ROOT}"
             find dist/prod -type d | sed 's#^dist/prod##' | sed '/^$/d' | while read -r dir; do
@@ -147,7 +265,7 @@ jobs:
           SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           printf '%s\n' \
             'put dist/prod/release.json /www/blindleiadarts/prod/release.json' \
             'quit' > sftp-release.txt
@@ -156,38 +274,45 @@ jobs:
             -o UserKnownHostsFile=/dev/null \
             -b sftp-release.txt "${SFTP_USERNAME}@${SFTP_HOST}"
 
-      - name: Verify exact production release and internal health
+      - name: Verify exact canonical production release
         env:
-          PROD_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://blindleiadarts.ingenting.org' }}
-          EXPECTED_SHA: ${{ github.sha }}
+          PROD_BASE_URL: https://blindleiadart.ingenting.org
+          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
         run: |
-          set -euo pipefail
-          PROD_ROOT="${PROD_BASE_URL%/}"
+          set -Eeuo pipefail
+          root="${PROD_BASE_URL%/}"
 
-          curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
-            "${PROD_ROOT}/release.json?sha=${EXPECTED_SHA}" -o release.json
+          release="$(curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "$root/release.json?cb=$RANDOM")"
           php -r '
-            $data = json_decode(file_get_contents("release.json"), true);
-            $expected = getenv("EXPECTED_SHA");
-            if (!is_array($data) || ($data["environment"] ?? null) !== "prod" || ($data["sha"] ?? null) !== $expected) {
-                fwrite(STDERR, "Production release marker does not match the deployed SHA.\n");
+            $data=json_decode(stream_get_contents(STDIN),true);
+            $expected=getenv("EXPECTED_SHA");
+            if (!is_array($data) || ($data["environment"] ?? null)!=="prod" || ($data["sha"] ?? null)!==$expected) {
+                fwrite(STDERR,"Canonical production release marker does not match requested SHA.\n");
                 exit(1);
             }
-          '
+          ' <<<"$release"
 
-          curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
-            "${PROD_ROOT}/api/health.php?sha=${EXPECTED_SHA}" -o health.json
-          cat health.json
-          echo
+          health="$(curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+            "$root/api/health.php?sha=$EXPECTED_SHA")"
           php -r '
-            $data = json_decode(file_get_contents("health.json"), true);
-            $expected = getenv("EXPECTED_SHA");
-            if (!is_array($data) || !($data["ok"] ?? false) || ($data["release"]["sha"] ?? null) !== $expected) {
-                fwrite(STDERR, "Production internal health verification failed.\n");
+            $data=json_decode(stream_get_contents(STDIN),true);
+            $expected=getenv("EXPECTED_SHA");
+            if (!is_array($data) || !($data["ok"] ?? false) || ($data["release"]["sha"] ?? null)!==$expected) {
+                fwrite(STDERR,"Production internal health verification failed.\n");
                 exit(1);
             }
-          '
+          ' <<<"$health"
 
-          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${PROD_ROOT}/admin/" -o /dev/null
-          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 "${PROD_ROOT}/kiosk/" -o /dev/null
-          echo "Production deployment verified for ${EXPECTED_SHA}."
+          for path in / /player/ /admin/ /kiosk/ /live/; do
+            echo "VERIFY: $path"
+            curl --fail --silent --show-error --location --retry 3 --retry-all-errors --max-time 30 "$root$path" -o /dev/null
+          done
+
+          live_html="$(curl --fail --silent --show-error "$root/live/?cb=$RANDOM")"
+          grep -Fq 'data-bd-surface="live"' <<<"$live_html"
+          grep -Fq 'live-v2.js' <<<"$live_html"
+
+          echo "PRODUCTION_DEPLOYMENT_VERIFIED=yes"
+          echo "PRODUCTION_SHA=$EXPECTED_SHA"
+          echo "PRODUCTION_URL=$root"

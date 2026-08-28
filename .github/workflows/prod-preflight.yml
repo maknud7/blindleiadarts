@@ -1,0 +1,115 @@
+name: Production Readiness Preflight
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/prod-preflight.yml'
+      - 'infra/sql/prod_preflight.php'
+      - '.github/workflows/deploy-prod.yml'
+      - 'infra/deploy/generate_api_config.php'
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/prod-preflight.yml'
+      - 'infra/sql/prod_preflight.php'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-readiness-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Inspect production database read-only
+        id: database
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -o pipefail
+          set +e
+          php infra/sql/prod_preflight.php 2>&1 | tee prod-preflight.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -eq 0 ]]; then
+            echo "PROD_PREFLIGHT_REPORT=green"
+            exit 0
+          fi
+          if [[ "$status" -eq 2 ]]; then
+            echo "::warning::Production preflight found pending PHP/data migrations that require explicit review before deploy."
+            echo "PROD_PREFLIGHT_REPORT=review_required"
+            exit 0
+          fi
+          echo "Production preflight could not be completed safely." >&2
+          exit "$status"
+
+      - name: Check canonical production hostname
+        if: always()
+        env:
+          BASE_URL: https://blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          echo "Checking $BASE_URL"
+          tmp="$(mktemp)"
+          status="$(curl --silent --show-error --location --connect-timeout 5 --max-time 20 -o "$tmp" -w '%{http_code}' "$BASE_URL/release.json?cb=$RANDOM" || true)"
+          if [[ "$status" == "200" ]]; then
+            php -r '
+              $data=json_decode(file_get_contents($argv[1]),true);
+              if (!is_array($data) || ($data["environment"] ?? null) !== "prod") {
+                  fwrite(STDERR,"Canonical production hostname returned a release marker, but it is not production.\n");
+                  exit(1);
+              }
+              echo "CANONICAL_PROD_HOST_OK=yes\n";
+              echo "CURRENT_PROD_SHA=".($data["sha"] ?? "unknown")."\n";
+            ' "$tmp"
+            rm -f "$tmp"
+            exit 0
+          fi
+          rm -f "$tmp"
+          if [[ "$status" == "000" || -z "$status" ]]; then
+            echo "Canonical production hostname is not reachable over HTTPS." >&2
+            exit 1
+          fi
+          echo "::warning::Canonical production hostname is reachable (HTTP $status), but no platform release marker exists yet. This is acceptable before first softlaunch deploy."
+          echo "CANONICAL_PROD_HOST_REACHABLE=yes"
+          echo "CURRENT_PROD_SHA=none"
+
+      - name: Check canonical test hostname
+        if: always()
+        env:
+          BASE_URL: https://test.blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          echo "Checking $BASE_URL"
+          release="$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 20 "$BASE_URL/release.json?cb=$RANDOM")"
+          php -r '
+            $data=json_decode(stream_get_contents(STDIN),true);
+            if (!is_array($data) || ($data["environment"] ?? null) !== "test") {
+                fwrite(STDERR,"Canonical test hostname does not serve a test release.\n");
+                exit(1);
+            }
+            echo "CANONICAL_TEST_HOST_OK=yes\n";
+            echo "CURRENT_TEST_SHA=".($data["sha"] ?? "unknown")."\n";
+          ' <<<"$release"
