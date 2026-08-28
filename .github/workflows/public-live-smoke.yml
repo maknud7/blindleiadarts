@@ -1,0 +1,64 @@
+name: Public Live Smoke
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-live-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for matching test release
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in $(seq 1 40); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then exit 0; fi
+            sleep 10
+          done
+          echo "Public Live smoke failed: expected release did not become live." >&2
+          exit 1
+
+      - name: Verify public Live 3DA and top 3 UX
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+
+          live_html="$(curl -fsS "$base/live/?cb=$RANDOM")"
+          grep -Fq 'live-v2.css' <<<"$live_html"
+          grep -Fq 'live-v2.js' <<<"$live_html"
+
+          live_js="$(curl -fsS "$base/live/live-v2.js?cb=$RANDOM")"
+          grep -Fq 'Topp 3 visits' <<<"$live_js"
+          grep -Fq 'Topp 3 checkout' <<<"$live_js"
+          grep -Fq 'Topp 3 3DA' <<<"$live_js"
+          grep -Fq 'three-da-col' <<<"$live_js"
+          grep -Fq 'three_dart_average' <<<"$live_js"
+
+          live_css="$(curl -fsS "$base/live/live-v2.css?cb=$RANDOM")"
+          grep -Fq 'live-top3-block' <<<"$live_css"
+          grep -Fq 'three-da-col' <<<"$live_css"
+
+          payload="$(curl -fsS "$base/api/v1/public/clubs/blindleia-dartklubb/live?cb=$RANDOM")"
+          tournament_id="$(jq -r '.data.tournament.id // empty' <<<"$payload")"
+          if [[ -n "$tournament_id" ]]; then
+            highlights="$(curl -fsS "$base/api/v1/tournaments/$tournament_id/live-highlights?cb=$RANDOM")"
+            jq -e '.ok == true and (.data.top_visits | type == "array") and (.data.top_checkouts | type == "array") and (.data.top_three_dart_averages | type == "array")' <<<"$highlights" >/dev/null
+          fi
+
+          echo "PUBLIC_LIVE_SMOKE_OK=yes"
