@@ -1,82 +1,34 @@
-@import url("../packages/ui-assets/brand-tokens.css");
-@import url("../packages/ui-assets/blindleia-system.css?v=20260826-1205");
-
-:root{
-  color-scheme:light;
-  --bg:#f3f6fb;
-  --panel:#ffffff;
-  --panel-soft:#f7f9fc;
-  --line:#dbe3ed;
-  --ink:#0c2340;
-  --muted:#697c94;
-  --gold:#2f6fed;
-  --green:#238060;
-  --warn:#9b6818;
+html, body {
+  min-height: 100%;
+  margin: 0;
 }
 
-html,body{overflow-x:hidden;background:#f3f6fb!important;color:#0c2340!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important}
-body{background:#f3f6fb!important}
-.screen-shell{background:#f3f6fb!important}
-.device-admin-meta{display:none!important}
-
-.connect-card,.screen-panel,.fallback-card{
-  background:#fff!important;
-  color:#0c2340!important;
-  border-color:#dbe3ed!important;
-  border-radius:18px!important;
-  box-shadow:0 10px 30px rgba(17,42,73,.07)!important;
+body {
+  display: grid;
+  place-items: center;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f3f8fb;
+  color: #082744;
 }
 
-.screen-header{
-  background:linear-gradient(135deg,#0b2b50,#071f3b)!important;
-  color:#fff!important;
-  border-color:rgba(255,255,255,.08)!important;
-  border-radius:18px!important;
-  box-shadow:0 12px 32px rgba(7,31,59,.18)!important;
-}
-.screen-header h1,.screen-header h2,.screen-header h3,.screen-header strong,.screen-header .eyebrow{color:#fff!important}
-.screen-header .tournament-label,.screen-header .header-meta,.screen-header .device-label{color:#c8d7e8!important}
-.screen-header .brand-badge{background:#fff!important;border-color:rgba(255,255,255,.16)!important;border-radius:10px!important}
-.screen-header .ghost-button{background:rgba(255,255,255,.1)!important;color:#fff!important;border-color:rgba(255,255,255,.16)!important;box-shadow:none!important}
-
-h1,h2,h3,h4{font-family:inherit!important;letter-spacing:-.02em!important;color:#0c2340!important}
-.eyebrow,.board-head h3,.compact-versus,.table-rank{color:#2f6fed!important}
-.connect-copy,.panel-subtitle,.muted,.table-name small,.tournament-label{color:#697c94!important}
-
-.connect-form input{background:#fff!important;color:#0c2340!important;border-color:#c8d4e2!important}
-.connect-form input:focus{border-color:#4b82f1!important;box-shadow:0 0 0 3px rgba(47,111,237,.16)!important;outline:none!important}
-.connect-form button{background:#2f6fed!important;color:#fff!important;border-color:#2f6fed!important;box-shadow:0 3px 9px rgba(47,111,237,.16)!important}
-.ghost-button{background:#fff!important;color:#0b2b50!important;border-color:#dbe3ed!important;box-shadow:none!important}
-
-.pill,.status-chip{background:#eef4ff!important;color:#123c69!important;border-color:#cfddf2!important}
-.status-assigned{color:#245acb!important;background:#eef4ff!important;border-color:#cfddf2!important}
-.status-live,.status-in_progress{color:#176449!important;background:#e8f6ef!important;border-color:#b8dfcd!important}
-
-.screen-panel{box-shadow:0 2px 10px rgba(17,42,73,.045)!important}
-.screen-panel *{text-shadow:none!important}
-.board-card,.match-card,.next-card,.table-row,.stat-row,.compact-row{
-  background:#f8fafc!important;
-  color:#0c2340!important;
-  border-color:#dbe3ed!important;
-}
-.board-card.active,.match-card.active{background:#eef4ff!important;border-color:#b9cff5!important}
-.score,.remaining,.board-number,.player-name{color:#0c2340!important}
-
-.fallback-card .fallback-mark,.brand-fallback{background:linear-gradient(135deg,#2f6fed,#245acb)!important;color:#fff!important}
-
-.screen-view{
-  padding:max(1rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left));
-}
-.connect-view,.fallback-panel{
-  background:#f3f6fb!important;
-  padding:max(2rem,env(safe-area-inset-top)) max(2rem,env(safe-area-inset-right)) max(2rem,env(safe-area-inset-bottom)) max(2rem,env(safe-area-inset-left));
+.retired-screen {
+  max-width: 34rem;
+  padding: 2rem;
+  text-align: center;
 }
 
-/* Operational buttons should not compete with live information from viewing distance. */
-.header-actions{opacity:.48;transition:opacity .15s ease}
-.header-actions:hover,.header-actions:focus-within{opacity:1}
+.retired-screen p {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
 
-@media(max-width:920px){
-  .header-actions{opacity:1;width:100%}
-  .header-actions button{flex:1}
+.retired-screen a {
+  display: inline-block;
+  margin-top: .75rem;
+  padding: .8rem 1.1rem;
+  border-radius: .75rem;
+  background: #2f72eb;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
 }
