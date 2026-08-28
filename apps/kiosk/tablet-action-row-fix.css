@@ -1,41 +1,129 @@
 /*
- * Keep the primary dart actions visible on shorter portrait tablet viewports.
+ * Fluid portrait-tablet scoring layout.
  *
- * Important: the action row is anchored to the scoring card instead of being a
- * normal grid row. That makes "Siste pil" and "Lagre kast" independent of the
- * browser's reported viewport height. The dart grid gets reserved bottom space
- * and is the only area allowed to shrink.
+ * The previous emergency fix pinned the dart action row absolutely with fixed
+ * pixel heights. That could still overlap controls when different Android/iPad
+ * models reported a shorter CSS viewport. This version keeps every scoring
+ * section in normal grid flow and lets only the central scoring controls shrink.
+ * No primary control can occupy the same grid area as another.
  */
-@media (orientation: portrait) and (min-width: 480px) and (min-height: 720px) {
+@media (orientation: portrait) and (min-width: 420px) {
+  .terminal-shell {
+    --kiosk-gap: clamp(3px, .55dvh, 6px);
+    --kiosk-scoreboard-height: clamp(116px, 16.5dvh, 150px);
+    --kiosk-activity-height: clamp(52px, 7.2dvh, 70px);
+    --kiosk-action-height: clamp(42px, 6.2dvh, 54px);
+    --kiosk-summary-height: clamp(30px, 4.5dvh, 38px);
+    --kiosk-special-height: clamp(32px, 4.8dvh, 42px);
+    --kiosk-head-height: clamp(32px, 4.7dvh, 40px);
+  }
+
   .kiosk-ux-v2 .match-layout,
   .match-layout {
-    grid-template-rows: clamp(124px, 17dvh, 146px) minmax(0, 1fr) 64px !important;
-    gap: 5px !important;
+    grid-template-rows:
+      var(--kiosk-scoreboard-height)
+      minmax(0, 1fr)
+      var(--kiosk-activity-height) !important;
+    gap: var(--kiosk-gap) !important;
   }
 
   .kiosk-ux-v2 .scoring-card,
   .scoring-card {
     position: relative !important;
-    padding: 6px !important;
+    min-height: 0 !important;
+    padding: clamp(4px, .7dvh, 7px) !important;
     overflow: hidden !important;
+    container-type: size;
   }
 
   .kiosk-ux-v2 .scoring-head,
   .scoring-head {
-    min-height: 36px !important;
-    margin-bottom: 4px !important;
+    min-height: 0 !important;
+    height: var(--kiosk-head-height) !important;
+    margin-bottom: var(--kiosk-gap) !important;
+    gap: clamp(4px, 1vw, 8px) !important;
   }
 
+  .kiosk-ux-v2 .scoring-head > div:first-child > .eyebrow,
+  .scoring-head > div:first-child > .eyebrow {
+    font-size: clamp(8px, min(1.7vw, 1.35dvh), 10px) !important;
+  }
+
+  .kiosk-ux-v2 .mode-switch,
+  .mode-switch {
+    width: min(44vw, 230px) !important;
+    min-width: 0 !important;
+  }
+
+  .kiosk-ux-v2 .mode-switch button,
+  .mode-switch button {
+    min-height: 0 !important;
+    height: clamp(28px, 4.1dvh, 34px) !important;
+    padding: clamp(3px, .6dvh, 5px) clamp(5px, 1.4vw, 8px) !important;
+    font-size: clamp(10px, min(2.2vw, 1.8dvh), 12px) !important;
+  }
+
+  /* Sum scoring follows the same rule: fixed display + fully shrinkable keypad. */
+  .kiosk-ux-v2 .sum-mode,
+  .sum-mode {
+    box-sizing: border-box !important;
+    height: calc(100% - var(--kiosk-head-height) - var(--kiosk-gap)) !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-rows: clamp(40px, 6.2dvh, 52px) minmax(0, 1fr) !important;
+    gap: var(--kiosk-gap) !important;
+    overflow: hidden !important;
+  }
+
+  .kiosk-ux-v2 .entry-display,
+  .entry-display {
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: clamp(3px, .7dvh, 6px) clamp(7px, 1.8vw, 11px) !important;
+  }
+
+  .kiosk-ux-v2 .entry-display strong,
+  .entry-display strong {
+    font-size: clamp(27px, min(6vw, 5dvh), 42px) !important;
+  }
+
+  .kiosk-ux-v2 .keypad,
+  .keypad {
+    height: 100% !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
+    gap: var(--kiosk-gap) !important;
+    overflow: hidden !important;
+  }
+
+  .kiosk-ux-v2 .keypad button,
+  .keypad button {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: clamp(2px, .5dvh, 5px) !important;
+    font-size: clamp(16px, min(4vw, 3.2dvh), 25px) !important;
+    border-radius: clamp(8px, 1.8vw, 12px) !important;
+  }
+
+  /* Per-dart mode: summary, controls and primary actions are three real rows.
+     This is the key invariant preventing overlap on every tablet height. */
   .kiosk-ux-v2 .dart-mode,
   .dart-mode {
     position: static !important;
     box-sizing: border-box !important;
-    height: calc(100% - 40px) !important;
+    height: calc(100% - var(--kiosk-head-height) - var(--kiosk-gap)) !important;
     min-height: 0 !important;
     display: grid !important;
-    grid-template-rows: 38px minmax(0, 1fr) !important;
-    gap: 4px !important;
-    padding: 0 0 60px !important;
+    grid-template-rows:
+      var(--kiosk-summary-height)
+      minmax(0, 1fr)
+      var(--kiosk-action-height) !important;
+    gap: var(--kiosk-gap) !important;
+    padding: 0 !important;
     overflow: hidden !important;
   }
 
@@ -46,93 +134,139 @@
 
   .kiosk-ux-v2 .dart-summary,
   .dart-summary {
-    height: 38px !important;
-    min-height: 38px !important;
-    gap: 4px !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    gap: var(--kiosk-gap) !important;
+  }
+
+  .kiosk-ux-v2 .dart-summary span,
+  .dart-summary span {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: clamp(2px, .45dvh, 5px) !important;
+    font-size: clamp(9px, min(2vw, 1.55dvh), 12px) !important;
+  }
+
+  .kiosk-ux-v2 .dart-summary strong,
+  .dart-summary strong {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: clamp(2px, .45dvh, 5px) !important;
+    font-size: clamp(15px, min(3.4vw, 2.5dvh), 20px) !important;
   }
 
   .kiosk-ux-v2 .dart-controls,
   .dart-controls {
     height: 100% !important;
     min-height: 0 !important;
+    display: grid !important;
+    grid-template-columns: clamp(44px, 9.5vw, 62px) minmax(0, 1fr) !important;
+    gap: var(--kiosk-gap) !important;
     overflow: hidden !important;
-    gap: 5px !important;
   }
 
   .kiosk-ux-v2 .multipliers,
   .multipliers {
     height: 100% !important;
     min-height: 0 !important;
-    gap: 4px !important;
+    display: grid !important;
+    grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+    gap: var(--kiosk-gap) !important;
+    overflow: hidden !important;
   }
 
-  .kiosk-ux-v2 .dart-controls > div:last-child {
+  .kiosk-ux-v2 .multipliers button,
+  .multipliers button {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 1px !important;
+    font-size: clamp(12px, min(3vw, 2.4dvh), 18px) !important;
+    line-height: 1 !important;
+  }
+
+  .kiosk-ux-v2 .dart-controls > div:last-child,
+  .dart-controls > div:last-child {
     height: 100% !important;
     min-height: 0 !important;
-    grid-template-rows: 42px minmax(0, 1fr) !important;
-    gap: 4px !important;
+    display: grid !important;
+    grid-template-rows: var(--kiosk-special-height) minmax(0, 1fr) !important;
+    gap: var(--kiosk-gap) !important;
     overflow: hidden !important;
   }
 
   .kiosk-ux-v2 .dart-controls .special-grid,
   .special-grid {
-    height: 42px !important;
-    min-height: 42px !important;
-    gap: 4px !important;
+    grid-row: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    gap: var(--kiosk-gap) !important;
+  }
+
+  .kiosk-ux-v2 .special-grid button,
+  .special-grid button {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: clamp(1px, .4dvh, 4px) !important;
+    font-size: clamp(9px, min(2.15vw, 1.7dvh), 12px) !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
   }
 
   .kiosk-ux-v2 .dart-controls .number-grid,
   .number-grid {
-    min-height: 0 !important;
+    grid-row: 2 !important;
     height: 100% !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
-    gap: 4px !important;
+    gap: var(--kiosk-gap) !important;
     overflow: hidden !important;
   }
 
   .kiosk-ux-v2 .number-grid button,
-  .number-grid button,
-  .kiosk-ux-v2 .multipliers button,
-  .multipliers button {
-    min-height: 0 !important;
-    padding: 2px !important;
-  }
-
-  .kiosk-ux-v2 .number-grid button,
   .number-grid button {
-    font-size: clamp(17px, 3.5vw, 22px) !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 1px !important;
+    font-size: clamp(14px, min(3.4vw, 2.75dvh), 22px) !important;
+    line-height: 1 !important;
+    border-radius: clamp(7px, 1.5vw, 11px) !important;
   }
 
-  /*
-   * Primary actions are pinned to the bottom edge of the scoring card. They are
-   * outside the shrinkable grid flow, so a short Android viewport cannot push
-   * them below the visible area.
-   */
   .kiosk-ux-v2 .dart-actions,
   .dart-actions {
-    position: absolute !important;
-    left: 6px !important;
-    right: 6px !important;
-    bottom: 6px !important;
-    z-index: 30 !important;
-    width: auto !important;
-    height: 54px !important;
-    min-height: 54px !important;
+    position: static !important;
+    inset: auto !important;
+    z-index: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
     margin: 0 !important;
     display: grid !important;
-    grid-template-columns: .78fr 1.22fr !important;
-    gap: 6px !important;
+    grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr) !important;
+    gap: var(--kiosk-gap) !important;
   }
 
   .kiosk-ux-v2 .dart-actions button,
   .dart-actions button {
     width: 100% !important;
-    height: 54px !important;
-    min-height: 54px !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
     margin: 0 !important;
-    padding: 6px 10px !important;
-    font-size: 14px !important;
-    border-radius: 11px !important;
+    padding: clamp(3px, .7dvh, 7px) clamp(5px, 1.6vw, 10px) !important;
+    font-size: clamp(11px, min(2.7vw, 2.05dvh), 15px) !important;
+    line-height: 1.05 !important;
+    border-radius: clamp(8px, 1.8vw, 12px) !important;
   }
 
   .kiosk-ux-v2 #dartSubmitButton,
@@ -140,34 +274,67 @@
     background: #2875ea !important;
     color: #fff !important;
     border-color: #2875ea !important;
-    font-size: 18px !important;
+    font-size: clamp(15px, min(3.5vw, 2.65dvh), 19px) !important;
     font-weight: 950 !important;
   }
 
   .kiosk-ux-v2 .activity-card,
   .activity-card {
-    height: 64px !important;
-    min-height: 64px !important;
-    padding: 5px 7px !important;
+    height: var(--kiosk-activity-height) !important;
+    min-height: 0 !important;
+    padding: clamp(4px, .65dvh, 7px) !important;
   }
 
   .kiosk-ux-v2 button.visit-row,
   .kiosk-ux-v2 .visit-row {
-    height: 50px !important;
-    min-height: 50px !important;
+    height: calc(var(--kiosk-activity-height) - clamp(10px, 1.8dvh, 16px)) !important;
+    min-height: 0 !important;
+    padding-top: clamp(3px, .55dvh, 6px) !important;
+    padding-bottom: clamp(3px, .55dvh, 6px) !important;
   }
 }
 
-/* Installed/full-screen tablets have more room, but the action row still wins. */
-@media (orientation: portrait) and (min-width: 650px) and (min-height: 900px) {
-  .kiosk-ux-v2 .match-layout,
-  .match-layout {
-    grid-template-rows: clamp(136px, 17dvh, 158px) minmax(0, 1fr) 70px !important;
+/* Short portrait viewports need less chrome, never overlapping controls. */
+@media (orientation: portrait) and (min-width: 420px) and (max-height: 760px) {
+  .terminal-shell {
+    --kiosk-scoreboard-height: clamp(106px, 15.5dvh, 124px);
+    --kiosk-activity-height: clamp(46px, 6.6dvh, 54px);
+    --kiosk-action-height: clamp(38px, 5.8dvh, 46px);
+    --kiosk-summary-height: clamp(27px, 4.1dvh, 32px);
+    --kiosk-special-height: clamp(28px, 4.3dvh, 34px);
+    --kiosk-head-height: clamp(28px, 4.2dvh, 34px);
+  }
+
+  .kiosk-ux-v2 .scoreboard,
+  .scoreboard {
+    padding: 4px !important;
+  }
+
+  .kiosk-ux-v2 .player-card,
+  .player-card {
+    padding: 5px 6px !important;
+  }
+
+  .kiosk-ux-v2 .activity-head,
+  .activity-head {
+    display: none !important;
   }
 
   .kiosk-ux-v2 .activity-card,
   .activity-card {
-    height: 70px !important;
-    min-height: 70px !important;
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Large portrait tablets get larger touch targets, but keep the same fluid model. */
+@media (orientation: portrait) and (min-width: 700px) and (min-height: 960px) {
+  .terminal-shell {
+    --kiosk-gap: clamp(5px, .65dvh, 8px);
+    --kiosk-scoreboard-height: clamp(140px, 17dvh, 170px);
+    --kiosk-activity-height: clamp(64px, 7.4dvh, 76px);
+    --kiosk-action-height: clamp(48px, 5.8dvh, 58px);
+    --kiosk-summary-height: clamp(34px, 4.2dvh, 42px);
+    --kiosk-special-height: clamp(38px, 4.6dvh, 46px);
+    --kiosk-head-height: clamp(36px, 4.4dvh, 44px);
   }
 }
