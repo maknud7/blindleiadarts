@@ -1,10 +1,12 @@
 const API_ROOT = "../api/v1";
 const PAIRING_URL = "../api/kiosk-pairing.php";
+const REPLACEMENT_URL = "../api/kiosk-pairing-replace.php";
 
 const clubSelect = document.getElementById("clubSelect");
 const refreshButton = document.getElementById("refreshAllButton");
 
-let syncTimer = null;
+let editorSyncTimer = null;
+let codeInspectTimer = null;
 let inspectedCode = "";
 let inspectedRequest = null;
 
@@ -12,7 +14,6 @@ function token() { return localStorage.getItem("bd:token") || ""; }
 function clubId() { return Number(clubSelect?.value || localStorage.getItem("bd:selectedClubId") || 0); }
 function editorBoardId() { return Number(document.getElementById("boardEditorId")?.value || 0); }
 function normalizeCode(value) { return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); }
-function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 
 async function requestJson(url, { method = "GET", body } = {}) {
   const headers = { Authorization: `Bearer ${token()}` };
@@ -47,7 +48,7 @@ function ensureStyles() {
 
 function ensureUi() {
   const device = document.getElementById("boardEditorDevice");
-  if (!device || document.getElementById("boardTabletActions")) return;
+  if (!device || document.getElementById("boardTabletActions")) return false;
 
   device.insertAdjacentHTML("afterend", `
     <div id="boardTabletActions" class="board-tablet-actions hidden">
@@ -59,7 +60,7 @@ function ensureUi() {
       <p class="muted">Det gamle nettbrettet virker helt til du bekrefter byttet. Deretter overtar det nye samme skive og samme serverlagrede kampstatus.</p>
       <div class="tablet-replacement-steps">
         <div class="tablet-replacement-step"><strong>1 · Nytt nettbrett</strong>Åpne Blindleia Kiosk. Det viser en pairingkode.</div>
-        <div class="tablet-replacement-step"><strong>2 · Skriv koden</strong>Kontroller at riktig nye enhet blir funnet.</div>
+        <div class="tablet-replacement-step"><strong>2 · Skriv koden</strong>Kontroller at riktig ny enhet blir funnet.</div>
         <div class="tablet-replacement-step"><strong>3 · Bytt og fortsett</strong>Ny terminal overtar med én gang. Ingen kamp restartes.</div>
       </div>
       <div class="tablet-replacement-code">
@@ -77,6 +78,7 @@ function ensureUi() {
   document.getElementById("cancelTabletReplacement")?.addEventListener("click", closeReplacement);
   document.getElementById("confirmTabletReplacement")?.addEventListener("click", replaceTablet);
   document.getElementById("replacementPairingCode")?.addEventListener("input", handleCodeInput);
+  return true;
 }
 
 function setReplacementStatus(text, tone = "warning") {
@@ -92,6 +94,7 @@ function setReplacementStatus(text, tone = "warning") {
 }
 
 function closeReplacement() {
+  clearTimeout(codeInspectTimer);
   document.getElementById("tabletReplacementPanel")?.classList.add("hidden");
   const input = document.getElementById("replacementPairingCode");
   if (input) input.value = "";
@@ -139,7 +142,7 @@ function handleCodeInput(event) {
   inspectedRequest = null;
   const confirmButton = document.getElementById("confirmTabletReplacement");
   if (confirmButton) confirmButton.disabled = true;
-  clearTimeout(syncTimer);
+  clearTimeout(codeInspectTimer);
 
   if (code.length < 6) {
     setReplacementStatus(code ? "Skriv hele pairingkoden fra det nye nettbrettet." : "Nåværende nettbrett er fortsatt aktivt.", "warning");
@@ -147,7 +150,7 @@ function handleCodeInput(event) {
   }
 
   setReplacementStatus("Kontrollerer pairingkoden …", "warning");
-  syncTimer = window.setTimeout(async () => {
+  codeInspectTimer = window.setTimeout(async () => {
     try {
       const request = await inspectPairingCode(code);
       if (normalizeCode(input.value) !== code) return;
@@ -167,7 +170,7 @@ async function replaceTablet() {
   const input = document.getElementById("replacementPairingCode");
   const code = normalizeCode(input?.value || "");
   const button = document.getElementById("confirmTabletReplacement");
-  if (!kioskId || !code) return;
+  if (!kioskId || !code || !button) return;
 
   button.disabled = true;
   setReplacementStatus("Bytter terminal …", "warning");
@@ -177,12 +180,11 @@ async function replaceTablet() {
       inspectedCode = code;
     }
 
-    const url = new URL(PAIRING_URL, window.location.href);
-    url.searchParams.set("action", "claim");
+    const url = new URL(REPLACEMENT_URL, window.location.href);
     url.searchParams.set("club_id", String(clubId()));
     const data = await requestJson(url, {
       method: "POST",
-      body: { code, kiosk_id: kioskId, replace_existing: true },
+      body: { code, kiosk_id: kioskId },
     });
     const kiosk = data.kiosk || {};
     setReplacementStatus(`${kiosk.device_name || inspectedRequest?.device_name || "Det nye nettbrettet"} har overtatt ${kiosk.name || `skive ${kiosk.board_number || ""}`}. Hvis kampen allerede var startet, åpnes samme leg og score automatisk uten «Start kamp».`, "good");
@@ -222,19 +224,36 @@ async function syncEditorTabletAction() {
   }
 }
 
-function scheduleSync(delay = 30) {
-  clearTimeout(syncTimer);
-  syncTimer = window.setTimeout(() => syncEditorTabletAction().catch(() => undefined), delay);
+function scheduleEditorSync(delay = 40) {
+  clearTimeout(editorSyncTimer);
+  editorSyncTimer = window.setTimeout(() => syncEditorTabletAction().catch(() => undefined), delay);
+}
+
+function attachEditorObserver() {
+  ensureUi();
+  const backdrop = document.getElementById("boardEditorBackdrop");
+  const device = document.getElementById("boardEditorDevice");
+  if (!backdrop || !device) return false;
+
+  const observer = new MutationObserver(() => scheduleEditorSync());
+  observer.observe(backdrop, { attributes: true, attributeFilter: ["class"] });
+  observer.observe(device, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+  return true;
 }
 
 function boot() {
   ensureStyles();
-  ensureUi();
-  const observer = new MutationObserver(() => scheduleSync());
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "value"] });
-  clubSelect?.addEventListener("change", () => scheduleSync(80));
-  refreshButton?.addEventListener("click", () => scheduleSync(250));
-  scheduleSync();
+  if (!attachEditorObserver()) {
+    const bootObserver = new MutationObserver(() => {
+      if (!attachEditorObserver()) return;
+      bootObserver.disconnect();
+      scheduleEditorSync();
+    });
+    bootObserver.observe(document.body, { childList: true, subtree: true });
+  }
+  clubSelect?.addEventListener("change", () => scheduleEditorSync(80));
+  refreshButton?.addEventListener("click", () => scheduleEditorSync(250));
+  scheduleEditorSync();
 }
 
 boot();
