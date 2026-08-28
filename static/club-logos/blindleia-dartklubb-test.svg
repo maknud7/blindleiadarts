@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Blindleia Dartklubb TEST">
+  <rect width="1024" height="1024" rx="220" fill="#f3c23c"/>
+  <rect x="54" y="54" width="916" height="916" rx="188" fill="#fff" stroke="#0b314c" stroke-width="18"/>
+  <image href="./blindleia-dartklubb-logo.svg" x="112" y="82" width="800" height="800" preserveAspectRatio="xMidYMid meet"/>
+  <g transform="translate(624 794)">
+    <rect width="292" height="132" rx="66" fill="#f3c23c" stroke="#0b314c" stroke-width="16"/>
+    <text x="146" y="89" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="72" font-weight="900" fill="#0b314c">TEST</text>
+  </g>
+</svg>

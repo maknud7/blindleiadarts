@@ -2,15 +2,36 @@
 <html lang="no">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b2b50">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Blindleia Darts">
   <title>Blindleia Darts</title>
+  <link rel="manifest" href="./api/pwa-manifest.php">
+  <link rel="icon" href="./static/club-logos/blindleia-dartklubb-logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./static/club-logos/blindleia-dartklubb-logo.png">
+  <script>
+    (() => {
+      const isTest = /(^|[.-])test([.-]|$)/i.test(window.location.hostname)
+        || new URLSearchParams(window.location.search).get("pwa") === "test";
+      if (!isTest) return;
+      document.documentElement.dataset.appEnv = "test";
+      document.title = "Blindleia Darts TEST";
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#f3c23c");
+      document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", "Blindleia Darts TEST");
+      document.querySelector('link[rel="icon"]')?.setAttribute("href", "./static/club-logos/blindleia-dartklubb-test.svg");
+      document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute("href", "./static/club-logos/blindleia-dartklubb-test.svg");
+    })();
+  </script>
   <style>
     :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0c2340;background:#f3f6fb}
     *{box-sizing:border-box}
     body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(145deg,#f7f9fc,#edf2f8)}
     .boot{width:min(420px,calc(100% - 32px));display:grid;justify-items:center;gap:14px;padding:32px;text-align:center;border:1px solid #dbe3ed;border-radius:20px;background:#fff;box-shadow:0 18px 50px rgba(17,42,73,.09)}
-    .logo{width:64px;height:64px;background:#fff url("./static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat}
+    .logo{width:64px;height:64px;border-radius:14px;background:#fff url("./static/club-logos/blindleia-dartklubb-logo.png") center/contain no-repeat}
+    html[data-app-env="test"] .logo{background-color:#fff8d8;outline:4px solid #f3c23c;outline-offset:2px}
+    html[data-app-env="test"] .boot{border-color:#e2c34f;box-shadow:inset 0 3px 0 #f3c23c,0 18px 50px rgba(17,42,73,.09)}
     h1{margin:0;font-size:24px}.boot p{margin:0;color:#697c94;line-height:1.5}.error{color:#9e303a}.retry{display:inline-flex;align-items:center;justify-content:center;margin-top:6px;padding:10px 14px;border:0;border-radius:10px;background:#2f6fed;color:#fff;font:inherit;font-weight:800;cursor:pointer}
   </style>
 </head>

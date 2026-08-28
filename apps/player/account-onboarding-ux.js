@@ -1,4 +1,10 @@
 const loginForm = document.getElementById("loginForm");
+const IS_TEST = /(^|[.-])test([.-]|$)/i.test(window.location.hostname)
+  || new URLSearchParams(window.location.search).get("pwa") === "test";
+const LOGO_URL = new URL(
+  IS_TEST ? "../static/club-logos/blindleia-dartklubb-test.svg" : "../static/club-logos/blindleia-dartklubb-logo.png",
+  import.meta.url
+).href;
 
 function installAccountStartUx() {
   if (!loginForm || document.getElementById("accountStartCard")) return;
@@ -8,7 +14,7 @@ function installAccountStartUx() {
   card.className = "account-start-card";
   card.innerHTML = `
     <div class="account-start-head">
-      <img src="../static/club-logos/blindleia-dartklubb-logo.png" alt="Blindleia Dartklubb">
+      <img src="${LOGO_URL}" alt="Blindleia Dartklubb${IS_TEST ? " TEST" : ""}">
       <div><p class="eyebrow">Første gang du logger inn?</p><h3>Én konto – samme spillerhistorikk</h3></div>
     </div>
     <p>Har du allerede spilt hos Blindleia, skal vi <strong>koble brukerkontoen til spilleren som finnes fra før</strong>. Vi lager ikke en ny statistikkhistorikk bare fordi du får innlogging.</p>
