@@ -46,6 +46,17 @@ copy_dir "$ROOT_DIR/apps/live" "$OUT_DIR/live"
 copy_dir "$ROOT_DIR/apps/onboarding" "$OUT_DIR/onboarding"
 copy_dir "$ROOT_DIR/packages" "$OUT_DIR/packages"
 
+# Historical source probes are deliberately available in TEST while history is
+# being migrated. They are migration tooling, not application runtime, and must
+# never be shipped in a production release.
+if [[ "$ENVIRONMENT" == "prod" ]]; then
+  rm -f \
+    "$OUT_DIR/api/atlas-import-probe.php" \
+    "$OUT_DIR/api/atlas-match-visits.php" \
+    "$OUT_DIR/api/atlas-season-probe.php" \
+    "$OUT_DIR/api/atlas-tournament-probe.php"
+fi
+
 mkdir -p "$OUT_DIR/static"
 copy_dir "$ROOT_DIR/static/club-logos" "$OUT_DIR/static/club-logos"
 copy_dir "$ROOT_DIR/static/sponsors" "$OUT_DIR/static/sponsors"

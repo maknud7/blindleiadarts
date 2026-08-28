@@ -17,11 +17,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Reject removed provider references
+      - name: Reject removed provider runtime references
         run: |
+          set -Eeuo pipefail
           removed_provider="$(printf '%s%s' 'darts' 'atlas')"
-          if git grep -n -i -E "${removed_provider}(\.com)?" -- .; then
-            echo "Removed provider reference found in repository."
+          matches="$(git grep -n -i -E "${removed_provider}(\.com)?" -- . || true)"
+          unexpected="$(printf '%s\n' "$matches" | grep -Ev '^(\.agents/skills/[^:]*history-migration/|\.github/workflows/(atlas-|import-atlas-)[^:]*:|apps/api/atlas-(import-probe|match-visits|season-probe|tournament-probe)\.php:|infra/atlas/[^:]*:|infra/import/legacy_atlas_probe\.php:|infra/sql/(atlas_|import_atlas_|run-(atlas-|import-atlas-|probe-atlas-))[^:]*:)' || true)"
+          if [[ -n "$unexpected" ]]; then
+            printf '%s\n' "$unexpected"
+            echo "Removed provider reference found outside historical migration tooling."
             exit 1
           fi
 
@@ -68,7 +72,7 @@ jobs:
       - name: UX information architecture check
         run: |
           set -Eeuo pipefail
-          grep -Fq '>Personer</a>' apps/admin/index.html
+          grep -Fq '>Medlemmer</a>' apps/admin/index.html
           grep -Fq '>Utstyr</a>' apps/admin/index.html
           grep -Fq '>Innstillinger</a>' apps/admin/index.html
           if grep -Fq 'href="#screens"' apps/admin/index.html; then
@@ -76,17 +80,18 @@ jobs:
             exit 1
           fi
           grep -Fq '>Min profil</a>' apps/player/index.html
-          grep -Fq '>Ranking</a>' apps/player/index.html
-          grep -Fq 'data-tr-view="matches"' apps/admin/admin-ux.js
-          grep -Fq 'Neste anbefalte steg' apps/admin/admin-ux.js
+          grep -Fq '>Statistikk</a>' apps/player/index.html
+          grep -Fq 'data-tournament-view="matches"' apps/player/index.html
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
+          grep -Fq './tournament-leader-v2.js' apps/admin/tournament-loader.js
+          grep -Fq 'data-leader-step=' apps/admin/tournament-leader-v2.js
 
       - name: Public live and first-party activity check
         run: |
           set -Eeuo pipefail
           grep -Fq 'blindleia-dartklubb' apps/live/app.js
           grep -Fq '/public/clubs/' apps/live/app.js
-          grep -Fq 'href="../live/"' apps/admin/admin-ux.js
+          grep -Fq 'href="../live/"' apps/admin/index.html
           grep -Fq 'ActivityApplication' apps/api/index.php
           grep -Fq 'v1/activity' apps/api/src/ActivityApplication.php
           grep -Fq 'activity_events' infra/sql/migrations/0043_create_activity_events.sql
@@ -136,6 +141,7 @@ jobs:
 
       - name: Release package smoke test
         run: |
+          set -Eeuo pipefail
           bash infra/deploy/build-release.sh test
           test -f dist/test/api/src/EmailAuthApplication.php
           test -f dist/test/api/src/PasswordResetApplication.php
@@ -147,6 +153,9 @@ jobs:
           test -f dist/test/admin/admin-ux.js
           test -f dist/test/admin/admin-ux.css
           test -f dist/test/admin/activity-admin.js
+          test -f dist/test/admin/tournament-leader-v2.js
+          test -f dist/test/admin/tournament-leader-v2-board-state.js
+          test -f dist/test/admin/tournament-leader-v2.css
           test -f dist/test/player/player-ux.js
           test -f dist/test/player/player-ux.css
           test -f dist/test/onboarding/index.html
@@ -175,3 +184,21 @@ jobs:
           grep -Fq '2201' dist/test/kiosk/admin-mode.js
           grep -Fq 'blindleia-dartklubb-logo.png' dist/test/kiosk/manifest.webmanifest
           grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
+
+          # Historical probes remain available in TEST for controlled migration work.
+          test -f dist/test/api/atlas-import-probe.php
+          test -f dist/test/api/atlas-match-visits.php
+          test -f dist/test/api/atlas-season-probe.php
+          test -f dist/test/api/atlas-tournament-probe.php
+
+          # Production must contain no historical provider runtime surface at all.
+          bash infra/deploy/build-release.sh prod
+          test ! -e dist/prod/api/atlas-import-probe.php
+          test ! -e dist/prod/api/atlas-match-visits.php
+          test ! -e dist/prod/api/atlas-season-probe.php
+          test ! -e dist/prod/api/atlas-tournament-probe.php
+          removed_provider="$(printf '%s%s' 'darts' 'atlas')"
+          if grep -R -n -i -E "${removed_provider}(\.com)?" dist/prod; then
+            echo 'Historical provider reference leaked into the production release.'
+            exit 1
+          fi
