@@ -1,0 +1,48 @@
+/* Player portal shell cleanup: keep the shared topbar as the single club identity,
+   simplify the call-up card, and guarantee readable foregrounds on blue surfaces. */
+
+body[data-portal-default="home"] .portal-header{
+  display:none!important;
+}
+
+#playerNowSection .player-now-logo{
+  display:none!important;
+}
+
+#playerNowSection .player-now-layout{
+  grid-template-columns:minmax(0,1fr) auto!important;
+}
+
+/* The shared desktop rail is dark blue. Never allow inherited dark text to leak
+   into the brand or an active blue navigation item. */
+.unified-sidebar-brand,
+.unified-sidebar-brand strong{
+  color:#fff!important;
+}
+
+body[data-portal-default="home"] .portal-nav.portal-menu a.active,
+body[data-portal-default="home"] .portal-nav.portal-menu a.active *,
+body[data-portal-default="overview"] .section-nav.portal-menu a.active,
+body[data-portal-default="overview"] .section-nav.portal-menu a.active *{
+  color:#fff!important;
+  fill:currentColor!important;
+}
+
+/* Filled blue actions in the player surface must use white copy/icons. */
+#playerBreakCard button:not(.ghost),
+#playerBreakCard button:not(.ghost) *,
+.player-now-actions .player-now-primary,
+.player-now-actions .player-now-primary *{
+  color:#fff!important;
+  fill:currentColor!important;
+}
+
+@media(max-width:640px){
+  #playerNowSection .player-now-layout{
+    grid-template-columns:1fr!important;
+  }
+
+  #playerNowSection .player-now-board{
+    grid-column:1!important;
+  }
+}
