@@ -1,0 +1,84 @@
+name: Ops Probe Andreas Registration
+
+on:
+  push:
+    branches:
+      - ops/probe-andreas-registration
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Read-only Andreas registration/account probe
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $db = new mysqli(
+              getenv('DB_HOST'),
+              getenv('DB_USERNAME'),
+              getenv('DB_PASSWORD'),
+              getenv('DB_NAME'),
+              (int) (getenv('DB_PORT') ?: 3306)
+          );
+          $db->set_charset('utf8mb4');
+          $db->query('START TRANSACTION READ ONLY');
+          try {
+              echo "PROBE_READ_ONLY=yes\n";
+              $registrations = $db->query(
+                  "SELECT CONCAT(TRIM(first_name),' ',TRIM(last_name)) AS display_name,
+                          CASE
+                            WHEN approved_at IS NOT NULL THEN 'approved'
+                            WHEN submitted_at IS NOT NULL THEN 'pending_approval'
+                            ELSE 'invite_not_submitted'
+                          END AS registration_status,
+                          submitted_at, approved_at
+                     FROM bd_prod_self_registration_invites
+                    WHERE LOWER(TRIM(first_name)) LIKE 'andreas%'
+                       OR LOWER(CONCAT(TRIM(first_name),' ',TRIM(last_name))) LIKE 'andreas%'
+                    ORDER BY id DESC LIMIT 10"
+              )->fetch_all(MYSQLI_ASSOC);
+              echo 'REGISTRATIONS=' . count($registrations) . "\n";
+              foreach ($registrations as $row) {
+                  echo 'REGISTRATION name=' . preg_replace('/[^\pL\pN ._-]/u', '', (string) $row['display_name'])
+                      . ' status=' . $row['registration_status']
+                      . ' submitted=' . ($row['submitted_at'] ?: 'no')
+                      . ' approved=' . ($row['approved_at'] ?: 'no') . "\n";
+              }
+
+              $accounts = $db->query(
+                  "SELECT display_name, account_status, is_active, claimed_at, last_login_at
+                     FROM bd_prod_user_accounts
+                    WHERE LOWER(TRIM(display_name)) LIKE 'andreas%'
+                    ORDER BY id DESC LIMIT 10"
+              )->fetch_all(MYSQLI_ASSOC);
+              echo 'ACCOUNTS=' . count($accounts) . "\n";
+              foreach ($accounts as $row) {
+                  echo 'ACCOUNT name=' . preg_replace('/[^\pL\pN ._-]/u', '', (string) $row['display_name'])
+                      . ' status=' . (string) $row['account_status']
+                      . ' active=' . (int) $row['is_active']
+                      . ' claimed=' . ($row['claimed_at'] ?: 'no')
+                      . ' last_login=' . ($row['last_login_at'] ?: 'never') . "\n";
+              }
+              $db->rollback();
+          } catch (Throwable $e) {
+              $db->rollback();
+              throw $e;
+          }
+          PHP
