@@ -1,0 +1,10 @@
+.payment-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.payment-settings-card{display:grid;gap:12px;padding:16px;border:1px solid var(--line,#dbe3ed);border-radius:15px;background:var(--panel,#fff)}
+.payment-settings-card h3{margin:0}.payment-settings-card p{margin:0}
+.payment-settings-card label{display:grid;gap:6px}.payment-settings-card label>span{font-size:.78rem;font-weight:800;color:var(--muted,#66788d)}
+.payment-settings-card input{width:100%}
+.payment-settings-note{padding:13px 14px;border-radius:12px;background:#f3f7fc;color:#526a84;font-size:.82rem;line-height:1.5}
+.payment-settings-note strong{color:#183d68}.payment-settings-actions{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+#paymentSettingsStatus{margin:0;flex:1;min-width:220px}
+#paymentStripeEffective{overflow-wrap:anywhere}
+@media(max-width:760px){.payment-settings-grid{grid-template-columns:1fr}.payment-settings-actions{display:grid}.payment-settings-actions button{width:100%}#paymentSettingsStatus{min-width:0}}
