@@ -93,6 +93,15 @@
     gap: 8px;
   }
 
+  body[data-bd-surface="admin"] .topbar-actions {
+    display: none !important;
+  }
+
+  body[data-bd-surface="admin"] .topbar {
+    min-height: 72px;
+    gap: 0 !important;
+  }
+
   .topbar-actions select {
     width: 100%;
     max-width: none;
