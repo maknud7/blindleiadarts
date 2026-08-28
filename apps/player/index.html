@@ -2,13 +2,21 @@
 <html lang="no">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2b50">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Blindleia Darts">
   <title>Blindleia Darts</title>
+  <link rel="manifest" href="./manifest.webmanifest?v=20260828-1130">
+  <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../static/club-logos/blindleia-dartklubb-logo.png">
   <link rel="stylesheet" href="./styles.css?v=20260827-1435">
   <link rel="stylesheet" href="./player-ux.css?v=20260828-0730">
   <link rel="stylesheet" href="./player-card-polish.css?v=20260827-1705">
   <link rel="stylesheet" href="./statistics-desktop-match-cards.css?v=20260828-0930">
   <link rel="stylesheet" href="./profile-v2.css?v=20260828-1015">
+  <link rel="stylesheet" href="./account-pwa.css?v=20260828-1130">
   <script>if(new URLSearchParams(window.location.search).has('reset_token')){window.location.hash='#profile';}</script>
 </head>
 <body data-portal-default="home">
@@ -118,6 +126,8 @@
   <script src="./app.js" type="module"></script>
   <script src="./tournament-registration-ux.js" type="module"></script>
   <script src="./member-account.js?v=20260828-1015" type="module"></script>
+  <script src="./account-onboarding-ux.js?v=20260828-1130" type="module"></script>
+  <script src="./pwa-install.js?v=20260828-1130" type="module"></script>
   <script src="./portal-content.js?v=20260827-1145" type="module"></script>
   <script src="./match-detail-ux.js?v=20260828-0700" type="module"></script>
   <script src="./portal-playoffs.js" type="module"></script>

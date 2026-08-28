@@ -1,0 +1,27 @@
+{
+  "id": "./",
+  "name": "Blindleia Darts",
+  "short_name": "Blindleia",
+  "description": "Spillerportal for Blindleia Dartklubb – turneringer, kampstatus, statistikk og medlemskap.",
+  "lang": "nb-NO",
+  "start_url": "./#home",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f6fb",
+  "theme_color": "#0b2b50",
+  "icons": [
+    {
+      "src": "../static/club-logos/blindleia-dartklubb-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "../static/club-logos/blindleia-dartklubb-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
