@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="./kiosk-brand-v3.css?v=3">
   <link rel="stylesheet" href="./kiosk-match-completion.css?v=20260828-01">
   <link rel="stylesheet" href="./mobile.css?v=20260826-2240">
+  <link rel="stylesheet" href="./club-tablet-ux.css?v=20260828-1745">
 </head>
 <body>
   <div class="terminal-shell">
@@ -39,13 +40,13 @@
         <div class="claim-layout">
           <div class="setup-copy">
             <p class="eyebrow">Førstegangsoppsett</p>
-            <h2>Koble denne terminalen til en skive</h2>
-            <p class="muted">Dette gjøres én gang. Scan QR-koden med mobilen til en klubbadmin, velg skive og terminalen husker oppsettet videre.</p>
+            <h2>Koble nettbrettet til riktig skive</h2>
+            <p class="muted">Bruk mobilen til en klubbadmin. QR-koden åpner Utstyr med denne terminalen ferdig gjenkjent. Når du velger skive, går nettbrettet videre automatisk.</p>
 
             <div class="claim-steps">
-              <div><span>1</span><p>Scan QR-koden med mobilen.</p></div>
-              <div><span>2</span><p>Logg inn i Blindleia Admin hvis du ikke allerede er innlogget.</p></div>
-              <div><span>3</span><p>Velg riktig skive og trykk «Koble til».</p></div>
+              <div><span>1</span><p>Scan QR-koden med adminmobilen.</p></div>
+              <div><span>2</span><p>Velg skiva nettbrettet står ved.</p></div>
+              <div><span>3</span><p>Trykk «Koble». Terminalen åpner skiva selv.</p></div>
             </div>
           </div>
 
@@ -54,10 +55,10 @@
               <img id="pairingQr" alt="QR-kode for pairing" class="pairing-qr hidden">
               <div id="qrLoading" class="qr-loading"><span class="spinner"></span><span>Lager pairingkode …</span></div>
             </div>
-            <p class="claim-label">Pairingkode</p>
+            <p class="claim-label">Kode hvis du ikke scanner QR</p>
             <strong id="pairingCode" class="claim-code">—</strong>
             <p id="pairingExpires" class="muted">Koden er gyldig i 30 minutter.</p>
-            <div class="waiting-line"><span class="spinner"></span><span id="pairingMessage">Venter på godkjenning …</span></div>
+            <div class="waiting-line"><span class="spinner"></span><span id="pairingMessage">Venter på at admin velger skive …</span></div>
             <button id="newPairingButton" class="ghost-button" type="button">Lag ny kode</button>
           </div>
         </div>
@@ -168,6 +169,7 @@
   <script src="./realtime-refresh-compat.js?v=1"></script>
   <script src="./app.js"></script>
   <script src="./pairing-runtime.js"></script>
+  <script src="./pairing-canonical-link.js?v=20260828-1745"></script>
   <script src="./operations-runtime.js"></script>
   <script src="./install.js"></script>
   <script src="./admin-mode.js"></script>
