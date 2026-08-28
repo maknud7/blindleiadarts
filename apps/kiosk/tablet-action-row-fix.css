@@ -1,8 +1,10 @@
 /*
  * Keep the primary dart actions visible on shorter portrait tablet viewports.
- * The physical club tablets can have substantially less CSS height than their
- * panel resolution suggests. Action buttons therefore get reserved height
- * before the score grid is allowed to consume the remaining space.
+ *
+ * Important: the action row is anchored to the scoring card instead of being a
+ * normal grid row. That makes "Siste pil" and "Lagre kast" independent of the
+ * browser's reported viewport height. The dart grid gets reserved bottom space
+ * and is the only area allowed to shrink.
  */
 @media (orientation: portrait) and (min-width: 480px) and (min-height: 720px) {
   .kiosk-ux-v2 .match-layout,
@@ -13,7 +15,9 @@
 
   .kiosk-ux-v2 .scoring-card,
   .scoring-card {
+    position: relative !important;
     padding: 6px !important;
+    overflow: hidden !important;
   }
 
   .kiosk-ux-v2 .scoring-head,
@@ -24,20 +28,32 @@
 
   .kiosk-ux-v2 .dart-mode,
   .dart-mode {
+    position: static !important;
+    box-sizing: border-box !important;
     height: calc(100% - 40px) !important;
-    grid-template-rows: 38px minmax(0, 1fr) 54px !important;
+    min-height: 0 !important;
+    display: grid !important;
+    grid-template-rows: 38px minmax(0, 1fr) !important;
     gap: 4px !important;
+    padding: 0 0 60px !important;
     overflow: hidden !important;
+  }
+
+  .kiosk-ux-v2 .dart-mode.hidden,
+  .dart-mode.hidden {
+    display: none !important;
   }
 
   .kiosk-ux-v2 .dart-summary,
   .dart-summary {
     height: 38px !important;
+    min-height: 38px !important;
     gap: 4px !important;
   }
 
   .kiosk-ux-v2 .dart-controls,
   .dart-controls {
+    height: 100% !important;
     min-height: 0 !important;
     overflow: hidden !important;
     gap: 5px !important;
@@ -45,11 +61,13 @@
 
   .kiosk-ux-v2 .multipliers,
   .multipliers {
+    height: 100% !important;
     min-height: 0 !important;
     gap: 4px !important;
   }
 
   .kiosk-ux-v2 .dart-controls > div:last-child {
+    height: 100% !important;
     min-height: 0 !important;
     grid-template-rows: 42px minmax(0, 1fr) !important;
     gap: 4px !important;
@@ -59,6 +77,7 @@
   .kiosk-ux-v2 .dart-controls .special-grid,
   .special-grid {
     height: 42px !important;
+    min-height: 42px !important;
     gap: 4px !important;
   }
 
@@ -84,24 +103,43 @@
     font-size: clamp(17px, 3.5vw, 22px) !important;
   }
 
+  /*
+   * Primary actions are pinned to the bottom edge of the scoring card. They are
+   * outside the shrinkable grid flow, so a short Android viewport cannot push
+   * them below the visible area.
+   */
   .kiosk-ux-v2 .dart-actions,
   .dart-actions {
+    position: absolute !important;
+    left: 6px !important;
+    right: 6px !important;
+    bottom: 6px !important;
+    z-index: 30 !important;
+    width: auto !important;
     height: 54px !important;
     min-height: 54px !important;
-    position: relative !important;
-    z-index: 3 !important;
+    margin: 0 !important;
+    display: grid !important;
+    grid-template-columns: .78fr 1.22fr !important;
     gap: 6px !important;
   }
 
   .kiosk-ux-v2 .dart-actions button,
   .dart-actions button {
+    width: 100% !important;
     height: 54px !important;
     min-height: 54px !important;
+    margin: 0 !important;
+    padding: 6px 10px !important;
     font-size: 14px !important;
+    border-radius: 11px !important;
   }
 
   .kiosk-ux-v2 #dartSubmitButton,
   #dartSubmitButton {
+    background: #2875ea !important;
+    color: #fff !important;
+    border-color: #2875ea !important;
     font-size: 18px !important;
     font-weight: 950 !important;
   }
