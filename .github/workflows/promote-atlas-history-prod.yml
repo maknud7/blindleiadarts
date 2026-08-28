@@ -1,0 +1,198 @@
+name: Promote Verified Atlas History To Production
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-promote-atlas-history-prod.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-atlas-history-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+      MANIFEST: infra/sql/atlas-prod-promotion.json
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - name: Checkout exact promotion commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate promotion request and scripts
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'PROMOTE_VERIFIED_ATLAS_HISTORY_TO_PROD=yes' infra/sql/run-promote-atlas-history-prod.flag
+          php -l infra/sql/prod_snapshot_backup.php
+          php -l infra/sql/atlas_promote_test_history_to_prod.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_history_lifecycle_verify.php
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            if(($m["source_prefix"]??"")!=="bd_test_" || ($m["target_prefix"]??"")!=="bd_prod_") throw new RuntimeException("Wrong prefixes");
+            if(($m["season_external_id"]??"")!=="rFByCgOqI1rq") throw new RuntimeException("Wrong season");
+            if(count($m["tournaments"]??[])!==3) throw new RuntimeException("Expected three tournaments");
+            $tot=$m["expected_totals"]??[];
+            if(($tot["matches"]??0)!==151 || ($tot["legs"]??0)!==173 || ($tot["visits"]??0)!==4255 || ($tot["atlas_player_references"]??0)!==18) throw new RuntimeException("Frozen totals changed");
+            echo "Frozen promotion manifest OK\n";
+          '
+
+      - name: Require exact commit live on canonical TEST
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${TEST_BASE_URL%/}"
+          for attempt in $(seq 1 60); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release" && grep -Fq '"environment":"test"' <<<"$release"; then
+              echo "Exact promotion commit is live on TEST: $EXPECTED_SHA"
+              exit 0
+            fi
+            echo "Waiting for TEST release $EXPECTED_SHA ($attempt/60)"
+            sleep 10
+          done
+          echo "TEST never reached exact promotion commit." >&2
+          exit 1
+
+      - name: Strict TEST history gates
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          while IFS='|' read -r external matches players; do
+            php infra/sql/atlas_history_verify.php --external="$external" --expected-matches="$matches" --expected-players="$players" --phase=final --require-visits=1 --require-playoff=1
+            php infra/sql/atlas_history_lifecycle_verify.php --external="$external"
+          done <<'EOF'
+          fpC4m4hIZdjZ|63|16
+          FHHAnnuO8txa|49|14
+          PvGa73emrY6e|39|9
+          EOF
+          php infra/sql/elo_ledger_doctor.php
+          echo 'ATLAS_TEST_PROMOTION_GATE_OK=yes'
+
+      - name: Guard clean PROD history target
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $p="bd_prod_";
+            $activeT=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournaments` WHERE status IN (\"ready\",\"in_progress\")")->fetch_assoc()["c"];
+            $activeM=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE status IN (\"pending\",\"assigned\",\"in_progress\")")->fetch_assoc()["c"];
+            if($activeT!==0||$activeM!==0) throw new RuntimeException("Active PROD runtime exists");
+            $ids=["fpC4m4hIZdjZ","FHHAnnuO8txa","PvGa73emrY6e"];
+            $stmt=$db->prepare("SELECT COUNT(*) c FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=?");
+            foreach($ids as $id){$stmt->bind_param("s",$id);$stmt->execute();if((int)$stmt->get_result()->fetch_assoc()["c"]!==0)throw new RuntimeException("PROD tournament already imported: {$id}");}
+            echo "PROD_HISTORY_TARGET_CLEAN=yes\n";
+          '
+          php infra/sql/history_inventory.php
+
+      - name: Snapshot existing PROD tables inside database
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          echo "Creating internal production snapshot: ${backup_prefix}*"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Bring PROD schema to current migration level
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: php infra/sql/migrate.php
+
+      - name: Promote exact verified TEST history into staged PROD rows
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_PROMOTION: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_promote_test_history_to_prod.php "$MANIFEST" | tee /tmp/atlas-prod-promotion.txt
+          grep -Fq 'ATLAS_PROD_PROMOTION_STAGED=yes' /tmp/atlas-prod-promotion.txt
+
+      - name: Strict PROD data-phase gates before finalization
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          while IFS='|' read -r external matches players; do
+            php infra/sql/atlas_history_verify.php --external="$external" --expected-matches="$matches" --expected-players="$players" --phase=data --require-visits=1 --require-playoff=1
+          done <<'EOF'
+          fpC4m4hIZdjZ|63|16
+          FHHAnnuO8txa|49|14
+          PvGa73emrY6e|39|9
+          EOF
+          echo 'ATLAS_PROD_DATA_GATE_OK=yes'
+
+      - name: Finalize canonical PROD historical lifecycle
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_FINALIZE: yes
+        run: |
+          set -Eeuo pipefail
+          for external in fpC4m4hIZdjZ FHHAnnuO8txa PvGa73emrY6e; do
+            php infra/sql/atlas_history_finalize.php --external="$external"
+          done
+
+      - name: Rebuild canonical PROD ELO in logical history order
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/run_php_migration.php infra/sql/migrations/0053_rebuild_elo_in_logical_match_order.php bd_prod_
+          php infra/sql/elo_ledger_doctor.php
+          echo 'ATLAS_PROD_ELO_REBUILD_OK=yes'
+
+      - name: Strict final PROD verification
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          while IFS='|' read -r external matches players; do
+            php infra/sql/atlas_history_verify.php --external="$external" --expected-matches="$matches" --expected-players="$players" --phase=final --require-visits=1 --require-playoff=1
+            php infra/sql/atlas_history_lifecycle_verify.php --external="$external"
+          done <<'EOF'
+          fpC4m4hIZdjZ|63|16
+          FHHAnnuO8txa|49|14
+          PvGa73emrY6e|39|9
+          EOF
+          php infra/sql/history_inventory.php
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$p="bd_prod_";
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $ids=[];foreach($m["tournaments"] as $spec)$ids[]=$spec["external_id"];
+            $tids=[];$stmt=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");
+            foreach($ids as $id){$stmt->bind_param("s",$id);$stmt->execute();$row=$stmt->get_result()->fetch_assoc();if(!$row)throw new RuntimeException("Missing PROD tournament ref {$id}");$tids[]=(int)$row["internal_id"];}
+            $in=implode(",",$tids);
+            $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id IN ({$in})")->fetch_assoc()["c"];
+            $legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` x ON x.id=l.match_id WHERE x.tournament_id IN ({$in})")->fetch_assoc()["c"];
+            $visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` x ON x.id=v.match_id WHERE x.tournament_id IN ({$in})")->fetch_assoc()["c"];
+            if($matches!==151||$legs!==173||$visits!==4255)throw new RuntimeException("Final PROD total drift: ".json_encode(compact("matches","legs","visits")));
+            echo "ATLAS_PROD_FINAL_TOTALS_OK=yes matches={$matches} legs={$legs} visits={$visits}\n";
+            echo "PROD_SNAPSHOT_RETAINED_PREFIX=".getenv("PROD_BACKUP_PREFIX")."\n";
+          '
