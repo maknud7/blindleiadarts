@@ -242,7 +242,8 @@ jobs:
             echo "ls ${REMOTE_ROOT}"
             echo "quit"
           } > sftp-batch.txt
-          sshpass -p "$SFTP_PASSWORD" sftp \
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}"
@@ -257,7 +258,7 @@ jobs:
           local_path: ./dist/prod/*
           remote_path: /www/blindleiadarts/prod
           sftp_only: true
-          rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql
+          rsyncArgs: --exclude=.git --exclude=.github --exclude=docs --exclude=infra/sql --exclude=release.json
 
       - name: Publish release marker last
         env:
@@ -269,7 +270,8 @@ jobs:
           printf '%s\n' \
             'put dist/prod/release.json /www/blindleiadarts/prod/release.json' \
             'quit' > sftp-release.txt
-          sshpass -p "$SFTP_PASSWORD" sftp \
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -b sftp-release.txt "${SFTP_USERNAME}@${SFTP_HOST}"
