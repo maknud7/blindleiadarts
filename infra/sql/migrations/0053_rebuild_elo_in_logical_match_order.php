@@ -123,10 +123,13 @@ return static function (mysqli $mysqli, string $prefix): void {
             $mergedAliases += max(0, count($ids) - 1);
         }
 
-        // Verify that the source structure itself can be traversed as:
-        // round robin -> quarter-final -> semi-final -> final.
+        // Verify phase and knockout chronology without assuming a fixed bracket size.
+        // Canonical round numbers always start at 1 for the first actual playoff round,
+        // so a four-player bracket correctly has semifinal=1 and final=2.
         $phaseByTournament = [];
         $playoffRoundByTournament = [];
+        $playoffStageByTournament = [];
+        $playoffStageRoundByTournament = [];
         foreach ($matches as $match) {
             $tournamentId = (int) $match['tournament_id'];
             $phase = (int) $match['phase_order'];
@@ -144,19 +147,44 @@ return static function (mysqli $mysqli, string $prefix): void {
                 }
                 $playoffRoundByTournament[$tournamentId] = $round;
 
-                $label = $normalize((string) ($match['playoff_round_label'] ?? $match['round_label'] ?? ''));
-                $expected = null;
-                if (str_contains($label, 'quarter') || str_contains($label, 'kvart')) $expected = 1;
-                elseif (str_contains($label, 'semi')) $expected = 2;
-                elseif ($label === 'final' || str_contains($label, 'finale')) $expected = 3;
-                if ($expected !== null && $round !== $expected) {
-                    throw new RuntimeException(sprintf(
-                        'Unexpected playoff order in tournament %d: %s has round %d, expected %d.',
-                        $tournamentId,
-                        (string) ($match['playoff_round_label'] ?? $match['round_label']),
-                        $round,
-                        $expected
-                    ));
+                $labelValue = (string) ($match['playoff_round_label'] ?? $match['round_label'] ?? '');
+                $label = $normalize($labelValue);
+                $stage = null;
+                if (str_contains($label, 'sekstendels') || str_contains($label, 'round of 32') || str_contains($label, 'last 32')) $stage = 1;
+                elseif (str_contains($label, 'åttedels') || str_contains($label, 'round of 16') || str_contains($label, 'last 16')) $stage = 2;
+                elseif (str_contains($label, 'quarter') || str_contains($label, 'kvart')) $stage = 3;
+                elseif (str_contains($label, 'semi')) $stage = 4;
+                elseif ($label === 'final' || str_contains($label, 'finale')) $stage = 5;
+
+                if ($stage !== null) {
+                    $previousStage = $playoffStageByTournament[$tournamentId] ?? null;
+                    $previousStageRound = $playoffStageRoundByTournament[$tournamentId] ?? null;
+                    if ($previousStage !== null && $stage < $previousStage) {
+                        throw new RuntimeException(sprintf(
+                            'ELO playoff stage order regressed in tournament %d: %s.',
+                            $tournamentId,
+                            $labelValue
+                        ));
+                    }
+                    if ($previousStage !== null && $stage === $previousStage && $previousStageRound !== $round) {
+                        throw new RuntimeException(sprintf(
+                            'ELO playoff stage %s spans multiple logical rounds in tournament %d: %d and %d.',
+                            $labelValue,
+                            $tournamentId,
+                            $previousStageRound,
+                            $round
+                        ));
+                    }
+                    if ($previousStage !== null && $stage > $previousStage && $previousStageRound !== null && $round <= $previousStageRound) {
+                        throw new RuntimeException(sprintf(
+                            'ELO playoff stage advanced without round progression in tournament %d: %s at round %d.',
+                            $tournamentId,
+                            $labelValue,
+                            $round
+                        ));
+                    }
+                    $playoffStageByTournament[$tournamentId] = $stage;
+                    $playoffStageRoundByTournament[$tournamentId] = $round;
                 }
             }
         }

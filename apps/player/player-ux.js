@@ -16,8 +16,6 @@ async function pxApi(path, auth = false) {
 function normalizePlayerNavigation() {
   const nav = document.querySelector(".portal-nav.portal-menu");
   if (!nav) return;
-  const tables = nav.querySelector('a[href="#tables"]');
-  if (tables) tables.textContent = "Ranking";
   nav.querySelector('a[href="#summaries"]')?.remove();
   if (!nav.querySelector('a[href="#profile"]')) {
     const link = document.createElement("a");
@@ -48,7 +46,12 @@ function ensureNowCard() {
   card.id = "playerNowCard";
   card.dataset.portalSection = "home";
   card.className = "card player-now-card";
-  card.innerHTML = `<div class="player-now-head"><div><p class="eyebrow">Akkurat nå</p><h2>Din dartkveld</h2></div><span id="playerNowStatus" class="player-now-status">Laster</span></div><div id="playerNowBody" class="player-now-main"><p class="muted">Henter det som er viktigst for deg nå …</p></div>`;
+  card.innerHTML = `
+    <div class="player-now-head">
+      <div><p class="eyebrow">Akkurat nå</p><h2>Din dartkveld</h2><p id="playerNowHint" class="muted player-now-hint">Det viktigste neste steget vises her.</p></div>
+      <span id="playerNowStatus" class="player-now-status">Laster</span>
+    </div>
+    <div id="playerNowBody" class="player-now-main"><p class="muted">Henter det som er viktigst for deg nå …</p></div>`;
   nav.insertAdjacentElement("afterend", card);
 }
 
@@ -61,6 +64,9 @@ function parseDate(value) {
 function fmtDate(value) {
   const date = parseDate(value);
   if (!date) return value ? String(value) : "";
+  const now = new Date();
+  const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+  if (sameDay) return `I dag ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date)}`;
   return new Intl.DateTimeFormat("nb-NO", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
@@ -76,19 +82,17 @@ function isTournamentRelevant(tournament, registrationStatus = "") {
   const now = Date.now();
   const start = parseDate(tournament.start_at)?.getTime() ?? null;
   const end = parseDate(tournament.end_at)?.getTime() ?? null;
-
   if (end !== null && end < now) return false;
   if (end !== null && end >= now && (start === null || start <= now)) return true;
 
-  const liveRegistration = ["checked_in", "paused"].includes(String(registrationStatus));
-  if (start === null) return !liveRegistration;
-
+  const liveRegistration = ["checked_in", "paused", "eliminated"].includes(String(registrationStatus));
+  if (start === null) return !liveRegistration || ["ready", "in_progress"].includes(status);
   const graceMs = 18 * 60 * 60 * 1000;
   return start >= now - graceMs;
 }
 
 function bestRegistration(registrations, tournaments) {
-  const priority = { checked_in: 0, paused: 0, registered: 1, waitlisted: 2, eliminated: 4, withdrawn: 9, no_show: 9 };
+  const priority = { paused: 0, checked_in: 1, registered: 2, waitlisted: 3, eliminated: 4, withdrawn: 9, no_show: 9 };
   return [...registrations]
     .filter((item) => {
       const regStatus = String(item.status || "");
@@ -112,29 +116,123 @@ function bestOpenTournament(tournaments) {
     .sort((a, b) => (parseDate(a.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseDate(b.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0] || null;
 }
 
+function bestUpcomingTournament(tournaments) {
+  const now = Date.now();
+  return [...tournaments]
+    .filter((item) => {
+      const status = String(item.status || "").toLowerCase();
+      const start = parseDate(item.start_at)?.getTime() ?? null;
+      return !["completed", "cancelled"].includes(status) && start !== null && start >= now;
+    })
+    .sort((a, b) => (parseDate(a.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (parseDate(b.start_at)?.getTime() ?? Number.MAX_SAFE_INTEGER))[0] || null;
+}
+
+function playerMatch(matchCalls, playerId) {
+  if (!playerId) return null;
+  const priority = { in_progress: 0, assigned: 1 };
+  return [...(matchCalls || [])]
+    .filter((match) => ["in_progress", "assigned"].includes(String(match.status))
+      && (Number(match.player_a_id) === Number(playerId) || Number(match.player_b_id) === Number(playerId)))
+    .sort((a, b) => (priority[String(a.status)] ?? 9) - (priority[String(b.status)] ?? 9) || Number(a.id) - Number(b.id))[0] || null;
+}
+
+function opponentName(match, playerId) {
+  if (!match) return "Motstander";
+  return Number(match.player_a_id) === Number(playerId) ? match.player_b_name : match.player_a_name;
+}
+
+function boardName(match) {
+  if (!match) return "";
+  const board = Number(match.board_number || 0);
+  if (board > 0) return `Skive ${board}`;
+  if (match.kiosk_name) return String(match.kiosk_name);
+  if (match.kiosk_code) return `Kiosk ${match.kiosk_code}`;
+  return "Skive ikke satt";
+}
+
+function matchContext(match) {
+  return [...new Set([match?.round_label, match?.bracket_label].filter(Boolean).map(String))].join(" · ");
+}
+
 function go(hash) { window.location.hash = hash; }
+function goStats(view = "season") {
+  localStorage.setItem("bd:statisticsView", view);
+  go("#statistics");
+  window.setTimeout(() => document.querySelector(`[data-statistics-view="${view}"]`)?.click(), 80);
+}
 
 function triggerExisting(action, tournamentId) {
   const selector = action === "checkin" ? `[data-checkin="${Number(tournamentId)}"]` : `[data-register="${Number(tournamentId)}"]`;
   const button = document.querySelector(selector);
-  if (button) {
-    go("#tournaments");
-    window.setTimeout(() => button.click(), 80);
-  } else {
-    go("#tournaments");
-  }
+  go("#tournaments");
+  if (button) window.setTimeout(() => button.click(), 80);
 }
 
-function renderNow({ me, dashboard, tournaments }) {
-  ensureNowCard();
+function setSituation(key, statusText, hint = "") {
+  document.body.dataset.playerSituation = key;
+  const card = document.getElementById("playerNowCard");
   const status = document.getElementById("playerNowStatus");
+  const hintNode = document.getElementById("playerNowHint");
+  if (card) card.dataset.situation = key;
+  if (status) status.textContent = statusText;
+  if (hintNode) hintNode.textContent = hint || "Det viktigste neste steget vises her.";
+
+  const breakSection = document.getElementById("playerBreakSection");
+  const statsSection = document.getElementById("statsGrid")?.closest('[data-portal-section="home"]');
+  if (breakSection) breakSection.classList.toggle("situational-hidden", !["waiting", "paused"].includes(key));
+  if (statsSection) statsSection.classList.toggle("situational-hidden", key === "logged_out");
+}
+
+function primaryFacts(items) {
+  const usable = items.filter((item) => item?.value);
+  if (!usable.length) return "";
+  return `<div class="player-now-facts">${usable.map((item) => `<div><small>${pxEsc(item.label)}</small><strong>${pxEsc(item.value)}</strong></div>`).join("")}</div>`;
+}
+
+function journey(active) {
+  const stages = [
+    ["registered", "Påmeldt"],
+    ["checked_in", "Innsjekket"],
+    ["match", "Kamp"],
+  ];
+  const order = { registered: 0, checked_in: 1, match: 2 };
+  const current = order[active] ?? -1;
+  return `<div class="player-now-journey" aria-label="Turneringsstatus">${stages.map(([key, label], index) => `<span class="${index < current ? "done" : index === current ? "current" : ""}">${index < current ? "✓" : index + 1} ${label}</span>`).join("")}</div>`;
+}
+
+function renderNow({ me, dashboard, tournaments, matchCalls }) {
+  ensureNowCard();
   const body = document.getElementById("playerNowBody");
-  if (!status || !body) return;
+  if (!body) return;
 
   if (!me) {
-    status.textContent = "Ikke innlogget";
-    body.innerHTML = `<div><strong>Logg inn med e-post</strong><p class="muted">Da ser du påmelding, check-in, kontingent og dine egne darttall på ett sted.</p></div><div class="player-now-actions"><button type="button" data-px-profile>Logg inn</button></div>`;
+    setSituation("logged_out", "Ikke innlogget", "Logg inn for en personlig forside.");
+    body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Personlig spillerportal</span><strong>Logg inn, så viser Hjem bare det som gjelder deg</strong><p class="muted">Påmelding, innsjekk, neste skive, motstander, pause og egne tall dukker opp her når de er relevante.</p></div><div class="player-now-actions"><button type="button" data-px-profile>Logg inn</button><button class="ghost" type="button" data-px-tournaments>Se turneringer</button></div>`;
     body.querySelector("[data-px-profile]")?.addEventListener("click", () => go("#profile"));
+    body.querySelector("[data-px-tournaments]")?.addEventListener("click", () => go("#tournaments"));
+    return;
+  }
+
+  const playerId = Number(me.player?.id || 0);
+  const currentMatch = playerMatch(matchCalls, playerId);
+  if (currentMatch) {
+    const opponent = opponentName(currentMatch, playerId);
+    const board = boardName(currentMatch);
+    const context = matchContext(currentMatch);
+    const isLive = String(currentMatch.status) === "in_progress";
+    const key = isLive ? "live_match" : "assigned_match";
+    const label = isLive ? "Spiller nå" : board;
+    setSituation(key, label, isLive ? "Kampen er i gang." : "Gå til skiven når du er klar.");
+    body.innerHTML = `
+      <div class="player-now-copy">
+        <span class="player-now-kicker">${isLive ? "Kamp pågår" : "Du er kalt opp"}</span>
+        <strong>${isLive ? `${pxEsc(board)} · mot ${pxEsc(opponent)}` : `Mot ${pxEsc(opponent)}`}</strong>
+        <p class="muted">${isLive ? "Fokuser på kampen — resultat og statistikk lagres fortløpende." : `Kampen er tildelt ${pxEsc(board)}.`}</p>
+        ${primaryFacts([{ label: "Skive", value: board }, { label: "Motstander", value: opponent }, { label: "Runde", value: context }])}
+        ${journey("match")}
+      </div>
+      <div class="player-now-actions"><a class="player-now-primary" href="../live/" target="_blank" rel="noopener">Åpne Live</a><button class="ghost" type="button" data-px-tournament>Turneringen</button></div>`;
+    body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
     return;
   }
 
@@ -143,41 +241,60 @@ function renderNow({ me, dashboard, tournaments }) {
   if (registration) {
     const tournament = findTournament(tournaments, registration.tournament_id) || registration;
     const regStatus = String(registration.status || "");
-    const meta = [fmtDate(tournament.start_at), tournament.registration_state === "open" ? "Påmelding åpen" : ""].filter(Boolean);
-    if (["checked_in", "paused"].includes(regStatus)) {
-      status.textContent = regStatus === "paused" ? "Pause" : "Klar";
-      body.innerHTML = `<div><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">${regStatus === "paused" ? "Du er satt på pause og blir ikke sendt til ny skive før pausen er ferdig." : "Du er checket inn. Følg opprop og Live for neste kamp og board."}</p><div class="player-now-meta">${meta.map((item) => `<span>${pxEsc(item)}</span>`).join("")}</div></div><div class="player-now-actions"><button type="button" data-px-tournament>Se turneringen</button><a class="ghost" href="../live/" target="_blank" rel="noopener">Åpne Live</a></div>`;
+    const date = fmtDate(tournament.start_at);
+
+    if (regStatus === "paused") {
+      setSituation("paused", "Pause", "Du blir ikke sendt til ny kamp mens pausen er aktiv.");
+      body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Spillerpause aktiv</span><strong>Ta pausen — systemet holder deg unna nytt opprop</strong><p class="muted">${pxEsc(tournament.name || registration.tournament_name)}. Når pausen er ferdig går du tilbake i vanlig kampflyt.</p>${journey("checked_in")}</div><div class="player-now-actions"><button type="button" data-px-break>Se pausen</button><a class="ghost" href="../live/" target="_blank" rel="noopener">Live</a></div>`;
+      body.querySelector("[data-px-break]")?.addEventListener("click", () => document.getElementById("playerBreakSection")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      return;
+    }
+
+    if (regStatus === "checked_in") {
+      setSituation("waiting", "Venter på kamp", "Du er klar. Hjem oppdateres når neste kamp eller skive er kjent.");
+      body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Innsjekket og klar</span><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du trenger ikke gjøre noe nå. Når du blir kalt opp, vises skive og motstander her automatisk.</p>${primaryFacts([{ label: "Turnering", value: tournament.name || registration.tournament_name }, { label: "Start", value: date }])}${journey("checked_in")}</div><div class="player-now-actions"><a class="player-now-primary" href="../live/" target="_blank" rel="noopener">Følg Live</a><button class="ghost" type="button" data-px-tournament>Turneringen</button></div>`;
       body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
       return;
     }
+
     if (regStatus === "registered") {
-      status.textContent = "Påmeldt";
-      body.innerHTML = `<div><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du har plass. Neste naturlige steg er å checke inn når turneringen åpner for det.</p><div class="player-now-meta">${meta.map((item) => `<span>${pxEsc(item)}</span>`).join("")}</div></div><div class="player-now-actions"><button type="button" data-px-checkin>Check inn</button><button class="ghost" type="button" data-px-tournament>Turneringsdetaljer</button></div>`;
+      setSituation("registered", "Påmeldt", "Neste steg er innsjekk når du kommer til lokalet.");
+      body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Plassen er sikret</span><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du er påmeldt. Innsjekk er det neste naturlige steget før turneringen starter.</p>${primaryFacts([{ label: "Når", value: date }, { label: "Status", value: "Påmeldt" }])}${journey("registered")}</div><div class="player-now-actions"><button type="button" data-px-checkin>Gå til innsjekk</button><button class="ghost" type="button" data-px-tournament>Turneringsdetaljer</button></div>`;
       body.querySelector("[data-px-checkin]")?.addEventListener("click", () => triggerExisting("checkin", registration.tournament_id));
       body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
       return;
     }
+
     if (regStatus === "waitlisted") {
-      status.textContent = "Venteliste";
-      body.innerHTML = `<div><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du står på venteliste. Du flyttes automatisk inn dersom det blir ledig plass.</p><div class="player-now-meta">${meta.map((item) => `<span>${pxEsc(item)}</span>`).join("")}</div></div><div class="player-now-actions"><button class="ghost" type="button" data-px-tournament>Se turneringen</button></div>`;
+      setSituation("waitlist", "Venteliste", "Du beholder plassen i køen automatisk.");
+      body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Du står i kø</span><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du flyttes inn automatisk dersom det blir ledig plass. Ingen handling er nødvendig nå.</p>${primaryFacts([{ label: "Når", value: date }, { label: "Status", value: "Venteliste" }])}</div><div class="player-now-actions"><button class="ghost" type="button" data-px-tournament>Se turneringen</button></div>`;
       body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
+      return;
+    }
+
+    if (regStatus === "eliminated") {
+      setSituation("eliminated", "Ferdig for kvelden", "Kampene dine er lagret og klare for gjennomgang.");
+      body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Turneringen fortsetter uten deg</span><strong>Dine kamper er ferdige</strong><p class="muted">Se kampsnitt, leg-snitt, kast og ELO-endringer i historikken.</p>${primaryFacts([{ label: "Turnering", value: tournament.name || registration.tournament_name }, { label: "Status", value: "Ute" }])}</div><div class="player-now-actions"><button type="button" data-px-matches>Mine kamper</button><a class="ghost" href="../live/" target="_blank" rel="noopener">Følg resten Live</a></div>`;
+      body.querySelector("[data-px-matches]")?.addEventListener("click", () => goStats("mine"));
       return;
     }
   }
 
   const open = bestOpenTournament(tournaments);
   if (open) {
-    status.textContent = "Åpen påmelding";
-    body.innerHTML = `<div><strong>${pxEsc(open.name)}</strong><p class="muted">Neste åpne turnering er klar for påmelding.</p><div class="player-now-meta"><span>${pxEsc(fmtDate(open.start_at))}</span><span>${Number(open.registration_count || 0)} påmeldte</span></div></div><div class="player-now-actions"><button type="button" data-px-register>Meld meg på</button></div>`;
+    setSituation("open_registration", "Påmelding åpen", "Du kan sikre deg plass direkte herfra.");
+    body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Neste mulighet</span><strong>${pxEsc(open.name)}</strong><p class="muted">Påmeldingen er åpen. Meld deg på nå, så følger Hjem deg videre til innsjekk og kamp.</p>${primaryFacts([{ label: "Når", value: fmtDate(open.start_at) }, { label: "Påmeldte", value: `${Number(open.registration_count || 0)}` }])}</div><div class="player-now-actions"><button type="button" data-px-register>Meld meg på</button><button class="ghost" type="button" data-px-tournament>Se detaljer</button></div>`;
     body.querySelector("[data-px-register]")?.addEventListener("click", () => triggerExisting("register", open.id));
+    body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
     return;
   }
 
+  const upcoming = bestUpcomingTournament(tournaments);
   const stats = dashboard?.stats || {};
-  status.textContent = "Ingen handling nå";
-  body.innerHTML = `<div><strong>Du er ajour</strong><p class="muted">Ingen turnering krever noe fra deg akkurat nå. Du har ${Number(stats.matches_played || 0)} registrerte kamper og ${Number(stats.matches_won || 0)} seire.</p></div><div class="player-now-actions"><button class="ghost" type="button" data-px-ranking>Se ranking</button><button class="ghost" type="button" data-px-profile>Min profil</button></div>`;
-  body.querySelector("[data-px-ranking]")?.addEventListener("click", () => go("#tables"));
-  body.querySelector("[data-px-profile]")?.addEventListener("click", () => go("#profile"));
+  setSituation("idle", upcoming ? "Neste turnering" : "Ajour", upcoming ? "Ingen handling kreves ennå." : "Ingen turnering krever noe fra deg nå.");
+  body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">${upcoming ? "I kalenderen" : "Rolig akkurat nå"}</span><strong>${upcoming ? pxEsc(upcoming.name) : "Du er ajour"}</strong><p class="muted">${upcoming ? `Neste turnering er ${pxEsc(fmtDate(upcoming.start_at))}. Påmelding vises her når den åpner.` : `Du har ${Number(stats.matches_played || 0)} registrerte kamper og ${Number(stats.matches_won || 0)} seire.`}</p>${upcoming ? primaryFacts([{ label: "Når", value: fmtDate(upcoming.start_at) }, { label: "Påmelding", value: String(upcoming.registration_state) === "not_open" ? "Ikke åpnet" : "Stengt" }]) : ""}</div><div class="player-now-actions"><button type="button" data-px-stats>Se statistikk</button><button class="ghost" type="button" data-px-matches>Mine kamper</button></div>`;
+  body.querySelector("[data-px-stats]")?.addEventListener("click", () => goStats("season"));
+  body.querySelector("[data-px-matches]")?.addEventListener("click", () => goStats("mine"));
 }
 
 let pxLoading = false;
@@ -190,11 +307,15 @@ async function loadPlayerNow() {
     const clubId = pxClubId();
     const tournaments = clubId ? (await pxApi(`/clubs/${clubId}/registration-tournaments`)).items || [] : [];
     if (!pxToken()) {
-      renderNow({ me: null, dashboard: null, tournaments });
+      renderNow({ me: null, dashboard: null, tournaments, matchCalls: [] });
       return;
     }
-    const [meData, dashData] = await Promise.all([pxApi("/auth/me", true), pxApi("/me/dashboard", true)]);
-    renderNow({ me: meData.user || null, dashboard: dashData.dashboard || null, tournaments });
+    const [meData, dashData, matchCallData] = await Promise.all([
+      pxApi("/auth/me", true),
+      pxApi("/me/dashboard", true),
+      clubId ? pxApi(`/clubs/${clubId}/match-calls`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+    ]);
+    renderNow({ me: meData.user || null, dashboard: dashData.dashboard || null, tournaments, matchCalls: matchCallData.items || [] });
   } catch (error) {
     const body = document.getElementById("playerNowBody");
     const status = document.getElementById("playerNowStatus");
@@ -210,10 +331,14 @@ function bootPlayerUx() {
   ensureNowCard();
   document.getElementById("clubSelect")?.addEventListener("change", () => window.setTimeout(loadPlayerNow, 80));
   document.getElementById("refreshButton")?.addEventListener("click", () => window.setTimeout(loadPlayerNow, 80));
-  window.addEventListener("storage", () => loadPlayerNow());
+  window.addEventListener("bd:player-state-changed", () => window.setTimeout(loadPlayerNow, 20));
+  window.addEventListener("storage", (event) => {
+    if (!["bd:token", "bd:playerClubId"].includes(event.key)) return;
+    loadPlayerNow();
+  });
   window.addEventListener("focus", () => loadPlayerNow());
   window.setTimeout(loadPlayerNow, 250);
-  window.setInterval(() => { if (!document.hidden) loadPlayerNow(); }, 15000);
+  window.setInterval(() => { if (!document.hidden) loadPlayerNow(); }, 10000);
 }
 
 bootPlayerUx();
