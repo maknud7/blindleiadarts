@@ -1,6 +1,6 @@
 const stylesheet = document.createElement("link");
 stylesheet.rel = "stylesheet";
-stylesheet.href = new URL("./statistics-ux.css?v=20260827-1510", import.meta.url).href;
+stylesheet.href = new URL("./statistics-ux.css?v=20260828-0700", import.meta.url).href;
 document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
@@ -8,6 +8,9 @@ const root = document.getElementById("statistics");
 const seasonRoot = document.getElementById("seasonStandings");
 const playerRoot = document.getElementById("playerDirectory");
 const profileRoot = document.getElementById("playerProfile");
+const tournamentRoot = document.getElementById("groupTables");
+const tournamentMatchesRoot = document.getElementById("tournamentMatches");
+const myMatchesRoot = document.getElementById("myMatchList");
 const search = document.getElementById("playerSearch");
 let currentView = "season";
 let seasons = [];
@@ -50,6 +53,7 @@ function activate(view) {
   if (!root) return;
   const available = new Set([...root.querySelectorAll("[data-statistics-panel]")].map((node) => node.dataset.statisticsPanel));
   currentView = available.has(view) ? view : "season";
+  localStorage.setItem("bd:statisticsView", currentView);
   root.querySelectorAll("[data-statistics-view]").forEach((button) => {
     const active = button.dataset.statisticsView === currentView;
     button.classList.toggle("active", active);
@@ -57,6 +61,8 @@ function activate(view) {
     button.tabIndex = active ? 0 : -1;
   });
   root.querySelectorAll("[data-statistics-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.statisticsPanel !== currentView));
+  if (currentView === "tournament") enhanceTournamentHistory();
+  if (currentView === "mine") enhanceHistoryRows(myMatchesRoot);
 }
 
 function prepareTabs() {
@@ -191,9 +197,9 @@ async function renderSeason() {
     const season = data.season || seasons.find((item) => Number(item.id) === selectedSeasonId) || {};
     const primary = season.ranking_method === "elo" ? "ELO" : "poeng";
     seasonRoot.innerHTML = `
-      <div class="season-table-heading"><div><strong>${esc(season.name || "Sesong")}</strong><p class="tie-break-note">Offisiell rekkefølge: ${primary} → leg differanse → 3DA → innbyrdes.</p></div><span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span></div>
+      <div class="season-table-heading"><div><strong>${esc(season.name || "Sesong")}</strong><p class="tie-break-note">Offisiell rekkefølge: ${primary} → leg differanse → sesongsnitt (3DA) → innbyrdes.</p></div><span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span></div>
       <div class="table-scroll"><table class="portal-table season-table combined-season-table" data-combined-season="${selectedSeasonId}">
-        <thead><tr><th data-sort-type="number" data-sort-default="ascending">Plass</th><th data-sort-type="text" data-sort-default="ascending">Spiller</th><th data-sort-type="number">Poeng</th><th data-sort-type="number">ELO</th><th data-sort-type="number">K</th><th data-sort-type="number">V</th><th data-sort-type="number">U</th><th data-sort-type="number">T</th><th data-sort-type="number" title="Leg differanse">Leg +/−</th><th data-sort-type="number">3DA</th></tr></thead>
+        <thead><tr><th data-sort-type="number" data-sort-default="ascending">Plass</th><th data-sort-type="text" data-sort-default="ascending">Spiller</th><th data-sort-type="number">Poeng</th><th data-sort-type="number">ELO</th><th data-sort-type="number">K</th><th data-sort-type="number">V</th><th data-sort-type="number">U</th><th data-sort-type="number">T</th><th data-sort-type="number" title="Leg differanse">Leg +/−</th><th data-sort-type="number" title="3-dart snitt for hele den valgte sesongen">3DA sesong</th></tr></thead>
         <tbody>${(data.items || []).map((row) => `<tr data-player-profile="${Number(row.id)}"><td data-sort-value="${Number(row.position)}"><strong>${Number(row.position)}</strong></td><td data-sort-value="${esc(row.display_name)}"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td><td data-sort-value="${Number(row.points || 0)}"><strong>${pointsText(row.points)}</strong></td><td data-sort-value="${Number(row.elo_rating || 1000)}"><span class="elo-table-value">${Number(row.elo_rating || 1000).toFixed(1)}</span></td><td data-sort-value="${Number(row.matches_played || 0)}">${Number(row.matches_played || 0)}</td><td data-sort-value="${Number(row.wins || 0)}">${Number(row.wins || 0)}</td><td data-sort-value="${Number(row.draws || 0)}">${Number(row.draws || 0)}</td><td data-sort-value="${Number(row.losses || 0)}">${Number(row.losses || 0)}</td><td data-sort-value="${Number(row.leg_diff || 0)}"><span class="leg-diff ${Number(row.leg_diff || 0) > 0 ? "positive" : Number(row.leg_diff || 0) < 0 ? "negative" : ""}">${Number(row.leg_diff || 0) > 0 ? "+" : ""}${Number(row.leg_diff || 0)}</span></td><td data-sort-value="${Number(row.three_dart_average || 0)}">${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</td></tr>`).join("")}</tbody>
       </table></div>`;
     seasonRoot.querySelectorAll("[data-player-profile]").forEach((row) => row.addEventListener("click", () => {
@@ -216,6 +222,39 @@ function queueSeasonRepair() {
     seasonRepairQueued = false;
     if (!seasonRoot.querySelector(`[data-combined-season="${selectedSeasonId}"]`)) renderSeason().catch(() => undefined);
   }, 100);
+}
+
+function enhanceTournamentHistory() {
+  tournamentRoot?.querySelectorAll("table.portal-table thead th").forEach((th) => {
+    if (norm(th.textContent) !== "3da") return;
+    th.textContent = "3DA turn.";
+    th.title = "3-dart snitt i den valgte turneringen";
+  });
+
+  tournamentMatchesRoot?.querySelectorAll(".match-result-card").forEach((card) => {
+    if (card.dataset.statisticsEnhanced === "1") return;
+    const names = [...card.querySelectorAll(".match-result-main strong")].map((node) => node.textContent?.trim() || "Spiller");
+    const stats = card.querySelector(".match-result-stats");
+    const values = stats ? [...stats.querySelectorAll(":scope > span")].map((node) => node.textContent?.trim() || "—") : [];
+    if (stats && values.length >= 2) {
+      const a = values[0].replace(/^3DA\s*/i, "") || "—";
+      const b = values[1].replace(/^3DA\s*/i, "") || "—";
+      stats.innerHTML = `<span><small>${esc(names[0])}</small><strong>3DA ${esc(a)}</strong></span><span><small>${esc(names[1])}</small><strong>3DA ${esc(b)}</strong></span>`;
+    }
+    card.dataset.statisticsEnhanced = "1";
+    card.classList.add("statistics-match-result");
+    card.title = "Åpne kampdetaljer med kamp- og leg-snitt";
+  });
+  bindSorting();
+}
+
+function enhanceHistoryRows(container) {
+  container?.querySelectorAll(".history-row-button").forEach((row) => {
+    if (row.dataset.statisticsHistoryEnhanced === "1") return;
+    row.dataset.statisticsHistoryEnhanced = "1";
+    row.classList.add("statistics-history-row");
+    row.title = "Åpne kampdetaljer med kamp- og leg-snitt";
+  });
 }
 
 function buildMovements(profile) {
@@ -257,7 +296,14 @@ function movementHtml(item, compact = false) {
 function renderProfileElo(profile, playerId) {
   if (!profileRoot || profileRoot.classList.contains("hidden")) return;
   const { movements, byMatch } = buildMovements(profile);
+  const historyContainer = profileRoot.querySelector(".profile-match-history");
+  const matchSection = historyContainer?.closest(".profile-section");
+  if (matchSection && !matchSection.querySelector(".statistics-history-help")) {
+    matchSection.querySelector(".section-head")?.insertAdjacentHTML("afterend", `<p class="muted statistics-history-help">Trykk på en kamp for kampsnitt (3DA), leg-snitt og registrerte kast.</p>`);
+  }
   profileRoot.querySelectorAll(".profile-match-history [data-match-detail]").forEach((row) => {
+    row.classList.add("statistics-history-row");
+    row.title = "Åpne kampdetaljer";
     if (row.querySelector(".elo-movement")) return;
     const movement = byMatch.get(Number(row.dataset.matchDetail || 0));
     if (!movement) return;
@@ -299,6 +345,8 @@ function enhance() {
     prepareTabs();
     filterPlayers();
     bindSorting();
+    enhanceTournamentHistory();
+    enhanceHistoryRows(myMatchesRoot);
     activate(currentView);
     queueSeasonRepair();
   } finally {
@@ -322,7 +370,7 @@ function initialize() {
   search?.addEventListener("input", filterPlayers);
 
   const contentObserver = new MutationObserver(() => requestAnimationFrame(enhance));
-  [seasonRoot, playerRoot].filter(Boolean).forEach((node) => contentObserver.observe(node, { childList: true, subtree: true }));
+  [seasonRoot, playerRoot, tournamentRoot, tournamentMatchesRoot, myMatchesRoot].filter(Boolean).forEach((node) => contentObserver.observe(node, { childList: true, subtree: true }));
   if (profileRoot) {
     const profileObserver = new MutationObserver(() => requestAnimationFrame(enhanceProfile));
     profileObserver.observe(profileRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
@@ -340,7 +388,8 @@ function initialize() {
     loadSeasons().catch(() => undefined);
   });
 
-  activate("season");
+  const rememberedView = localStorage.getItem("bd:statisticsView") || "season";
+  activate(rememberedView);
   enhance();
   loadSeasons().catch((error) => {
     if (seasonRoot) seasonRoot.innerHTML = `<div class="mini-card"><p class="muted">${esc(error.message || "Kunne ikke hente sesongene.")}</p></div>`;
