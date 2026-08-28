@@ -1,0 +1,5 @@
+# Copy these keys into .github/prod-release-request only when production deploy is authorized.
+# Creating/updating .github/prod-release-request on develop triggers Deploy Production.
+release_sha=0000000000000000000000000000000000000000
+backup_confirmed=NO
+migration_review_confirmed=NO

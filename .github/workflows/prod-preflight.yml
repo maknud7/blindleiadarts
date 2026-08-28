@@ -1,0 +1,80 @@
+name: Production Readiness Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/prod-preflight.yml'
+      - 'infra/sql/prod_preflight.php'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-readiness-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Inspect production database read-only
+        id: database
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -o pipefail
+          php infra/sql/prod_preflight.php 2>&1 | tee prod-preflight.txt
+
+      - name: Check canonical production hostname
+        if: always()
+        env:
+          BASE_URL: https://blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          echo "Checking $BASE_URL"
+          release="$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 20 "$BASE_URL/release.json?cb=$RANDOM")"
+          php -r '
+            $data=json_decode(stream_get_contents(STDIN),true);
+            if (!is_array($data) || ($data["environment"] ?? null) !== "prod") {
+                fwrite(STDERR,"Canonical production hostname does not serve a production release.\n");
+                exit(1);
+            }
+            echo "CANONICAL_PROD_HOST_OK=yes\n";
+            echo "CURRENT_PROD_SHA=".($data["sha"] ?? "unknown")."\n";
+          ' <<<"$release"
+
+      - name: Check canonical test hostname
+        if: always()
+        env:
+          BASE_URL: https://test.blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          echo "Checking $BASE_URL"
+          release="$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 20 "$BASE_URL/release.json?cb=$RANDOM")"
+          php -r '
+            $data=json_decode(stream_get_contents(STDIN),true);
+            if (!is_array($data) || ($data["environment"] ?? null) !== "test") {
+                fwrite(STDERR,"Canonical test hostname does not serve a test release.\n");
+                exit(1);
+            }
+            echo "CANONICAL_TEST_HOST_OK=yes\n";
+            echo "CURRENT_TEST_SHA=".($data["sha"] ?? "unknown")."\n";
+          ' <<<"$release"
