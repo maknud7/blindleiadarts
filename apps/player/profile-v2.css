@@ -3,7 +3,8 @@
 .profile-authenticated #loginForm,
 .profile-authenticated #passwordResetPanel,
 .profile-authenticated #authSummary,
-.profile-authenticated #statusArea{display:none!important}
+.profile-authenticated #statusArea,
+.profile-authenticated #logoutButton{display:none!important}
 
 #profileSelfService{display:grid;gap:14px}
 .profile-v2-hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;padding:14px;border:1px solid #dbe4ef;border-radius:16px;background:linear-gradient(135deg,#f8fbff,#fff)}
@@ -37,8 +38,6 @@
 .profile-v2-message.success{background:#e8f6ef;color:#176449}
 .profile-v2-message.error{background:#fff0f2;color:#9e303a}
 
-.profile-authenticated #logoutButton{width:auto;justify-self:start;padding:.7rem .95rem;background:#fff!important;color:#8f2f3a!important;border:1px solid #efc5ca!important;box-shadow:none!important}
-
 .profile-payment-stack{display:grid;gap:12px}
 .profile-membership-summary{display:grid;gap:12px;padding:14px;border:1px solid #dbe4ef;border-radius:15px;background:#fff}
 .profile-membership-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -51,9 +50,13 @@
 
 .profile-payment-options{display:grid;gap:10px}
 .profile-payment-option{display:grid;gap:9px;padding:14px;border:1px solid #dbe4ef;border-radius:15px;background:#fff}
+.profile-payment-option-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .profile-payment-option h4{margin:0;font-size:1rem}
 .profile-payment-option p{margin:0;color:#687d95;font-size:.82rem;line-height:1.45}
 .profile-payment-option .profile-vipps-number{font-size:1.18rem;font-weight:900;color:#0c2340;letter-spacing:.02em}
+.profile-payment-status{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;padding:4px 8px;background:#eef2f6;color:#607188;font-size:.68rem;font-weight:850}
+.profile-payment-status.good{background:#e7f6ee;color:#176449}
+.profile-payment-status.warning{background:#fff4d9;color:#806119}
 .profile-payment-link{display:inline-flex;align-items:center;justify-content:center;width:fit-content;min-height:42px;padding:.7rem .9rem;border-radius:10px;background:#2f6fed;color:#fff!important;text-decoration:none;font-weight:850;font-size:.84rem}
 .profile-payment-link.secondary{background:#fff;color:#123c69!important;border:1px solid #d5e0ec}
 .profile-vipps-guide{padding:12px 13px;border-radius:12px;background:#f3f7fc;color:#526a84;font-size:.8rem;line-height:1.5}
@@ -90,7 +93,6 @@
   .profile-v2-identity-actions button{width:100%;padding:.72rem .55rem;font-size:.8rem}
   .profile-v2-form-actions{display:grid;grid-template-columns:1fr}
   .profile-v2-form-actions button{width:100%}
-  .profile-authenticated #logoutButton{width:100%}
   .profile-membership-metrics{grid-template-columns:1fr 1fr}
   .profile-payment-options{grid-template-columns:1fr}
   .profile-payment-link{width:100%}

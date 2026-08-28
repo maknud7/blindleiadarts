@@ -10,6 +10,7 @@ use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
 use Blindleia\Dartkiosk\Api\MatchScoringApplication;
 use Blindleia\Dartkiosk\Api\PasswordResetApplication;
+use Blindleia\Dartkiosk\Api\PaymentSettingsApplication;
 use Blindleia\Dartkiosk\Api\PlayerBreakApplication;
 use Blindleia\Dartkiosk\Api\PlayerIdentityApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
@@ -56,6 +57,11 @@ if ($emailAuth->run()) {
 
 $accountProfile = new AccountProfileApplication(__DIR__);
 if ($accountProfile->run()) {
+    return;
+}
+
+$paymentSettings = new PaymentSettingsApplication(__DIR__);
+if ($paymentSettings->run()) {
     return;
 }
 

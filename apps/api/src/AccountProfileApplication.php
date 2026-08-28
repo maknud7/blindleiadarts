@@ -7,6 +7,7 @@ namespace Blindleia\Dartkiosk\Api;
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\AccountProfileRepository;
+use Blindleia\Dartkiosk\Api\Repository\PaymentSettingsRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Support\Config;
@@ -50,7 +51,14 @@ final class AccountProfileApplication
             if ($isProfileRead) {
                 $response = JsonResponse::ok(['profile' => $profiles->profileForUser($user)]);
             } elseif ($isPaymentsRead) {
-                $response = JsonResponse::ok($profiles->membershipAndPayments($user));
+                $profile = $profiles->profileForUser($user);
+                $data = $profiles->membershipAndPayments($user);
+                $payments = new PaymentSettingsRepository($database);
+                $data['payment_options'] = $payments->publicOptions(
+                    (int) ($profile['club_id'] ?? 0),
+                    (int) ($profile['member_id'] ?? 0)
+                );
+                $response = JsonResponse::ok($data);
             } elseif ($isProfileUpdate) {
                 $payload = $request->jsonBody();
                 $profile = $profiles->updateProfile(
