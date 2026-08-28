@@ -5,15 +5,11 @@
 /* While a tournament is active, the hub replaces the duplicate registration/"Neste for meg" card. */
 #activeTournamentHub:not(.hidden)+#signup{display:none!important}
 
-/* Keep the player surface player-first. Admins get one subdued entry instead of a second full navigation tree. */
-body[data-portal-default="home"] .portal-nav.portal-menu .unified-group-label.admin,
-body[data-portal-default="home"] .portal-nav.portal-menu .unified-admin-link{display:none!important}
-body[data-portal-default="home"] .portal-nav.portal-menu #adminPortalLink:not(.hidden){display:flex!important;margin-top:10px!important;border-top:1px solid rgba(255,255,255,.13)!important;border-radius:0!important;padding-top:14px!important;color:#b8cbe0!important}
-body[data-portal-default="home"] .portal-nav.portal-menu #adminPortalLink:not(.hidden):hover{color:#fff!important;background:transparent!important}
+/* Role-aware Klubbadmin/Superadmin navigation belongs to the shared shell. The tournament hub must never hide it. */
 
 .hub-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:0 2px 2px}.hub-heading h2{font-size:1.6rem;margin-top:.12rem;line-height:1.12}.hub-heading .muted{margin-top:.2rem;font-size:.88rem}.hub-live-pill{display:inline-flex;align-items:center;gap:.42rem;padding:.42rem .68rem;border-radius:999px;background:#f5f9ff;color:#174f9c;border:1px solid #cbdcf3;font-size:.76rem;font-weight:850;letter-spacing:.04em;box-shadow:none}.hub-live-pill i{width:7px;height:7px;border-radius:50%;background:currentColor}
 
-/* Personal status is a light information strip, not another primary action. */
+/* Personal status is useful on narrow screens, but deliberately omitted on desktop where the next-match card repeats it. */
 .hub-personal-strip{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid #d9e3ef;border-radius:12px;overflow:hidden;background:#f8fafc;box-shadow:none}.hub-personal-strip>span{display:flex;min-width:0;flex-direction:column;gap:.12rem;padding:.68rem .82rem;background:#f8fafc!important;color:#173b63!important;border-right:1px solid #e3e9f1}.hub-personal-strip>span:last-child{border-right:0}.hub-personal-strip small{font-size:.67rem;color:#71839a!important;text-transform:uppercase;letter-spacing:.065em;font-weight:800}.hub-personal-strip strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}.hub-personal-strip-generic{grid-template-columns:minmax(150px,.7fr) minmax(0,1.3fr)}.hub-personal-strip-generic>strong,.hub-personal-strip-generic>span{background:#f8fafc!important;color:#173b63!important;padding:.72rem .82rem}.hub-personal-strip-generic>strong{border-right:1px solid #e3e9f1}
 
 /* Tabs: only the active destination gets the accent. Generic portal button rules must not paint every tab blue. */
@@ -48,10 +44,17 @@ body[data-portal-default="home"] .portal-nav.portal-menu #adminPortalLink:not(.h
 @media(min-width:981px){
   body[data-portal-default="home"] .tournament-hub{padding:18px 18px 16px!important}
   .hub-primary-column{padding-right:2px}
+  /* Desktop already has the next-match card; removing the duplicate strip makes the first scan much calmer. */
+  .hub-personal-strip{display:none!important}
+  /* Seire and poeng are already visible in the group context. Keep only Kamper, Leg +/−, 3DA and Plass here. */
+  .hub-secondary-column .hub-stat:nth-child(2),.hub-secondary-column .hub-stat:nth-child(5){display:none!important}
+  /* Qualification detail belongs under the Sluttspill tab rather than competing with the current action. */
+  .hub-secondary-column .hub-qualification{display:none!important}
+  /* The default view previews only the latest completed match; the full list is one click away. */
+  .hub-mine-grid~.hub-history-head+.hub-match-list .hub-match-card:nth-child(n+2){display:none!important}
 }
 
 @media(max-width:980px){
-  body[data-portal-default="home"] .portal-nav.portal-menu #adminPortalLink:not(.hidden){margin-top:0!important;border-top:0!important;padding-top:8px!important;background:#f6f8fb!important;border:1px solid #dbe3ed!important;color:#31516f!important}
   .hub-mine-grid{grid-template-columns:1fr}
   .hub-secondary-column{display:grid;grid-template-columns:minmax(0,1fr)}
 }
