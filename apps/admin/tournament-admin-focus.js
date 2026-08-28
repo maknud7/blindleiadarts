@@ -33,18 +33,21 @@ if (focusHost) {
     if (active.length) return active[0];
 
     const upcoming = unfinished
-      .filter((item) => tournamentTime(item) >= now)
+      .filter((item) => Number.isFinite(tournamentTime(item)) && tournamentTime(item) >= now)
       .sort((a, b) => tournamentTime(a) - tournamentTime(b));
     if (upcoming.length) return upcoming[0];
 
     const latestUnfinished = unfinished
-      .slice()
+      .filter((item) => Number.isFinite(tournamentTime(item)))
       .sort((a, b) => tournamentTime(b) - tournamentTime(a));
     if (latestUnfinished.length) return latestUnfinished[0];
 
     return items.slice().sort((a, b) => {
-      const byTime = tournamentTime(b) - tournamentTime(a);
-      return Number.isFinite(byTime) && byTime !== 0 ? byTime : Number(b?.id || 0) - Number(a?.id || 0);
+      const timeA = tournamentTime(a);
+      const timeB = tournamentTime(b);
+      if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) return timeB - timeA;
+      if (Number.isFinite(timeA) !== Number.isFinite(timeB)) return Number.isFinite(timeA) ? -1 : 1;
+      return Number(b?.id || 0) - Number(a?.id || 0);
     })[0] || null;
   }
 
@@ -69,13 +72,10 @@ if (focusHost) {
     if (!id || !select || appliedClubs.has(id) || userTouchedTournament) return;
     const request = ++selectionRequest;
     const items = await registrationTournaments(id).catch(() => []);
-    if (request !== selectionRequest || userTouchedTournament || clubId() !== id) return;
+    if (request !== selectionRequest || userTouchedTournament || clubId() !== id || !items.length) return;
     const preferred = preferredTournament(items);
     const preferredId = Number(preferred?.id || 0);
-    if (!preferredId) {
-      appliedClubs.add(id);
-      return;
-    }
+    if (!preferredId) return;
     const ready = await waitForTournamentOption(select, preferredId);
     if (!ready || request !== selectionRequest || userTouchedTournament || clubId() !== id) return;
     appliedClubs.add(id);
