@@ -11,6 +11,8 @@ const profileSection = loginForm?.closest('[data-portal-section="profile"]') || 
 let lastToken = null;
 let loading = false;
 let currentProfile = null;
+let profileFingerprint = "";
+let accountHtml = "";
 
 function token() { return localStorage.getItem("bd:token") || ""; }
 function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
@@ -49,7 +51,11 @@ async function api(path, options = {}) {
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    if (!response.ok || !payload?.ok) {
+      const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+      error.status = response.status;
+      throw error;
+    }
     return payload.data || {};
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Hentingen tok for lang tid. Trykk Oppdater for å prøve igjen.");
@@ -76,8 +82,10 @@ function setAuthenticated(authenticated) {
   document.body.classList.toggle("profile-authenticated", authenticated);
   const selfService = ensureProfileRoot();
   selfService?.classList.toggle("hidden", !authenticated);
+  logoutButton?.classList.add("hidden");
   if (!authenticated) {
     currentProfile = null;
+    profileFingerprint = "";
     if (!new URLSearchParams(window.location.search).has("reset_token")) loginForm?.classList.remove("hidden");
   } else {
     loginForm?.classList.add("hidden");
@@ -138,12 +146,7 @@ function renderProfile(profile) {
           <div id="profilePasswordMessage" class="profile-v2-message hidden"></div>
         </form>
       </div>
-    </details>
-    <div id="profileLogoutSlot"></div>`;
-
-  const logoutSlot = node.querySelector("#profileLogoutSlot");
-  if (logoutButton && logoutSlot) logoutSlot.appendChild(logoutButton);
-  logoutButton?.classList.remove("hidden");
+    </details>`;
 
   node.querySelector("[data-profile-edit]")?.addEventListener("click", () => openPanel("profileEditPanel"));
   node.querySelector("[data-profile-password]")?.addEventListener("click", () => openPanel("profilePasswordPanel"));
@@ -180,8 +183,8 @@ async function saveProfile(event) {
     });
     setMessage("profileEditMessage", data.message || "Profilen er oppdatert.", "success");
     if (data.profile) {
-      currentProfile = data.profile;
-      window.setTimeout(() => renderProfile(data.profile), 350);
+      profileFingerprint = "";
+      window.setTimeout(() => renderProfileIfChanged(data.profile), 250);
     }
   } catch (error) {
     setMessage("profileEditMessage", error.message || "Kunne ikke lagre profilen.", "error");
@@ -216,36 +219,66 @@ async function changePassword(event) {
   }
 }
 
+function renderProfileIfChanged(profile) {
+  const next = JSON.stringify({
+    display_name: profile?.display_name || "",
+    nickname: profile?.nickname || "",
+    email: profile?.email || "",
+    avatar_url: profile?.avatar_url || "",
+    player_id: Number(profile?.player_id || 0),
+  });
+  if (next === profileFingerprint) return;
+  profileFingerprint = next;
+  renderProfile(profile);
+}
+
+function stripeStatus(subscription) {
+  if (!subscription) return null;
+  if (subscription.cancel_at_period_end && subscription.active) return { label: "Aktiv · avsluttes", tone: "warning" };
+  if (subscription.active) return { label: "Aktiv", tone: "good" };
+  if (subscription.status === "past_due" || subscription.status === "unpaid") return { label: "Betaling krever oppfølging", tone: "warning" };
+  if (subscription.status === "canceled" || subscription.ended_at) return { label: "Avsluttet", tone: "neutral" };
+  return { label: subscription.status || "Ukjent", tone: "neutral" };
+}
+
 function renderPaymentOptions(options = {}) {
-  const recurringUrl = safeUrl(options.recurring_url);
-  const oneTimeUrl = safeUrl(options.one_time_url);
+  const stripeStartUrl = safeUrl(options.stripe_start_url);
+  const stripePortalUrl = safeUrl(options.stripe_portal_url);
+  const stripeSubscription = options.stripe_subscription || null;
+  const stripeState = stripeStatus(stripeSubscription);
+  const vippsUrl = safeUrl(options.vipps_one_time_url);
   const vippsNumber = String(options.vipps_number || "").trim();
   const vippsName = String(options.vipps_name || options.club_name || "Blindleia Dartklubb").trim();
-  const configured = Boolean(options.configured);
+  const paymentContact = String(options.payment_contact || "").trim();
 
-  const recurringAction = recurringUrl
-    ? `<a class="profile-payment-link" href="${esc(recurringUrl)}" target="_blank" rel="noopener">Start fast betaling</a>`
-    : `<span class="profile-v2-help">Fast betalingslenke er ikke lagt inn i portalen ennå.</span>`;
-  const oneTimeAction = oneTimeUrl
-    ? `<a class="profile-payment-link" href="${esc(oneTimeUrl)}" target="_blank" rel="noopener">Betal med Vipps</a>`
+  let stripeAction = `<span class="profile-v2-help">Stripe-lenken for fast betaling er ikke konfigurert.</span>`;
+  if (stripeSubscription?.active) {
+    stripeAction = stripePortalUrl
+      ? `<a class="profile-payment-link secondary" href="${esc(stripePortalUrl)}" target="_blank" rel="noopener">Administrer fast betaling</a>`
+      : `<span class="profile-v2-help">Avtalen er aktiv. ${paymentContact ? `Kontakt ${esc(paymentContact)} hvis du vil endre eller avslutte avtalen.` : "Administrasjonslenke kan legges inn av klubben under Innstillinger → Betaling."}</span>`;
+  } else if (stripeStartUrl) {
+    stripeAction = `<a class="profile-payment-link" href="${esc(stripeStartUrl)}" target="_blank" rel="noopener">Start fast betaling via Stripe</a>`;
+  }
+
+  const vippsAction = vippsUrl
+    ? `<a class="profile-payment-link" href="${esc(vippsUrl)}" target="_blank" rel="noopener">Betal én gang med Vipps</a>`
     : vippsNumber
       ? `<div class="profile-vipps-number">Vipps ${esc(vippsNumber)}</div>`
-      : `<span class="profile-v2-help">Vipps-nummer eller betalingslenke er ikke lagt inn i portalen ennå.</span>`;
+      : `<span class="profile-v2-help">Vipps-nummer eller betalingslenke er ikke konfigurert.</span>`;
 
   return `
     <div class="profile-payment-options">
       <article class="profile-payment-option">
-        <div><h4>Fast betaling</h4><p>For månedlig kontingent uten at du må huske hver betaling.</p></div>
-        ${recurringAction}
+        <div class="profile-payment-option-head"><div><h4>Fast månedlig betaling</h4><p>Registrer kort én gang. Kontingenten trekkes automatisk hver måned via Stripe.</p></div>${stripeState ? `<span class="profile-payment-status ${esc(stripeState.tone)}">${esc(stripeState.label)}</span>` : ""}</div>
+        ${stripeAction}
       </article>
       <article class="profile-payment-option">
-        <div><h4>Enkeltbetaling</h4><p>Betal én kontingent manuelt til ${esc(vippsName)}.</p></div>
-        ${oneTimeAction}
+        <div><h4>Enkeltbetaling med Vipps</h4><p>Vipps brukes når du vil betale kontingent manuelt én gang til ${esc(vippsName)}.</p></div>
+        ${vippsAction}
       </article>
       <div class="profile-vipps-guide">
-        <strong>Endre eller avslutte fast betaling i Vipps</strong><br>
-        Gå til <strong>Meg → Betalingsavtaler</strong>, åpne avtalen med ${esc(vippsName)}. Der kan du endre betalingskort eller velge <strong>Avbryt gjentakende betaling</strong>. Hvis avbryt-valget ikke vises, kontakt klubben.
-        ${!configured ? `<br><br><span>Klubbens Vipps-detaljer er klargjort i portalen, men må konfigureres før betalingsknappene kan vises.</span>` : ""}
+        <strong>Stripe og Vipps har ulike roller</strong><br>
+        Fast månedsbetaling og administrasjon av betalingskort går via Stripe. Vipps er kun for enkeltbetaling og oppretter ingen løpende betalingsavtale.
       </div>
     </div>`;
 }
@@ -326,42 +359,62 @@ async function load(force = false) {
   if (!root || loading) return;
   const currentToken = token();
   if (!currentToken) {
-    lastToken = null;
-    setAuthenticated(false);
-    root.innerHTML = `<p class="muted">Logg inn for å se medlemskap, betalinger og egne tall.</p>`;
+    if (lastToken !== null || root.dataset.profileLoaded !== "anonymous") {
+      lastToken = null;
+      accountHtml = "";
+      root.dataset.profileLoaded = "anonymous";
+      setAuthenticated(false);
+      root.innerHTML = `<p class="muted">Logg inn for å se medlemskap, betalinger og egne tall.</p>`;
+    }
     return;
   }
   if (!force && currentToken === lastToken) return;
+
   loading = true;
   tuneHeadings();
-  root.innerHTML = `<p class="muted">Henter medlemskap og betalinger …</p>`;
+  const firstLoad = root.dataset.profileLoaded !== "ready" || lastToken !== currentToken;
+  if (firstLoad) root.innerHTML = `<p class="muted">Henter medlemskap og betalinger …</p>`;
+  root.setAttribute("aria-busy", "true");
+
   try {
     const profileResponse = await api("/me/profile");
     const profile = profileResponse.profile || null;
     if (!profile) throw new Error("Spillerprofilen kunne ikke lastes.");
     setAuthenticated(true);
-    renderProfile(profile);
+    renderProfileIfChanged(profile);
 
     const [payments, playerStats] = await Promise.all([
       api("/me/payments"),
       profile.player_id ? api(`/players/${Number(profile.player_id)}/profile`) : Promise.resolve(null),
     ]);
-    root.innerHTML = `${renderMembership(payments)}${renderStats(playerStats)}`;
+    const nextHtml = `${renderMembership(payments)}${renderStats(playerStats)}`;
+    if (nextHtml !== accountHtml) {
+      root.innerHTML = nextHtml;
+      accountHtml = nextHtml;
+    }
+    root.dataset.profileLoaded = "ready";
     lastToken = currentToken;
   } catch (error) {
-    lastToken = null;
-    setAuthenticated(false);
-    root.innerHTML = `<div class="mini-card"><strong>Kunne ikke laste Min profil</strong><p class="muted">${esc(error.message)}</p></div>`;
+    if (Number(error?.status || 0) === 401) {
+      lastToken = null;
+      accountHtml = "";
+      setAuthenticated(false);
+      root.dataset.profileLoaded = "anonymous";
+      root.innerHTML = `<p class="muted">Innloggingen er utløpt. Logg inn på nytt.</p>`;
+    } else if (firstLoad) {
+      root.innerHTML = `<div class="mini-card"><strong>Kunne ikke laste Min profil</strong><p class="muted">${esc(error.message)}</p></div>`;
+    } else {
+      console.warn("Silent profile refresh failed", error);
+    }
   } finally {
+    root.removeAttribute("aria-busy");
     loading = false;
   }
 }
 
 refreshButton?.addEventListener("click", () => window.setTimeout(() => load(true), 50));
 loginForm?.addEventListener("submit", () => window.setTimeout(() => load(true), 700));
-logoutButton?.addEventListener("click", () => window.setTimeout(() => load(true), 80));
-window.addEventListener("focus", () => load(true));
 window.addEventListener("storage", () => load(true));
 window.addEventListener("bd:player-state-changed", () => load(true));
-window.setInterval(() => load(false), 30000);
+window.setInterval(() => load(false), 60000);
 load(true);
