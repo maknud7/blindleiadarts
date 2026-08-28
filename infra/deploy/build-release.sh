@@ -14,10 +14,13 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT_DIR="$ROOT_DIR/dist/$ENVIRONMENT"
-RELEASE_SHA="${GITHUB_SHA:-}"
 
+# The release marker must describe the commit that is actually checked out.
+# GITHUB_SHA describes the triggering event and can differ for a production
+# release-request workflow that subsequently checks out an immutable RC SHA.
+RELEASE_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
 if [[ -z "$RELEASE_SHA" ]]; then
-  RELEASE_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
+  RELEASE_SHA="${GITHUB_SHA:-}"
 fi
 if [[ -z "$RELEASE_SHA" ]]; then
   RELEASE_SHA="unknown"
