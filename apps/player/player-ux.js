@@ -3,6 +3,17 @@ const PLAYER_UX_API = "../api/v1";
 function pxToken() { return localStorage.getItem("bd:token") || ""; }
 function pxClubId() { return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:playerClubId") || 0); }
 function pxEsc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+function pxSafeUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(String(value), window.location.href);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch { return ""; }
+}
+function pxMoney(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("nb-NO", { maximumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount) + " kr";
+}
 
 async function pxApi(path, auth = false) {
   const headers = {};
@@ -200,7 +211,19 @@ function journey(active) {
   return `<div class="player-now-journey" aria-label="Turneringsstatus">${stages.map(([key, label], index) => `<span class="${index < current ? "done" : index === current ? "current" : ""}">${index < current ? "✓" : index + 1} ${label}</span>`).join("")}</div>`;
 }
 
-function renderNow({ me, dashboard, tournaments, matchCalls }) {
+function paymentActions(eligibility) {
+  const options = eligibility?.payment_options || {};
+  const status = String(eligibility?.status || "");
+  const stripeUrl = pxSafeUrl(status === "payment_problem" ? options.stripe_portal_url : options.stripe_start_url);
+  const vippsUrl = pxSafeUrl(options.vipps_one_time_url);
+  const actions = [];
+  if (stripeUrl) actions.push(`<a class="player-now-primary" href="${pxEsc(stripeUrl)}" target="_blank" rel="noopener">${status === "payment_problem" ? "Administrer Stripe" : "Fast betaling med Stripe"}</a>`);
+  if (vippsUrl) actions.push(`<a class="ghost" href="${pxEsc(vippsUrl)}" target="_blank" rel="noopener">Betal med Vipps</a>`);
+  actions.push(`<button class="ghost" type="button" data-px-payments>Se betalinger</button>`);
+  return `<div class="player-now-actions">${actions.join("")}</div>`;
+}
+
+function renderNow({ me, dashboard, tournaments, matchCalls, eligibility }) {
   ensureNowCard();
   const body = document.getElementById("playerNowBody");
   if (!body) return;
@@ -280,6 +303,31 @@ function renderNow({ me, dashboard, tournaments, matchCalls }) {
     }
   }
 
+  const paymentStatus = String(eligibility?.status || "");
+  if (eligibility?.action_required && ["blocked", "overdue", "due", "payment_problem"].includes(paymentStatus)) {
+    const blocked = eligibility.can_register === false;
+    const amount = paymentStatus === "overdue" ? eligibility.previous_remaining : eligibility.current_remaining;
+    setSituation(
+      blocked ? "payment_blocked" : "payment_due",
+      blocked ? "Påmelding låst" : paymentStatus === "payment_problem" ? "Betaling" : "Kontingent",
+      blocked ? "Ordne kontingenten for å åpne ny påmelding." : "Dette bør ordnes, men du kan fortsatt melde deg på."
+    );
+    body.innerHTML = `
+      <div class="player-now-copy">
+        <span class="player-now-kicker">${blocked ? "Krever handling før ny påmelding" : "Betaling krever oppmerksomhet"}</span>
+        <strong>${pxEsc(eligibility.headline || "Kontingent")}</strong>
+        <p class="muted">${pxEsc(eligibility.message || "Sjekk betalingsstatusen din.")}</p>
+        ${primaryFacts([
+          { label: paymentStatus === "overdue" ? "Mangler forrige måned" : "Mangler nå", value: Number(amount || 0) > 0 ? pxMoney(amount) : "Se betaling" },
+          { label: "Sist avsluttet", value: eligibility.previous_period_label || "" },
+          { label: "Påmeldingsgrense", value: Number(eligibility.block_after_missed_months || 0) > 0 ? `${Number(eligibility.block_after_missed_months)} mnd` : "Ingen blokkering" },
+        ])}
+      </div>
+      ${paymentActions(eligibility)}`;
+    body.querySelector("[data-px-payments]")?.addEventListener("click", () => go("#profile"));
+    return;
+  }
+
   const open = bestOpenTournament(tournaments);
   if (open) {
     setSituation("open_registration", "Påmelding åpen", "Du kan sikre deg plass direkte herfra.");
@@ -307,15 +355,22 @@ async function loadPlayerNow() {
     const clubId = pxClubId();
     const tournaments = clubId ? (await pxApi(`/clubs/${clubId}/registration-tournaments`)).items || [] : [];
     if (!pxToken()) {
-      renderNow({ me: null, dashboard: null, tournaments, matchCalls: [] });
+      renderNow({ me: null, dashboard: null, tournaments, matchCalls: [], eligibility: null });
       return;
     }
-    const [meData, dashData, matchCallData] = await Promise.all([
+    const [meData, dashData, matchCallData, eligibilityData] = await Promise.all([
       pxApi("/auth/me", true),
       pxApi("/me/dashboard", true),
       clubId ? pxApi(`/clubs/${clubId}/match-calls`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+      pxApi("/me/eligibility", true).catch(() => ({ eligibility: null })),
     ]);
-    renderNow({ me: meData.user || null, dashboard: dashData.dashboard || null, tournaments, matchCalls: matchCallData.items || [] });
+    renderNow({
+      me: meData.user || null,
+      dashboard: dashData.dashboard || null,
+      tournaments,
+      matchCalls: matchCallData.items || [],
+      eligibility: eligibilityData.eligibility || null,
+    });
   } catch (error) {
     const body = document.getElementById("playerNowBody");
     const status = document.getElementById("playerNowStatus");
