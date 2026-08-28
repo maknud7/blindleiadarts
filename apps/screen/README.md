@@ -1,10 +1,5 @@
-# Screen App
+# Screen (retired)
 
-Public venue display for live boards, next matches, and rankings.
+The former standalone `/screen/` venue display has been retired.
 
-Current v1 capabilities:
-
-- club selection
-- kiosk board overview
-- tournament summary list
-- recent matches feed
+`/live/` is now the single canonical wall/public live surface. The remaining `/screen/` files only provide a compatibility redirect so old bookmarks and installed displays land on Live instead of breaking.
