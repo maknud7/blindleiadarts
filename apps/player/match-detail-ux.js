@@ -49,18 +49,28 @@ function injectStyles() {
     .match-stat-names strong{font-size:1rem;line-height:1.18}
     .match-stat-row{padding:13px 18px;grid-template-columns:minmax(72px,1fr) 130px minmax(72px,1fr);gap:12px;min-height:52px}
     .match-stat-row strong{font-size:1.06rem}
-    .match-stat-row span{font-size:.84rem;color:#71849a}
+    .match-stat-row span{font-size:.84rem;color:#71849a;text-align:center}
+    .match-stat-row.match-average-row{background:#f4f8ff}
+    .match-stat-row.match-average-row span{font-weight:850;color:#205da7}
+    .match-stat-row.match-average-row strong{font-size:1.16rem;color:#123f74}
     .match-stat-row.match-winning-checkout{background:#f8fbff}
     .match-stat-row.match-winning-checkout span{color:#2f6fed;font-weight:800}
     .match-stat-row.match-winning-checkout strong:not(.empty-value){color:#0c5cc9}
     .match-legs{margin-top:20px}
-    .match-legs h3{font-size:1.15rem;margin-bottom:10px}
+    .match-legs h3{font-size:1.15rem;margin-bottom:3px}
+    .match-legs>.match-leg-help{margin:0 0 10px;font-size:.78rem;color:#71849a}
     .leg-card{border-color:#dbe5ef;border-radius:14px;background:#fff;margin-bottom:9px;overflow:hidden}
     .leg-card-toggle{padding:14px 16px;background:#fff!important;box-shadow:none!important}
     .leg-card-toggle:hover{background:#f8fbff!important}
     .leg-card-toggle>span:first-child strong{color:#2f6fed}
-    .leg-card-toggle>span:last-child{display:inline-flex;align-items:center;border-radius:999px;background:#edf4ff;color:#1858bc;padding:6px 10px;font-weight:800;white-space:nowrap}
+    .leg-card-toggle>span:last-child{display:grid;gap:1px;justify-items:end;border-radius:10px;background:#edf4ff;color:#1858bc;padding:6px 10px;font-weight:800;white-space:nowrap}
+    .leg-card-toggle>span:last-child small{font-size:.58rem;letter-spacing:.07em;text-transform:uppercase;color:#6a82a1}
+    .leg-card-toggle>span:last-child strong{font-size:.82rem;color:#1858bc;font-variant-numeric:tabular-nums}
     .leg-visits{background:#fbfcfe;padding:5px 14px 9px}
+    .leg-average-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:7px 0 9px}
+    .leg-average-player{display:grid;gap:2px;padding:9px 10px;border:1px solid #dce7f2;border-radius:10px;background:#fff}
+    .leg-average-player small{font-size:.64rem;color:#71849a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .leg-average-player strong{font-size:1rem;color:#174a82;font-variant-numeric:tabular-nums}
     @media(max-width:680px){
       .match-detail-dialog{width:calc(100vw - 18px);max-height:calc(100dvh - 24px);border-radius:22px}
       .match-detail-content{max-height:calc(100dvh - 24px);padding:20px 16px 22px}
@@ -72,8 +82,9 @@ function injectStyles() {
       .match-stat-names strong{font-size:.94rem}
       .match-stat-row{padding:12px 12px;grid-template-columns:minmax(64px,1fr) 116px minmax(64px,1fr);gap:8px}
       .match-stat-row strong{font-size:1rem}
-      .match-stat-row span{font-size:.79rem}
+      .match-stat-row span{font-size:.76rem}
       .leg-card-toggle{padding:13px 14px}
+      .leg-average-breakdown{grid-template-columns:1fr}
     }
   `;
   document.head.appendChild(style);
@@ -100,13 +111,48 @@ function enhanceCurrentMatch() {
   const rows = [...board.querySelectorAll('.match-stat-row')];
   const rowByLabel = new Map(rows.map((row) => [row.querySelector('span')?.textContent?.trim() || '', row]));
 
+  const averageRow = rowByLabel.get('3DA');
+  if (averageRow) {
+    averageRow.classList.add('match-average-row');
+    const label = averageRow.querySelector('span');
+    if (label) label.textContent = 'Kampsnitt (3DA)';
+  }
+
   rowByLabel.get('Checkout')?.remove();
   rowByLabel.get('Høy checkout')?.remove();
 
   populateFirstNine(rowByLabel.get('First 9'), playerAName, playerBName);
   addWinningCheckout(board, rowByLabel.get('First 9'), playerAName, playerBName);
+  enhanceLegAverages(playerAName, playerBName);
 
   if (matchId > 0) renderElo(matchId, playerAName, playerBName, board);
+}
+
+function enhanceLegAverages(playerAName, playerBName) {
+  const legsRoot = content.querySelector('.match-legs');
+  if (legsRoot && !legsRoot.querySelector('.match-leg-help')) {
+    legsRoot.querySelector('h3')?.insertAdjacentHTML('afterend', '<p class="match-leg-help">Åpne et leg for å se leg-snitt (3DA) og kast for begge spillere.</p>');
+  }
+
+  content.querySelectorAll('.leg-card').forEach((card) => {
+    if (card.dataset.legAverageEnhanced === '1') return;
+    const toggle = card.querySelector('.leg-card-toggle');
+    const summary = toggle?.querySelector(':scope > span:last-child');
+    const values = String(summary?.textContent || '').split('·').map((value) => value.trim());
+    const aAverage = values[0] || '—';
+    const bAverage = values[1] || '—';
+    if (summary) summary.innerHTML = `<small>Leg 3DA</small><strong>${escapeHtml(aAverage)} / ${escapeHtml(bAverage)}</strong>`;
+
+    const visits = card.querySelector('.leg-visits');
+    if (visits) {
+      visits.insertAdjacentHTML('afterbegin', `
+        <div class="leg-average-breakdown">
+          <span class="leg-average-player"><small>${escapeHtml(playerAName)}</small><strong>3DA ${escapeHtml(aAverage)}</strong></span>
+          <span class="leg-average-player"><small>${escapeHtml(playerBName)}</small><strong>3DA ${escapeHtml(bAverage)}</strong></span>
+        </div>`);
+    }
+    card.dataset.legAverageEnhanced = '1';
+  });
 }
 
 function visitData() {
