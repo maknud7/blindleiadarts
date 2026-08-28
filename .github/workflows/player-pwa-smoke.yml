@@ -38,38 +38,43 @@ jobs:
         run: |
           set -Eeuo pipefail
           base="${BASE_URL%/}"
+          fetch_resource() {
+            local path="$1"
+            echo "Checking /$path" >&2
+            curl -fsS "$base/$path?cb=$RANDOM"
+          }
 
-          root_html="$(curl -fsS "$base/?cb=$RANDOM")"
+          root_html="$(fetch_resource '')"
           grep -Fq 'api/pwa-manifest.php' <<<"$root_html"
           grep -Fq 'apple-mobile-web-app-capable' <<<"$root_html"
 
-          manifest="$(curl -fsS "$base/api/pwa-manifest.php?cb=$RANDOM")"
+          manifest="$(fetch_resource 'api/pwa-manifest.php')"
           grep -Fq '"name": "Blindleia Darts TEST"' <<<"$manifest"
           grep -Fq '"id": "/blindleia-darts-test"' <<<"$manifest"
           grep -Fq '"scope": "/"' <<<"$manifest"
           grep -Fq '"theme_color": "#f3c23c"' <<<"$manifest"
           grep -Fq 'blindleia-dartklubb-test.svg' <<<"$manifest"
 
-          service_worker="$(curl -fsS "$base/api/pwa-service-worker.php?cb=$RANDOM")"
+          service_worker="$(fetch_resource 'api/pwa-service-worker.php')"
           grep -Fq 'blindleia-pwa-test-' <<<"$service_worker"
           grep -Fq 'url.pathname.includes("/api/")' <<<"$service_worker"
           grep -Fq 'Authorization' <<<"$service_worker"
 
-          test_logo="$(curl -fsS "$base/static/club-logos/blindleia-dartklubb-test.svg?cb=$RANDOM")"
+          test_logo="$(fetch_resource 'static/club-logos/blindleia-dartklubb-test.svg')"
           grep -Fq '#f3c23c' <<<"$test_logo"
           grep -Fq '>TEST<' <<<"$test_logo"
 
-          pwa_js="$(curl -fsS "$base/player/pwa-install.js?cb=$RANDOM")"
+          pwa_js="$(fetch_resource 'player/pwa-install.js')"
           grep -Fq 'Blindleia Darts TEST' <<<"$pwa_js"
           grep -Fq 'blindleia-dartklubb-test.svg' <<<"$pwa_js"
           grep -Fq 'pwa-service-worker.php' <<<"$pwa_js"
           grep -Fq 'Legg til på Hjem-skjerm' <<<"$pwa_js"
 
-          player_now_js="$(curl -fsS "$base/player/player-now.js?cb=$RANDOM")"
+          player_now_js="$(fetch_resource 'player/player-now.js')"
           grep -Fq '/match-calls' <<<"$player_now_js"
           grep -Fq 'Venter på oppkalling' <<<"$player_now_js"
 
-          account_js="$(curl -fsS "$base/admin/member-onboarding-admin.js?cb=$RANDOM")"
+          account_js="$(fetch_resource 'admin/member-onboarding-admin.js')"
           grep -Fq 'Ingen konto' <<<"$account_js"
           grep -Fq 'Invitasjon sendt' <<<"$account_js"
           grep -Fq 'Aktiv konto' <<<"$account_js"
