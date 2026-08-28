@@ -1,0 +1,650 @@
+/*
+ * Venue Wall v3
+ * Production wall-display layout for the clubhouse TV.
+ * Target: 16:9 / 1366x768 and larger, one viewport, no scrolling.
+ * Capacity: four live boards + two full 10-player group tables.
+ */
+@media (min-width: 1180px) and (min-height: 650px) {
+  body.phase-live {
+    background: #eef3f8;
+  }
+
+  body.phase-live .live-shell {
+    height: 100dvh;
+    padding: 8px 10px;
+    overflow: hidden;
+  }
+
+  body.phase-live .active-experience {
+    height: 100%;
+    display: grid;
+    grid-template-rows: 82px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  /* Header: one strong broadcast-like identity band. */
+  body.phase-live .hero {
+    min-height: 0;
+    height: 82px;
+    padding: 9px 14px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(112deg, #083e88 0%, #002d68 100%);
+    box-shadow: 0 5px 16px rgba(7,31,59,.18);
+  }
+
+  body.phase-live .live-logo {
+    width: 52px;
+    height: 52px;
+    padding: 3px;
+    background: #fff;
+    border-radius: 10px;
+  }
+
+  body.phase-live .hero .eyebrow,
+  body.phase-live .hero .muted,
+  body.phase-live .hero h1 {
+    color: #fff;
+  }
+
+  body.phase-live .hero .eyebrow {
+    opacity: .86;
+    font-size: .61rem;
+    letter-spacing: .055em;
+  }
+
+  body.phase-live .hero h1 {
+    margin-top: 1px;
+    font-size: clamp(1.8rem, 2.2vw, 2.6rem);
+    line-height: .95;
+  }
+
+  body.phase-live .hero .muted {
+    margin-top: 4px;
+    opacity: .86;
+    font-size: .7rem;
+  }
+
+  body.phase-live .live-status {
+    border: 1px solid rgba(82,198,255,.6);
+    background: rgba(0,26,68,.42);
+    color: #fff;
+    padding: 7px 11px;
+    font-size: .72rem;
+    font-weight: 900;
+  }
+
+  /* Macro layout: KPI / 4 boards + queue / 2 tables + highlights. */
+  body.phase-live #liveDashboard {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(300px, .72fr);
+    grid-template-rows: 54px minmax(0, .93fr) minmax(0, 1.07fr);
+    gap: 7px;
+    overflow: hidden;
+  }
+
+  body.phase-live #progressCards {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    gap: 7px;
+    margin: 0;
+  }
+
+  body.phase-live .stat-card {
+    min-width: 0;
+    padding: 7px 12px;
+    border: 1px solid #dbe4ed;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 7px rgba(7,31,59,.08);
+  }
+
+  body.phase-live .stat-card small {
+    color: #36536f;
+    font-size: .56rem;
+    font-weight: 900;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+  }
+
+  body.phase-live .stat-card strong {
+    color: #071f3b;
+    font-size: 1.32rem;
+    line-height: 1;
+  }
+
+  body.phase-live #liveDashboard > .priority-section {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) {
+    grid-column: 3;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  body.phase-live #liveDashboard > .section:has(#tables) {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) {
+    grid-column: 3;
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  /* ELO is useful elsewhere, but costs too much wall real estate when two
+     10-player group tables must be readable at the same time. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) {
+    display: none !important;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#highlights) {
+    display: grid;
+    height: 100%;
+  }
+
+  body.phase-live .section,
+  body.phase-live .panel,
+  body.phase-live .table-card {
+    border-color: #d6e0ea;
+    box-shadow: 0 2px 8px rgba(7,31,59,.07);
+  }
+
+  body.phase-live .section {
+    margin: 0;
+    padding: 8px;
+    border-radius: 11px;
+    background: #fff;
+  }
+
+  body.phase-live .section-head {
+    min-height: 25px;
+    margin-bottom: 4px;
+  }
+
+  body.phase-live .section-head .eyebrow {
+    font-size: .53rem;
+    color: #35618c;
+  }
+
+  body.phase-live .section-head h2,
+  body.phase-live .section h2 {
+    color: #092c51;
+    font-size: .96rem;
+  }
+
+  body.phase-live #updatedAt {
+    font-size: .58rem;
+  }
+
+  /* Four boards: always reserve a clean 2x2 matrix. */
+  body.phase-live .boards-grid,
+  body.phase-live .boards-grid:has(> .board-card:only-child) {
+    height: calc(100% - 29px);
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  body.phase-live .board-card,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-card {
+    min-height: 0;
+    height: 100%;
+    padding: 7px 9px;
+    display: grid;
+    grid-template-rows: 24px minmax(0, 1fr) 18px;
+    border: 1px solid #cfdbe8;
+    border-radius: 9px;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: none;
+  }
+
+  body.phase-live .board-card .board-top {
+    min-height: 0;
+    margin: 0;
+    align-items: center;
+  }
+
+  body.phase-live .board-number,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-number {
+    color: #0b3c85;
+    font-size: .8rem;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  body.phase-live .board-card .badge.live {
+    color: #fff;
+    background: #0b4fb2;
+    border-color: #0b4fb2;
+  }
+
+  body.phase-live .board-card .players {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    align-content: stretch;
+  }
+
+  body.phase-live .board-card .player-line,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line {
+    position: relative;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 70px 26px;
+    gap: 7px;
+    align-items: center;
+    padding: 2px 0;
+    border-top: 1px solid #edf1f5;
+  }
+
+  body.phase-live .board-card .player-line:first-child {
+    border-top: 0;
+  }
+
+  body.phase-live .board-card .player-line strong,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line strong {
+    min-width: 0;
+    color: #111827;
+    font-size: clamp(.78rem, .88vw, 1.08rem);
+    line-height: 1.02;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.phase-live .board-card .remaining,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .remaining {
+    color: #07111f;
+    font-size: clamp(1.55rem, 2.05vw, 2.55rem);
+    line-height: .82;
+    font-weight: 950;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.phase-live .board-card .legs,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .legs {
+    display: grid;
+    place-items: center;
+    height: 28px;
+    border-left: 1px solid #dce4ec;
+    color: #102f52;
+    font-size: .9rem;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.phase-live .board-card .player-line.active {
+    background: linear-gradient(90deg, rgba(20,99,210,.08), rgba(20,99,210,0));
+  }
+
+  body.phase-live .board-card .player-line.active::after {
+    content: "KASTER";
+    position: absolute;
+    right: 104px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 2px 4px;
+    border: 1px solid #8bb7f4;
+    border-radius: 4px;
+    color: #0b4fb2;
+    background: #eef5ff;
+    font-size: .47rem;
+    font-weight: 950;
+    letter-spacing: .04em;
+  }
+
+  body.phase-live .board-card .round,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .round {
+    min-width: 0;
+    margin: 0;
+    align-self: end;
+    color: #486884;
+    font-size: .54rem;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.phase-live .board-card.idle {
+    grid-template-rows: 24px 1fr;
+  }
+
+  /* Queue and results: broadcast sidebar, not two equal half-page panels. */
+  body.phase-live #liveDashboard > .two-column:has(#queue) .panel {
+    height: 100%;
+    min-height: 0;
+    padding: 7px 9px;
+    display: grid;
+    grid-template-rows: 24px minmax(0, 1fr);
+    border-radius: 9px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head {
+    min-height: 20px;
+    margin: 0 0 2px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head .eyebrow {
+    display: none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head h2 {
+    font-size: .78rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row {
+    min-height: 0;
+    padding: 3px 1px;
+    border-top: 1px solid #e7edf3;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row:first-child {
+    border-top: 0;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong {
+    font-size: .65rem;
+    line-height: 1.05;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small {
+    font-size: .5rem;
+    color: #54718d;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .badge,
+  body.phase-live #liveDashboard > .two-column:has(#queue) .result-score {
+    font-size: .56rem;
+  }
+
+  /* Tables: the title in each group card is enough; remove redundant outer title. */
+  body.phase-live #liveDashboard > .section:has(#tables) > .section-head {
+    display: none;
+  }
+
+  body.phase-live .tables-grid,
+  body.phase-live .tables-grid:has(> .table-card:only-child) {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  body.phase-live .table-card {
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    display: grid;
+    grid-template-rows: 26px minmax(0, 1fr);
+    border: 1px solid #cfdbe8;
+    border-radius: 9px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  body.phase-live .table-card h3 {
+    margin: 0;
+    padding: 6px 9px 5px;
+    color: #fff;
+    background: #083e88;
+    font-size: .7rem;
+    line-height: 1;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  body.phase-live .table-scroll {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.phase-live .portal-table {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: clamp(.56rem, .59vw, .73rem);
+    line-height: 1;
+  }
+
+  body.phase-live .portal-table thead {
+    height: 20px;
+  }
+
+  body.phase-live .portal-table tbody {
+    height: calc(100% - 20px);
+  }
+
+  body.phase-live .portal-table tbody tr {
+    height: 10%;
+  }
+
+  body.phase-live .portal-table th,
+  body.phase-live .portal-table td {
+    height: auto;
+    padding: 1px 3px;
+    vertical-align: middle;
+    border-bottom: 1px solid #edf1f5;
+    white-space: nowrap;
+  }
+
+  body.phase-live .portal-table th {
+    color: #48647d;
+    background: #f3f6f9;
+    font-size: .46rem;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  body.phase-live .portal-table th:nth-child(1),
+  body.phase-live .portal-table td:nth-child(1) {
+    width: 23px;
+    text-align: center;
+  }
+
+  body.phase-live .portal-table th:nth-child(2),
+  body.phase-live .portal-table td:nth-child(2) {
+    width: auto;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.phase-live .portal-table th:nth-child(n+3),
+  body.phase-live .portal-table td:nth-child(n+3) {
+    width: 29px;
+    text-align: center;
+  }
+
+  body.phase-live .portal-table th.three-da-col,
+  body.phase-live .portal-table td.three-da-col {
+    width: 42px;
+  }
+
+  body.phase-live .portal-table td:nth-child(2) strong {
+    font-weight: 850;
+  }
+
+  /* Highlight column: three compact ranked blocks, readable but subordinate. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) {
+    padding: 7px 8px;
+    grid-template-rows: 25px minmax(0, 1fr);
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) .section-head {
+    margin-bottom: 3px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) .section-head .eyebrow {
+    display: none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) .section-head h2 {
+    font-size: .78rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+  }
+
+  body.phase-live #highlights.highlight-grid {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  body.phase-live .live-top3-block {
+    height: 100%;
+    min-height: 0;
+    padding: 5px 7px;
+    border: 1px solid #dbe4ed;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  body.phase-live .live-top3-block h3 {
+    color: #0b3c85;
+    font-size: .55rem;
+  }
+
+  body.phase-live .live-top3-row {
+    grid-template-columns: 16px minmax(0,1fr) auto;
+    gap: 4px;
+    font-size: .54rem;
+  }
+
+  body.phase-live .live-top3-row strong {
+    font-size: .56rem;
+  }
+
+  body.phase-live .live-top3-row em {
+    font-size: .65rem;
+  }
+
+  /* Keep playoff behavior safe. The wall layout gives the bracket priority
+     when playoffs are visible rather than forcing group-stage geometry. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > .section:has(#tables) {
+    display: none;
+  }
+}
+
+/* Tighter 1366x768 screens: preserve structure, reduce decoration before text. */
+@media (min-width: 1180px) and (max-height: 800px) {
+  body.phase-live .active-experience {
+    grid-template-rows: 66px minmax(0,1fr);
+    gap: 5px;
+  }
+
+  body.phase-live .hero {
+    height: 66px;
+    padding: 6px 10px;
+  }
+
+  body.phase-live .live-logo {
+    width: 42px;
+    height: 42px;
+  }
+
+  body.phase-live .hero h1 {
+    font-size: 1.65rem;
+  }
+
+  body.phase-live #liveDashboard {
+    grid-template-rows: 44px minmax(0,.92fr) minmax(0,1.08fr);
+    gap: 5px;
+  }
+
+  body.phase-live .stat-card {
+    padding: 5px 8px;
+  }
+
+  body.phase-live .stat-card strong {
+    font-size: 1.08rem;
+  }
+
+  body.phase-live .section {
+    padding: 6px;
+  }
+
+  body.phase-live .boards-grid,
+  body.phase-live .boards-grid:has(> .board-card:only-child) {
+    height: calc(100% - 25px);
+    gap: 5px;
+  }
+
+  body.phase-live .board-card,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-card {
+    padding: 5px 7px;
+    grid-template-rows: 20px minmax(0,1fr) 15px;
+  }
+
+  body.phase-live .board-card .player-line,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line {
+    grid-template-columns: minmax(0,1fr) 58px 23px;
+    gap: 5px;
+  }
+
+  body.phase-live .board-card .player-line.active::after {
+    right: 86px;
+  }
+
+  body.phase-live .portal-table {
+    font-size: .54rem;
+  }
+
+  body.phase-live .portal-table th {
+    font-size: .43rem;
+  }
+
+  body.phase-live .table-card {
+    grid-template-rows: 22px minmax(0,1fr);
+  }
+
+  body.phase-live .table-card h3 {
+    padding-top: 5px;
+    font-size: .61rem;
+  }
+
+  body.phase-live .live-top3-block {
+    padding: 4px 5px;
+  }
+}
