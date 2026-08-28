@@ -1,0 +1,117 @@
+/* Live highlights v2: tie-break 3DA and three compact top-3 leaderboards. */
+.phase3-pulse-panel .phase3-elo-block { display: none !important; }
+.phase3-pulse-panel .phase3-pulse-metrics {
+  flex: 1;
+  min-height: 0;
+  display: block !important;
+}
+
+.live-highlight-leaderboard {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: .32rem;
+}
+
+.live-highlight-category {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: stretch;
+  gap: .3rem;
+  padding: .28rem .34rem;
+  border: 1px solid #e1e8ef;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.live-highlight-label {
+  display: grid;
+  align-content: center;
+  color: #526980;
+  font-size: .54rem;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.live-highlight-items {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .24rem;
+}
+
+.live-highlight-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: .18rem;
+  padding: .16rem .2rem;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.live-highlight-rank {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #8a9aae;
+  font-size: .51rem;
+  font-weight: 900;
+}
+
+.live-highlight-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0c2340;
+  font-size: .55rem;
+  font-weight: 850;
+}
+
+.live-highlight-value {
+  color: #245da8;
+  font-size: .68rem;
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-highlight-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  color: #8796a6;
+  font-size: .55rem;
+}
+
+/* 3DA is an actual tie-breaker, so make the column visually explicit. */
+.phase3-group-table .phase3-table-head > span:last-child {
+  color: #245da8 !important;
+  font-weight: 950 !important;
+}
+.phase3-group-table .phase3-table-row > span:last-child {
+  margin: .08rem 0;
+  padding: .12rem .2rem;
+  border-radius: 5px;
+  background: #edf4ff;
+  color: #174f9b !important;
+  font-weight: 950 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-standings-v2 .phase3-table-head,
+.live-standings-v2 .phase3-table-row {
+  grid-template-columns: 24px minmax(0, 1fr) 34px 38px 48px !important;
+}
+
+@media (max-height: 820px) and (min-width: 1101px) {
+  .live-highlight-category { grid-template-columns: 65px minmax(0, 1fr); padding: .2rem .27rem; }
+  .live-highlight-label { font-size: .49rem; }
+  .live-highlight-name { font-size: .5rem; }
+  .live-highlight-value { font-size: .61rem; }
+}
