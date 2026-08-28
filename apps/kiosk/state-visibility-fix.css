@@ -1,0 +1,17 @@
+/*
+ * State exclusivity guard.
+ * Tablet layout files use display: ... !important for their active layouts.
+ * A hidden kiosk state must always win over those layout declarations.
+ */
+#setupState.hidden,
+#idleState.hidden,
+#assignedState.hidden,
+#matchState.hidden,
+#manualScoring.hidden,
+#scoliaScoring.hidden,
+#sumMode.hidden,
+#dartMode.hidden,
+#settingsOverlay.hidden,
+#settingsDialog.hidden {
+  display: none !important;
+}
