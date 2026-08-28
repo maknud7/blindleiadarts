@@ -129,9 +129,10 @@ function bestUpcomingTournament(tournaments) {
 
 function playerMatch(matchCalls, playerId) {
   if (!playerId) return null;
-  const priority = { in_progress: 0, assigned: 1, pending: 2 };
+  const priority = { in_progress: 0, assigned: 1 };
   return [...(matchCalls || [])]
-    .filter((match) => Number(match.player_a_id) === Number(playerId) || Number(match.player_b_id) === Number(playerId))
+    .filter((match) => ["in_progress", "assigned"].includes(String(match.status))
+      && (Number(match.player_a_id) === Number(playerId) || Number(match.player_b_id) === Number(playerId)))
     .sort((a, b) => (priority[String(a.status)] ?? 9) - (priority[String(b.status)] ?? 9) || Number(a.id) - Number(b.id))[0] || null;
 }
 
@@ -219,15 +220,14 @@ function renderNow({ me, dashboard, tournaments, matchCalls }) {
     const board = boardName(currentMatch);
     const context = matchContext(currentMatch);
     const isLive = String(currentMatch.status) === "in_progress";
-    const isAssigned = String(currentMatch.status) === "assigned";
-    const key = isLive ? "live_match" : isAssigned ? "assigned_match" : "pending_match";
-    const label = isLive ? "Spiller nå" : isAssigned ? board : "Neste kamp";
-    setSituation(key, label, isLive ? "Kampen er i gang." : isAssigned ? "Gå til skiven når du er klar." : "Kampen er opprettet og venter på skive.");
+    const key = isLive ? "live_match" : "assigned_match";
+    const label = isLive ? "Spiller nå" : board;
+    setSituation(key, label, isLive ? "Kampen er i gang." : "Gå til skiven når du er klar.");
     body.innerHTML = `
       <div class="player-now-copy">
-        <span class="player-now-kicker">${isLive ? "Kamp pågår" : isAssigned ? "Du er kalt opp" : "Neste kamp er kjent"}</span>
+        <span class="player-now-kicker">${isLive ? "Kamp pågår" : "Du er kalt opp"}</span>
         <strong>${isLive ? `${pxEsc(board)} · mot ${pxEsc(opponent)}` : `Mot ${pxEsc(opponent)}`}</strong>
-        <p class="muted">${isLive ? "Fokuser på kampen — resultat og statistikk lagres fortløpende." : isAssigned ? `Kampen er tildelt ${pxEsc(board)}.` : "Du trenger ikke lete i kampoversikten; Hjem oppdateres når skiven blir satt."}</p>
+        <p class="muted">${isLive ? "Fokuser på kampen — resultat og statistikk lagres fortløpende." : `Kampen er tildelt ${pxEsc(board)}.`}</p>
         ${primaryFacts([{ label: "Skive", value: board }, { label: "Motstander", value: opponent }, { label: "Runde", value: context }])}
         ${journey("match")}
       </div>
