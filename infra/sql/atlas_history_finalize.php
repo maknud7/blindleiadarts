@@ -183,6 +183,18 @@ try {
     throw $error;
 }
 
+$eloRebuilt = false;
+if ($prefix === 'bd_test_') {
+    $rebuild = require __DIR__ . '/migrations/0053_rebuild_elo_in_logical_match_order.php';
+    if (!is_callable($rebuild)) {
+        throw new RuntimeException('0053 ELO rebuild migration is not callable.');
+    }
+    echo "ATLAS_HISTORY_ELO_REBUILD tournament_id={$tournamentId} start\n";
+    $rebuild($db, $prefix);
+    $eloRebuilt = true;
+    echo "ATLAS_HISTORY_ELO_REBUILD tournament_id={$tournamentId} completed\n";
+}
+
 echo 'ATLAS_HISTORY_FINALIZE ' . json_encode([
     'ok' => true,
     'external_id' => $externalId,
@@ -193,5 +205,6 @@ echo 'ATLAS_HISTORY_FINALIZE ' . json_encode([
     'end_at' => $latestFinishedAt,
     'legs_timestamped' => $legsFinalized,
     'players_eliminated' => $eliminated,
+    'elo_rebuilt' => $eloRebuilt,
     'prefix' => $prefix,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
