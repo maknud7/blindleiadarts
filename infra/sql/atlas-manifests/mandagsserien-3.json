@@ -1,0 +1,83 @@
+{
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "PvGa73emrY6e",
+  "tournament_name": "Mandagsserien #3",
+  "tournament_slug": "mandagsserien-3-2026",
+  "tournament_date": "2026-08-24",
+  "tournament_start_at": "2026-08-24 18:30:00",
+  "expected_players": 9,
+  "expected_matches": 39,
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "6dLds5Na0PsZ",
+        "DUq32rNObrUk",
+        "3GERGyOGK1tY",
+        "GFg9pZkPKrpU",
+        "lGf1wBj3yKWV",
+        "hE2Jzt55iTf2",
+        "Rujhhq1jF7Uu",
+        "xTpeuJWBefFN",
+        "2bhzMxZ5bdyy"
+      ],
+      "match_ids": [
+        "D2qi6c60o0RO","qlK8YZltrE1x","xhklHjI8ydb9","PfOHPvFM5ml4",
+        "lXPsBM5lwKC3","echWATtER6Ql","4mVbNvbh8du0","iI2C7uRe0rWT",
+        "TDdWYSroBQum","QgU8VHxnlRTH","vAnu25dJeYrX","nqsauzzeNpeY",
+        "BVtRKWSwGIGb","PF0BizCn7yyW","kc14yPzXNmZi","v0vP7LDy3fxf",
+        "8emA9ezzwO1X","Yrd0BdSRRanN","86l4q2aceew4","bChVyqvOXmXT",
+        "xob8tyU3xlvc","wj1QMFSoFlnf","tIG7KxshVv3K","sZ081lyAKszG",
+        "FBizn3jB4b8H","ORRR28QX4aTd","IV6lTDtl4vaX","JIJP2M8w0RNA",
+        "1ZwHadK3vsU1","SYsri7ZLrOkh","PtkmH2jNtipv","B9upl9F15MZl",
+        "IthC46MKK2n8","H47XbiGkjCKk","MLlnBgPLz6FN","cBchnuvC48TG"
+      ]
+    }
+  ],
+  "players": {
+    "6dLds5Na0PsZ": "Arild Eidesund",
+    "DUq32rNObrUk": "Thomas Kildal",
+    "3GERGyOGK1tY": "Bjørn Jarle Jahnsen",
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen",
+    "lGf1wBj3yKWV": "Steffen Madsen",
+    "hE2Jzt55iTf2": "Andre Kendrick",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson"
+  },
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "qualifiers": ["6dLds5Na0PsZ","DUq32rNObrUk","3GERGyOGK1tY","GFg9pZkPKrpU"],
+    "match_ids": ["yu6OitFCAFil","0CQeBfeBxu9O","Pycp9H61fZ82"],
+    "champion_external_id": "6dLds5Na0PsZ"
+  },
+  "ranking_points": {
+    "6dLds5Na0PsZ": 4,
+    "3GERGyOGK1tY": 3,
+    "DUq32rNObrUk": 2,
+    "GFg9pZkPKrpU": 2,
+    "lGf1wBj3yKWV": 1,
+    "hE2Jzt55iTf2": 1,
+    "Rujhhq1jF7Uu": 1,
+    "xTpeuJWBefFN": 1,
+    "2bhzMxZ5bdyy": 1
+  },
+  "ranking_stages": {
+    "6dLds5Na0PsZ": "Champion",
+    "3GERGyOGK1tY": "Final",
+    "DUq32rNObrUk": "Semi-Final",
+    "GFg9pZkPKrpU": "Semi-Final",
+    "lGf1wBj3yKWV": "Group stage",
+    "hE2Jzt55iTf2": "Group stage",
+    "Rujhhq1jF7Uu": "Group stage",
+    "xTpeuJWBefFN": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage"
+  }
+}
