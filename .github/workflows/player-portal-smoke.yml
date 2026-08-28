@@ -45,8 +45,21 @@ jobs:
           base="${BASE_URL%/}"
 
           player_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/?cb=$RANDOM")"
-          grep -Fq 'member-account.js?v=20260827-1145' <<<"$player_html"
-          grep -Fq 'portal-content.js?v=20260827-1145' <<<"$player_html"
+          grep -Eq 'member-account\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
+          grep -Eq 'portal-content\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
+
+          member_account_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/member-account.js?cb=$RANDOM")"
+          grep -Fq 'Fast betaling med Stripe' <<<"$member_account_js"
+          grep -Fq 'Betal én kontingent manuelt med Vipps' <<<"$member_account_js"
+
+          admin_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/?cb=$RANDOM")"
+          grep -Eq 'payment-settings\.js(\?v=[^"[:space:]]+)?' <<<"$admin_html"
+          grep -Eq 'payment-settings\.css(\?v=[^"[:space:]]+)?' <<<"$admin_html"
+
+          payment_settings_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/payment-settings.js?cb=$RANDOM")"
+          grep -Fq '/payment-settings' <<<"$payment_settings_js"
+          grep -Fq 'Stripe' <<<"$payment_settings_js"
+          grep -Fq 'Vipps' <<<"$payment_settings_js"
 
           request() {
             local label="$1"
