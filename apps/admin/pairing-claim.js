@@ -1,4 +1,4 @@
-import "./pairing-claim-core.js?v=20260826-1340";
+import "./pairing-claim-core.js?v=20260828-1745";
 import "./equipment-admin-ux.js?v=20260826-1345";
 import "./board-admin.js";
 import "./tablet-replacement.js?v=20260828-1700";
