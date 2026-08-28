@@ -17,6 +17,7 @@ final class PaymentSettingsRepository
         'vipps_number' => 'membership.vipps_number',
         'vipps_one_time_url' => 'membership.vipps_one_time_url',
         'payment_contact' => 'membership.payment_contact',
+        'registration_block_after_missed_months' => 'membership.registration_block_after_missed_months',
     ];
 
     private mysqli $connection;
@@ -44,6 +45,7 @@ final class PaymentSettingsRepository
             'vipps_number' => $this->value($settings, 'membership.vipps_number'),
             'vipps_one_time_url' => $this->value($settings, 'membership.vipps_one_time_url'),
             'payment_contact' => $this->value($settings, 'membership.payment_contact'),
+            'registration_block_after_missed_months' => $this->registrationBlockAfterMissedMonths($settings),
         ];
     }
 
@@ -63,6 +65,7 @@ final class PaymentSettingsRepository
         foreach (self::FIELD_TO_KEY as $field => $key) {
             $result[$field] = $this->value($settings, $key);
         }
+        $result['registration_block_after_missed_months'] = $this->registrationBlockAfterMissedMonths($settings);
         return $result;
     }
 
@@ -81,7 +84,24 @@ final class PaymentSettingsRepository
                 if (!array_key_exists($field, $payload)) {
                     continue;
                 }
-                $value = trim((string) ($payload[$field] ?? ''));
+
+                if ($field === 'registration_block_after_missed_months') {
+                    $raw = trim((string) ($payload[$field] ?? ''));
+                    if ($raw === '') {
+                        $value = '3';
+                    } elseif (!preg_match('/^\d{1,2}$/', $raw)) {
+                        throw new ValidationException('payment_policy_invalid', 'Påmeldingsgrensen må være et helt antall måneder fra 0 til 12.', 422);
+                    } else {
+                        $months = (int) $raw;
+                        if ($months < 0 || $months > 12) {
+                            throw new ValidationException('payment_policy_invalid', 'Påmeldingsgrensen må være fra 0 til 12 måneder.', 422);
+                        }
+                        $value = (string) $months;
+                    }
+                } else {
+                    $value = trim((string) ($payload[$field] ?? ''));
+                }
+
                 if (in_array($field, $urlFields, true) && $value !== '' && !$this->isHttpUrl($value)) {
                     throw new ValidationException('payment_url_invalid', 'Betalingslenker må være gyldige http- eller https-adresser.', 422);
                 }
@@ -92,7 +112,7 @@ final class PaymentSettingsRepository
                     throw new ValidationException('payment_setting_too_long', 'En betalingsinnstilling er for lang.', 422);
                 }
 
-                if ($value === '') {
+                if ($value === '' && $field !== 'registration_block_after_missed_months') {
                     $delete = $this->connection->prepare("DELETE FROM `{$settingsTable}` WHERE club_id = ? AND setting_key = ?");
                     $delete->bind_param('is', $clubId, $key);
                     $delete->execute();
@@ -187,6 +207,16 @@ final class PaymentSettingsRepository
     {
         $value = trim((string) ($settings[$key] ?? ''));
         return $value !== '' ? $value : null;
+    }
+
+    /** @param array<string,string|null> $settings */
+    private function registrationBlockAfterMissedMonths(array $settings): int
+    {
+        $raw = $this->value($settings, 'membership.registration_block_after_missed_months');
+        if ($raw === null) {
+            return 3;
+        }
+        return max(0, min(12, (int) $raw));
     }
 
     /** @param array<string,mixed>|null $club */
