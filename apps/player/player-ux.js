@@ -90,13 +90,15 @@ function isTournamentRelevant(tournament, registrationStatus = "") {
   const status = String(tournament.status || tournament.tournament_status || "").toLowerCase();
   if (["completed", "cancelled"].includes(status)) return false;
 
+  const liveRegistration = ["checked_in", "paused", "eliminated"].includes(String(registrationStatus).toLowerCase());
+  if (liveRegistration && ["ready", "in_progress"].includes(status)) return true;
+
   const now = Date.now();
   const start = parseDate(tournament.start_at)?.getTime() ?? null;
   const end = parseDate(tournament.end_at)?.getTime() ?? null;
   if (end !== null && end < now) return false;
   if (end !== null && end >= now && (start === null || start <= now)) return true;
 
-  const liveRegistration = ["checked_in", "paused", "eliminated"].includes(String(registrationStatus));
   if (start === null) return !liveRegistration || ["ready", "in_progress"].includes(status);
   const graceMs = 18 * 60 * 60 * 1000;
   return start >= now - graceMs;
@@ -140,9 +142,9 @@ function bestUpcomingTournament(tournaments) {
 
 function playerMatch(matchCalls, playerId) {
   if (!playerId) return null;
-  const priority = { in_progress: 0, assigned: 1 };
+  const priority = { in_progress: 0, assigned: 1, pending: 2 };
   return [...(matchCalls || [])]
-    .filter((match) => ["in_progress", "assigned"].includes(String(match.status))
+    .filter((match) => ["in_progress", "assigned", "pending"].includes(String(match.status))
       && (Number(match.player_a_id) === Number(playerId) || Number(match.player_b_id) === Number(playerId)))
     .sort((a, b) => (priority[String(a.status)] ?? 9) - (priority[String(b.status)] ?? 9) || Number(a.id) - Number(b.id))[0] || null;
 }
@@ -242,16 +244,28 @@ function renderNow({ me, dashboard, tournaments, matchCalls, eligibility }) {
     const opponent = opponentName(currentMatch, playerId);
     const board = boardName(currentMatch);
     const context = matchContext(currentMatch);
-    const isLive = String(currentMatch.status) === "in_progress";
-    const key = isLive ? "live_match" : "assigned_match";
-    const label = isLive ? "Spiller nå" : board;
-    setSituation(key, label, isLive ? "Kampen er i gang." : "Gå til skiven når du er klar.");
+    const matchStatus = String(currentMatch.status || "");
+    const isLive = matchStatus === "in_progress";
+    const isAssigned = matchStatus === "assigned";
+    const isPending = matchStatus === "pending";
+    const key = isLive ? "live_match" : isAssigned ? "assigned_match" : "pending_match";
+    const label = isLive ? "Spiller nå" : isAssigned ? board : "Neste kamp";
+    const hint = isLive
+      ? "Kampen er i gang."
+      : isAssigned
+        ? "Gå til skiven når du er klar."
+        : "Kampen ligger i kø og blir stående her til en skive er ledig.";
+    setSituation(key, label, hint);
     body.innerHTML = `
       <div class="player-now-copy">
-        <span class="player-now-kicker">${isLive ? "Kamp pågår" : "Du er kalt opp"}</span>
+        <span class="player-now-kicker">${isLive ? "Kamp pågår" : isAssigned ? "Du er kalt opp" : "Neste kamp er klar"}</span>
         <strong>${isLive ? `${pxEsc(board)} · mot ${pxEsc(opponent)}` : `Mot ${pxEsc(opponent)}`}</strong>
-        <p class="muted">${isLive ? "Fokuser på kampen — resultat og statistikk lagres fortløpende." : `Kampen er tildelt ${pxEsc(board)}.`}</p>
-        ${primaryFacts([{ label: "Skive", value: board }, { label: "Motstander", value: opponent }, { label: "Runde", value: context }])}
+        <p class="muted">${isLive ? "Fokuser på kampen — resultat og statistikk lagres fortløpende." : isAssigned ? `Kampen er tildelt ${pxEsc(board)}.` : "Du er neste i denne kampen. Skiven vises automatisk så snart kampen blir tildelt."}</p>
+        ${primaryFacts([
+          { label: "Turnering", value: currentMatch.tournament_name || "" },
+          { label: "Skive", value: isPending ? "Venter" : board },
+          { label: "Runde", value: context },
+        ])}
         ${journey("match")}
       </div>
       <div class="player-now-actions"><a class="player-now-primary" href="../live/" target="_blank" rel="noopener">Åpne Live</a><button class="ghost" type="button" data-px-tournament>Turneringen</button></div>`;
