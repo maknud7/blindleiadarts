@@ -43,6 +43,7 @@
   <link rel="stylesheet" href="./admin-ux.css?v=20260826-0915">
   <link rel="stylesheet" href="./health-tracker.css?v=20260827-1900">
   <link rel="stylesheet" href="./player-identity-admin.css?v=20260827-1900">
+  <link rel="stylesheet" href="./payment-settings.css?v=20260828-1040">
   <link rel="stylesheet" href="../packages/ui-assets/portal-brand.css?v=20260826-1300">
   <link rel="stylesheet" href="./brand-logo-fix.css?v=20260826-1420">
 </head>
@@ -181,6 +182,35 @@
         <div class="hidden" aria-hidden="true"><span id="playerCount">0</span><table><tbody id="playerRows"></tbody></table></div>
       </section>
 
+      <section id="integrations" data-portal-section="integrations" class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Klubbinnstillinger</p><h2>Betaling</h2><p class="muted">Offentlig betalingsinformasjon som vises til medlemmene. Hemmelige Stripe-nøkler lagres fortsatt bare i eksisterende Blindleia-admin/serveroppsett.</p></div>
+        </div>
+        <form id="paymentSettingsForm">
+          <div class="payment-settings-grid">
+            <section class="payment-settings-card">
+              <div><p class="eyebrow">Fast betaling</p><h3>Stripe</h3></div>
+              <p class="muted">Fast månedlig kontingent går via det eksisterende Stripe-oppsettet. Ikke legg Secret Key, Webhook Secret eller Price ID her.</p>
+              <label><span>Startside for fast betaling</span><input id="paymentStripeStartUrl" type="url" inputmode="url" placeholder="https://dart.ingenting.org/stripe_kontingent.php"></label>
+              <label><span>Stripe-side for å administrere/avslutte abonnement</span><input id="paymentStripePortalUrl" type="url" inputmode="url" placeholder="https://..."></label>
+              <p id="paymentStripeEffective" class="payment-settings-note">Henter aktiv Stripe-side …</p>
+            </section>
+            <section class="payment-settings-card">
+              <div><p class="eyebrow">Enkeltbetaling</p><h3>Vipps</h3></div>
+              <p class="muted">Vipps brukes kun til manuell enkeltbetaling. Det opprettes ingen fast betalingsavtale i Vipps.</p>
+              <label><span>Vipps-navn</span><input id="paymentVippsName" maxlength="150" placeholder="Blindleia Dartklubb"></label>
+              <label><span>Vipps-nummer</span><input id="paymentVippsNumber" maxlength="50" inputmode="numeric" placeholder="Vipps-nummer"></label>
+              <label><span>Vipps betalingslenke (valgfritt)</span><input id="paymentVippsUrl" type="url" inputmode="url" placeholder="https://..."></label>
+            </section>
+          </div>
+          <div class="payment-settings-card" style="margin-top:14px">
+            <label><span>Kontaktinfo ved spørsmål om betaling (valgfritt)</span><input id="paymentContact" maxlength="255" placeholder="E-post eller annen kort kontaktinfo"></label>
+            <div class="payment-settings-note"><strong>Hvor ligger resten?</strong><br>Stripe-abonnement, webhook, medlemskobling og faktiske betalinger finnes allerede i Blindleia admin og de eksisterende Stripe-tabellene. Denne siden styrer bare hva spillerportalen skal vise og hvor knappene skal gå.</div>
+          </div>
+          <div class="payment-settings-actions"><button type="submit" class="button">Lagre betalingsoppsett</button><div id="paymentSettingsStatus" class="message hidden"></div></div>
+        </form>
+      </section>
+
       <section id="screens" data-portal-section="kiosks" class="panel">
         <div class="panel-head">
           <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Opprett en skjermkode én gang. TV-en kobler seg til ved å skrive inn koden på venue-siden.</p></div>
@@ -227,6 +257,7 @@
   <script src="./activity-admin.js?v=20260827-1900" type="module"></script>
   <script src="./superadmin-identity-audit.js?v=20260827-1900" type="module"></script>
   <script src="./scolia-admin.js" type="module"></script>
+  <script src="./payment-settings.js?v=20260828-1040" type="module"></script>
   <script src="./checkin-admin-v2.js?v=20260826-1445" type="module"></script>
   <script src="./tournament-loader.js?v=20260826-1510" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js?v=20260827-1900" type="module"></script>
