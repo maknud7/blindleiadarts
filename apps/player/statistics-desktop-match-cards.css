@@ -1,0 +1,95 @@
+/* Desktop-only polish for statistics match history. Mobile keeps the compact stacked layout. */
+@media (min-width: 761px) {
+  #statistics [data-statistics-panel="mine"] #myMatchList {
+    gap: 8px !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 72px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) repeat(3, max-content) !important;
+    align-items: center !important;
+    column-gap: 18px !important;
+    row-gap: 6px !important;
+    padding: 12px 14px !important;
+    border: 1px solid #dde6ef !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #0c2340 !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row:hover {
+    border-color: #b9cee7 !important;
+    background: #f8fbff !important;
+    transform: none !important;
+  }
+
+  /* The old desktop presentation could stretch win/loss colour across almost the whole row.
+     Keep any semantic colour on the text, but remove full-width fills from the copy area. */
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > div:first-child {
+    min-width: 0 !important;
+    display: grid !important;
+    gap: 4px !important;
+    align-content: center !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > div:first-child *,
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > div:first-child > * {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-align: left !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > div:first-child > strong {
+    display: block !important;
+    font-size: 14px !important;
+    line-height: 1.3 !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > div:first-child > small {
+    display: block !important;
+    margin-top: 1px !important;
+    color: #6d7f94 !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > .elo-movement {
+    margin: 0 !important;
+    align-self: center !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .history-row-button.statistics-history-row > span:not(.elo-movement) {
+    margin: 0 !important;
+    align-self: center !important;
+    color: #71849a !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+
+  body #statistics [data-statistics-panel="mine"] .my-matches-all {
+    margin-top: 4px !important;
+  }
+}
