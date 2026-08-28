@@ -1,5 +1,5 @@
-release_sha=d4a8c5d638946b8bd298c545522d837cf9c18472
+release_sha=653ff4a20a4b1f9aa3e8d9702ef7e43b685c3984
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-08-28T17:14:00+02:00
-purpose=softlaunch_generalprove
+requested_at=2026-08-28T19:42:00+02:00
+purpose=prod_all_after_softlaunch
