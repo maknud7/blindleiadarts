@@ -19,7 +19,6 @@ if (opsHost) {
       <label><span>Turnering</span><select id="opsTournament"></select></label>
       <label class="ops-toggle"><input id="opsAuto" type="checkbox"><span>Automatisk kampfordeling</span></label>
       <button id="opsSave" type="button" class="button secondary">Lagre</button>
-      <button id="opsReconcile" type="button" class="button">Fordel ledige skiver</button>
       <button id="opsRefresh" type="button" class="button quiet">Oppdater</button>
     </div>
     <div id="opsProgress" class="ops-progress"></div>
@@ -29,7 +28,7 @@ if (opsHost) {
     </div>`;
   opsHost.appendChild(panel);
 
-  const el = Object.fromEntries(["opsLiveLink","opsMessage","opsTournament","opsAuto","opsSave","opsReconcile","opsRefresh","opsProgress","opsBoards","opsQueue"].map((id) => [id, document.getElementById(id)]));
+  const el = Object.fromEntries(["opsLiveLink","opsMessage","opsTournament","opsAuto","opsSave","opsRefresh","opsProgress","opsBoards","opsQueue"].map((id) => [id, document.getElementById(id)]));
   const state = { tournaments: [], snapshot: null };
   function token() { return localStorage.getItem("bd:token") || ""; }
   function clubId() { return Number(localStorage.getItem("bd:selectedClubId") || 0); }
@@ -109,18 +108,6 @@ if (opsHost) {
     try { state.snapshot = await api(`/tournaments/${id}/operations/settings`, { method: "PATCH", body: { auto_assign_enabled: el.opsAuto.checked } }); show("Driftsinnstillingene er lagret.", "success"); render(); }
     catch (e) { show(e.message, "error"); }
     finally { el.opsSave.disabled = false; }
-  });
-  el.opsReconcile.addEventListener("click", async () => {
-    const id = Number(el.opsTournament.value || 0); if (!id) return;
-    el.opsReconcile.disabled = true;
-    try {
-      state.snapshot = await api(`/tournaments/${id}/operations/reconcile`, { method: "POST" });
-      const n = Number(state.snapshot.assignment?.assigned_count || 0);
-      show(n ? `${n} kamp${n === 1 ? "" : "er"} ble sendt til ledige skiver.` : "Kampmotoren fant ingen nye kamper som kunne sendes ut akkurat nå.", "success");
-      render();
-    }
-    catch (e) { show(e.message, "error"); }
-    finally { el.opsReconcile.disabled = false; }
   });
   document.getElementById("clubSelect")?.addEventListener("change", () => setTimeout(() => loadBase().catch((e) => show(e.message, "error")), 0));
   hideMessage();
