@@ -91,69 +91,74 @@
   .member-access-block{margin-top:0}
   .member-account-intro{display:none}
 
-  .member-toolbar{align-items:stretch;margin:0 0 8px;gap:7px}
+  .member-toolbar{align-items:stretch;margin:0 0 10px;gap:8px}
   .member-search{flex-basis:100%;min-width:0}
-  .member-search input{min-height:42px;font-size:16px}
+  .member-search input{min-height:44px;font-size:16px}
   .member-filters{overflow-x:auto;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .member-filters::-webkit-scrollbar{display:none}
-  .member-filters button{min-height:36px!important;padding:6px 10px!important}
+  .member-filters button{min-height:38px!important;padding:7px 11px!important}
   .member-toolbar>.pill{margin-left:auto;align-self:center}
 
-  .member-access-summary{display:flex;gap:6px;overflow-x:auto;margin-bottom:9px;scrollbar-width:none}
-  .member-access-summary::-webkit-scrollbar{display:none}
-  .member-access-summary button{flex:1 0 auto;min-width:105px;min-height:42px;padding:6px 9px!important;gap:5px}
-  .member-access-summary strong{font-size:17px}
-  .member-access-summary span{font-size:10px}
+  .member-access-summary{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;overflow:visible!important;margin-bottom:12px!important}
+  .member-access-summary button{display:block!important;min-width:0!important;min-height:70px!important;padding:10px 8px!important;border-radius:12px!important}
+  .member-access-summary strong{display:block!important;font-size:20px!important;line-height:1.1!important;margin-bottom:5px!important}
+  .member-access-summary span{display:block!important;font-size:10px!important;line-height:1.2!important}
 
   .member-link-row{flex-direction:column}
   .member-pending-card{grid-template-columns:1fr}
 
-  .member-access-table-wrap{border:0;overflow:visible;background:transparent}
-  .member-access-table-wrap table,.member-access-table-wrap tbody{display:block;min-width:0;width:100%}
-  .member-access-table-wrap thead{display:none}
-  .member-access-table-wrap tr:not(.member-empty-row){display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:9px;padding:12px;border:1px solid var(--line);border-radius:15px;background:#fff;overflow:hidden;box-shadow:0 2px 7px rgba(17,42,73,.04)}
-  .member-access-table-wrap tr.member-row-inactive{background:#fafbfc}
+  .member-access-table-wrap{border:0!important;overflow:visible!important;background:transparent!important}
+  .member-access-table-wrap table,.member-access-table-wrap tbody{display:block!important;min-width:0!important;width:100%!important}
+  .member-access-table-wrap thead{display:none!important}
+  .member-access-table-wrap tr:not(.member-empty-row){display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"person person" "membership payment" "account action"!important;column-gap:10px!important;row-gap:9px!important;margin-bottom:10px!important;padding:14px!important;border:1px solid var(--line)!important;border-radius:16px!important;background:#fff!important;overflow:hidden!important;box-shadow:0 2px 8px rgba(17,42,73,.05)!important}
+  .member-access-table-wrap tr.member-row-inactive{background:#fafbfc!important}
 
-  .member-access-table-wrap td{display:block;min-width:0;padding:0!important;border:0!important;text-align:left}
-  .member-access-table-wrap td::before{content:attr(data-label);display:block;margin-bottom:5px;font-size:9px;font-weight:900;line-height:1;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
-  .member-access-table-wrap td[data-label="Medlem"]{grid-column:1/-1;padding-bottom:9px!important;border-bottom:1px solid #edf1f4!important}
-  .member-access-table-wrap td[data-label="Medlem"]::before{display:none}
-  .member-access-table-wrap td[data-label="Medlem"]>strong{display:inline;font-size:19px;line-height:1.15;letter-spacing:-.02em;color:var(--text)}
-  .member-access-table-wrap td[data-label="Medlem"]>small{display:inline;margin:0 0 0 8px;font-size:11px;white-space:nowrap}
+  .member-access-table-wrap td{display:block!important;min-width:0!important;width:auto!important;max-width:none!important;padding:0!important;border:0!important;text-align:left!important}
+  .member-access-table-wrap td::before{display:none!important;content:none!important}
+  .member-access-table-wrap td>*{max-width:none!important;text-align:left!important;align-items:flex-start!important}
 
-  .member-access-table-wrap td[data-label="Betaling"],
-  .member-access-table-wrap td[data-label="Brukerkonto"]{padding:9px!important;border-radius:10px!important;background:#f7fafc}
-  .member-access-table-wrap td[data-label="Betaling"] small,
-  .member-access-table-wrap td[data-label="Brukerkonto"] small{font-size:11px;line-height:1.3;overflow-wrap:anywhere;word-break:break-word}
-  .member-payment-stack{min-width:0}
-  .member-payment-badges{gap:4px}
-  .member-payment-pattern{padding-top:5px}
+  .member-access-table-wrap td[data-label="Medlem"]{grid-area:person!important;padding-bottom:10px!important;border-bottom:1px solid #edf1f4!important}
+  .member-access-table-wrap .member-person{gap:3px!important}
+  .member-access-table-wrap .member-person strong{font-size:18px!important;line-height:1.15!important;letter-spacing:-.015em!important;color:var(--text)!important}
+  .member-access-table-wrap .member-person small{font-size:12px!important;margin:0!important;color:var(--muted)!important}
 
-  .member-access-table-wrap td[data-label="Handling"]{grid-column:1/-1;padding-top:1px!important}
-  .member-access-table-wrap td[data-label="Handling"]::before{display:none}
-  .member-access-actions button{width:auto;min-height:36px;padding:7px 11px!important;white-space:normal;border-radius:10px!important;font-size:12px!important}
-  .member-access-actions .member-disable{width:auto}
+  .member-access-table-wrap td[data-label="Medlemsstatus"]{grid-area:membership!important;align-self:center!important}
+  .member-access-table-wrap td[data-label="Betaling"]{grid-area:payment!important;align-self:center!important;background:transparent!important;padding:0!important;border-radius:0!important}
+  .member-access-table-wrap .member-status-stack,.member-access-table-wrap .member-payment-overview{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;min-width:0!important}
+  .member-access-table-wrap .member-payment-overview small{display:none!important}
+  .member-access-table-wrap td[data-label="Betaling"] .badge::before{content:"Betaling ";font-weight:inherit}
 
-  .member-access-level{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;margin-top:7px;padding-top:6px}
-  .member-access-level label{min-width:0}
-  .member-access-level select{min-height:36px;font-size:12px}
-  .member-access-level button{align-self:end;min-height:36px!important}
-  .member-access-level.readonly{display:grid;grid-template-columns:1fr;gap:2px}
+  .member-access-table-wrap td[data-label="Konto og tilgang"]{grid-area:account!important;padding-top:10px!important;border-top:1px solid #edf1f4!important;min-width:0!important}
+  .member-access-table-wrap .member-account-compact{display:grid!important;gap:4px!important;align-items:start!important}
+  .member-access-table-wrap .member-account-compact::before{content:"Konto";display:block;font-size:10px;font-weight:800;color:var(--muted);line-height:1.1}
+  .member-access-table-wrap .member-account-compact>small{display:none!important}
+  .member-access-table-wrap .member-account-compact>.badge{justify-self:start!important}
+
+  .member-access-table-wrap td[data-label="Handling"]{grid-area:action!important;align-self:end!important;justify-self:end!important;padding-top:10px!important;border-top:1px solid #edf1f4!important;white-space:normal!important}
+  .member-access-actions button{width:auto!important;min-height:38px!important;padding:8px 12px!important;white-space:nowrap!important;border-radius:10px!important;font-size:12px!important}
+  .member-access-actions .member-disable{width:auto!important}
+
+  .member-access-level{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:5px!important;margin-top:6px!important;padding-top:6px!important}
+  .member-access-level label{min-width:0!important}
+  .member-access-level select{min-height:36px!important;font-size:12px!important}
+  .member-access-level button{align-self:end!important;min-height:36px!important}
+  .member-access-level.readonly{display:grid!important;grid-template-columns:1fr!important;gap:2px!important}
 
   .member-empty-row{display:block!important}
   .member-empty-row td{display:block!important}
-
   .member-pending-foot{grid-column:auto}
   .member-new-person>div{justify-items:stretch}
   .member-new-person button{width:100%;min-height:42px}
 }
 
 @media(max-width:480px){
-  .member-access-table-wrap tr:not(.member-empty-row){padding:10px;gap:7px}
-  .member-access-table-wrap td[data-label="Medlem"]>strong{font-size:18px}
-  .member-access-table-wrap td[data-label="Medlem"]>small{font-size:10px}
-  .member-access-table-wrap td[data-label="Betaling"],
-  .member-access-table-wrap td[data-label="Brukerkonto"]{padding:8px!important}
-  .member-access-level{grid-template-columns:1fr}
-  .member-access-level button{justify-self:start}
+  .member-access-summary button{min-height:66px!important;padding:9px 7px!important}
+  .member-access-summary strong{font-size:19px!important}
+  .member-access-summary span{font-size:9px!important}
+  .member-access-table-wrap tr:not(.member-empty-row){padding:12px!important;column-gap:8px!important;row-gap:8px!important}
+  .member-access-table-wrap .member-person strong{font-size:17px!important}
+  .member-access-table-wrap .badge{font-size:11px!important;padding:5px 8px!important}
+  .member-access-table-wrap td[data-label="Konto og tilgang"]{min-width:0!important}
+  .member-access-level{grid-template-columns:1fr!important}
+  .member-access-level button{justify-self:start!important}
 }
