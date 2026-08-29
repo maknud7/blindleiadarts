@@ -16,7 +16,7 @@
 .member-filters button{border:0!important;background:transparent!important;color:var(--muted)!important;box-shadow:none!important;padding:7px 10px!important;border-radius:8px!important;font-size:11px!important;transform:none!important;white-space:nowrap}
 .member-filters button.active{background:#fff!important;color:var(--accent)!important;box-shadow:0 2px 7px rgba(11,49,69,.08)!important}
 
-.member-access-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 11px}
+.member-access-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:0 0 11px}
 .member-access-summary button{display:flex;align-items:baseline;gap:7px;text-align:left;padding:9px 11px;border:1px solid var(--line)!important;border-radius:11px!important;background:#fff!important;color:var(--muted)!important;box-shadow:none!important;transform:none!important}
 .member-access-summary button:hover{border-color:#a8bfd0!important;background:#f8fbfd!important}
 .member-access-summary strong{font-size:18px;color:var(--text)}
@@ -33,6 +33,15 @@
 .member-access-actions button{white-space:nowrap}
 .member-access-actions .member-disable{background:#fff0f2!important;color:#9e303a!important;border:1px solid #efc5ca!important}
 .member-access-actions .member-reactivate{background:#e8f6ef!important;color:#176449!important;border:1px solid #b8dfcd!important}
+
+.member-payment-stack{display:grid;gap:6px;min-width:230px}
+.member-payment-badges{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.member-payment-pattern{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid #e7edf2}
+.member-payment-pattern>span:first-child{font-size:9px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.member-payment-arrears{display:grid;gap:2px;padding:7px 8px;border:1px solid #efc5ca;border-radius:9px;background:#fff4f4;color:#9e303a}
+.member-payment-arrears strong{font-size:12px}
+.member-payment-arrears span{font-size:10px;line-height:1.3}
+.member-dues-reason{opacity:.82}
 
 .member-access-level{display:flex;align-items:end;gap:6px;margin-top:8px;padding-top:7px;border-top:1px solid #e7edf2}
 .member-access-level label{display:grid;gap:3px;min-width:0;flex:1}
@@ -73,6 +82,7 @@
 
 @media(max-width:1050px){
   .member-account-intro{grid-template-columns:1fr}
+  .member-access-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
   .member-pending-card{grid-template-columns:1fr 1fr}
   .member-pending-foot{grid-column:1/-1}
 }
@@ -111,10 +121,13 @@
   .member-access-table-wrap td[data-label="Medlem"]>strong{display:inline;font-size:19px;line-height:1.15;letter-spacing:-.02em;color:var(--text)}
   .member-access-table-wrap td[data-label="Medlem"]>small{display:inline;margin:0 0 0 8px;font-size:11px;white-space:nowrap}
 
-  .member-access-table-wrap td[data-label="Kontingent"],
+  .member-access-table-wrap td[data-label="Betaling"],
   .member-access-table-wrap td[data-label="Brukerkonto"]{padding:9px!important;border-radius:10px!important;background:#f7fafc}
-  .member-access-table-wrap td[data-label="Kontingent"] small,
+  .member-access-table-wrap td[data-label="Betaling"] small,
   .member-access-table-wrap td[data-label="Brukerkonto"] small{font-size:11px;line-height:1.3;overflow-wrap:anywhere;word-break:break-word}
+  .member-payment-stack{min-width:0}
+  .member-payment-badges{gap:4px}
+  .member-payment-pattern{padding-top:5px}
 
   .member-access-table-wrap td[data-label="Handling"]{grid-column:1/-1;padding-top:1px!important}
   .member-access-table-wrap td[data-label="Handling"]::before{display:none}
@@ -139,7 +152,7 @@
   .member-access-table-wrap tr:not(.member-empty-row){padding:10px;gap:7px}
   .member-access-table-wrap td[data-label="Medlem"]>strong{font-size:18px}
   .member-access-table-wrap td[data-label="Medlem"]>small{font-size:10px}
-  .member-access-table-wrap td[data-label="Kontingent"],
+  .member-access-table-wrap td[data-label="Betaling"],
   .member-access-table-wrap td[data-label="Brukerkonto"]{padding:8px!important}
   .member-access-level{grid-template-columns:1fr}
   .member-access-level button{justify-self:start}
