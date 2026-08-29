@@ -21,4 +21,4 @@ window.addEventListener("bd:portal-view",hideClubSwitcher);
 document.getElementById("clubSelect")?.addEventListener("change",hideClubSwitcher);
 window.addEventListener("bd:player-state-changed",hideClubSwitcher);
 
-import("./tournament-discovery-ux.js?v=20260829-1915");
+import("./tournament-discovery-ux.js?v=20260829-1925");
