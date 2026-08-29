@@ -117,15 +117,42 @@
         </div>
       </section>
 
-      <section id="tournaments" data-portal-section="tournaments" class="panel"></section>
-      <section id="players" data-portal-section="players" class="panel"><div id="memberRegistryStatus"></div></section>
-      <section id="kiosks" data-portal-section="kiosks" class="panel"></section>
-      <section id="integrations" data-portal-section="integrations" class="panel"></section>
+      <section id="tournaments" data-portal-section="tournaments" class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Turneringer</p><h2>Turneringsadministrasjon</h2></div>
+          <div class="panel-actions"><button id="createTournamentButton" type="button">Ny turnering</button></div>
+        </div>
+        <div id="tournamentAdmin"></div>
+      </section>
+
+      <section id="players" data-portal-section="players" class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Medlemmer</p><h2>Medlemsregister</h2></div>
+        </div>
+        <div id="memberRegistryStatus"></div>
+      </section>
+
+      <section id="kiosks" data-portal-section="kiosks" class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Utstyr</p><h2>Skiver og nettbrett</h2></div></div>
+        <div id="equipmentAdmin"></div>
+      </section>
+
+      <section id="integrations" data-portal-section="integrations" class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Innstillinger</p><h2>Klubbinnstillinger</h2></div></div>
+        <div id="integrationSettings"></div>
+      </section>
     </main>
   </div>
 
   <script src="./app.js"></script>
+  <script src="./tournament-admin.js"></script>
+  <script src="./tournament-operations-admin.js"></script>
+  <script src="./tournament-playoff-admin.js"></script>
   <script src="./member-onboarding-admin.js?v=20260829-1025"></script>
   <script src="./member-mobile-expand.js?v=20260829-0955"></script>
+  <script src="./equipment-admin.js"></script>
+  <script src="./health-tracker.js"></script>
+  <script src="./player-identity-admin.js"></script>
+  <script src="./payment-settings.js"></script>
 </body>
 </html>
