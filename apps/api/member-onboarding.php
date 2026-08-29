@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\MemberAdminRepository;
 use Blindleia\Dartkiosk\Api\Repository\MemberOnboardingRepository;
-use Blindleia\Dartkiosk\Api\Repository\MembershipEligibilityRepository;
+use Blindleia\Dartkiosk\Api\Repository\MembershipAdminStatusRepository;
 use Blindleia\Dartkiosk\Api\Repository\SelfRegistrationRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
@@ -45,12 +45,13 @@ try {
     $request = Request::fromGlobals();
     $repository = new MemberOnboardingRepository($database);
     $memberAdmin = new MemberAdminRepository($database);
-    $membershipEligibility = new MembershipEligibilityRepository($database);
+    $membershipAdminStatus = new MembershipAdminStatusRepository($database);
     $selfRegistration = new SelfRegistrationRepository($database);
     $action = strtolower(trim((string) ($_GET['action'] ?? '')));
 
-    // Kept for the legacy `self` payload only. Admin list status below comes from
-    // MembershipEligibilityRepository so there is one canonical dues calculation.
+    // Kept for the legacy `self` payload only. The club-admin list below uses
+    // MembershipAdminStatusRepository, which mirrors blindleia-admin's canonical
+    // kontingentlogikk.php + medlemsarkiv.php rules.
     $loadMembership = static function (int $memberId, bool $includePayments = false) use ($db): ?array {
         if ($memberId <= 0) return null;
         $stmt = $db->prepare(
@@ -175,15 +176,10 @@ try {
         $requiresAction = 0;
 
         foreach ($data['items'] as &$item) {
-            $playerId = (int) ($item['player']['id'] ?? 0);
-            $membership = $membershipEligibility->forMember(
-                (int) ($item['member_id'] ?? 0),
-                $clubId,
-                $playerId > 0 ? $playerId : null
-            );
+            $membership = $membershipAdminStatus->forMember((int) ($item['member_id'] ?? 0));
             $item['membership'] = $membership;
 
-            $isActiveMember = (bool) ($membership['member_active'] ?? true);
+            $isActiveMember = (bool) ($membership['is_active_member'] ?? true);
             if ($isActiveMember) {
                 $activeMembers++;
             } else {
@@ -192,7 +188,7 @@ try {
 
             $accountStatus = (string) ($item['account']['status'] ?? 'none');
             $accountNeedsAction = $accountStatus !== 'active';
-            if ($isActiveMember && ((bool) ($membership['action_required'] ?? false) || $accountNeedsAction)) {
+            if ($isActiveMember && ((bool) ($membership['needs_follow_up'] ?? false) || $accountNeedsAction)) {
                 $requiresAction++;
             }
         }
