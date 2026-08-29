@@ -4,35 +4,38 @@ const REACTIVATE_ENDPOINT = "../api/member-account-reactivate.php";
 
 const panel = document.getElementById("players");
 if (panel) {
-  const css = document.createElement("link");
-  css.rel = "stylesheet";
-  css.href = "./member-onboarding-admin.css?v=20260828-1210";
-  document.head.appendChild(css);
+  const MEMBER_UI_VERSION = "20260829-0830";
+  if (!document.querySelector('link[data-member-onboarding-css]')) {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.dataset.memberOnboardingCss = "1";
+    css.href = `./member-onboarding-admin.css?v=${MEMBER_UI_VERSION}`;
+    document.head.appendChild(css);
+  }
 
   const block = document.createElement("div");
   block.className = "member-access-block";
   block.innerHTML = `
     <section class="member-account-intro">
       <div>
-        <p class="eyebrow">Brukerkontoer</p>
-        <h3>Én konto per medlem – samme spillerprofil</h3>
-        <p>Medlemmet og spillerhistorikken finnes først. Brukerkontoen gir bare innlogging til den samme spilleren. En aktivering skal derfor aldri lage en ny ELO- eller kamphistorikk.</p>
+        <p class="eyebrow">Medlemsadministrasjon</p>
+        <h3>Medlem, kontingent og tilgang på ett sted</h3>
+        <p>Standardlisten viser aktive medlemmer. Kontingentstatus bruker samme beregning som påmelding og medlemsoppfølging, mens inaktive medlemmer kan hentes frem med filteret.</p>
       </div>
       <div class="member-account-flow" aria-label="Kontoflyt">
-        <div><span>1</span><strong>Ingen konto</strong><small>Medlem og spiller finnes.</small></div>
-        <div><span>2</span><strong>Invitasjon sendt</strong><small>Spilleren velger e-post og passord.</small></div>
-        <div><span>3</span><strong>Aktiv konto</strong><small>Samme spiller kan logge inn.</small></div>
+        <div><span>1</span><strong>Medlem</strong><small>Canonical medlemsstatus.</small></div>
+        <div><span>2</span><strong>Kontingent</strong><small>Samme betalingslogikk overalt.</small></div>
+        <div><span>3</span><strong>Tilgang</strong><small>Klubbadmin styrer klubbtilgang.</small></div>
       </div>
     </section>
 
     <div class="member-toolbar">
       <label class="member-search"><span class="sr-only">Søk i medlemmer</span><input id="memberSearch" type="search" placeholder="Søk navn, medlemsnr. eller e-post …" autocomplete="off"></label>
-      <div class="member-filters" role="group" aria-label="Filtrer brukerkontoer">
-        <button type="button" class="active" data-member-filter="all">Alle</button>
-        <button type="button" data-member-filter="needs">Må aktiveres</button>
-        <button type="button" data-member-filter="invited">Invitasjon sendt</button>
-        <button type="button" data-member-filter="active">Aktive</button>
-        <button type="button" data-member-filter="disabled">Deaktivert</button>
+      <div class="member-filters" role="group" aria-label="Filtrer medlemmer">
+        <button type="button" class="active" data-member-filter="active">Aktive</button>
+        <button type="button" data-member-filter="needs">Krever handling</button>
+        <button type="button" data-member-filter="all">Alle</button>
+        <button type="button" data-member-filter="inactive">Inaktive</button>
       </div>
       <span id="memberAccessCount" class="pill">—</span>
     </div>
@@ -43,7 +46,7 @@ if (panel) {
 
     <div class="table-wrap member-access-table-wrap">
       <table>
-        <thead><tr><th>Medlem</th><th>Kontingent</th><th>Brukerkonto</th><th>Neste handling</th></tr></thead>
+        <thead><tr><th>Medlem</th><th>Kontingent</th><th>Brukerkonto og tilgang</th><th>Handling</th></tr></thead>
         <tbody id="memberAccessRows"></tbody>
       </table>
     </div>
@@ -51,7 +54,7 @@ if (panel) {
     <details class="member-new-person">
       <summary>Ny person som ikke finnes i medlemslisten</summary>
       <div>
-        <p>Bruk generell registreringslenke bare når personen ikke allerede finnes som medlem/spiller. Har personen spilt tidligere, bruk aktiveringsknappen på riktig medlem i tabellen over.</p>
+        <p>Bruk generell registreringslenke bare når personen ikke allerede finnes som medlem/spiller. Har personen spilt tidligere, bruk aktiveringsknappen på riktig medlem i listen over.</p>
         <button id="memberOpenInvite" type="button" class="button secondary">Lag registreringslenke for ny person</button>
       </div>
     </details>`;
@@ -76,12 +79,14 @@ if (panel) {
     key: "",
     items: [],
     pending: [],
+    permissions: {},
     loading: false,
-    filter: "all",
+    filter: "active",
     search: "",
     linkConfig: null,
   };
 
+  const collator = new Intl.Collator("nb-NO", { sensitivity: "base" });
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -168,7 +173,9 @@ if (panel) {
 
   function formatMoney(value) {
     const number = Number(value);
-    return Number.isFinite(number) ? new Intl.NumberFormat("nb-NO", { style: "currency", currency: "NOK", maximumFractionDigits: 0 }).format(number) : "—";
+    return Number.isFinite(number) ? new Intl.NumberFormat("nb-NO", {
+      style: "currency", currency: "NOK", maximumFractionDigits: 0,
+    }).format(number) : "—";
   }
 
   function formatDate(value, includeTime = false) {
@@ -184,62 +191,156 @@ if (panel) {
     return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("nb");
   }
 
+  function isInactiveMember(item) {
+    return item.membership?.member_active === false
+      || String(item.membership?.reason_code || "") === "membership_inactive";
+  }
+
+  function requiresAction(item) {
+    if (isInactiveMember(item)) return false;
+    const duesNeedsAction = Boolean(item.membership?.action_required);
+    const accountNeedsAction = accountStage(item) !== "active";
+    return duesNeedsAction || accountNeedsAction;
+  }
+
   function duesCell(membership) {
-    if (!membership) return `<span class="muted">Ikke registrert</span>`;
-    const override = String(membership.status_override || "").trim();
-    const latest = membership.latest_payment || null;
-    if (override) return `<strong>${escapeHtml(override)}</strong>`;
-    if (latest) return `<strong>${escapeHtml(latest.period || formatDate(latest.date))}</strong><small>${formatMoney(latest.amount)}</small>`;
-    return `<strong>Ingen betaling registrert</strong>`;
+    if (!membership || membership.status === "unavailable") {
+      return `<span class="badge neutral">Ukjent</span><small>Kunne ikke beregne kontingentstatus</small>`;
+    }
+
+    const reason = String(membership.reason_code || "");
+    const currentLabel = membership.current_period_label || "inneværende måned";
+    const previousLabel = membership.previous_period_label || "forrige måned";
+    const missed = Number(membership.missed_closed_months || 0);
+    const remaining = Number(membership.current_remaining || 0);
+
+    switch (reason) {
+      case "membership_inactive":
+        return `<span class="badge neutral">Inaktivt medlem</span><small>Skjult fra standardlisten</small>`;
+      case "payment_not_required":
+        return `<span class="badge good">Ikke fast kontingent</span><small>Betaling er ikke påkrevd</small>`;
+      case "dues_not_started":
+        return `<span class="badge neutral">Ikke startet</span><small>Kontingent starter ${escapeHtml(formatDate(membership.dues_start))}</small>`;
+      case "payment_too_far_overdue":
+        return `<span class="badge bad">Kontingent mangler</span><small>${missed} avsluttede måneder uten betaling</small>`;
+      case "stripe_needs_attention":
+        return `<span class="badge warning">Fast betaling feiler</span><small>Stripe trenger oppfølging</small>`;
+      case "active_autodebit":
+        return `<span class="badge good">Fast betaling aktiv</span><small>Stripe-abonnement</small>`;
+      case "previous_period_incomplete":
+        return `<span class="badge warning">Kontingent mangler</span><small>${escapeHtml(previousLabel)} er ikke fullt betalt</small>`;
+      case "current_period_incomplete":
+        return `<span class="badge warning">Denne måneden</span><small>${remaining > 0 ? `${formatMoney(remaining)} mangler · ` : ""}${escapeHtml(currentLabel)}</small>`;
+      case "paid":
+        return `<span class="badge good">Betalt</span><small>${escapeHtml(currentLabel)}</small>`;
+      default:
+        return `<span class="badge good">OK</span><small>${escapeHtml(currentLabel)}</small>`;
+    }
+  }
+
+  function accessLabel(level) {
+    switch (String(level || "player")) {
+      case "super_admin": return "Superadmin";
+      case "club_admin": return "Klubbadmin";
+      default: return "Medlem";
+    }
+  }
+
+  function accessControlHtml(item, stage) {
+    const account = item.account || null;
+    if (!account || stage !== "active") return "";
+
+    const level = String(account.access_level || "player");
+    const accountId = Number(account.id || 0);
+    const currentAccountId = Number(state.permissions.current_user_account_id || 0);
+    const canGrantSuper = Boolean(state.permissions.can_grant_super_admin);
+    const canEdit = Boolean(state.permissions.can_manage_roles)
+      && accountId > 0
+      && accountId !== currentAccountId
+      && (level !== "super_admin" || canGrantSuper);
+
+    if (!canEdit) {
+      const own = accountId === currentAccountId ? " · deg" : "";
+      return `<div class="member-access-level readonly"><span>Tilgang</span><strong>${escapeHtml(accessLabel(level))}${own}</strong></div>`;
+    }
+
+    const options = [
+      ["player", "Medlem"],
+      ["club_admin", "Klubbadmin"],
+      ...(canGrantSuper ? [["super_admin", "Superadmin"]] : []),
+    ];
+
+    return `<div class="member-access-level">
+      <label><span>Tilgang</span><select class="member-access-select" aria-label="Tilgangsnivå for ${escapeHtml(item.member_name)}">
+        ${options.map(([value, label]) => `<option value="${value}"${value === level ? " selected" : ""}>${label}</option>`).join("")}
+      </select></label>
+      <button type="button" class="button secondary member-access-save" data-account-id="${accountId}">Lagre</button>
+    </div>`;
+  }
+
+  function accountDetails(item, stage) {
+    const account = item.account || null;
+    let details = "";
+    if (stage === "active") {
+      const email = account?.email ? escapeHtml(account.email) : "E-post mangler";
+      const login = account?.last_login_at ? `Sist innlogget ${escapeHtml(formatDate(account.last_login_at, true))}` : "Ikke logget inn ennå";
+      details = `<small>${email}</small><small>${login}</small>`;
+    } else if (stage === "invited") {
+      details = `<small>Aktiveringslenke gyldig til ${escapeHtml(formatDate(account?.invite_expires_at, true))}</small>`;
+    } else if (stage === "disabled") {
+      details = `<small>${account?.email ? escapeHtml(account.email) : "Ingen e-post lagret"}</small><small>Innlogging er sperret</small>`;
+    } else if (stage === "needs") {
+      details = `<small>Kontoen finnes, men aktiveringen er ikke ferdig</small>`;
+    } else {
+      details = `<small>Spillerprofilen beholdes når konto opprettes</small>`;
+    }
+    return `${details}${accessControlHtml(item, stage)}`;
+  }
+
+  function actionHtml(item, stage) {
+    const account = item.account || null;
+    const isOwnAccount = Number(account?.id || 0) === Number(state.permissions.current_user_account_id || 0);
+    if (stage === "active") {
+      return isOwnAccount
+        ? `<small class="muted">Din brukerkonto</small>`
+        : `<button type="button" class="button quiet member-disable">Deaktiver konto</button>`;
+    }
+    if (stage === "disabled" && account?.claimed_at && account?.email) {
+      return `<button type="button" class="button secondary member-reactivate">Aktiver igjen</button>`;
+    }
+    if (stage === "invited") {
+      return `<button type="button" class="button secondary member-invite">Ny aktiveringslenke</button>`;
+    }
+    return `<button type="button" class="button member-invite">Send aktiveringslenke</button>`;
   }
 
   function matchesFilter(item) {
-    const stage = accountStage(item);
-    if (state.filter !== "all" && stage !== state.filter) {
-      if (!(state.filter === "needs" && stage === "none")) return false;
-    }
+    const inactive = isInactiveMember(item);
+    if (state.filter === "active" && inactive) return false;
+    if (state.filter === "inactive" && !inactive) return false;
+    if (state.filter === "needs" && !requiresAction(item)) return false;
+
     if (!state.search) return true;
     const haystack = `${item.member_name || ""} ${item.player?.display_name || ""} ${item.membership?.member_number || ""} ${item.account?.email || ""}`.toLocaleLowerCase("nb");
     return haystack.includes(state.search);
   }
 
-  function accountDetails(item, stage) {
-    const account = item.account || null;
-    if (stage === "active") {
-      const email = account?.email ? escapeHtml(account.email) : "E-post mangler";
-      const login = account?.last_login_at ? `Sist innlogget ${escapeHtml(formatDate(account.last_login_at, true))}` : "Ikke logget inn ennå";
-      return `<small>${email}</small><small>${login}</small>`;
-    }
-    if (stage === "invited") {
-      return `<small>Aktiveringslenke gyldig til ${escapeHtml(formatDate(account?.invite_expires_at, true))}</small>`;
-    }
-    if (stage === "disabled") {
-      return `<small>${account?.email ? escapeHtml(account.email) : "Ingen e-post lagret"}</small><small>Innlogging er sperret</small>`;
-    }
-    if (stage === "needs") {
-      return `<small>Kontoen finnes, men aktiveringen er ikke ferdig</small>`;
-    }
-    return `<small>Spillerprofilen beholdes når konto opprettes</small>`;
-  }
-
-  function actionHtml(item, stage) {
-    const account = item.account || null;
-    if (stage === "active") {
-      return `<button type="button" class="button quiet member-disable">Deaktiver konto</button>`;
-    }
-    if (stage === "disabled" && account?.claimed_at && account?.email) {
-      return `<button type="button" class="button secondary member-reactivate">Aktiver igjen</button><small>Beholder samme e-post og passord</small>`;
-    }
-    if (stage === "invited") {
-      return `<button type="button" class="button secondary member-invite">Lag ny aktiveringslenke</button><small>Den forrige lenken blir ugyldig</small>`;
-    }
-    return `<button type="button" class="button member-invite">Send aktiveringslenke</button>`;
+  function sortedVisibleItems() {
+    return state.items.filter(matchesFilter).sort((a, b) => {
+      const actionOrder = Number(requiresAction(b)) - Number(requiresAction(a));
+      if (actionOrder !== 0) return actionOrder;
+      return collator.compare(a.player?.display_name || a.member_name || "", b.player?.display_name || b.member_name || "");
+    });
   }
 
   function renderRows() {
-    const items = state.items.filter(matchesFilter);
+    const items = sortedVisibleItems();
+    el.count.textContent = state.filter === "all"
+      ? `${items.length} medlemmer`
+      : `${items.length} av ${state.items.length}`;
+
     if (!items.length) {
-      el.rows.innerHTML = `<tr><td colspan="4"><div class="empty">Ingen medlemmer passer filteret.</div></td></tr>`;
+      el.rows.innerHTML = `<tr class="member-empty-row"><td colspan="4"><div class="empty">Ingen medlemmer passer filteret.</div></td></tr>`;
       return;
     }
 
@@ -248,11 +349,12 @@ if (panel) {
       const [label, tone] = stageInfo(stage);
       const playerName = item.player?.display_name || item.member_name;
       const memberNumber = item.membership?.member_number || item.member_number || null;
-      return `<tr data-member-id="${Number(item.member_id)}">
+      const inactiveClass = isInactiveMember(item) ? " member-row-inactive" : "";
+      return `<tr class="${inactiveClass.trim()}" data-member-id="${Number(item.member_id)}">
         <td data-label="Medlem"><strong>${escapeHtml(playerName)}</strong>${memberNumber ? `<small>Medlemsnr. ${escapeHtml(memberNumber)}</small>` : ""}</td>
         <td data-label="Kontingent">${duesCell(item.membership)}</td>
         <td data-label="Brukerkonto"><span class="badge ${tone}">${escapeHtml(label)}</span>${accountDetails(item, stage)}</td>
-        <td data-label="Neste handling" class="member-access-actions">${actionHtml(item, stage)}</td>
+        <td data-label="Handling" class="member-access-actions">${actionHtml(item, stage)}</td>
       </tr>`;
     }).join("");
   }
@@ -260,7 +362,7 @@ if (panel) {
   function memberOptions(registration) {
     const exact = normalizeName(registration.display_name);
     return state.items
-      .filter((item) => accountStage(item) !== "active")
+      .filter((item) => !isInactiveMember(item) && accountStage(item) !== "active")
       .map((item) => {
         const selected = normalizeName(item.member_name) === exact ? " selected" : "";
         const [label] = stageInfo(accountStage(item));
@@ -292,25 +394,23 @@ if (panel) {
   }
 
   function renderSummary() {
-    const counts = { needs: 0, invited: 0, active: 0, disabled: 0 };
-    for (const item of state.items) {
-      const stage = accountStage(item);
-      if (stage === "none" || stage === "needs") counts.needs++;
-      else if (Object.hasOwn(counts, stage)) counts[stage]++;
-    }
+    const active = state.items.filter((item) => !isInactiveMember(item)).length;
+    const needs = state.items.filter(requiresAction).length;
+    const inactive = state.items.filter(isInactiveMember).length;
     const cards = [
-      ["needs", "Må aktiveres", counts.needs],
-      ["invited", "Invitasjon sendt", counts.invited],
-      ["active", "Aktiv konto", counts.active],
-      ["disabled", "Deaktivert", counts.disabled],
+      ["active", "Aktive", active],
+      ["needs", "Krever handling", needs],
+      ["inactive", "Inaktive", inactive],
     ];
-    el.summary.innerHTML = cards.map(([filter, label, value]) => `<button type="button" data-summary-filter="${filter}"><strong>${value}</strong><span>${escapeHtml(label)}</span></button>`).join("");
+    el.summary.innerHTML = cards.map(([filter, label, value]) =>
+      `<button type="button" data-summary-filter="${filter}"><strong>${value}</strong><span>${escapeHtml(label)}</span></button>`
+    ).join("");
   }
 
   function render(data) {
     state.items = data.items || [];
     state.pending = data.pending_registrations || [];
-    el.count.textContent = `${state.items.length} medlemmer`;
+    state.permissions = data.permissions || {};
     renderSummary();
     renderPending();
     renderRows();
@@ -360,8 +460,10 @@ if (panel) {
   }
 
   function setFilter(filter) {
-    state.filter = filter || "all";
-    block.querySelectorAll("[data-member-filter]").forEach((button) => button.classList.toggle("active", button.dataset.memberFilter === state.filter));
+    state.filter = filter || "active";
+    block.querySelectorAll("[data-member-filter]").forEach((button) =>
+      button.classList.toggle("active", button.dataset.memberFilter === state.filter)
+    );
     renderRows();
   }
 
@@ -380,13 +482,13 @@ if (panel) {
   block.addEventListener("click", async (event) => {
     const filterButton = event.target.closest("[data-member-filter]");
     if (filterButton) {
-      setFilter(filterButton.dataset.memberFilter || "all");
+      setFilter(filterButton.dataset.memberFilter || "active");
       return;
     }
 
     const summaryButton = event.target.closest("[data-summary-filter]");
     if (summaryButton) {
-      setFilter(summaryButton.dataset.summaryFilter || "all");
+      setFilter(summaryButton.dataset.summaryFilter || "active");
       return;
     }
 
@@ -418,6 +520,43 @@ if (panel) {
     const memberId = Number(row.dataset.memberId || 0);
     const item = state.items.find((entry) => Number(entry.member_id) === memberId);
     if (!item) return;
+
+    const accessButton = event.target.closest(".member-access-save");
+    if (accessButton) {
+      const accountId = Number(accessButton.dataset.accountId || 0);
+      const select = row.querySelector(".member-access-select");
+      const accessLevel = String(select?.value || "");
+      const oldLevel = String(item.account?.access_level || "player");
+      const touchesSuperAdmin = accessLevel === "super_admin" || oldLevel === "super_admin";
+
+      if (touchesSuperAdmin && accessButton.dataset.confirm !== "1") {
+        accessButton.dataset.confirm = "1";
+        accessButton.textContent = "Bekreft";
+        window.setTimeout(() => {
+          if (accessButton.isConnected && accessButton.dataset.confirm === "1") {
+            accessButton.dataset.confirm = "";
+            accessButton.textContent = "Lagre";
+          }
+        }, 5000);
+        return;
+      }
+
+      accessButton.disabled = true;
+      try {
+        await request("set-access-level", {
+          method: "POST",
+          body: { account_id: accountId, access_level: accessLevel },
+        });
+        showInline(`${item.member_name} har nå tilgangsnivå ${accessLabel(accessLevel)}.`, "good");
+        state.key = "";
+        await load(true);
+      } catch (error) {
+        showInline(error.message, "bad");
+      } finally {
+        accessButton.disabled = false;
+      }
+      return;
+    }
 
     const inviteButton = event.target.closest(".member-invite");
     if (inviteButton) {
@@ -483,9 +622,17 @@ if (panel) {
     renderRows();
   });
 
-  document.getElementById("refreshAllButton")?.addEventListener("click", () => { state.key = ""; setTimeout(() => load(true), 50); });
-  document.getElementById("clubSelect")?.addEventListener("change", () => { state.key = ""; setTimeout(() => load(true), 100); });
-  window.addEventListener("bd:portal-view", (event) => { if (event.detail?.target === "players") load(true); });
+  document.getElementById("refreshAllButton")?.addEventListener("click", () => {
+    state.key = "";
+    setTimeout(() => load(true), 50);
+  });
+  document.getElementById("clubSelect")?.addEventListener("change", () => {
+    state.key = "";
+    setTimeout(() => load(true), 100);
+  });
+  window.addEventListener("bd:portal-view", (event) => {
+    if (event.detail?.target === "players") load(true);
+  });
   loadLinkConfig().catch(() => null);
   load(true);
 }

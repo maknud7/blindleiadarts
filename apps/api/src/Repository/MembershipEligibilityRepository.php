@@ -49,6 +49,24 @@ final class MembershipEligibilityRepository
             ]);
         }
 
+        return $this->forMember($memberId, $clubId, $playerId);
+    }
+
+    /**
+     * Canonical member/dues state used by both the player flow and club admin.
+     * This keeps the members page on exactly the same rules as registration.
+     *
+     * @return array<string,mixed>
+     */
+    public function forMember(int $memberId, int $clubId, ?int $playerId = null): array
+    {
+        if ($memberId <= 0) {
+            return array_merge($this->unavailable('member_missing'), [
+                'club_id' => $clubId > 0 ? $clubId : null,
+                'player_id' => $playerId !== null && $playerId > 0 ? $playerId : null,
+            ]);
+        }
+
         $memberStmt = $this->connection->prepare(
             'SELECT id, medlemsnummer, navn, innmeldingsdato, betalingsstatus_override, kontingent_start, kontingent_slutt, maanedsbelop
                FROM `medlemmer` WHERE id = ? LIMIT 1'
@@ -61,11 +79,19 @@ final class MembershipEligibilityRepository
         if ($member === null) {
             return array_merge($this->unavailable('member_not_found'), [
                 'club_id' => $clubId > 0 ? $clubId : null,
-                'player_id' => $playerId,
+                'player_id' => $playerId !== null && $playerId > 0 ? $playerId : null,
                 'member_id' => $memberId,
             ]);
         }
 
+        return $this->evaluateMember($member, $clubId, $playerId);
+    }
+
+    /** @param array<string,mixed> $member
+     *  @return array<string,mixed>
+     */
+    private function evaluateMember(array $member, int $clubId, ?int $playerId): array
+    {
         $today = new DateTimeImmutable('today');
         $currentMonth = new DateTimeImmutable($today->format('Y-m-01'));
         $previousMonth = $currentMonth->modify('-1 month');
@@ -80,6 +106,7 @@ final class MembershipEligibilityRepository
             $duesEnd = new DateTimeImmutable($duesEndValue->format('Y-m-01'));
         }
 
+        $memberId = (int) ($member['id'] ?? 0);
         $memberNumber = (int) ($member['medlemsnummer'] ?? 0);
         $payments = $memberNumber > 0 ? $this->paymentsByMonth($memberNumber) : [];
         $currentPaid = (float) ($payments[$currentMonth->format('Y-m')] ?? 0.0);
@@ -92,11 +119,20 @@ final class MembershipEligibilityRepository
         $blockAfter = $this->blockAfterMissedMonths($clubId);
         $missedClosedMonths = $this->consecutiveUnpaidClosedMonths($payments, $previousMonth, $duesStart, $duesEnd);
         $override = strtolower(trim((string) ($member['betalingsstatus_override'] ?? 'automatisk')));
+        if ($override === '') {
+            $override = 'automatisk';
+        }
+
         $base = [
-            'player_id' => $playerId,
+            'player_id' => $playerId !== null && $playerId > 0 ? $playerId : null,
             'club_id' => $clubId > 0 ? $clubId : null,
             'member_id' => $memberId,
             'member_number' => $memberNumber > 0 ? $memberNumber : null,
+            'member_name' => (string) ($member['navn'] ?? ''),
+            'member_active' => true,
+            'status_override' => $override,
+            'dues_start' => $duesStart->format('Y-m-d'),
+            'dues_end' => $duesEnd?->format('Y-m-d'),
             'monthly_amount' => $monthlyAmount,
             'current_period' => $currentMonth->format('Y-m'),
             'current_period_label' => $this->periodLabel($currentMonth),
@@ -113,6 +149,7 @@ final class MembershipEligibilityRepository
 
         if ($override === 'inaktiv' || ($duesEnd !== null && $duesEnd < $currentMonth)) {
             return array_merge($base, [
+                'member_active' => false,
                 'status' => 'blocked',
                 'reason_code' => 'membership_inactive',
                 'can_register' => false,
@@ -228,6 +265,7 @@ final class MembershipEligibilityRepository
         return [
             'status' => 'unavailable',
             'reason_code' => $reason,
+            'member_active' => true,
             'can_register' => true,
             'action_required' => false,
             'headline' => null,
