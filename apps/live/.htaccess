@@ -1,8 +1,10 @@
 RewriteEngine On
 
 # Keep the canonical public address without a trailing slash so relative Live
-# assets continue to resolve from /live/ rather than /live/NNNN/.
-RewriteRule ^([0-9]{4})/$ $1 [R=302,L]
+# assets continue to resolve from /live/ rather than /live/NNNN/. Use an
+# absolute URL-path here; a relative redirect on Domeneshop can expose the
+# server filesystem path in Location.
+RewriteRule ^([0-9]{4})/$ /live/$1 [R=302,L,NE]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
