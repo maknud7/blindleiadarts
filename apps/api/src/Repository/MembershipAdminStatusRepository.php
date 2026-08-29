@@ -12,12 +12,8 @@ use mysqli;
 use RuntimeException;
 
 /**
- * Canonical member-status evaluator for the Darts admin surface.
- *
- * The rules intentionally mirror blindleia-admin/includes/kontingentlogikk.php
- * and includes/medlemsarkiv.php: payment-pattern classification, three closed
- * months before automatic archive, current-month reactivation, two-paid-month
- * forgiveness of old gaps, manual overrides and Stripe auto-debit handling.
+ * Admin membership status using the same rules as blindleia-admin's
+ * kontingentlogikk.php and medlemsarkiv.php.
  */
 final class MembershipAdminStatusRepository
 {
@@ -35,18 +31,16 @@ final class MembershipAdminStatusRepository
             throw new InvalidArgumentException('Ugyldig medlem.');
         }
 
-        $statement = $this->connection->prepare(
+        $stmt = $this->connection->prepare(
             'SELECT id, medlemsnummer, navn, innmeldingsdato, rolle,
                     betalingsstatus_override, kontingent_start, kontingent_slutt,
                     maanedsbelop, oppfolging_notat
-             FROM `medlemmer`
-             WHERE id=? LIMIT 1'
+             FROM `medlemmer` WHERE id=? LIMIT 1'
         );
-        $statement->bind_param('i', $memberId);
-        $statement->execute();
-        $member = $statement->get_result()->fetch_assoc() ?: null;
-        $statement->close();
-
+        $stmt->bind_param('i', $memberId);
+        $stmt->execute();
+        $member = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
         if ($member === null) {
             throw new InvalidArgumentException('Medlemmet finnes ikke.');
         }
@@ -54,10 +48,13 @@ final class MembershipAdminStatusRepository
         $memberNumber = (int) ($member['medlemsnummer'] ?? 0);
         $payments = $memberNumber > 0 ? $this->paymentsByMonth($memberNumber) : [];
         $stripe = $this->stripeState($memberId);
-        $status = $this->evaluateMember($member, $payments, (bool) ($stripe['active'] ?? false));
+        $status = $this->evaluateMember($member, $payments, (bool) ($stripe['any_active'] ?? false));
 
+        // Dashboardet bruker den sist oppdaterte ikke-avsluttede Stripe-raden til
+        // oppfølging/visning, mens selve arkiveringen stoppes av enhver aktiv avtale.
+        $surfaceAutoDebitActive = (bool) ($stripe['active'] ?? false);
         $needsPatternFollowUp = in_array($status['code'], ['mulig_fast', 'tidligere_fast'], true)
-            && !(bool) ($stripe['active'] ?? false);
+            && !$surfaceAutoDebitActive;
         $needsFollowUp = (float) ($status['arrears'] ?? 0.0) > 0.001
             || (bool) ($stripe['problem'] ?? false)
             || $needsPatternFollowUp;
@@ -93,27 +90,218 @@ final class MembershipAdminStatusRepository
         ];
     }
 
+    /** @param array<string,mixed> $member @param array<string,float> $payments @return array<string,mixed> */
+    private function evaluateMember(array $member, array $payments, bool $hasAnyActiveAutoDebit): array
+    {
+        $today = new DateTimeImmutable('today');
+        $currentMonth = $this->currentMonth($today);
+        $lastClosed = $currentMonth->modify('-1 month');
+        $monthlyAmount = max(0.01, (float) ($member['maanedsbelop'] ?? 200));
+
+        $latestPaidPeriod = null;
+        foreach ($payments as $key => $amount) {
+            if ((float) $amount + 0.001 < $monthlyAmount || preg_match('/^\d{4}-\d{2}$/', (string) $key) !== 1) {
+                continue;
+            }
+            $month = new DateTimeImmutable((string) $key . '-01');
+            if ($latestPaidPeriod === null || $month > $latestPaidPeriod) {
+                $latestPaidPeriod = $month;
+            }
+        }
+
+        $startRaw = trim((string) ($member['kontingent_start'] ?? ''))
+            ?: trim((string) ($member['innmeldingsdato'] ?? ''))
+            ?: $currentMonth->format('Y-m-d');
+        $configuredStart = $this->monthStart(new DateTimeImmutable($startRaw));
+        $configuredEnd = trim((string) ($member['kontingent_slutt'] ?? '')) !== ''
+            ? $this->monthStart(new DateTimeImmutable((string) $member['kontingent_slutt']))
+            : null;
+
+        $override = (string) ($member['betalingsstatus_override'] ?? 'automatisk');
+        if (!in_array($override, ['automatisk', 'fast', 'ikke_fast', 'inaktiv'], true)) {
+            $override = 'automatisk';
+        }
+
+        $evaluationEnd = $configuredEnd !== null && $configuredEnd < $lastClosed ? $configuredEnd : $lastClosed;
+        $evaluationMonths = $this->monthsBetween($configuredStart, $evaluationEnd);
+        $flags = [];
+        $latestFull = null;
+        foreach ($evaluationMonths as $month) {
+            $isFull = (float) ($payments[$this->monthKey($month)] ?? 0.0) + 0.001 >= $monthlyAmount;
+            $flags[] = $isFull;
+            if ($isFull) {
+                $latestFull = $month;
+            }
+        }
+
+        $currentAmount = (float) ($payments[$this->monthKey($currentMonth)] ?? 0.0);
+        $previousAmount = (float) ($payments[$this->monthKey($lastClosed)] ?? 0.0);
+        $paidCurrent = $currentAmount + 0.001 >= $monthlyAmount;
+        $paidPrevious = $previousAmount + 0.001 >= $monthlyAmount;
+        $recentFlags = array_slice($flags, -6);
+        $recentCount = count($recentFlags);
+        $paidRecent = count(array_filter($recentFlags));
+        $streak = $this->longestStreak($recentFlags);
+        $stableStart = $this->firstStableStart($evaluationMonths, $flags);
+        $monthsSincePaid = $latestFull === null ? 999 : $this->monthDiff($latestFull, $evaluationEnd);
+
+        $base = [
+            'monthlyAmount' => $monthlyAmount,
+            'latestPaidPeriod' => $latestPaidPeriod,
+            'paidCurrent' => $paidCurrent,
+            'currentAmount' => $currentAmount,
+            'previousMonth' => $lastClosed,
+            'paidPrevious' => $paidPrevious,
+            'previousAmount' => $previousAmount,
+            'manual' => false,
+            'missing' => [],
+            'missingCount' => 0,
+            'historicalMissing' => [],
+            'historicalMissingCount' => 0,
+            'arrears' => 0.0,
+        ];
+
+        if ($override === 'inaktiv') {
+            return array_merge($base, [
+                'code' => 'inaktiv', 'label' => 'Inaktiv',
+                'reason' => 'Manuelt satt som inaktiv', 'manual' => true,
+            ]);
+        }
+
+        if ($configuredEnd !== null && $configuredEnd < $currentMonth && $override === 'automatisk') {
+            return array_merge($base, [
+                'code' => 'inaktiv', 'label' => 'Avsluttet',
+                'reason' => 'Kontingentperioden ble avsluttet ' . $this->periodLabel($configuredEnd),
+            ]);
+        }
+
+        $archive = $this->archiveInfo($member, $payments, $today);
+        if ((bool) ($archive['archived'] ?? false) && !$hasAnyActiveAutoDebit) {
+            return array_merge($base, [
+                'code' => 'inaktiv', 'label' => 'Arkivert',
+                'reason' => (string) ($archive['reason'] ?? 'Tre avsluttede måneder uten betaling'),
+            ]);
+        }
+
+        if ($evaluationMonths === []) {
+            $status = array_merge($base, [
+                'code' => 'under_vurdering', 'label' => 'Under vurdering',
+                'reason' => 'Ingen betalingsmåneder å vurdere ennå',
+            ]);
+        } elseif (count($evaluationMonths) < 3) {
+            $eligible = count($evaluationMonths);
+            $status = array_merge($base, [
+                'code' => 'under_vurdering', 'label' => 'Under vurdering',
+                'reason' => $eligible . ' betalingsmåned' . ($eligible === 1 ? '' : 'er') . ' å vurdere',
+            ]);
+        } elseif ($stableStart !== null && $monthsSincePaid >= 3) {
+            $status = array_merge($base, [
+                'code' => 'tidligere_fast', 'label' => 'Tidligere fast',
+                'reason' => 'Tidligere fast mønster, men ingen full betaling de siste ' . $monthsSincePaid . ' månedene',
+            ]);
+        } elseif ($recentCount >= 4 && $paidRecent >= 4 && $streak >= 3 && $monthsSincePaid <= 2) {
+            $split = $stableStart !== null && $evaluationEnd >= $stableStart
+                ? $this->splitMissingPeriods($stableStart, $evaluationEnd, $payments, $monthlyAmount)
+                : ['active' => [], 'historical' => []];
+            $status = array_merge($base, [
+                'code' => 'fast', 'label' => 'Fast betaler',
+                'reason' => $paidRecent . ' av ' . $recentCount . ' siste måneder fullt betalt',
+                'missing' => $split['active'],
+                'missingCount' => count($split['active']),
+                'historicalMissing' => $split['historical'],
+                'historicalMissingCount' => count($split['historical']),
+                'arrears' => array_sum(array_column($split['active'], 'remaining')),
+            ]);
+        } elseif ($paidRecent >= 2 || $streak >= 2) {
+            $status = array_merge($base, [
+                'code' => 'mulig_fast', 'label' => 'Mulig fast',
+                'reason' => $paidRecent . ' av ' . $recentCount . ' siste måneder fullt betalt',
+            ]);
+        } else {
+            $status = array_merge($base, [
+                'code' => 'sporadisk', 'label' => 'Sporadisk',
+                'reason' => $paidRecent . ' av ' . $recentCount . ' siste måneder fullt betalt',
+            ]);
+        }
+
+        if ($override === 'fast') {
+            $split = $evaluationEnd >= $configuredStart
+                ? $this->splitMissingPeriods($configuredStart, $evaluationEnd, $payments, $monthlyAmount)
+                : ['active' => [], 'historical' => []];
+            $status['code'] = 'fast';
+            $status['label'] = 'Fast betaler';
+            $status['reason'] = 'Manuelt overstyrt til fast betaler';
+            $status['manual'] = true;
+            $status['missing'] = $split['active'];
+            $status['missingCount'] = count($split['active']);
+            $status['historicalMissing'] = $split['historical'];
+            $status['historicalMissingCount'] = count($split['historical']);
+            $status['arrears'] = array_sum(array_column($split['active'], 'remaining'));
+        } elseif ($override === 'ikke_fast') {
+            $status['code'] = 'ikke_fast';
+            $status['label'] = 'Ikke fast';
+            $status['reason'] = 'Manuelt overstyrt til ikke-fast betaler';
+            $status['manual'] = true;
+            $status['missing'] = [];
+            $status['missingCount'] = 0;
+            $status['arrears'] = 0.0;
+        }
+
+        return $status;
+    }
+
+    /** @param array<string,mixed> $member @param array<string,float> $payments @return array<string,mixed> */
+    private function archiveInfo(array $member, array $payments, DateTimeImmutable $today): array
+    {
+        $currentMonth = $this->currentMonth($today);
+        $lastClosed = $currentMonth->modify('-1 month');
+        $startRaw = trim((string) ($member['kontingent_start'] ?? ''))
+            ?: trim((string) ($member['innmeldingsdato'] ?? ''))
+            ?: $currentMonth->format('Y-m-d');
+        $start = $this->monthStart(new DateTimeImmutable($startRaw));
+
+        // En hvilken som helst betaling i inneværende måned reaktiverer medlemskapet.
+        if ((float) ($payments[$this->monthKey($currentMonth)] ?? 0.0) > 0.001) {
+            return ['archived' => false];
+        }
+
+        $months = [$lastClosed->modify('-2 months'), $lastClosed->modify('-1 month'), $lastClosed];
+        if ($months[0] < $start) {
+            return ['archived' => false];
+        }
+        foreach ($months as $month) {
+            if ((float) ($payments[$this->monthKey($month)] ?? 0.0) > 0.001) {
+                return ['archived' => false];
+            }
+        }
+
+        return [
+            'archived' => true,
+            'reason' => 'Ingen betaling registrert i ' . implode(', ', array_map(
+                fn (DateTimeImmutable $month): string => $this->periodLabel($month),
+                $months
+            )),
+        ];
+    }
+
     /** @return array<string,float> */
     private function paymentsByMonth(int $memberNumber): array
     {
-        $statement = $this->connection->prepare(
-            'SELECT periode, SUM(belop) AS paid
-             FROM `kontingentbetalinger`
-             WHERE medlemsnummer=?
-             GROUP BY periode'
+        $stmt = $this->connection->prepare(
+            'SELECT periode, SUM(belop) AS paid FROM `kontingentbetalinger`
+             WHERE medlemsnummer=? GROUP BY periode'
         );
-        $statement->bind_param('i', $memberNumber);
-        $statement->execute();
-        $rows = $statement->get_result()->fetch_all(MYSQLI_ASSOC);
-        $statement->close();
+        $stmt->bind_param('i', $memberNumber);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
 
         $payments = [];
         foreach ($rows as $row) {
             $period = trim((string) ($row['periode'] ?? ''));
-            if (preg_match('/^(0[1-9]|1[0-2])-(\d{2})$/', $period, $match) !== 1) {
-                continue;
+            if (preg_match('/^(0[1-9]|1[0-2])-(\d{2})$/', $period, $match) === 1) {
+                $payments[sprintf('20%02d-%02d', (int) $match[2], (int) $match[1])] = (float) ($row['paid'] ?? 0.0);
             }
-            $payments[sprintf('20%02d-%02d', (int) $match[2], (int) $match[1])] = (float) ($row['paid'] ?? 0.0);
         }
         return $payments;
     }
@@ -125,19 +313,25 @@ final class MembershipAdminStatusRepository
             return null;
         }
 
-        $statement = $this->connection->prepare(
+        $anyStmt = $this->connection->prepare(
+            "SELECT 1 FROM `stripe_abonnementer`
+             WHERE member_id=? AND status IN ('active','trialing') LIMIT 1"
+        );
+        $anyStmt->bind_param('i', $memberId);
+        $anyStmt->execute();
+        $anyActive = $anyStmt->get_result()->fetch_row() !== null;
+        $anyStmt->close();
+
+        $stmt = $this->connection->prepare(
             "SELECT status, cancel_at_period_end, ended_at, updated_at
              FROM `stripe_abonnementer`
-             WHERE member_id=?
-               AND status NOT IN ('canceled','incomplete_expired')
-             ORDER BY updated_at DESC, id DESC
-             LIMIT 1"
+             WHERE member_id=? AND status NOT IN ('canceled','incomplete_expired')
+             ORDER BY updated_at DESC, id DESC LIMIT 1"
         );
-        $statement->bind_param('i', $memberId);
-        $statement->execute();
-        $row = $statement->get_result()->fetch_assoc() ?: null;
-        $statement->close();
-
+        $stmt->bind_param('i', $memberId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
         if ($row === null) {
             return null;
         }
@@ -146,6 +340,7 @@ final class MembershipAdminStatusRepository
         return [
             'status' => $status,
             'active' => in_array($status, ['active', 'trialing'], true),
+            'any_active' => $anyActive,
             'problem' => in_array($status, ['past_due', 'unpaid', 'incomplete', 'paused'], true),
             'cancel_at_period_end' => (int) ($row['cancel_at_period_end'] ?? 0) === 1,
             'ended_at' => $row['ended_at'] ?? null,
@@ -153,249 +348,31 @@ final class MembershipAdminStatusRepository
         ];
     }
 
-    /** @param array<string,float> $memberPayments @return array<string,mixed> */
-    private function evaluateMember(array $member, array $memberPayments, bool $hasActiveAutoDebit): array
+    /** @param list<bool> $flags */
+    private function longestStreak(array $flags): int
     {
-        $today = new DateTimeImmutable('today');
-        $currentMonth = $this->currentMonth($today);
-        $lastClosed = $currentMonth->modify('-1 month');
-        $monthlyAmount = max(0.01, (float) ($member['maanedsbelop'] ?? 200));
-
-        $latestPaidPeriod = null;
-        foreach ($memberPayments as $monthKey => $paidAmount) {
-            if ((float) $paidAmount + 0.001 < $monthlyAmount || preg_match('/^\d{4}-\d{2}$/', (string) $monthKey) !== 1) {
-                continue;
-            }
-            $paidMonth = new DateTimeImmutable((string) $monthKey . '-01');
-            if ($latestPaidPeriod === null || $paidMonth > $latestPaidPeriod) {
-                $latestPaidPeriod = $paidMonth;
+        $best = 0;
+        $current = 0;
+        foreach ($flags as $flag) {
+            if ($flag) {
+                $current++;
+                $best = max($best, $current);
+            } else {
+                $current = 0;
             }
         }
-
-        $startRaw = trim((string) ($member['kontingent_start'] ?? ''))
-            ?: trim((string) ($member['innmeldingsdato'] ?? ''))
-            ?: $currentMonth->format('Y-m-d');
-        $configuredStart = $this->monthStart(new DateTimeImmutable($startRaw));
-
-        $configuredEnd = null;
-        if (trim((string) ($member['kontingent_slutt'] ?? '')) !== '') {
-            $configuredEnd = $this->monthStart(new DateTimeImmutable((string) $member['kontingent_slutt']));
-        }
-
-        $override = (string) ($member['betalingsstatus_override'] ?? 'automatisk');
-        if (!in_array($override, ['automatisk', 'fast', 'ikke_fast', 'inaktiv'], true)) {
-            $override = 'automatisk';
-        }
-
-        $evaluationEnd = $configuredEnd !== null && $configuredEnd < $lastClosed
-            ? $configuredEnd
-            : $lastClosed;
-        $dueEnd = $evaluationEnd;
-        $evaluationMonths = $this->monthsBetween($configuredStart, $evaluationEnd);
-        $flags = [];
-        $latestFull = null;
-
-        foreach ($evaluationMonths as $month) {
-            $paid = (float) ($memberPayments[$this->monthKey($month)] ?? 0.0);
-            $isFull = $paid + 0.001 >= $monthlyAmount;
-            $flags[] = $isFull;
-            if ($isFull) {
-                $latestFull = $month;
-            }
-        }
-
-        $currentAmount = (float) ($memberPayments[$this->monthKey($currentMonth)] ?? 0.0);
-        $paidCurrent = $currentAmount + 0.001 >= $monthlyAmount;
-        $previousAmount = (float) ($memberPayments[$this->monthKey($lastClosed)] ?? 0.0);
-        $paidPrevious = $previousAmount + 0.001 >= $monthlyAmount;
-        $recentFlags = array_slice($flags, -6);
-        $recentCount = count($recentFlags);
-        $paidRecent = count(array_filter($recentFlags));
-        $streak = $this->longestStreak($recentFlags);
-        $stableStart = $this->firstStableStart($evaluationMonths, $flags);
-        $monthsSincePaid = $latestFull === null ? 999 : $this->monthDiff($latestFull, $evaluationEnd);
-
-        $base = [
-            'monthlyAmount' => $monthlyAmount,
-            'configuredStart' => $configuredStart,
-            'configuredEnd' => $configuredEnd,
-            'autoFixedStart' => $stableStart,
-            'latestFull' => $latestFull,
-            'latestPaidPeriod' => $latestPaidPeriod,
-            'lastPaid' => $latestPaidPeriod,
-            'paidCurrent' => $paidCurrent,
-            'currentAmount' => $currentAmount,
-            'previousMonth' => $lastClosed,
-            'paidPrevious' => $paidPrevious,
-            'previousAmount' => $previousAmount,
-            'paidRecent' => $paidRecent,
-            'recentCount' => $recentCount,
-            'streak' => $streak,
-            'monthsSincePaid' => $monthsSincePaid,
-            'lastClosed' => $lastClosed,
-            'manual' => false,
-            'missing' => [],
-            'missingCount' => 0,
-            'historicalMissing' => [],
-            'historicalMissingCount' => 0,
-            'arrears' => 0.0,
-        ];
-
-        if ($override === 'inaktiv') {
-            return array_merge($base, [
-                'code' => 'inaktiv',
-                'label' => 'Inaktiv',
-                'reason' => 'Manuelt satt som inaktiv',
-                'manual' => true,
-            ]);
-        }
-
-        if ($configuredEnd !== null && $configuredEnd < $currentMonth && $override === 'automatisk') {
-            return array_merge($base, [
-                'code' => 'inaktiv',
-                'label' => 'Avsluttet',
-                'reason' => 'Kontingentperioden ble avsluttet ' . $this->periodLabel($configuredEnd),
-            ]);
-        }
-
-        $archiveInfo = $this->archiveInfo($member, $memberPayments, $today);
-        if ((bool) ($archiveInfo['archived'] ?? false) && !$hasActiveAutoDebit) {
-            return array_merge($base, [
-                'code' => 'inaktiv',
-                'label' => 'Arkivert',
-                'reason' => (string) ($archiveInfo['reason'] ?? 'Tre avsluttede måneder uten betaling'),
-            ]);
-        }
-
-        if ($evaluationMonths === []) {
-            $auto = array_merge($base, [
-                'code' => 'under_vurdering',
-                'label' => 'Under vurdering',
-                'reason' => 'Ingen betalingsmåneder å vurdere ennå',
-            ]);
-        } elseif (count($evaluationMonths) < 3) {
-            $eligible = count($evaluationMonths);
-            $auto = array_merge($base, [
-                'code' => 'under_vurdering',
-                'label' => 'Under vurdering',
-                'reason' => $eligible . ' betalingsmåned' . ($eligible === 1 ? '' : 'er') . ' å vurdere',
-            ]);
-        } elseif ($stableStart !== null && $monthsSincePaid >= 3) {
-            $auto = array_merge($base, [
-                'code' => 'tidligere_fast',
-                'label' => 'Tidligere fast',
-                'reason' => 'Tidligere fast mønster, men ingen full betaling de siste ' . $monthsSincePaid . ' månedene',
-            ]);
-        } elseif ($recentCount >= 4 && $paidRecent >= 4 && $streak >= 3 && $monthsSincePaid <= 2) {
-            $missingSplit = $stableStart !== null && $dueEnd >= $stableStart
-                ? $this->splitMissingPeriods($stableStart, $dueEnd, $memberPayments, $monthlyAmount)
-                : ['active' => [], 'historical' => []];
-            $missing = $missingSplit['active'];
-            $historicalMissing = $missingSplit['historical'];
-            $auto = array_merge($base, [
-                'code' => 'fast',
-                'label' => 'Fast betaler',
-                'reason' => $paidRecent . ' av ' . $recentCount . ' siste måneder fullt betalt',
-                'missing' => $missing,
-                'missingCount' => count($missing),
-                'historicalMissing' => $historicalMissing,
-                'historicalMissingCount' => count($historicalMissing),
-                'arrears' => array_sum(array_column($missing, 'remaining')),
-            ]);
-        } elseif ($paidRecent >= 2 || $streak >= 2) {
-            $auto = array_merge($base, [
-                'code' => 'mulig_fast',
-                'label' => 'Mulig fast',
-                'reason' => $paidRecent . ' av ' . $recentCount . ' siste måneder fullt betalt',
-            ]);
-        } else {
-            $auto = array_merge($base, [
-                'code' => 'sporadisk',
-                'label' => 'Sporadisk',
-                'reason' => $paidRecent . ' av ' . $recentCount . ' siste måneder fullt betalt',
-            ]);
-        }
-
-        if ($override === 'fast') {
-            $missingSplit = $dueEnd >= $configuredStart
-                ? $this->splitMissingPeriods($configuredStart, $dueEnd, $memberPayments, $monthlyAmount)
-                : ['active' => [], 'historical' => []];
-            $missing = $missingSplit['active'];
-            $historicalMissing = $missingSplit['historical'];
-            $auto['code'] = 'fast';
-            $auto['label'] = 'Fast betaler';
-            $auto['reason'] = 'Manuelt overstyrt til fast betaler';
-            $auto['manual'] = true;
-            $auto['missing'] = $missing;
-            $auto['missingCount'] = count($missing);
-            $auto['historicalMissing'] = $historicalMissing;
-            $auto['historicalMissingCount'] = count($historicalMissing);
-            $auto['arrears'] = array_sum(array_column($missing, 'remaining'));
-        } elseif ($override === 'ikke_fast') {
-            $auto['code'] = 'ikke_fast';
-            $auto['label'] = 'Ikke fast';
-            $auto['reason'] = 'Manuelt overstyrt til ikke-fast betaler';
-            $auto['manual'] = true;
-            $auto['missing'] = [];
-            $auto['missingCount'] = 0;
-            $auto['arrears'] = 0.0;
-        }
-
-        return $auto;
-    }
-
-    /** @param array<string,float> $memberPayments @return array{archived:bool,months?:array<int,DateTimeImmutable>,reason?:string} */
-    private function archiveInfo(array $member, array $memberPayments, DateTimeImmutable $today): array
-    {
-        $currentMonth = $this->currentMonth($today);
-        $lastClosed = $currentMonth->modify('-1 month');
-        $startRaw = trim((string) ($member['kontingent_start'] ?? ''))
-            ?: trim((string) ($member['innmeldingsdato'] ?? ''))
-            ?: $currentMonth->format('Y-m-d');
-        $start = $this->monthStart(new DateTimeImmutable($startRaw));
-
-        $currentPaid = (float) ($memberPayments[$this->monthKey($currentMonth)] ?? 0.0);
-        if ($currentPaid > 0.001) {
-            return ['archived' => false, 'months' => []];
-        }
-
-        $months = [
-            $lastClosed->modify('-2 months'),
-            $lastClosed->modify('-1 month'),
-            $lastClosed,
-        ];
-        if ($months[0] < $start) {
-            return ['archived' => false, 'months' => []];
-        }
-
-        foreach ($months as $month) {
-            $paid = (float) ($memberPayments[$this->monthKey($month)] ?? 0.0);
-            if ($paid > 0.001) {
-                return ['archived' => false, 'months' => []];
-            }
-        }
-
-        return [
-            'archived' => true,
-            'months' => $months,
-            'reason' => 'Ingen betaling registrert i ' . implode(', ', array_map(
-                fn (DateTimeImmutable $month): string => $this->periodLabel($month),
-                $months
-            )),
-        ];
+        return $best;
     }
 
     /** @param list<DateTimeImmutable> $months @param list<bool> $flags */
     private function firstStableStart(array $months, array $flags): ?DateTimeImmutable
     {
-        $count = count($flags);
-        for ($end = 0; $end < $count; $end++) {
+        for ($end = 0, $count = count($flags); $end < $count; $end++) {
             $windowStart = max(0, $end - 5);
             $window = array_slice($flags, $windowStart, $end - $windowStart + 1);
             if (count($window) < 4 || count(array_filter($window)) < 4 || $this->longestStreak($window) < 3) {
                 continue;
             }
-
             $runLength = 0;
             $runStart = null;
             foreach ($window as $index => $paid) {
@@ -416,49 +393,28 @@ final class MembershipAdminStatusRepository
         return null;
     }
 
-    /** @param list<bool> $flags */
-    private function longestStreak(array $flags): int
-    {
-        $best = 0;
-        $current = 0;
-        foreach ($flags as $flag) {
-            if ($flag) {
-                $current++;
-                $best = max($best, $current);
-            } else {
-                $current = 0;
-            }
-        }
-        return $best;
-    }
-
-    /** @param array<string,float> $memberPayments @return array{active:list<array<string,mixed>>,historical:list<array<string,mixed>>} */
-    private function splitMissingPeriods(DateTimeImmutable $start, DateTimeImmutable $end, array $memberPayments, float $monthlyAmount): array
+    /** @param array<string,float> $payments @return array{active:list<array<string,mixed>>,historical:list<array<string,mixed>>} */
+    private function splitMissingPeriods(DateTimeImmutable $start, DateTimeImmutable $end, array $payments, float $monthlyAmount): array
     {
         $active = [];
         $historical = [];
         foreach ($this->monthsBetween($start, $end) as $month) {
-            $paid = (float) ($memberPayments[$this->monthKey($month)] ?? 0.0);
+            $paid = (float) ($payments[$this->monthKey($month)] ?? 0.0);
             if ($paid + 0.001 >= $monthlyAmount) {
                 continue;
             }
-
             $item = [
                 'month' => $month,
                 'paid' => $paid,
                 'remaining' => max(0.0, $monthlyAmount - $paid),
             ];
-            $nextMonth = $month->modify('+1 month');
-            $secondNextMonth = $month->modify('+2 months');
-            $hasTwoClosedMonthsAfter = $secondNextMonth <= $end;
-            $nextPaid = (float) ($memberPayments[$this->monthKey($nextMonth)] ?? 0.0);
-            $secondNextPaid = (float) ($memberPayments[$this->monthKey($secondNextMonth)] ?? 0.0);
-            $isForgiven = $hasTwoClosedMonthsAfter
-                && $nextPaid + 0.001 >= $monthlyAmount
-                && $secondNextPaid + 0.001 >= $monthlyAmount;
-
-            if ($isForgiven) {
-                $item['forgivenBy'] = [$nextMonth, $secondNextMonth];
+            $next = $month->modify('+1 month');
+            $secondNext = $month->modify('+2 months');
+            $forgiven = $secondNext <= $end
+                && (float) ($payments[$this->monthKey($next)] ?? 0.0) + 0.001 >= $monthlyAmount
+                && (float) ($payments[$this->monthKey($secondNext)] ?? 0.0) + 0.001 >= $monthlyAmount;
+            if ($forgiven) {
+                $item['forgivenBy'] = [$next, $secondNext];
                 $historical[] = $item;
             } else {
                 $active[] = $item;
@@ -541,13 +497,14 @@ final class MembershipAdminStatusRepository
         if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
             throw new RuntimeException('Invalid table name.');
         }
-        $statement = $this->connection->prepare(
-            'SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=? LIMIT 1'
+        $stmt = $this->connection->prepare(
+            'SELECT 1 FROM information_schema.tables
+             WHERE table_schema=DATABASE() AND table_name=? LIMIT 1'
         );
-        $statement->bind_param('s', $table);
-        $statement->execute();
-        $exists = $statement->get_result()->fetch_row() !== null;
-        $statement->close();
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $exists = $stmt->get_result()->fetch_row() !== null;
+        $stmt->close();
         return $exists;
     }
 }
