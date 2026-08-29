@@ -1,0 +1,16 @@
+@media (max-width:760px){
+  .member-access-table-wrap tr[data-member-id]{position:relative;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease;background:#fff}
+  .member-access-table-wrap tr[data-member-id]::after{content:"⌄";position:absolute;right:12px;top:13px;font-size:18px;line-height:1;color:var(--muted,#667085);transition:transform .15s ease}
+  .member-access-table-wrap tr[data-member-id].member-expanded::after{transform:rotate(180deg)}
+  .member-access-table-wrap tr[data-member-id]:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:2px}
+  .member-access-table-wrap tr[data-member-id] td[data-label="Medlem"]{padding-right:34px!important}
+  .member-access-table-wrap tr[data-member-id] td[data-label="Konto og tilgang"],
+  .member-access-table-wrap tr[data-member-id] td[data-label="Handling"]{display:none}
+  .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Konto og tilgang"],
+  .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Handling"]{display:block}
+  .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Konto og tilgang"]{grid-column:1/-1;margin-top:2px;padding:10px!important;border-radius:10px!important;background:#f7fafc}
+  .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Handling"]{grid-column:1/-1;padding-top:2px!important}
+  .member-access-table-wrap tr[data-member-id] td[data-label="Betaling"] small{display:none!important}
+  .member-access-table-wrap tr[data-member-id] .member-account-compact{align-items:flex-start!important;text-align:left!important}
+  .member-access-table-wrap tr[data-member-id] .member-access-level{width:100%}
+}
