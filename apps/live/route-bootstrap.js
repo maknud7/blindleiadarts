@@ -2,11 +2,11 @@
   const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const match = window.location.pathname.match(/\/live\/(\d{4})\/?$/i);
   const liveCode = match?.[1] || "";
+  const legacyClub = new URLSearchParams(window.location.search).get("club") || "";
 
   function appBasePath() {
-    const lower = window.location.pathname.toLowerCase();
-    const index = lower.lastIndexOf("/live/");
-    return index >= 0 ? window.location.pathname.slice(0, index + 1) : "/";
+    const match = window.location.pathname.match(/^(.*\/live)(?:\/|$)/i);
+    return match ? `${match[1]}/` : "/live/";
   }
 
   function loadScript(src) {
@@ -19,9 +19,41 @@
     });
   }
 
+  function showCodeEntry() {
+    document.body.classList.remove("phase-loading", "phase-standby", "phase-live", "phase-checkin");
+    document.body.classList.add("phase-code-entry");
+    document.getElementById("standbyState")?.classList.add("hidden");
+    document.getElementById("activeExperience")?.classList.add("hidden");
+    document.getElementById("codeEntryState")?.classList.remove("hidden");
+
+    const form = document.getElementById("liveCodeForm");
+    const input = document.getElementById("liveCodeInput");
+    const error = document.getElementById("liveCodeError");
+    if (!form || !input) return;
+
+    input.addEventListener("input", () => {
+      input.value = input.value.replace(/\D/g, "").slice(0, 4);
+      if (error) error.textContent = "";
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const code = input.value.trim();
+      if (!/^\d{4}$/.test(code)) {
+        if (error) error.textContent = "Skriv inn en firesifret Live-kode.";
+        input.focus();
+        return;
+      }
+      window.location.assign(`${appBasePath()}${code}`);
+    });
+
+    window.setTimeout(() => input.focus(), 0);
+  }
+
   function showInvalidLink(message) {
-    document.body.classList.remove("phase-loading");
+    document.body.classList.remove("phase-loading", "phase-code-entry");
     document.body.classList.add("phase-standby");
+    document.getElementById("codeEntryState")?.classList.add("hidden");
     document.getElementById("standbyState")?.classList.remove("hidden");
     const next = document.getElementById("standbyNext");
     next?.classList.remove("hidden");
@@ -43,6 +75,11 @@
   }
 
   async function boot() {
+    if (!liveCode && !legacyClub) {
+      showCodeEntry();
+      return;
+    }
+
     let cleanRoute = false;
     try {
       const club = await resolveClub();
