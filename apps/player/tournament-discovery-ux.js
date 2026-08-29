@@ -32,7 +32,7 @@ function publicStatus(t){
 }
 function regFor(t){ return registrations.find(r=>Number(r.tournament_id)===Number(t.id)) || null; }
 function isFinished(t){ return ["completed","archived","cancelled","canceled"].includes(String(t?.status||"").toLowerCase()) || (!!t?.end_at && parseDate(t.end_at)?.getTime() < Date.now()); }
-function isUpcoming(t){ return !isFinished(t) && String(t?.status||"").toLowerCase() !== "in_progress"; }
+function isUpcoming(t){ return !isFinished(t); }
 function isMine(t){ const r=regFor(t); return !!r && !["withdrawn","no_show"].includes(String(r.status||"")); }
 
 async function api(path,{method="GET",auth=false}={}){
@@ -49,7 +49,7 @@ style.textContent=`
   .tdx-root{display:grid;gap:18px}
   .tdx-head{display:flex;align-items:end;justify-content:space-between;gap:12px}
   .tdx-head h2{margin:2px 0 0;font-size:30px;line-height:1.05;color:#0b2b50}
-  .tdx-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:14px;background:#e9eff5}
+  .tdx-tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px;border-radius:14px;background:#e9eff5}
   .tdx-tabs button{min-height:42px;border:0;border-radius:11px;background:transparent;color:#61758b;font-weight:800;font-size:14px;padding:0 8px}
   .tdx-tabs button.active{background:#fff;color:#0b2b50;box-shadow:0 1px 5px rgba(10,35,64,.1)}
   .tdx-next{border-radius:18px;padding:16px;background:linear-gradient(135deg,#edf5ff,#f7fbff);border:1px solid #c8dcf5;display:grid;gap:10px;text-align:left}
@@ -104,7 +104,6 @@ dialog.className="tdx-detail";
 document.body.appendChild(dialog);
 
 function filtered(){
-  if(activeFilter==="mine") return allTournaments.filter(isMine).sort((a,b)=>(parseDate(b.start_at)?.getTime()||0)-(parseDate(a.start_at)?.getTime()||0));
   if(activeFilter==="past") return allTournaments.filter(isFinished).sort((a,b)=>(parseDate(b.start_at)?.getTime()||0)-(parseDate(a.start_at)?.getTime()||0));
   return allTournaments.filter(isUpcoming).sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity));
 }
@@ -113,9 +112,9 @@ function nextForMe(){ return allTournaments.filter(t=>isMine(t)&&!isFinished(t))
 function render(){
   const items=filtered(); const next=nextForMe();
   root.innerHTML=`<div class="tdx-head"><div><p class="eyebrow">Turneringer</p><h2>Din dartkalender</h2></div></div>
-    <div class="tdx-tabs" role="tablist"><button class="${activeFilter==="upcoming"?"active":""}" data-filter="upcoming">Kommende</button><button class="${activeFilter==="mine"?"active":""}" data-filter="mine">Mine</button><button class="${activeFilter==="past"?"active":""}" data-filter="past">Tidligere</button></div>
+    <div class="tdx-tabs" role="tablist"><button class="${activeFilter==="upcoming"?"active":""}" data-filter="upcoming">Kommende</button><button class="${activeFilter==="past"?"active":""}" data-filter="past">Tidligere</button></div>
     ${activeFilter==="upcoming"&&next?`<button class="tdx-next" data-open="${Number(next.id)}"><div class="tdx-next-top"><span class="tdx-kicker">Neste for deg</span><span class="tdx-pill">${esc(statusLabel(regFor(next)?.status))}</span></div><h3>${esc(next.name)}</h3><div class="tdx-meta">${esc(fmtDate(next.start_at))}${fmtTime(next.start_at)?` · ${esc(fmtTime(next.start_at))}`:""}</div></button>`:""}
-    <div class="tdx-list">${items.length?items.map(rowHtml).join(""):`<div class="tdx-empty">${activeFilter==="past"?"Ingen tidligere turneringer ennå.":activeFilter==="mine"?"Du har ingen turneringer her ennå.":"Ingen kommende turneringer akkurat nå."}</div>`}</div>`;
+    <div class="tdx-list">${items.length?items.map(rowHtml).join(""):`<div class="tdx-empty">${activeFilter==="past"?"Ingen tidligere turneringer ennå.":"Ingen kommende turneringer akkurat nå."}</div>`}</div>`;
   root.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{activeFilter=b.dataset.filter;render();}));
   root.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openDetail(Number(b.dataset.open))));
 }
