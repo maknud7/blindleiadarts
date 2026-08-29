@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260829-2115";
+const MODULE_VERSION = "20260829-2135";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -90,6 +90,7 @@ async function loadModules() {
       import(moduleUrl("./tournament-flow-ux.js")),
       import(moduleUrl("./tournament-desktop-rail.js")),
       import(moduleUrl("./tournament-board-selection.js")),
+      import(moduleUrl("./tournament-delete-admin.js")),
     ]);
     await import(moduleUrl("./tournament-workspace-ux.js"));
     await import(moduleUrl("./tournament-canonical-ux.js"));
