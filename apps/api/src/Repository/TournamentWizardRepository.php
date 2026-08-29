@@ -94,6 +94,64 @@ final class TournamentWizardRepository
         return $this->getPlan($tournamentId) ?? [];
     }
 
+    /** @return array<string,mixed> */
+    public function deleteDraftTournament(int $tournamentId): array
+    {
+        $plan = $this->getPlan($tournamentId);
+        if ($plan === null) throw new ValidationException('tournament_not_found', 'Turneringen ble ikke funnet.', 404);
+        if ((string) $plan['status'] !== 'draft') {
+            throw new ValidationException('tournament_delete_not_allowed', 'Bare turneringer som ikke er startet kan slettes.', 409);
+        }
+
+        $stmt = $this->connection->prepare(sprintf('SELECT COUNT(*) AS c FROM `%1$smatches` WHERE tournament_id=?', $this->tablePrefix));
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $matchCount = (int) (($stmt->get_result()->fetch_assoc()['c'] ?? 0));
+        $stmt->close();
+        if ($matchCount > 0) {
+            throw new ValidationException('tournament_delete_has_matches', 'Turneringen har kamper og kan ikke slettes. Arkiver den i stedet.', 409);
+        }
+
+        $this->connection->begin_transaction();
+        try {
+            $schema = $this->connection->query('SELECT DATABASE() AS db')->fetch_assoc()['db'] ?? '';
+            $parentTable = $this->tablePrefix . 'tournaments';
+            $sql = 'SELECT TABLE_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE '
+                . 'WHERE REFERENCED_TABLE_SCHEMA=? AND REFERENCED_TABLE_NAME=? AND REFERENCED_COLUMN_NAME="id"';
+            $fk = $this->connection->prepare($sql);
+            $fk->bind_param('ss', $schema, $parentTable);
+            $fk->execute();
+            $result = $fk->get_result();
+            $children = [];
+            while ($row = $result->fetch_assoc()) $children[] = $row;
+            $fk->close();
+
+            foreach ($children as $child) {
+                $table = str_replace('`', '``', (string) $child['TABLE_NAME']);
+                $column = str_replace('`', '``', (string) $child['COLUMN_NAME']);
+                $delete = $this->connection->prepare("DELETE FROM `{$table}` WHERE `{$column}`=?");
+                $delete->bind_param('i', $tournamentId);
+                $delete->execute();
+                $delete->close();
+            }
+
+            $deleteTournament = $this->connection->prepare(sprintf('DELETE FROM `%1$stournaments` WHERE id=? AND status="draft"', $this->tablePrefix));
+            $deleteTournament->bind_param('i', $tournamentId);
+            $deleteTournament->execute();
+            if ($deleteTournament->affected_rows !== 1) {
+                $deleteTournament->close();
+                throw new ValidationException('tournament_delete_failed', 'Turneringen kunne ikke slettes.', 409);
+            }
+            $deleteTournament->close();
+            $this->connection->commit();
+        } catch (\Throwable $error) {
+            $this->connection->rollback();
+            throw $error;
+        }
+
+        return ['deleted' => true, 'tournament_id' => $tournamentId, 'name' => (string) $plan['name']];
+    }
+
     private function oddBestOf(mixed $value, string $label): int
     {
         $bestOf = (int) $value;
