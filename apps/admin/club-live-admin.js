@@ -2,15 +2,21 @@ const CLUB_LIVE_ENDPOINT = "../api/club-live.php";
 
 const style = document.createElement("style");
 style.textContent = `
-  .club-live-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px;margin:0 0 20px;padding:18px 20px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(233,185,73,.09),rgba(21,27,36,.94))}
-  .club-live-card h2{margin:0 0 5px;font-size:22px;letter-spacing:-.02em}
+  .club-live-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px;margin:0 0 20px;padding:18px 20px;border:1px solid var(--line);border-radius:18px;background:var(--surface,#fff);box-shadow:0 8px 24px rgba(15,23,42,.05)}
+  .club-live-card h2{margin:0 0 5px;font-size:22px;letter-spacing:-.02em;color:var(--text,#0f2744)}
   .club-live-card p{margin:0;color:var(--muted);line-height:1.4}
-  .club-live-link{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}
-  .club-live-link code{display:inline-flex;align-items:center;min-height:36px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#0f151e;color:#f4f7fb;font:700 13px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
-  .club-live-code{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;background:rgba(233,185,73,.12);border:1px solid rgba(233,185,73,.35);color:var(--accent-strong);font-size:12px;font-weight:900;letter-spacing:.08em}
+  .club-live-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .club-live-code-label{font-size:.75rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .club-live-code{display:inline-flex;align-items:center;border-radius:999px;padding:7px 12px;background:rgba(47,111,237,.08);border:1px solid rgba(47,111,237,.18);color:var(--accent-strong,#175bb8);font-size:15px;font-weight:900;letter-spacing:.12em}
+  .club-live-status{font-size:.84rem;color:var(--muted)}
+  .club-live-status.bad{color:#b42318}
   .club-live-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
-  .club-live-error{color:#ffc4c4!important}
-  @media(max-width:720px){.club-live-card{grid-template-columns:1fr;padding:15px}.club-live-actions{justify-content:stretch}.club-live-actions .button,.club-live-actions button{flex:1}.club-live-link{display:grid}.club-live-link code{width:100%}}
+  .club-live-actions .button{min-width:132px;text-align:center}
+  @media(max-width:720px){
+    .club-live-card{grid-template-columns:1fr;padding:16px;gap:16px}
+    .club-live-actions{justify-content:stretch}
+    .club-live-actions .button,.club-live-actions button{flex:1;min-width:0}
+  }
 `;
 document.head.appendChild(style);
 
@@ -28,9 +34,13 @@ card.className = "club-live-card";
 card.innerHTML = `
   <div>
     <p class="eyebrow">Klubbens Live</p>
-    <h2>Én fast Live-lenke</h2>
-    <p>Samme adresse brukes på klubb-TV, ved deling og for alle klubbens turneringer.</p>
-    <div class="club-live-link"><span id="clubLiveCode" class="club-live-code">----</span><code id="clubLiveUrl">Henter Live-lenke …</code></div>
+    <h2>Fast Live-lenke</h2>
+    <p>Samme Live-side brukes på klubb-TV, ved deling og for alle klubbens turneringer.</p>
+    <div class="club-live-meta">
+      <span class="club-live-code-label">Live-kode</span>
+      <span id="clubLiveCode" class="club-live-code">----</span>
+      <span id="clubLiveStatus" class="club-live-status">Henter …</span>
+    </div>
   </div>
   <div class="club-live-actions">
     <a id="clubLiveOpen" class="button" href="../live/" target="_blank" rel="noopener">Åpne Live</a>
@@ -40,7 +50,7 @@ shortcuts?.insertAdjacentElement("afterend", card);
 
 const el = {
   code: card.querySelector("#clubLiveCode"),
-  url: card.querySelector("#clubLiveUrl"),
+  status: card.querySelector("#clubLiveStatus"),
   open: card.querySelector("#clubLiveOpen"),
   copy: card.querySelector("#clubLiveCopy"),
 };
@@ -69,8 +79,8 @@ async function loadClubLive(force = false) {
   requestKey = key;
 
   el.code.textContent = "----";
-  el.url.textContent = "Henter Live-lenke …";
-  el.url.classList.remove("club-live-error");
+  el.status.textContent = "Henter …";
+  el.status.classList.remove("bad");
   el.open.setAttribute("href", "../live/");
   el.copy.disabled = true;
 
@@ -86,7 +96,7 @@ async function loadClubLive(force = false) {
     const code = String(payload.data.club?.live_code || "");
     currentUrl = String(payload.data.live_url);
     el.code.textContent = code || "----";
-    el.url.textContent = currentUrl;
+    el.status.textContent = "Klar";
     el.open.href = currentUrl;
     el.copy.disabled = false;
 
@@ -97,8 +107,8 @@ async function loadClubLive(force = false) {
   } catch (error) {
     currentUrl = "";
     requestKey = "";
-    el.url.textContent = error?.message || "Live-lenken er ikke tilgjengelig.";
-    el.url.classList.add("club-live-error");
+    el.status.textContent = error?.message || "Live-lenken er ikke tilgjengelig.";
+    el.status.classList.add("bad");
   }
 }
 
@@ -110,7 +120,8 @@ el.copy?.addEventListener("click", async () => {
     el.copy.textContent = "Kopiert";
     window.setTimeout(() => { el.copy.textContent = previous; }, 1200);
   } catch {
-    el.url.textContent = currentUrl;
+    el.status.textContent = "Kunne ikke kopiere lenken.";
+    el.status.classList.add("bad");
   }
 });
 
