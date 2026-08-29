@@ -4,13 +4,11 @@ const tournamentList = document.getElementById("tournamentList");
 const refreshButton = document.getElementById("refreshButton");
 const signupSection = registrationList?.closest("section") || null;
 const tournamentSection = tournamentList?.closest("section") || null;
-const visibleUpcomingLimit = 3;
 let enhancing = false;
 let refreshTimer = null;
 let observer = null;
 
 function token() { return localStorage.getItem("bd:token") || ""; }
-function clubId() { return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:playerClubId") || 0); }
 
 async function api(path, { method = "GET", auth = false } = {}) {
   const headers = {};
@@ -32,12 +30,6 @@ function findCard(root, name) {
     || null;
 }
 
-function parseStart(value) {
-  if (!value) return Number.POSITIVE_INFINITY;
-  const parsed = new Date(String(value).replace(" ", "T")).getTime();
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-}
-
 function isFinishedTournamentStatus(value) {
   return ["completed", "archived", "cancelled", "canceled"].includes(String(value || "").toLowerCase());
 }
@@ -48,14 +40,6 @@ function isRelevantRegistration(registration) {
   if (isFinishedTournamentStatus(tournamentStatus)) return false;
   if (["withdrawn", "no_show"].includes(registrationStatus)) return false;
   return ["registered", "waitlisted", "checked_in", "eliminated"].includes(registrationStatus);
-}
-
-function isUpcomingTournament(tournament) {
-  const status = String(tournament?.status || tournament?.tournament_status || "").toLowerCase();
-  if (isFinishedTournamentStatus(status) || status === "in_progress") return false;
-  const start = parseStart(tournament?.start_at);
-  if (!Number.isFinite(start)) return true;
-  return start >= Date.now();
 }
 
 function prepareSectionCopy() {
@@ -71,6 +55,26 @@ function prepareSectionCopy() {
   const tournamentHeading = tournamentSection?.querySelector("h2");
   if (tournamentEyebrow) tournamentEyebrow.textContent = "Kommende";
   if (tournamentHeading) tournamentHeading.textContent = "Kommende turneringer";
+}
+
+function focusRegistrations(registrations) {
+  if (!registrationList || !signupSection) return;
+  if (!token()) {
+    signupSection.classList.add("hidden");
+    return;
+  }
+
+  const relevant = registrations.filter(isRelevantRegistration);
+  const names = new Set(relevant.map((registration) => String(registration.tournament_name || "").trim()).filter(Boolean));
+  const cards = [...registrationList.querySelectorAll(":scope > .list-item")];
+  cards.forEach((card) => card.classList.toggle("hidden", !names.has(cardName(card))));
+
+  if (!relevant.length) {
+    signupSection.classList.add("hidden");
+    return;
+  }
+
+  signupSection.classList.remove("hidden");
 }
 
 function addWithdraw(card, tournamentId) {
@@ -89,107 +93,11 @@ function addWithdraw(card, tournamentId) {
       scheduleEnhance(350);
     } catch (error) {
       button.disabled = false;
-      const status = document.getElementById("statusArea");
-      if (status) {
-        const item = document.createElement("div");
-        item.className = "mini-card";
-        item.innerHTML = `<strong>Kunne ikke melde av</strong><p class="muted"></p>`;
-        item.querySelector("p").textContent = error.message;
-        status.prepend(item);
-      }
     }
   });
   const stack = card.querySelector(".stack");
   if (stack) stack.appendChild(button);
   else card.appendChild(button);
-}
-
-function focusRegistrations(registrations) {
-  if (!registrationList || !signupSection) return;
-
-  if (!token()) {
-    signupSection.classList.add("hidden");
-    return;
-  }
-
-  const relevant = registrations.filter(isRelevantRegistration);
-  const relevantNames = new Set(relevant.map((registration) => String(registration.tournament_name || "").trim()).filter(Boolean));
-  const cards = [...registrationList.querySelectorAll(":scope > .list-item")];
-
-  cards.forEach((card) => {
-    card.classList.toggle("hidden", !relevantNames.has(cardName(card)));
-  });
-
-  if (!relevant.length) {
-    signupSection.classList.add("hidden");
-    return;
-  }
-
-  signupSection.classList.remove("hidden");
-  relevant.forEach((registration) => {
-    const name = String(registration.tournament_name || "").trim();
-    const card = findCard(registrationList, name);
-    if (card && card.parentElement === registrationList) registrationList.appendChild(card);
-  });
-}
-
-function focusUpcomingTournaments(tournaments) {
-  if (!tournamentList) return;
-
-  tournamentList.querySelectorAll("[data-upcoming-overflow]").forEach((node) => node.remove());
-  const cards = [...tournamentList.querySelectorAll(":scope > .list-item")];
-  const upcoming = tournaments
-    .filter(isUpcomingTournament)
-    .sort((a, b) => parseStart(a.start_at) - parseStart(b.start_at));
-  const byName = new Map(cards.map((card) => [cardName(card), card]));
-  const upcomingNames = new Set(upcoming.map((tournament) => String(tournament.name || "").trim()).filter(Boolean));
-
-  cards.forEach((card) => card.classList.toggle("hidden", !upcomingNames.has(cardName(card))));
-
-  const orderedCards = [];
-  upcoming.forEach((tournament) => {
-    const card = byName.get(String(tournament.name || "").trim());
-    if (!card) return;
-    card.classList.remove("hidden");
-    tournamentList.appendChild(card);
-    orderedCards.push(card);
-  });
-
-  if (!upcoming.length) {
-    const empty = document.createElement("div");
-    empty.className = "mini-card";
-    empty.dataset.upcomingOverflow = "empty";
-    empty.innerHTML = `<strong>Ingen kommende turneringer</strong><p class="muted">Ferdige turneringer og kamper finner du under Statistikk.</p>`;
-    tournamentList.appendChild(empty);
-    return;
-  }
-
-  // API-et kan være klart før app.js har rukket å rendre turneringskortene.
-  // Da skal vi aldri vise en falsk tomtilstand; vent på neste DOM-runde i stedet.
-  if (!orderedCards.length) {
-    scheduleEnhance(180);
-    return;
-  }
-
-  const laterCards = orderedCards.slice(visibleUpcomingLimit);
-  laterCards.forEach((card) => card.classList.add("hidden"));
-  if (!laterCards.length) return;
-
-  const control = document.createElement("div");
-  control.className = "mini-card";
-  control.dataset.upcomingOverflow = "control";
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "ghost";
-  button.textContent = `Vis ${laterCards.length} senere turneringer`;
-  let expanded = false;
-  button.addEventListener("click", () => {
-    expanded = !expanded;
-    laterCards.forEach((card) => card.classList.toggle("hidden", !expanded));
-    button.textContent = expanded ? "Vis færre turneringer" : `Vis ${laterCards.length} senere turneringer`;
-  });
-  control.appendChild(button);
-  tournamentList.appendChild(control);
 }
 
 function applyMembershipEligibility(eligibility) {
@@ -221,10 +129,7 @@ function applyMembershipEligibility(eligibility) {
   });
 }
 
-function disconnectObserver() {
-  observer?.disconnect();
-}
-
+function disconnectObserver() { observer?.disconnect(); }
 function connectObserver() {
   if (!observer) return;
   if (registrationList) observer.observe(registrationList, { childList: true, subtree: true });
@@ -237,16 +142,14 @@ async function enhance() {
   disconnectObserver();
   try {
     prepareSectionCopy();
-    const currentClubId = clubId();
-    const [dashboard, tournamentData, eligibilityData] = await Promise.all([
+    const [dashboard, eligibilityData] = await Promise.all([
       token() ? api("/me/dashboard", { auth: true }).catch(() => null) : Promise.resolve(null),
-      currentClubId ? api(`/clubs/${currentClubId}/registration-tournaments`).catch(() => null) : Promise.resolve(null),
       token() ? api("/me/eligibility", { auth: true }).catch(() => null) : Promise.resolve(null),
     ]);
     const registrations = dashboard?.dashboard?.registrations || [];
-    const tournaments = tournamentData?.items || [];
     const eligibility = eligibilityData?.eligibility || null;
 
+    focusRegistrations(registrations);
     for (const registration of registrations) {
       if (String(registration.status) !== "checked_in") continue;
       if (["in_progress", "completed", "archived"].includes(String(registration.tournament_status))) continue;
@@ -256,9 +159,6 @@ async function enhance() {
       addWithdraw(findCard(registrationList, name), tournamentId);
       addWithdraw(findCard(tournamentList, name), tournamentId);
     }
-
-    focusRegistrations(registrations);
-    if (tournamentData) focusUpcomingTournaments(tournaments);
     applyMembershipEligibility(eligibility);
   } finally {
     enhancing = false;
