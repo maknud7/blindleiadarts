@@ -1,4 +1,17 @@
 (() => {
+  // app.js og enkelte UX-moduler bruker fortsatt refreshButton som intern refresh-hook.
+  // Den synlige knappen er fjernet fra UI, men hooken må finnes for at bootstrap ikke skal stoppe.
+  if (!document.getElementById("refreshButton")) {
+    const refreshHook = document.createElement("button");
+    refreshHook.id = "refreshButton";
+    refreshHook.type = "button";
+    refreshHook.hidden = true;
+    refreshHook.tabIndex = -1;
+    refreshHook.setAttribute("aria-hidden", "true");
+    refreshHook.style.display = "none";
+    document.body.appendChild(refreshHook);
+  }
+
   const originalFetch = window.fetch.bind(window);
   const MAX_MS = 12000;
   const history = [];
