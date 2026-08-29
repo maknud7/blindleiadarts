@@ -39,7 +39,15 @@ jobs:
           set -Eeuo pipefail
           base="${BASE_URL%/}"
 
-          live_json="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/club-live.php?club_id=1&cb=$RANDOM")"
+          clubs_json="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/v1/clubs?cb=$RANDOM")"
+          club_id="$(python3 -c 'import json,sys; p=json.load(sys.stdin); items=p.get("data",{}).get("items",[]); matches=[x for x in items if x.get("slug")=="blindleia-dartklubb"]; print(matches[0]["id"] if matches else "")' <<<"$clubs_json")"
+          if [[ ! "$club_id" =~ ^[0-9]+$ ]]; then
+            echo "Club Live smoke failed: Blindleia club was not found in /api/v1/clubs." >&2
+            echo "$clubs_json" >&2
+            exit 1
+          fi
+
+          live_json="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/club-live.php?club_id=$club_id&cb=$RANDOM")"
           live_code="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["club"]["live_code"])' <<<"$live_json")"
           live_url="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["live_url"])' <<<"$live_json")"
 
@@ -66,6 +74,7 @@ jobs:
             exit 1
           fi
 
+          echo "CLUB_ID=$club_id"
           echo "CLUB_LIVE_CODE=$live_code"
           echo "CLUB_LIVE_URL=$live_url"
           echo "CLUB_LIVE_SMOKE_OK=yes"
