@@ -452,18 +452,18 @@ final class TournamentCheckinRepository
         if ($code === '') {
             return null;
         }
-        if (strlen($code) < 4 || strlen($code) > 12) {
-            throw new ValidationException('invalid_checkin_code', 'Innsjekk-koden må være 4–12 tegn.');
+        if (strlen($code) < 3 || strlen($code) > 12) {
+            throw new ValidationException('invalid_checkin_code', 'Innsjekk-koden må være 3–12 tegn.');
         }
         return $code;
     }
 
     private function generateUniqueCode(int $clubId, int $excludeTournamentId): string
     {
-        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
         for ($attempt = 0; $attempt < 30; $attempt++) {
             $code = '';
-            for ($i = 0; $i < 6; $i++) {
+            for ($i = 0; $i < 3; $i++) {
                 $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
             }
             $stmt = $this->connection->prepare(sprintf(
