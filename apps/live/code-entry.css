@@ -1,0 +1,17 @@
+body.phase-code-entry{overflow:hidden}
+body.phase-code-entry .live-shell{width:100%;max-width:none;padding:0}
+.code-entry-state{min-height:100svh;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));background:radial-gradient(circle at 50% 12%,#fff 0,#f3f8fb 44%,#eaf1f7 100%)}
+.code-entry-card{width:min(460px,100%);padding:32px;border:1px solid #dbe3ed;border-radius:24px;background:rgba(255,255,255,.96);box-shadow:0 22px 60px rgba(7,31,59,.14);text-align:center}
+.code-entry-logo{display:block;width:116px;height:116px;object-fit:contain;margin:0 auto 18px}
+.code-entry-eyebrow{margin:0 0 5px;text-transform:uppercase;letter-spacing:.12em;font-size:.72rem;font-weight:850;color:#2f6fed}
+.code-entry-card h1{margin:0;color:#0c2340;font-size:clamp(2rem,7vw,2.8rem);line-height:1;letter-spacing:-.04em}
+.code-entry-help{margin:12px auto 22px;max-width:320px;color:#697c94;font-size:.98rem}
+.code-entry-form{display:grid;gap:12px}
+.code-entry-input{width:100%;height:72px;border:2px solid #cbd8e6;border-radius:16px;background:#f8fbfd;color:#0c2340;text-align:center;font:850 clamp(2rem,10vw,2.7rem)/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.24em;padding:0 8px 0 .24em;font-variant-numeric:tabular-nums;outline:none;transition:border-color .16s,box-shadow .16s,background .16s}
+.code-entry-input:focus{border-color:#2f6fed;background:#fff;box-shadow:0 0 0 5px rgba(47,111,237,.12)}
+.code-entry-input::placeholder{color:#a7b5c5;opacity:1}
+.code-entry-button{height:54px;border:0;border-radius:14px;background:#0c3158;color:#fff;font:800 1rem/1 inherit;cursor:pointer;box-shadow:0 8px 18px rgba(12,49,88,.16)}
+.code-entry-button:hover{background:#092947}
+.code-entry-button:focus-visible{outline:3px solid rgba(47,111,237,.35);outline-offset:3px}
+.code-entry-error{min-height:1.3em;margin:0;color:#b42318;font-size:.86rem;font-weight:700}
+@media(max-width:520px){.code-entry-card{padding:26px 20px;border-radius:20px}.code-entry-logo{width:96px;height:96px}.code-entry-input{height:66px}}
