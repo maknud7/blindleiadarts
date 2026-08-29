@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\MemberAdminRepository;
 use Blindleia\Dartkiosk\Api\Repository\MemberOnboardingRepository;
+use Blindleia\Dartkiosk\Api\Repository\MembershipEligibilityRepository;
 use Blindleia\Dartkiosk\Api\Repository\SelfRegistrationRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
@@ -42,9 +44,13 @@ try {
     $prefix = $database->tablePrefix();
     $request = Request::fromGlobals();
     $repository = new MemberOnboardingRepository($database);
+    $memberAdmin = new MemberAdminRepository($database);
+    $membershipEligibility = new MembershipEligibilityRepository($database);
     $selfRegistration = new SelfRegistrationRepository($database);
     $action = strtolower(trim((string) ($_GET['action'] ?? '')));
 
+    // Kept for the legacy `self` payload only. Admin list status below comes from
+    // MembershipEligibilityRepository so there is one canonical dues calculation.
     $loadMembership = static function (int $memberId, bool $includePayments = false) use ($db): ?array {
         if ($memberId <= 0) return null;
         $stmt = $db->prepare(
@@ -163,13 +169,60 @@ try {
     }
 
     if ($request->method() === 'GET' && $action === 'list') {
-        $data = $repository->listMembers($clubId);
+        $data = $memberAdmin->listMembers($clubId);
+        $activeMembers = 0;
+        $inactiveMembers = 0;
+        $requiresAction = 0;
+
         foreach ($data['items'] as &$item) {
-            $item['membership'] = $loadMembership((int) ($item['member_id'] ?? 0), false);
+            $playerId = (int) ($item['player']['id'] ?? 0);
+            $membership = $membershipEligibility->forMember(
+                (int) ($item['member_id'] ?? 0),
+                $clubId,
+                $playerId > 0 ? $playerId : null
+            );
+            $item['membership'] = $membership;
+
+            $isActiveMember = (bool) ($membership['member_active'] ?? true);
+            if ($isActiveMember) {
+                $activeMembers++;
+            } else {
+                $inactiveMembers++;
+            }
+
+            $accountStatus = (string) ($item['account']['status'] ?? 'none');
+            $accountNeedsAction = $accountStatus !== 'active';
+            if ($isActiveMember && ((bool) ($membership['action_required'] ?? false) || $accountNeedsAction)) {
+                $requiresAction++;
+            }
         }
         unset($item);
+
+        $data['member_status_summary'] = [
+            'active' => $activeMembers,
+            'inactive' => $inactiveMembers,
+            'requires_action' => $requiresAction,
+        ];
+        $data['permissions'] = [
+            'current_user_account_id' => (int) ($currentUser['id'] ?? 0),
+            'current_access_level' => (string) ($currentUser['role'] ?? 'player'),
+            'can_manage_roles' => true,
+            'can_grant_super_admin' => (string) ($currentUser['role'] ?? '') === 'super_admin',
+        ];
         $data['pending_registrations'] = $selfRegistration->listPending($clubId);
         $respond(['ok' => true, 'data' => $data]);
+    }
+
+    if ($request->method() === 'POST' && $action === 'set-access-level') {
+        $payload = $request->jsonBody();
+        $result = $memberAdmin->setAccessLevel(
+            $clubId,
+            (int) ($payload['account_id'] ?? 0),
+            (string) ($payload['access_level'] ?? ''),
+            (int) ($currentUser['id'] ?? 0),
+            (string) ($currentUser['role'] ?? '') === 'super_admin'
+        );
+        $respond(['ok' => true, 'data' => $result]);
     }
 
     if ($request->method() === 'POST' && $action === 'invite-open') {
@@ -225,7 +278,11 @@ try {
 
     if ($request->method() === 'POST' && $action === 'disable') {
         $payload = $request->jsonBody();
-        $repository->disableAccount((int) ($payload['member_id'] ?? 0));
+        $memberId = (int) ($payload['member_id'] ?? 0);
+        if ($memberId > 0 && $memberId === (int) ($currentUser['member_id'] ?? 0)) {
+            throw new InvalidArgumentException('Du kan ikke deaktivere din egen brukerkonto her.');
+        }
+        $repository->disableAccount($memberId);
         $respond(['ok' => true, 'data' => ['status' => 'disabled']]);
     }
 
