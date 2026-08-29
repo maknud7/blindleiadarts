@@ -1,0 +1,67 @@
+/* Mobile polish for tournament administration. Loaded by tournament-loader with a cache-busting version. */
+@media (max-width: 800px) {
+  /* The check-in surface already contains cards and disclosures. Remove the extra
+     outer frame so the hierarchy reads as one surface rather than boxes in boxes. */
+  #tcStageCheckin.tc-stage {
+    border: 0;
+    box-shadow: none;
+    padding: 10px 4px 14px;
+    background: transparent;
+  }
+
+  #tcStageCheckin .tc-disclosure {
+    border-color: #d7e1e8;
+    box-shadow: none;
+  }
+
+  #tcStageCheckin .tc-disclosure[open] {
+    border-color: #cbd9e2;
+  }
+
+  #tcStageCheckin .tc-disclosure-body {
+    padding: 12px;
+  }
+
+  /* Keep the +/- control inside the disclosure row. The previous grid placed the
+     pseudo element in a non-existent third column on narrow screens. */
+  #tcStageCheckin .tc-checkin-settings summary {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    padding-right: 12px;
+  }
+
+  #tcStageCheckin .tc-checkin-settings summary::after {
+    position: static;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: center;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    float: none;
+    border-radius: 8px;
+    background: #f1f6f9;
+    color: #627789;
+    font-size: 19px;
+    line-height: 1;
+  }
+
+  #tcStageCheckin .tc-checkin-settings summary small {
+    grid-column: 1;
+    white-space: normal;
+    padding-right: 4px;
+  }
+
+  /* The code is information, not another card inside a card. */
+  #tcStageCheckin .tc-code-box {
+    border: 0;
+    background: #eef6fa;
+    padding: 12px 14px;
+  }
+
+  #tcStageCheckin .tc-code-box .button {
+    background: #fff;
+  }
+}
