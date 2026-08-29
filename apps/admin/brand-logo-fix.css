@@ -14,3 +14,58 @@ body[data-bd-surface="admin"] .brand-mark {
     background-size: contain !important;
   }
 }
+
+/* Mobile member cards: collapsed is summary only; expanded reveals actual details. */
+@media (max-width:760px) {
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id]:not(.member-expanded) td[data-label="Konto og tilgang"],
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id]:not(.member-expanded) td[data-label="Handling"] {
+    display:none !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded {
+    grid-template-areas:"person person" "membership payment" "account account" "action action" !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Konto og tilgang"],
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Handling"] {
+    display:block !important;
+    width:100% !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Konto og tilgang"] {
+    margin-top:2px !important;
+    padding:12px !important;
+    border-top:1px solid #dfe7ee !important;
+    border-radius:10px !important;
+    background:#f7fafc !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Handling"] {
+    justify-self:stretch !important;
+    padding-top:10px !important;
+    border-top:0 !important;
+    text-align:left !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded .member-account-compact > small {
+    display:block !important;
+    margin-top:2px !important;
+    color:var(--muted,#667085) !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded .member-payment-overview {
+    flex-wrap:wrap !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded .member-payment-overview small {
+    display:block !important;
+    flex-basis:100% !important;
+    margin-top:4px !important;
+    font-size:11px !important;
+    color:var(--muted,#667085) !important;
+  }
+
+  body[data-bd-surface="admin"] .member-access-table-wrap tr[data-member-id].member-expanded .member-access-level {
+    margin-top:10px !important;
+  }
+}
