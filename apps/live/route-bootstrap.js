@@ -4,9 +4,15 @@
   const liveCode = match?.[1] || "";
   const legacyClub = new URLSearchParams(window.location.search).get("club") || "";
 
-  function appBasePath() {
+  function liveBasePath() {
     const match = window.location.pathname.match(/^(.*\/live)(?:\/|$)/i);
     return match ? `${match[1]}/` : "/live/";
+  }
+
+  function siteBasePath() {
+    const match = window.location.pathname.match(/^(.*)\/live(?:\/|$)/i);
+    const prefix = match?.[1] || "";
+    return prefix ? `${prefix}/` : "/";
   }
 
   function loadScript(src) {
@@ -44,7 +50,7 @@
         input.focus();
         return;
       }
-      window.location.assign(`${appBasePath()}${code}`);
+      window.location.assign(`${liveBasePath()}${code}`);
     });
 
     window.setTimeout(() => input.focus(), 0);
@@ -65,7 +71,7 @@
 
   async function resolveClub() {
     if (!liveCode) return null;
-    const endpoint = `${appBasePath()}api/club-live.php?code=${encodeURIComponent(liveCode)}`;
+    const endpoint = `${siteBasePath()}api/club-live.php?code=${encodeURIComponent(liveCode)}`;
     const response = await fetch(endpoint, { cache: "no-store" });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok || !payload?.data?.club?.slug) {
