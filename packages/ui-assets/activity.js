@@ -18,6 +18,23 @@
   let pausedUntil = 0;
   let context = { club_id: null, club_slug: null, tournament_id: null };
 
+  function installTestEnvironmentFrame() {
+    const hostname = String(window.location.hostname || "").toLowerCase();
+    if (!(hostname === "test.blindleiadarts.ingenting.org" || hostname.startsWith("test."))) return;
+    if (document.getElementById("bd-test-environment-frame")) return;
+
+    const frame = document.createElement("div");
+    frame.id = "bd-test-environment-frame";
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none;border:4px solid #f2c94c;box-sizing:border-box;";
+
+    const badge = document.createElement("div");
+    badge.textContent = "TEST";
+    badge.style.cssText = "position:absolute;top:0;left:50%;transform:translateX(-50%);padding:2px 10px 3px;border-radius:0 0 8px 8px;background:#f2c94c;color:#3b2d00;font:800 11px/1.2 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:.08em;box-shadow:0 1px 3px rgba(0,0,0,.12);";
+    frame.appendChild(badge);
+    document.documentElement.appendChild(frame);
+  }
+
   function surface() {
     const explicit = document.body?.dataset?.activitySurface;
     if (explicit) return explicit;
@@ -140,8 +157,6 @@
       });
 
       if (response.status === 429) {
-        // Activity is non-critical. Drop queued telemetry and back off instead of
-        // creating a retry storm that can affect scoring/admin traffic.
         queue.length = 0;
         pausedUntil = Date.now() + BACKOFF_429_MS;
         return;
@@ -152,7 +167,6 @@
       }
     } catch (error) {
       if (!keepalive) console.warn("Activity logging unavailable", error);
-      // Never requeue failed telemetry. Core application traffic has priority.
     } finally {
       inFlight = false;
     }
@@ -186,13 +200,12 @@
     },
   };
 
-  // Do not log every generic click. Navigation and form submits cover normal UX;
-  // data-track is available for specific business actions we explicitly care about.
   document.addEventListener("click", trackExplicitClick, { capture: true, passive: true });
   document.addEventListener("submit", trackSubmit, { capture: true });
   window.addEventListener("bd:portal-view", (event) => push("navigation", { portal_view: event.detail?.target || null }));
   window.addEventListener("pagehide", () => flush({ keepalive: true }));
 
+  installTestEnvironmentFrame();
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => push("page_view"), { once: true });
   } else {
