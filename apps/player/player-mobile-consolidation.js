@@ -22,4 +22,5 @@ document.getElementById("clubSelect")?.addEventListener("change",hideClubSwitche
 window.addEventListener("bd:player-state-changed",hideClubSwitcher);
 
 import("./tournament-discovery-ux.js?v=20260829-1935")
-  .then(()=>import("./tournament-calendar-polish.js?v=20260829-1945"));
+  .then(()=>import("./tournament-calendar-polish.js?v=20260829-1945"))
+  .then(()=>import("./tournament-prestart-detail.js?v=20260829-2025"));
