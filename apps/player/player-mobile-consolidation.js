@@ -20,3 +20,5 @@ if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",
 window.addEventListener("bd:portal-view",hideClubSwitcher);
 document.getElementById("clubSelect")?.addEventListener("change",hideClubSwitcher);
 window.addEventListener("bd:player-state-changed",hideClubSwitcher);
+
+import("./tournament-discovery-ux.js?v=20260829-1915");
