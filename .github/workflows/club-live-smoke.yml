@@ -58,6 +58,18 @@ jobs:
             rm -f "$tmp"
           }
 
+          entry_html="$(probe code-entry "$base/live/?cb=$RANDOM")"
+          echo "PROBE code-entry OK"
+          grep -Fq 'id="liveCodeForm"' <<<"$entry_html"
+          grep -Fq 'id="liveCodeInput"' <<<"$entry_html"
+          grep -Fq 'code-entry.css' <<<"$entry_html"
+          grep -Fq 'route-bootstrap.js' <<<"$entry_html"
+
+          route_js="$(probe route-bootstrap "$base/live/route-bootstrap.js?cb=$RANDOM")"
+          echo "PROBE route-bootstrap OK"
+          grep -Fq 'showCodeEntry' <<<"$route_js"
+          grep -Fq 'window.location.assign' <<<"$route_js"
+
           clubs_json="$(probe clubs "$base/api/v1/clubs?cb=$RANDOM")"
           echo "PROBE clubs OK"
           club_id="$(python3 -c 'import json,sys; lines=sys.stdin.read().splitlines(); raw="\n".join(line for line in lines if not line.startswith("PROBE ")); p=json.loads(raw); items=p.get("data",{}).get("items",[]); matches=[x for x in items if x.get("slug")=="blindleia-dartklubb"]; print(matches[0]["id"] if matches else "")' <<<"$clubs_json")"
