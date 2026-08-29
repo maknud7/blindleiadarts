@@ -4,7 +4,7 @@ const REACTIVATE_ENDPOINT = "../api/member-account-reactivate.php";
 
 const panel = document.getElementById("players");
 if (panel) {
-  const MEMBER_UI_VERSION = "20260829-0830";
+  const MEMBER_UI_VERSION = "20260829-0915";
   if (!document.querySelector('link[data-member-onboarding-css]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
@@ -20,12 +20,12 @@ if (panel) {
       <div>
         <p class="eyebrow">Medlemsadministrasjon</p>
         <h3>Medlem, kontingent og tilgang på ett sted</h3>
-        <p>Standardlisten viser aktive medlemmer. Kontingentstatus bruker samme beregning som påmelding og medlemsoppfølging, mens inaktive medlemmer kan hentes frem med filteret.</p>
+        <p>Standardlisten viser aktive medlemmer. Kontingentstatus følger samme regler som Blindleia-admin, og klubbadmin kan styre tilgangsnivå på andre brukerkontoer.</p>
       </div>
       <div class="member-account-flow" aria-label="Kontoflyt">
-        <div><span>1</span><strong>Medlem</strong><small>Canonical medlemsstatus.</small></div>
-        <div><span>2</span><strong>Kontingent</strong><small>Samme betalingslogikk overalt.</small></div>
-        <div><span>3</span><strong>Tilgang</strong><small>Klubbadmin styrer klubbtilgang.</small></div>
+        <div><span>1</span><strong>Medlem</strong><small>Samme aktiv/inaktiv-status som admin.</small></div>
+        <div><span>2</span><strong>Kontingent</strong><small>Fast, mulig fast, sporadisk og restanse.</small></div>
+        <div><span>3</span><strong>Tilgang</strong><small>Medlem, klubbadmin eller superadmin.</small></div>
       </div>
     </section>
 
@@ -192,50 +192,60 @@ if (panel) {
   }
 
   function isInactiveMember(item) {
-    return item.membership?.member_active === false
-      || String(item.membership?.reason_code || "") === "membership_inactive";
+    return item.membership?.is_active_member === false
+      || String(item.membership?.code || "") === "inaktiv";
   }
 
   function requiresAction(item) {
     if (isInactiveMember(item)) return false;
-    const duesNeedsAction = Boolean(item.membership?.action_required);
+    const duesNeedsAction = Boolean(item.membership?.needs_follow_up);
     const accountNeedsAction = accountStage(item) !== "active";
     return duesNeedsAction || accountNeedsAction;
   }
 
+  function duesTone(membership) {
+    if (String(membership?.code || "") === "inaktiv") return "neutral";
+    if (Boolean(membership?.stripe?.problem) || Number(membership?.arrears || 0) > 0) return "bad";
+    if (Boolean(membership?.needs_follow_up)) return "warning";
+    if (["fast"].includes(String(membership?.code || ""))) return "good";
+    if (["mulig_fast", "under_vurdering"].includes(String(membership?.code || ""))) return "warning";
+    return "neutral";
+  }
+
   function duesCell(membership) {
-    if (!membership || membership.status === "unavailable") {
+    if (!membership || !membership.code) {
       return `<span class="badge neutral">Ukjent</span><small>Kunne ikke beregne kontingentstatus</small>`;
     }
 
-    const reason = String(membership.reason_code || "");
+    const tone = duesTone(membership);
+    const label = membership.label || "Ukjent";
     const currentLabel = membership.current_period_label || "inneværende måned";
-    const previousLabel = membership.previous_period_label || "forrige måned";
-    const missed = Number(membership.missed_closed_months || 0);
-    const remaining = Number(membership.current_remaining || 0);
+    const arrears = Number(membership.arrears || 0);
+    const currentAmount = Number(membership.current_amount || 0);
+    const monthlyAmount = Number(membership.monthly_amount || 0);
+    const stripeActive = Boolean(membership.stripe?.active);
+    const stripeProblem = Boolean(membership.stripe?.problem);
+    let primary = "";
 
-    switch (reason) {
-      case "membership_inactive":
-        return `<span class="badge neutral">Inaktivt medlem</span><small>Skjult fra standardlisten</small>`;
-      case "payment_not_required":
-        return `<span class="badge good">Ikke fast kontingent</span><small>Betaling er ikke påkrevd</small>`;
-      case "dues_not_started":
-        return `<span class="badge neutral">Ikke startet</span><small>Kontingent starter ${escapeHtml(formatDate(membership.dues_start))}</small>`;
-      case "payment_too_far_overdue":
-        return `<span class="badge bad">Kontingent mangler</span><small>${missed} avsluttede måneder uten betaling</small>`;
-      case "stripe_needs_attention":
-        return `<span class="badge warning">Fast betaling feiler</span><small>Stripe trenger oppfølging</small>`;
-      case "active_autodebit":
-        return `<span class="badge good">Fast betaling aktiv</span><small>Stripe-abonnement</small>`;
-      case "previous_period_incomplete":
-        return `<span class="badge warning">Kontingent mangler</span><small>${escapeHtml(previousLabel)} er ikke fullt betalt</small>`;
-      case "current_period_incomplete":
-        return `<span class="badge warning">Denne måneden</span><small>${remaining > 0 ? `${formatMoney(remaining)} mangler · ` : ""}${escapeHtml(currentLabel)}</small>`;
-      case "paid":
-        return `<span class="badge good">Betalt</span><small>${escapeHtml(currentLabel)}</small>`;
-      default:
-        return `<span class="badge good">OK</span><small>${escapeHtml(currentLabel)}</small>`;
+    if (stripeProblem) {
+      primary = "Stripe-avtalen trenger oppfølging";
+    } else if (arrears > 0) {
+      primary = `${formatMoney(arrears)} utestående`;
+    } else if (Boolean(membership.paid_current)) {
+      primary = `${currentLabel} fullt betalt`;
+    } else if (stripeActive) {
+      primary = `Aktivt autotrekk · avventer ${String(currentLabel).toLocaleLowerCase("nb")}`;
+    } else if (currentAmount > 0 && monthlyAmount > 0) {
+      primary = `${formatMoney(currentAmount)} av ${formatMoney(monthlyAmount)} registrert ${String(currentLabel).toLocaleLowerCase("nb")}`;
+    } else if (membership.latest_paid_period_label) {
+      primary = `Sist fullt betalt ${String(membership.latest_paid_period_label).toLocaleLowerCase("nb")}`;
+    } else {
+      primary = membership.reason || "Ingen full betaling registrert ennå";
     }
+
+    const reason = String(membership.reason || "").trim();
+    const showReason = reason && reason !== primary && !primary.includes(reason);
+    return `<span class="badge ${tone}">${escapeHtml(label)}</span><small>${escapeHtml(primary)}</small>${showReason ? `<small class="member-dues-reason">${escapeHtml(reason)}</small>` : ""}`;
   }
 
   function accessLabel(level) {
@@ -255,6 +265,7 @@ if (panel) {
     const currentAccountId = Number(state.permissions.current_user_account_id || 0);
     const canGrantSuper = Boolean(state.permissions.can_grant_super_admin);
     const canEdit = Boolean(state.permissions.can_manage_roles)
+      && account.can_manage_access !== false
       && accountId > 0
       && accountId !== currentAccountId
       && (level !== "super_admin" || canGrantSuper);
@@ -272,7 +283,7 @@ if (panel) {
 
     return `<div class="member-access-level">
       <label><span>Tilgang</span><select class="member-access-select" aria-label="Tilgangsnivå for ${escapeHtml(item.member_name)}">
-        ${options.map(([value, label]) => `<option value="${value}"${value === level ? " selected" : ""}>${label}</option>`).join("")}
+        ${options.map(([value, optionLabel]) => `<option value="${value}"${value === level ? " selected" : ""}>${optionLabel}</option>`).join("")}
       </select></label>
       <button type="button" class="button secondary member-access-save" data-account-id="${accountId}">Lagre</button>
     </div>`;
@@ -300,10 +311,11 @@ if (panel) {
   function actionHtml(item, stage) {
     const account = item.account || null;
     const isOwnAccount = Number(account?.id || 0) === Number(state.permissions.current_user_account_id || 0);
+    const isSuperAdmin = String(account?.access_level || "") === "super_admin";
     if (stage === "active") {
-      return isOwnAccount
-        ? `<small class="muted">Din brukerkonto</small>`
-        : `<button type="button" class="button quiet member-disable">Deaktiver konto</button>`;
+      if (isOwnAccount) return `<small class="muted">Din brukerkonto</small>`;
+      if (isSuperAdmin) return `<small class="muted">Superadmin-konto</small>`;
+      return `<button type="button" class="button quiet member-disable">Deaktiver konto</button>`;
     }
     if (stage === "disabled" && account?.claimed_at && account?.email) {
       return `<button type="button" class="button secondary member-reactivate">Aktiver igjen</button>`;
@@ -321,7 +333,7 @@ if (panel) {
     if (state.filter === "needs" && !requiresAction(item)) return false;
 
     if (!state.search) return true;
-    const haystack = `${item.member_name || ""} ${item.player?.display_name || ""} ${item.membership?.member_number || ""} ${item.account?.email || ""}`.toLocaleLowerCase("nb");
+    const haystack = `${item.member_name || ""} ${item.player?.display_name || ""} ${item.membership?.member_number || ""} ${item.account?.email || ""} ${item.membership?.label || ""}`.toLocaleLowerCase("nb");
     return haystack.includes(state.search);
   }
 
@@ -362,11 +374,12 @@ if (panel) {
   function memberOptions(registration) {
     const exact = normalizeName(registration.display_name);
     return state.items
-      .filter((item) => !isInactiveMember(item) && accountStage(item) !== "active")
+      .filter((item) => accountStage(item) !== "active")
       .map((item) => {
         const selected = normalizeName(item.member_name) === exact ? " selected" : "";
-        const [label] = stageInfo(accountStage(item));
-        return `<option value="${Number(item.member_id)}"${selected}>${escapeHtml(item.member_name)} · ${escapeHtml(label)}</option>`;
+        const [accountLabel] = stageInfo(accountStage(item));
+        const membershipLabel = item.membership?.label ? ` · ${item.membership.label}` : "";
+        return `<option value="${Number(item.member_id)}"${selected}>${escapeHtml(item.member_name)} · ${escapeHtml(accountLabel)}${escapeHtml(membershipLabel)}</option>`;
       }).join("");
   }
 
@@ -380,7 +393,7 @@ if (panel) {
     el.pending.classList.remove("hidden");
     el.pending.innerHTML = `
       <div class="member-pending-head">
-        <div><p class="eyebrow">Krever handling</p><h3>Nye registreringer må kobles til riktig medlem</h3><p>Hvis personen har spilt tidligere, velg eksisterende medlem. Da følger kamper, ELO og statistikk med videre.</p></div>
+        <div><p class="eyebrow">Krever handling</p><h3>Nye registreringer må kobles til riktig medlem</h3><p>Hvis personen har spilt tidligere, velg eksisterende medlem – også om medlemskapet står som inaktivt. Da følger kamper, ELO og statistikk med videre.</p></div>
         <span class="pill">${state.pending.length}</span>
       </div>
       <div class="member-pending-list">${state.pending.map((item) => `
