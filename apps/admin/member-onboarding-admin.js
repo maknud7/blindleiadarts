@@ -4,7 +4,7 @@ const REACTIVATE_ENDPOINT = "../api/member-account-reactivate.php";
 
 const panel = document.getElementById("players");
 if (panel && !panel.querySelector(".member-access-block")) {
-  const MEMBER_UI_VERSION = "20260829-1025";
+  const MEMBER_UI_VERSION = "20260829-1055";
 
   const style = document.createElement("style");
   style.textContent = `
@@ -22,7 +22,21 @@ if (panel && !panel.querySelector(".member-access-block")) {
     .member-access-level.readonly{display:flex;flex-direction:column;align-items:flex-start;gap:1px}.member-access-select{min-width:130px}.member-access-save{padding:7px 9px!important}
     .member-pending{margin:0 0 18px;border:1px solid #f0c36a;border-radius:14px;background:#fff9e8;padding:14px}.member-pending-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.member-pending-head h3{margin:2px 0 4px}.member-pending-list{display:grid;gap:10px;margin-top:10px}.member-pending-card{display:grid;grid-template-columns:minmax(160px,1fr) minmax(220px,1.4fr) auto;gap:10px;align-items:end;background:#fff;border-radius:12px;padding:12px}.member-pending-person{display:flex;flex-direction:column;gap:3px}.member-pending-card label{display:flex;flex-direction:column;gap:4px}
     .member-invite-result{margin:0 0 14px;padding:12px;border-radius:12px}.member-invite-result.good{background:#ecfdf3}.member-invite-result.bad{background:#fef2f2}.member-link-row{display:flex;gap:8px;margin-top:8px}.member-link-row input{flex:1}.member-new-person{margin-top:16px}.member-row-inactive{opacity:.68}
-    @media(max-width:760px){.member-account-intro{display:block}.member-account-note{margin-top:8px}.member-access-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.member-access-table-wrap thead{display:none}.member-access-table-wrap table,.member-access-table-wrap tbody,.member-access-table-wrap tr,.member-access-table-wrap td{display:block;width:100%}.member-access-table-wrap tr{padding:12px 0}.member-access-table-wrap td{display:flex;justify-content:space-between;gap:14px;padding:6px 4px}.member-access-table-wrap td:before{content:attr(data-label);font-size:.72rem;text-transform:uppercase;color:var(--muted,#667085);padding-top:2px}.member-access-table-wrap td>*{max-width:72%;text-align:right;align-items:flex-end}.member-access-actions{text-align:right}.member-pending-card{grid-template-columns:1fr}.member-link-row{flex-direction:column}}
+    @media(max-width:760px){
+      .member-account-intro{display:block}.member-account-note{margin-top:8px}.member-access-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.member-access-table-wrap thead{display:none}.member-access-table-wrap table,.member-access-table-wrap tbody,.member-access-table-wrap tr,.member-access-table-wrap td{display:block;width:100%}.member-access-table-wrap tr{padding:12px 0}.member-access-table-wrap td{display:flex;justify-content:space-between;gap:14px;padding:6px 4px}.member-access-table-wrap td:before{content:attr(data-label);font-size:.72rem;text-transform:uppercase;color:var(--muted,#667085);padding-top:2px}.member-access-table-wrap td>*{max-width:72%;text-align:right;align-items:flex-end}.member-access-actions{text-align:right}.member-pending-card{grid-template-columns:1fr}.member-link-row{flex-direction:column}
+      .member-access-table-wrap tr[data-member-id]{position:relative;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
+      .member-access-table-wrap tr[data-member-id]::after{content:"⌄";position:absolute;right:12px;top:13px;font-size:18px;line-height:1;color:var(--muted,#667085);transition:transform .15s ease}
+      .member-access-table-wrap tr[data-member-id].member-expanded::after{transform:rotate(180deg)}
+      .member-access-table-wrap tr[data-member-id]:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:2px}
+      .member-access-table-wrap tr[data-member-id] td[data-label="Medlem"]{padding-right:34px!important}
+      .member-access-table-wrap tr[data-member-id] td[data-label="Konto og tilgang"],.member-access-table-wrap tr[data-member-id] td[data-label="Handling"]{display:none}
+      .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Konto og tilgang"],.member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Handling"]{display:block}
+      .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Konto og tilgang"]{grid-column:1/-1;margin-top:2px;padding:10px!important;border-radius:10px!important;background:#f7fafc}
+      .member-access-table-wrap tr[data-member-id].member-expanded td[data-label="Handling"]{grid-column:1/-1;padding-top:2px!important}
+      .member-access-table-wrap tr[data-member-id] td[data-label="Betaling"] small{display:none!important}
+      .member-access-table-wrap tr[data-member-id] .member-account-compact{align-items:flex-start!important;text-align:left!important}
+      .member-access-table-wrap tr[data-member-id] .member-access-level{width:100%}
+    }
   `;
   document.head.appendChild(style);
 
@@ -139,9 +153,6 @@ if (panel && !panel.querySelector(".member-access-block")) {
   }
 
   function isInactiveMember(item) { return item.membership?.is_active_member === false || String(item.membership?.code || "") === "inaktiv"; }
-
-  // Denne arbeidskøen gjelder kun oppgaver Blindleia Darts faktisk skal håndtere.
-  // Betalingsoppfølging hører hjemme i Blindleia-admin og påvirker derfor ikke "Krever handling" her.
   function requiresAction(item) { return !isInactiveMember(item) && accountStage(item) !== "active"; }
 
   function membershipStatus(item) {
@@ -179,7 +190,8 @@ if (panel && !panel.querySelector(".member-access-block")) {
   function accountCell(item, stage) {
     const [label,tone]=stageInfo(stage); const account=item.account||null;
     const email=account?.email ? `<small>${escapeHtml(account.email)}</small>` : "";
-    return `<div class="member-account-compact"><span class="badge ${tone}">${escapeHtml(label)}</span>${email}${accessControlHtml(item,stage)}</div>`;
+    const lastLogin=account?.last_login_at ? `<small>Sist innlogget ${escapeHtml(formatDate(account.last_login_at,true))}</small>` : "";
+    return `<div class="member-account-compact"><span class="badge ${tone}">${escapeHtml(label)}</span>${email}${lastLogin}${accessControlHtml(item,stage)}</div>`;
   }
 
   function actionHtml(item, stage) {
@@ -210,7 +222,7 @@ if (panel && !panel.querySelector(".member-access-block")) {
     if(!items.length){el.rows.innerHTML=`<tr><td colspan="5"><div class="empty">Ingen medlemmer passer filteret.</div></td></tr>`;return;}
     el.rows.innerHTML=items.map(item=>{
       const stage=accountStage(item); const playerName=item.player?.display_name||item.member_name; const memberNumber=item.membership?.member_number||item.member_number||null; const ms=membershipStatus(item); const pay=paymentOverview(item);
-      return `<tr class="${isInactiveMember(item)?"member-row-inactive":""}" data-member-id="${Number(item.member_id)}">
+      return `<tr class="${isInactiveMember(item)?"member-row-inactive":""}" data-member-id="${Number(item.member_id)}" tabindex="0" role="button" aria-expanded="false" aria-label="Vis mer informasjon om ${escapeHtml(playerName)}">
         <td data-label="Medlem"><div class="member-person"><strong>${escapeHtml(playerName)}</strong>${memberNumber?`<small>Medlemsnr. ${escapeHtml(memberNumber)}</small>`:""}</div></td>
         <td data-label="Medlemsstatus"><div class="member-status-stack"><span class="badge ${ms.tone}">${ms.label}</span></div></td>
         <td data-label="Betaling"><div class="member-payment-overview"><span class="badge ${pay.tone}">${pay.label}</span><small>${pay.detail}</small></div></td>
@@ -265,7 +277,20 @@ if (panel && !panel.querySelector(".member-access-block")) {
     if(accessButton){const accountId=Number(accessButton.dataset.accountId||0);const select=row.querySelector(".member-access-select");const accessLevel=String(select?.value||"");const oldLevel=String(item.account?.access_level||"player");const touchesSuper=accessLevel==="super_admin"||oldLevel==="super_admin";if(touchesSuper&&accessButton.dataset.confirm!=="1"){accessButton.dataset.confirm="1";accessButton.textContent="Bekreft";window.setTimeout(()=>{if(accessButton.isConnected&&accessButton.dataset.confirm==="1"){accessButton.dataset.confirm="";accessButton.textContent="Lagre";}},5000);return;}accessButton.disabled=true;try{await request("set-access-level",{method:"POST",body:{account_id:accountId,access_level:accessLevel}});showInline(`${item.member_name} har nå tilgangsnivå ${accessLabel(accessLevel)}.`,"good");state.key="";await load(true);}catch(error){showInline(error.message,"bad");}finally{accessButton.disabled=false;}return;}
     const inviteButton=event.target.closest(".member-invite");if(inviteButton){inviteButton.disabled=true;try{const data=await request("invite",{method:"POST",body:{member_id:memberId}});await showInviteLink(`Aktiveringslenke til ${item.member_name}`,data.token,data.expires_at,"Lenken er koblet direkte til dette medlemmet og beholder eksisterende spillerprofil.","member");state.key="";await load(true);}catch(error){showInline(error.message,"bad");}finally{inviteButton.disabled=false;}return;}
     const reactivateButton=event.target.closest(".member-reactivate");if(reactivateButton){reactivateButton.disabled=true;try{await reactivateAccount(memberId);showInline(`${item.member_name} kan logge inn igjen med samme e-post og passord.`,"good");state.key="";await load(true);}catch(error){showInline(error.message,"bad");}finally{reactivateButton.disabled=false;}return;}
-    const disableButton=event.target.closest(".member-disable");if(disableButton){if(disableButton.dataset.confirm!=="1"){disableButton.dataset.confirm="1";disableButton.textContent="Bekreft deaktivering";window.setTimeout(()=>{if(disableButton.isConnected&&disableButton.dataset.confirm==="1"){disableButton.dataset.confirm="";disableButton.textContent="Deaktiver konto";}},5000);return;}disableButton.disabled=true;try{await request("disable",{method:"POST",body:{member_id:memberId}});showInline(`${item.member_name} er deaktivert. Spillerhistorikken er ikke endret.`,"good");state.key="";await load(true);}catch(error){showInline(error.message,"bad");}finally{disableButton.disabled=false;}}
+    const disableButton=event.target.closest(".member-disable");if(disableButton){if(disableButton.dataset.confirm!=="1"){disableButton.dataset.confirm="1";disableButton.textContent="Bekreft deaktivering";window.setTimeout(()=>{if(disableButton.isConnected&&disableButton.dataset.confirm==="1"){disableButton.dataset.confirm="";disableButton.textContent="Deaktiver konto";}},5000);return;}disableButton.disabled=true;try{await request("disable",{method:"POST",body:{member_id:memberId}});showInline(`${item.member_name} er deaktivert. Spillerhistorikken er ikke endret.`,"good");state.key="";await load(true);}catch(error){showInline(error.message,"bad");}finally{disableButton.disabled=false;}return;}
+    if(window.matchMedia("(max-width:760px)").matches && !event.target.closest("button,a,input,select,textarea,label")){
+      const expanded=!row.classList.contains("member-expanded");
+      el.rows.querySelectorAll("tr.member-expanded").forEach(other=>{if(other!==row){other.classList.remove("member-expanded");other.setAttribute("aria-expanded","false");}});
+      row.classList.toggle("member-expanded",expanded);row.setAttribute("aria-expanded",expanded?"true":"false");
+    }
+  });
+
+  block.addEventListener("keydown",event=>{
+    if(!window.matchMedia("(max-width:760px)").matches || (event.key!=="Enter"&&event.key!==" "))return;
+    const row=event.target.closest("tr[data-member-id]");if(!row||event.target.closest("button,a,input,select,textarea"))return;
+    event.preventDefault();const expanded=!row.classList.contains("member-expanded");
+    el.rows.querySelectorAll("tr.member-expanded").forEach(other=>{if(other!==row){other.classList.remove("member-expanded");other.setAttribute("aria-expanded","false");}});
+    row.classList.toggle("member-expanded",expanded);row.setAttribute("aria-expanded",expanded?"true":"false");
   });
 
   el.search?.addEventListener("input",()=>{state.search=String(el.search.value||"").trim().toLocaleLowerCase("nb");renderRows();});
