@@ -15,9 +15,25 @@
   <link rel="stylesheet" href="./live-v2.css?v=20260828-02">
   <link rel="stylesheet" href="./venue-wall-v3.css?v=20260828-1746">
   <link rel="stylesheet" href="./venue-playoff-v4.css?v=20260828-1818">
+  <link rel="stylesheet" href="./code-entry.css?v=20260829-01">
 </head>
 <body class="phase-loading">
   <main class="live-shell">
+    <section id="codeEntryState" class="code-entry-state hidden" aria-label="Åpne Blindleia Live">
+      <div class="code-entry-card">
+        <img src="../static/club-logos/blindleia-dartklubb-logo.png" alt="Blindleia Dartklubb" class="code-entry-logo">
+        <p class="code-entry-eyebrow">Blindleia Dartklubb</p>
+        <h1>Live</h1>
+        <p class="code-entry-help">Skriv inn den firesifrede Live-koden for å åpne klubbens liveside.</p>
+        <form id="liveCodeForm" class="code-entry-form" novalidate>
+          <label class="hidden" for="liveCodeInput">Live-kode</label>
+          <input id="liveCodeInput" class="code-entry-input" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" placeholder="0000" aria-describedby="liveCodeError">
+          <button class="code-entry-button" type="submit">Åpne Live</button>
+          <p id="liveCodeError" class="code-entry-error" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
     <section id="standbyState" class="standby-state" aria-label="Blindleia Dartklubb">
       <div class="standby-clock-panel" aria-live="off">
         <strong id="standbyClock" class="standby-clock">--:--:--</strong>
@@ -110,6 +126,6 @@
       </div>
     </div>
   </main>
-  <script src="./route-bootstrap.js?v=20260829-0945"></script>
+  <script src="./route-bootstrap.js?v=20260829-01"></script>
 </body>
 </html>
