@@ -49,11 +49,13 @@ final class TournamentWizardApplication
         $tournamentId = (int) $m[1];
         $plan = $repo->getPlan($tournamentId);
         if ($plan === null) return JsonResponse::error(404, 'tournament_not_found', 'Turneringen ble ikke funnet.');
-        $admin = $this->requireAdmin($request, $users, (int) $plan['club_id']);
-        if ($admin instanceof JsonResponse) return $admin;
 
+        // Tournament format is public tournament information. Only mutations require admin access.
         if ($request->method() === 'GET') return JsonResponse::ok(['plan' => $plan]);
+
         if (in_array($request->method(), ['PATCH','PUT'], true)) {
+            $admin = $this->requireAdmin($request, $users, (int) $plan['club_id']);
+            if ($admin instanceof JsonResponse) return $admin;
             return JsonResponse::ok(['plan' => $repo->updatePlan($tournamentId, $request->jsonBody())]);
         }
         return JsonResponse::error(405, 'method_not_allowed', 'Method not allowed.');
