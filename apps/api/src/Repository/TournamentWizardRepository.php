@@ -25,6 +25,7 @@ final class TournamentWizardRepository
             'SELECT id,club_id,name,status,start_at,
                     planned_group_count,planned_group_draw_mode,planned_group_best_of_legs,
                     planned_qualifiers_per_group,planned_playoff_best_of_legs,
+                    planned_tournament_format,planned_starting_score,
                     group_count,group_draw_mode,group_drawn_at
              FROM `%1$stournaments` WHERE id=? LIMIT 1',
             $this->tablePrefix
@@ -42,6 +43,8 @@ final class TournamentWizardRepository
             'name' => $row['name'],
             'status' => $row['status'],
             'start_at' => $row['start_at'],
+            'tournament_format' => (string) $row['planned_tournament_format'],
+            'starting_score' => (int) $row['planned_starting_score'],
             'group_count' => $row['planned_group_count'] !== null
                 ? (int) $row['planned_group_count']
                 : ($row['group_count'] !== null ? (int) $row['group_count'] : 1),
@@ -59,6 +62,14 @@ final class TournamentWizardRepository
         $current = $this->getPlan($tournamentId);
         if ($current === null) throw new ValidationException('tournament_not_found', 'Turneringen ble ikke funnet.', 404);
 
+        $format = (string) ($payload['tournament_format'] ?? $current['tournament_format']);
+        if (!in_array($format, ['groups_playoff','groups_only','single_elimination','swiss'], true)) {
+            throw new ValidationException('invalid_tournament_format', 'Ugyldig turneringsformat.');
+        }
+        $startingScore = (int) ($payload['starting_score'] ?? $current['starting_score']);
+        if (!in_array($startingScore, [301, 501, 701, 1001], true)) {
+            throw new ValidationException('invalid_starting_score', 'Ugyldig startscore.');
+        }
         $groupCount = min(32, max(1, (int) ($payload['group_count'] ?? $current['group_count'])));
         $drawMode = (string) ($payload['group_draw_mode'] ?? $current['group_draw_mode']);
         if (!in_array($drawMode, ['elo_snake','elo_pots','random'], true)) {
@@ -71,12 +82,13 @@ final class TournamentWizardRepository
         $sql = sprintf(
             'UPDATE `%1$stournaments`
              SET planned_group_count=?,planned_group_draw_mode=?,planned_group_best_of_legs=?,
-                 planned_qualifiers_per_group=?,planned_playoff_best_of_legs=?
+                 planned_qualifiers_per_group=?,planned_playoff_best_of_legs=?,
+                 planned_tournament_format=?,planned_starting_score=?
              WHERE id=?',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('isiiii', $groupCount, $drawMode, $groupBestOf, $qualifiers, $playoffBestOf, $tournamentId);
+        $stmt->bind_param('isiiisii', $groupCount, $drawMode, $groupBestOf, $qualifiers, $playoffBestOf, $format, $startingScore, $tournamentId);
         $stmt->execute();
         $stmt->close();
         return $this->getPlan($tournamentId) ?? [];
