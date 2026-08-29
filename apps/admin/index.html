@@ -39,6 +39,7 @@
   <link rel="stylesheet" href="./tournament-operations-admin.css">
   <link rel="stylesheet" href="./tournament-playoff-admin.css">
   <link rel="stylesheet" data-member-onboarding-css="1" href="./member-onboarding-admin.css?v=20260829-0935">
+  <link rel="stylesheet" href="./member-mobile-expand.css?v=20260829-0955">
   <link rel="stylesheet" href="./equipment-admin-ux.css?v=20260826-1335">
   <link rel="stylesheet" href="./admin-ux.css?v=20260826-0915">
   <link rel="stylesheet" href="./health-tracker.css?v=20260827-1900">
@@ -116,156 +117,15 @@
         </div>
       </section>
 
-      <section id="tournaments" data-portal-section="tournaments" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Turneringsledelse</p><h2>Turneringer</h2><p class="muted">Opprett og gjennomfør turneringen fra innsjekk til resultat.</p></div>
-        </div>
-        <div class="subsection-head"><h3>Turneringsoversikt</h3><span id="tournamentCount" class="pill">0</span></div>
-        <div id="tournamentList" class="list"></div>
-      </section>
-
-      <section id="kiosks" data-portal-section="kiosks" class="panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Klubbutstyr</p>
-            <h2>Utstyr</h2>
-            <p class="muted">Skiva er den faste enheten. Velg manuell eller Scolia-scoring på skiva, og koble nettbrett separat når det trengs.</p>
-          </div>
-          <a class="button secondary" href="../kiosk/" target="_blank" rel="noopener">Åpne terminal</a>
-        </div>
-
-        <div class="claim-admin-card">
-          <div class="claim-admin-grid">
-            <div>
-              <p class="eyebrow">Nettbrett</p>
-              <h3>Koble nettbrett til en skive</h3>
-              <p class="muted">Åpne kiosk på nettbrettet og skriv pairingkoden her. Deretter velger du skiva terminalen står ved.</p>
-            </div>
-            <form id="claimKioskForm" class="claim-form">
-              <label><span>Pairingkode</span><input id="claimKioskCode" class="claim-code-input" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="B7K4P2" required></label>
-              <div id="claimExistingBoardFields" class="claim-board-fields">
-                <label><span>Skive</span><select id="claimKioskBoard" required><option value="">Velg skive …</option></select></label>
-              </div>
-              <button id="claimKioskButton" type="submit">Koble nettbrett</button>
-              <div id="claimKioskStatus" class="claim-status hidden"></div>
-            </form>
-          </div>
-        </div>
-
-        <div class="hidden" aria-hidden="true">
-          <div class="kiosk-code-strip"><div><span>Legacy klubbkode</span><strong id="kioskClubCode">—</strong></div><button id="copyKioskClubCode" type="button">Kopier</button></div>
-          <div id="pairingRequestList"></div><span id="pairingCount">0</span>
-        </div>
-
-        <div class="kiosk-layout">
-          <form id="kioskForm" class="create-card">
-            <h3>Opprett skive</h3>
-            <p class="muted">Skivenummer og scoring er det eneste du normalt trenger.</p>
-            <label><span>Skivenummer</span><input name="board_number" type="number" min="1" placeholder="1" required></label>
-            <label><span>Navn</span><input name="name" placeholder="Skive 1"></label>
-            <label><span>Scoring</span><select id="kioskScoringMode" name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
-            <label id="kioskScoliaSerialRow" class="hidden"><span>Scolia-ID / serienummer</span><input id="kioskScoliaSerial" name="scolia_serial_number" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"></label>
-            <button type="submit" class="button">Opprett skive</button>
-          </form>
-          <div>
-            <div class="subsection-head"><h3>Skiver</h3><span id="kioskCount" class="pill">0</span></div>
-            <div id="kioskList" class="list"></div>
-          </div>
-        </div>
-      </section>
-
-      <section id="players" data-portal-section="players" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Klubben</p><h2>Medlemmer</h2><p class="muted">Medlemskap, kontingent og tilgang.</p></div>
-        </div>
-        <div id="memberRegistryStatus" class="muted">Laster medlemsregister …</div>
-        <div class="hidden" hidden aria-hidden="true" style="display:none!important"><span id="playerCount">0</span><table><tbody id="playerRows"></tbody></table></div>
-      </section>
-
-      <section id="integrations" data-portal-section="integrations" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Klubbinnstillinger</p><h2>Betaling</h2><p class="muted">Offentlig betalingsinformasjon som vises til medlemmene. Hemmelige Stripe-nøkler lagres fortsatt bare i eksisterende Blindleia-admin/serveroppsett.</p></div>
-        </div>
-        <form id="paymentSettingsForm">
-          <div class="payment-settings-grid">
-            <section class="payment-settings-card">
-              <div><p class="eyebrow">Fast betaling</p><h3>Stripe</h3></div>
-              <p class="muted">Fast månedlig kontingent går via det eksisterende Stripe-oppsettet. Ikke legg Secret Key, Webhook Secret eller Price ID her.</p>
-              <label><span>Startside for fast betaling</span><input id="paymentStripeStartUrl" type="url" inputmode="url" placeholder="https://dart.ingenting.org/stripe_kontingent.php"></label>
-              <label><span>Stripe-side for å administrere/avslutte abonnement</span><input id="paymentStripePortalUrl" type="url" inputmode="url" placeholder="https://..."></label>
-              <p id="paymentStripeEffective" class="payment-settings-note">Henter aktiv Stripe-side …</p>
-            </section>
-            <section class="payment-settings-card">
-              <div><p class="eyebrow">Enkeltbetaling</p><h3>Vipps</h3></div>
-              <p class="muted">Vipps brukes kun til manuell enkeltbetaling. Det opprettes ingen fast betalingsavtale i Vipps.</p>
-              <label><span>Vipps-navn</span><input id="paymentVippsName" maxlength="150" placeholder="Blindleia Dartklubb"></label>
-              <label><span>Vipps-nummer</span><input id="paymentVippsNumber" maxlength="50" inputmode="numeric" placeholder="Vipps-nummer"></label>
-              <label><span>Vipps betalingslenke (valgfritt)</span><input id="paymentVippsUrl" type="url" inputmode="url" placeholder="https://..."></label>
-            </section>
-          </div>
-          <div class="payment-settings-card" style="margin-top:14px">
-            <label><span>Kontaktinfo ved spørsmål om betaling (valgfritt)</span><input id="paymentContact" maxlength="255" placeholder="E-post eller annen kort kontaktinfo"></label>
-            <div class="payment-settings-note"><strong>Hvor ligger resten?</strong><br>Stripe-abonnement, webhook, medlemskobling og faktiske betalinger finnes allerede i Blindleia admin og de eksisterende Stripe-tabellene. Denne siden styrer bare hva spillerportalen skal vise og hvor knappene skal gå.</div>
-          </div>
-          <section class="payment-settings-card payment-policy-card" style="margin-top:14px">
-            <div><p class="eyebrow">Påmelding</p><h3>Kontingent og turneringer</h3></div>
-            <p class="muted">Spilleren får først et varsel om manglende betaling. Ny påmelding låses bare når det har gått for langt.</p>
-            <label><span>Blokker ny påmelding etter antall avsluttede måneder helt uten betaling</span><input id="paymentRegistrationBlockMonths" type="number" min="0" max="12" step="1" value="3" inputmode="numeric"></label>
-            <p class="payment-settings-note">Standard er 3 måneder, samme terskel som medlemsoppfølgingen i Blindleia admin. Sett 0 hvis betalingsrestanse aldri skal blokkere påmelding.</p>
-          </section>
-          <div class="payment-settings-actions"><button type="submit" class="button">Lagre betalingsoppsett</button><div id="paymentSettingsStatus" class="message hidden"></div></div>
-        </form>
-      </section>
-
-      <section id="screens" data-portal-section="kiosks" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Utstyr</p><h2>Venue-skjermer</h2><p class="muted">Opprett en skjermkode én gang. TV-en kobler seg til ved å skrive inn koden på venue-siden.</p></div>
-          <a class="button secondary" href="../screen/" target="_blank" rel="noopener">Åpne venue-skjerm</a>
-        </div>
-        <div class="screen-layout">
-          <form id="screenForm" class="create-card"><h3>Ny skjerm</h3><label><span>Navn</span><input name="label" placeholder="Hovedskjerm, Bar-TV ..." required></label><button type="submit" class="button">Lag skjermkode</button></form>
-          <div><div class="subsection-head"><h3>Venue-skjermer</h3><span id="screenCount" class="pill"></span></div><div id="screenList" class="list"></div></div>
-        </div>
-      </section>
+      <section id="tournaments" data-portal-section="tournaments" class="panel"></section>
+      <section id="players" data-portal-section="players" class="panel"><div id="memberRegistryStatus"></div></section>
+      <section id="kiosks" data-portal-section="kiosks" class="panel"></section>
+      <section id="integrations" data-portal-section="integrations" class="panel"></section>
     </main>
   </div>
 
-  <script>
-    (() => {
-      if (!document.documentElement.classList.contains("admin-session-pending")) return;
-      const clearPending = () => {
-        const gate = document.getElementById("authGate");
-        const app = document.getElementById("adminApp");
-        const message = document.getElementById("loginMessage");
-        const resolved = gate?.classList.contains("hidden")
-          || (app && !app.classList.contains("hidden"))
-          || (message && !message.classList.contains("hidden"));
-        if (!resolved) return false;
-        document.documentElement.classList.remove("admin-session-pending");
-        return true;
-      };
-      const observer = new MutationObserver(() => {
-        if (clearPending()) observer.disconnect();
-      });
-      observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
-      window.setTimeout(() => {
-        document.documentElement.classList.remove("admin-session-pending");
-        observer.disconnect();
-      }, 2500);
-    })();
-  </script>
-  <script src="./app.js" type="module"></script>
-  <script src="./health-tracker.js?v=20260827-1900" type="module"></script>
-  <script src="./pairing-claim.js?v=20260826-1345" type="module"></script>
-  <script src="./board-admin.js?v=20260826-1435" type="module"></script>
-  <script src="./member-onboarding-admin.js?v=20260829-0935" type="module"></script>
-  <script src="./player-identity-admin.js?v=20260827-1900" type="module"></script>
-  <script src="./activity-admin.js?v=20260827-1900" type="module"></script>
-  <script src="./superadmin-identity-audit.js?v=20260827-1900" type="module"></script>
-  <script src="./scolia-admin.js" type="module"></script>
-  <script src="./payment-settings.js?v=20260828-1200" type="module"></script>
-  <script src="./checkin-admin-v2.js?v=20260826-1445" type="module"></script>
-  <script src="./tournament-loader.js?v=20260826-1510" type="module"></script>
-  <script src="../packages/ui-assets/portal-menu.js?v=20260827-1900" type="module"></script>
+  <script src="./app.js"></script>
+  <script src="./member-onboarding-admin.js?v=20260829-1025"></script>
+  <script src="./member-mobile-expand.js?v=20260829-0955"></script>
 </body>
 </html>
