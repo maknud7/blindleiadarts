@@ -39,17 +39,39 @@ jobs:
           set -Eeuo pipefail
           base="${BASE_URL%/}"
 
-          clubs_json="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/v1/clubs?cb=$RANDOM")"
-          club_id="$(python3 -c 'import json,sys; p=json.load(sys.stdin); items=p.get("data",{}).get("items",[]); matches=[x for x in items if x.get("slug")=="blindleia-dartklubb"]; print(matches[0]["id"] if matches else "")' <<<"$clubs_json")"
+          probe() {
+            local label="$1"
+            local url="$2"
+            local tmp
+            tmp="$(mktemp)"
+            local status
+            status="$(curl -sS --connect-timeout 5 --max-time 15 -o "$tmp" -w '%{http_code}' "$url" || true)"
+            echo "PROBE $label => HTTP $status"
+            if [[ "$status" != "200" ]]; then
+              echo "--- response body ($label) ---" >&2
+              cat "$tmp" >&2 || true
+              echo >&2
+              rm -f "$tmp"
+              return 1
+            fi
+            cat "$tmp"
+            rm -f "$tmp"
+          }
+
+          clubs_json="$(probe clubs "$base/api/v1/clubs?cb=$RANDOM")"
+          echo "PROBE clubs OK"
+          club_id="$(python3 -c 'import json,sys; lines=sys.stdin.read().splitlines(); raw="\n".join(line for line in lines if not line.startswith("PROBE ")); p=json.loads(raw); items=p.get("data",{}).get("items",[]); matches=[x for x in items if x.get("slug")=="blindleia-dartklubb"]; print(matches[0]["id"] if matches else "")' <<<"$clubs_json")"
           if [[ ! "$club_id" =~ ^[0-9]+$ ]]; then
             echo "Club Live smoke failed: Blindleia club was not found in /api/v1/clubs." >&2
             echo "$clubs_json" >&2
             exit 1
           fi
+          echo "CLUB_ID=$club_id"
 
-          live_json="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/club-live.php?club_id=$club_id&cb=$RANDOM")"
-          live_code="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["club"]["live_code"])' <<<"$live_json")"
-          live_url="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["live_url"])' <<<"$live_json")"
+          live_json="$(probe club-by-id "$base/api/club-live.php?club_id=$club_id&cb=$RANDOM")"
+          echo "PROBE club-by-id OK"
+          live_code="$(python3 -c 'import json,sys; lines=sys.stdin.read().splitlines(); raw="\n".join(line for line in lines if not line.startswith("PROBE ")); print(json.loads(raw)["data"]["club"]["live_code"])' <<<"$live_json")"
+          live_url="$(python3 -c 'import json,sys; lines=sys.stdin.read().splitlines(); raw="\n".join(line for line in lines if not line.startswith("PROBE ")); print(json.loads(raw)["data"]["live_url"])' <<<"$live_json")"
 
           if [[ ! "$live_code" =~ ^[0-9]{4}$ ]]; then
             echo "Club Live smoke failed: invalid Live code: $live_code" >&2
@@ -59,22 +81,24 @@ jobs:
             echo "Club Live smoke failed: unexpected canonical URL: $live_url" >&2
             exit 1
           fi
+          echo "CLUB_LIVE_CODE=$live_code"
+          echo "CLUB_LIVE_URL=$live_url"
 
-          resolver="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/club-live.php?code=$live_code&cb=$RANDOM")"
+          resolver="$(probe club-by-code "$base/api/club-live.php?code=$live_code&cb=$RANDOM")"
+          echo "PROBE club-by-code OK"
           grep -Fq '"slug":"blindleia-dartklubb"' <<<"$resolver"
           grep -Fq "\"live_code\":\"$live_code\"" <<<"$resolver"
 
-          live_html="$(curl -fsSL --connect-timeout 5 --max-time 15 "$live_url?cb=$RANDOM")"
+          live_html="$(probe pretty-live "$live_url?cb=$RANDOM")"
+          echo "PROBE pretty-live OK"
           grep -Fq 'route-bootstrap.js' <<<"$live_html"
           grep -Fq 'blindleia-dartklubb-logo.png' <<<"$live_html"
 
-          effective_url="$(curl -fsSL --connect-timeout 5 --max-time 15 -o /dev/null -w '%{url_effective}' "$live_url/")"
-          if [[ "$effective_url" != "$live_url" ]]; then
+          effective_url="$(curl -sS -L --connect-timeout 5 --max-time 15 -o /dev/null -w '%{http_code} %{url_effective}' "$live_url/")"
+          echo "PROBE trailing-slash => $effective_url"
+          if [[ "$effective_url" != "200 $live_url" ]]; then
             echo "Club Live smoke failed: trailing-slash canonicalization ended at $effective_url" >&2
             exit 1
           fi
 
-          echo "CLUB_ID=$club_id"
-          echo "CLUB_LIVE_CODE=$live_code"
-          echo "CLUB_LIVE_URL=$live_url"
           echo "CLUB_LIVE_SMOKE_OK=yes"
