@@ -37,7 +37,7 @@ final class TournamentCheckinApplication
             $users = new UserAccountRepository($database);
             $screens = new ScreenRepository($database);
             $clubs = new ClubRepository($database);
-            $response = $this->dispatch($request, $path, $repo, $users, $screens, $clubs);
+            $response = $this->dispatch($request, $path, $repo, $users, $screens, $clubs, $database);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception) {
@@ -58,7 +58,7 @@ final class TournamentCheckinApplication
             || (in_array($method, ['GET', 'PATCH', 'PUT'], true) && preg_match('#^v1/clubs/\d+/checkin-settings$#', $path) === 1)
             || (in_array($method, ['GET', 'PATCH', 'PUT'], true) && preg_match('#^v1/tournaments/\d+/checkin-settings$#', $path) === 1)
             || ($method === 'POST' && preg_match('#^v1/tournaments/\d+/checkin-code/rotate$#', $path) === 1)
-            || ($method === 'POST' && preg_match('#^v1/tournaments/\d+/admin-check-in/\d+$#', $path) === 1);
+            || (in_array($method, ['POST', 'DELETE'], true) && preg_match('#^v1/tournaments/\d+/admin-check-in/\d+$#', $path) === 1);
     }
 
     private function dispatch(
@@ -67,7 +67,8 @@ final class TournamentCheckinApplication
         TournamentCheckinRepository $repo,
         UserAccountRepository $users,
         ScreenRepository $screens,
-        ClubRepository $clubs
+        ClubRepository $clubs,
+        Database $database
     ): JsonResponse {
         $method = $request->method();
 
@@ -204,7 +205,7 @@ final class TournamentCheckinApplication
             return JsonResponse::ok(['settings' => $repo->rotateTournamentCode($tournamentId)]);
         }
 
-        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/admin-check-in/(\d+)$#', $path, $m) === 1) {
+        if (preg_match('#^v1/tournaments/(\d+)/admin-check-in/(\d+)$#', $path, $m) === 1) {
             $tournamentId = (int) $m[1];
             $playerId = (int) $m[2];
             $settings = $repo->getTournamentSettings($tournamentId);
@@ -218,20 +219,67 @@ final class TournamentCheckinApplication
             if ($this->checkinLocked($settings)) {
                 return $this->checkinLockedResponse();
             }
-            $payload = $request->jsonBody();
-            $force = !empty($payload['force']);
-            return JsonResponse::ok([
-                'registration' => $repo->checkInPlayer(
-                    $tournamentId,
-                    $playerId,
-                    true,
-                    null,
-                    $force
-                ),
-            ]);
+
+            if ($method === 'POST') {
+                return JsonResponse::ok([
+                    'registration' => $repo->checkInPlayer(
+                        $tournamentId,
+                        $playerId,
+                        true,
+                        null,
+                        false
+                    ),
+                ]);
+            }
+
+            if ($method === 'DELETE') {
+                return JsonResponse::ok([
+                    'registration' => $this->adminCheckOut($database, $tournamentId, $playerId),
+                ]);
+            }
         }
 
         return JsonResponse::error(405, 'method_not_allowed', 'Method not allowed.');
+    }
+
+    /** @return array<string,mixed> */
+    private function adminCheckOut(Database $database, int $tournamentId, int $playerId): array
+    {
+        $connection = $database->connection();
+        $prefix = $database->tablePrefix();
+        $stmt = $connection->prepare(sprintf(
+            'SELECT id,status FROM `%1$stournament_players` WHERE tournament_id=? AND player_id=? LIMIT 1',
+            $prefix
+        ));
+        $stmt->bind_param('ii', $tournamentId, $playerId);
+        $stmt->execute();
+        $registration = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+
+        if ($registration === null) {
+            throw new ValidationException('registration_not_found', 'Påmeldingen ble ikke funnet.', 404);
+        }
+        if ((string) $registration['status'] !== 'checked_in') {
+            throw new ValidationException('registration_not_checked_in', 'Spilleren er ikke sjekket inn.', 409);
+        }
+
+        $stmt = $connection->prepare(sprintf(
+            'UPDATE `%1$stournament_players` SET status="registered",checked_in_at=NULL,checkin_source=NULL WHERE id=?',
+            $prefix
+        ));
+        $registrationId = (int) $registration['id'];
+        $stmt->bind_param('i', $registrationId);
+        $stmt->execute();
+        $stmt->close();
+
+        return [
+            'id' => $registrationId,
+            'tournament_id' => $tournamentId,
+            'player_id' => $playerId,
+            'status' => 'registered',
+            'checked_in_at' => null,
+            'checkin_source' => null,
+        ];
     }
 
     /** @param array<string,mixed> $settings */
