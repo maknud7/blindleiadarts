@@ -36,6 +36,10 @@ function syncTournamentList(items){
   if(!list)return;
   const names=new Set(items.map(item=>String(item.name||"").trim()).filter(Boolean));
   list.querySelectorAll("[data-upcoming-overflow]").forEach(node=>node.remove());
+
+  const emptyStates=[...list.children].filter(node=>String(node.textContent||"").includes("Ingen kommende turneringer"));
+  emptyStates.forEach(node=>node.classList.toggle("hidden",items.length>0));
+
   const cards=[...list.querySelectorAll(":scope > .list-item")];
   cards.forEach(card=>{
     const name=String(card.querySelector("strong")?.textContent||"").trim();
