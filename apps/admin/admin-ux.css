@@ -115,3 +115,101 @@ th,td{border-bottom-color:var(--line)}
 @media(max-width:900px){.tournament-room{position:static}.tournament-room-top{grid-template-columns:1fr}.tournament-room-progress{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:720px){.section-nav{background:transparent;padding:0}.topbar{background:#fff}.panel{box-shadow:none}}
 @media(max-width:650px){.admin-menu-label{display:none}.tournament-room-progress{grid-template-columns:1fr 1fr}.tournament-room-next{align-items:stretch;flex-direction:column}.tournament-room-next .button{width:100%}.admin-overview-next-head{display:grid}.admin-overview-next-actions{display:grid}.admin-overview-next-actions .button{width:100%;box-sizing:border-box;text-align:center}}
+
+/* Mobile UX consolidation · 2026-08-29
+   One visual surface, one primary action, consistent tap targets and less chrome. */
+@media(max-width:760px){
+  :root{--mobile-gutter:14px;--mobile-radius:14px;--mobile-touch:48px}
+  body{background:#f7f9fc!important;padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))}
+  .main{width:100%!important;padding:14px var(--mobile-gutter) 28px!important}
+
+  /* Header becomes utility chrome rather than another card-like area. */
+  .topbar{position:static!important;padding:10px var(--mobile-gutter)!important;gap:8px!important;border-bottom:1px solid #e4eaf0!important;box-shadow:none!important}
+  .topbar-brand .brand-mark.small{display:none!important}
+  .topbar-brand .eyebrow{display:none!important}
+  .topbar-brand strong{font-size:15px!important}
+  .topbar-actions{display:none!important}
+
+  /* Fixed four-item mobile navigation. */
+  .section-nav.portal-menu{position:fixed!important;z-index:80!important;left:0!important;right:0!important;bottom:0!important;margin:0!important;padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px))!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:4px!important;background:rgba(255,255,255,.97)!important;border:0!important;border-top:1px solid #dfe6ed!important;border-radius:0!important;box-shadow:0 -8px 24px rgba(17,42,73,.07)!important;overflow:visible!important;backdrop-filter:blur(16px)}
+  .section-nav.portal-menu a{min-width:0!important;min-height:52px!important;padding:8px 4px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:0!important;border-radius:11px!important;background:transparent!important;color:#6b7f92!important;font-size:11px!important;font-weight:800!important;text-align:center!important}
+  .section-nav.portal-menu a.active{background:#2f6fed!important;color:#fff!important}
+  .section-nav.portal-menu a:nth-of-type(n+5){display:none!important}
+
+  /* Remove duplicated page framing and excessive vertical labels. */
+  .hero{padding:4px 0 12px!important;gap:8px!important}
+  .hero .eyebrow{display:none!important}
+  .hero h1{font-size:27px!important;line-height:1.08!important;margin:0 0 4px!important}
+  .hero .muted{font-size:13px!important;line-height:1.4!important}
+  .panel{padding:0!important;margin:0 0 14px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+  .panel-head{gap:8px!important;margin-bottom:12px!important}
+  .panel-head .eyebrow{display:none!important}
+  .panel h2{font-size:23px!important;line-height:1.12!important;margin-bottom:4px!important}
+  .panel h3{font-size:16px!important}
+  .subsection-head{margin:12px 0 8px!important}
+
+  /* One-level cards: compact radius, subtle line, no card-in-card shadows. */
+  .metric,.list-row,.create-card,.status-item,.mini-card,.inline-status,.shortcut-card,.admin-overview-next,.claim-admin-card,.payment-settings-card,.health-tracker,.member-pending{border:1px solid #e0e7ee!important;border-radius:var(--mobile-radius)!important;background:#fff!important;box-shadow:none!important}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin:8px 0 14px!important}
+  .metric{min-height:88px!important;padding:12px!important}
+  .metric strong{font-size:22px!important;padding-top:8px!important}
+  .portal-shortcuts{gap:8px!important}
+  .shortcut-card{padding:13px!important}
+
+  /* Forms share the same rhythm and full-width primary action. */
+  label{gap:5px!important;font-size:12px!important}
+  input,select,textarea{min-height:var(--mobile-touch)!important;border-radius:11px!important;padding:11px 12px!important;font-size:16px!important;background:#fff!important}
+  button,.button{min-height:var(--mobile-touch);border-radius:11px;padding:11px 14px}
+  form>.button:last-child,form>button[type="submit"]:last-of-type{width:100%}
+  button:disabled,.button:disabled{opacity:.55!important}
+
+  /* Feedback should read like feedback, not another content card. */
+  .message{margin-top:9px!important;border-radius:11px!important;padding:10px 12px!important;box-shadow:none!important}
+  .message.success{background:#eef9f2!important;border-color:#b9dec8!important;color:#176344!important}
+  .message.error{background:#fff1f2!important;border-color:#efc0c5!important;color:#a1323d!important}
+
+  /* Tournament room: remove outer frame; disclosures are list rows. */
+  #tournaments{background:transparent!important}
+  #tournaments .tc-context-card{padding:0 0 10px!important;border-bottom:0!important}
+  #tournaments .tc-stage{padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
+  #tournaments .tc-stage-head{margin-bottom:10px!important}
+  #tournaments .tc-stage-count{border:0!important;background:#edf8f2!important;border-radius:999px!important;padding:6px 9px!important}
+  #tournaments .tc-filterbar{border:0!important;background:#eef3f7!important;border-radius:11px!important;padding:3px!important}
+  #tournaments .tc-registration{padding:12px 0!important;border:0!important;border-bottom:1px solid #edf1f4!important;border-radius:0!important;background:transparent!important}
+  #tournaments .tc-registration:last-child{border-bottom:0!important}
+  #tournaments .tc-primary-next{margin-top:12px!important;padding:13px!important;border-color:#cbdcf7!important;background:#eef4ff!important;border-radius:12px!important}
+  #tournaments .tc-disclosure{margin-top:8px!important;border:1px solid #e0e7ee!important;border-radius:12px!important;box-shadow:none!important}
+  #tournaments .tc-disclosure summary{position:relative!important;min-height:48px!important;padding:13px 44px 13px 13px!important;display:flex!important;align-items:center!important;color:#245acb!important}
+  #tournaments .tc-disclosure summary::after{position:absolute!important;right:14px!important;top:50%!important;transform:translateY(-50%)!important;float:none!important}
+  #tournaments .tc-disclosure[open] summary{background:#f8fafc!important;border-bottom:1px solid #e7edf2!important}
+  #tournaments .tc-disclosure-body{padding:12px 13px!important}
+  #tournaments .tc-code-box{padding:14px!important;border:0!important;background:#eef6ff!important;border-radius:12px!important;text-align:center!important}
+  #tournaments .tc-code-box strong{font-size:34px!important;letter-spacing:.18em!important}
+
+  /* Members become a flat directory instead of a pile of individual cards. */
+  .member-access-summary{display:none!important}
+  .member-access-table-wrap{border:1px solid #e0e7ee!important;border-radius:14px!important;overflow:hidden!important;background:#fff!important}
+  .member-access-table-wrap tr:not(.member-empty-row){margin:0!important;padding:12px 13px!important;border:0!important;border-bottom:1px solid #edf1f4!important;border-radius:0!important;box-shadow:none!important;background:#fff!important}
+  .member-access-table-wrap tr:not(.member-empty-row):last-child{border-bottom:0!important}
+  .member-access-table-wrap td[data-label="Medlem"]{padding-bottom:7px!important;border-bottom:0!important}
+  .member-access-table-wrap td[data-label="Konto og tilgang"],.member-access-table-wrap td[data-label="Handling"]{border-top:0!important;padding-top:7px!important}
+  .member-filters{border:0!important;background:#eef3f7!important;border-radius:11px!important}
+
+  /* Equipment: everyday board status first, setup secondary. */
+  .kiosk-layout{gap:12px!important}
+  .kiosk-layout .create-card{order:2!important}
+  .kiosk-layout>div{order:1!important}
+  .board-row{padding:12px 0!important;border:0!important;border-bottom:1px solid #edf1f4!important;border-radius:0!important;background:transparent!important}
+  .board-row:last-child{border-bottom:0!important}
+  .board-number{width:38px!important;height:38px!important;border-radius:10px!important;font-size:16px!important}
+
+  /* Settings should read as sections, not a grid of nested cards. */
+  .payment-settings-grid{grid-template-columns:1fr!important;gap:10px!important}
+  .payment-settings-card{padding:14px!important}
+}
+
+@media(max-width:430px){
+  .metrics{grid-template-columns:1fr 1fr!important}
+  .section-nav.portal-menu a{font-size:10px!important}
+  .tc-phase-nav button b{font-size:9px!important}
+}
