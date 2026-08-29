@@ -9,6 +9,8 @@ const state = {
   snapshot: null,
   pollHandle: null,
   liveSource: null,
+  socket: null,
+  realtime: null,
   reconnectHandle: null,
   inputMode: localStorage.getItem("bd:kioskInputMode") || "sum",
   sumValue: "",
@@ -311,20 +313,65 @@ function startPolling() {
     else if (state.pairingRequestCode) checkPairing().catch(() => undefined);
   }, 1500);
 }
+async function realtimeConfig() {
+  if (state.realtime) return state.realtime;
+  try { state.realtime = await api("/realtime/config"); }
+  catch { state.realtime = { enabled: false }; }
+  return state.realtime;
+}
 function closeLive() {
+  if (state.socket) { const socket = state.socket; state.socket = null; socket.close(); }
   if (state.liveSource) { state.liveSource.close(); state.liveSource = null; }
   clearTimeout(state.reconnectHandle);
   clearInterval(state.pollHandle);
   state.pollHandle = null;
 }
-async function startLive() {
-  closeLive();
+function startSseLive() {
   if (!state.kioskCode) { startPolling(); return; }
   if (typeof EventSource !== "function") { startPolling(); return; }
   const url = `${API_ROOT}/kiosks/${encodeURIComponent(state.kioskCode)}/live?pairing_token=${encodeURIComponent(state.pairingToken)}`;
   const source = new EventSource(url); state.liveSource = source;
   source.addEventListener("snapshot", (event) => { if (state.mutating) return; try { state.snapshot = JSON.parse(event.data); render(); } catch {} });
-  source.onerror = () => { if (state.liveSource === source) state.liveSource = null; source.close(); startPolling(); clearTimeout(state.reconnectHandle); state.reconnectHandle = setTimeout(() => startLive().catch(() => undefined), 2500); };
+  source.onerror = () => {
+    if (state.liveSource !== source) return;
+    state.liveSource = null;
+    source.close();
+    startPolling();
+    clearTimeout(state.reconnectHandle);
+    state.reconnectHandle = setTimeout(() => startLive().catch(() => undefined), 2500);
+  };
+}
+async function startLive() {
+  closeLive();
+  if (!state.kioskCode) { startPolling(); return; }
+  const config = await realtimeConfig();
+  if (!config?.enabled || !config.websocket_url || typeof WebSocket !== "function") { startSseLive(); return; }
+  try {
+    const socket = new WebSocket(config.websocket_url);
+    state.socket = socket;
+    socket.addEventListener("open", () => {
+      if (state.socket !== socket) return;
+      socket.send(JSON.stringify({ type: "subscribe", channels: [`kiosk:${state.kioskCode}`] }));
+    });
+    socket.addEventListener("message", (event) => {
+      if (state.mutating) return;
+      try {
+        const message = JSON.parse(event.data);
+        if (message?.type === "event" && message?.event === "snapshot" && message?.payload) {
+          state.snapshot = message.payload;
+          render();
+        }
+      } catch {}
+    });
+    socket.addEventListener("close", () => {
+      if (state.socket !== socket) return;
+      state.socket = null;
+      startSseLive();
+      clearTimeout(state.reconnectHandle);
+      state.reconnectHandle = setTimeout(() => startLive().catch(() => undefined), 2500);
+    });
+    socket.addEventListener("error", () => socket.close());
+  } catch { startSseLive(); }
 }
 
 function renderSettings() {

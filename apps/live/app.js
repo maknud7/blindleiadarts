@@ -297,7 +297,15 @@ async function startRealtime() {
     socket.addEventListener("message", (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message?.type === "event" && message?.event === "snapshot") load().catch(() => undefined);
+        if (message?.type === "event" && message?.event === "snapshot") {
+          const live = message?.payload?.live || null;
+          if (live && livePayloadIsRelevant(live)) {
+            render(live);
+            setPhase("live");
+            return;
+          }
+          load().catch(() => undefined);
+        }
       } catch { /* ignore malformed event */ }
     });
     socket.addEventListener("close", () => {

@@ -13,6 +13,7 @@ use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScreenRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
+use Blindleia\Dartkiosk\Api\Repository\TournamentLiveRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
 use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
 use Blindleia\Dartkiosk\Api\Support\Config;
@@ -29,6 +30,9 @@ use Throwable;
 final class Application
 {
     private string $rootPath;
+
+    /** @var array<int, callable(): void> */
+    private array $afterResponse = [];
 
     public function __construct(string $rootPath)
     {
@@ -84,6 +88,7 @@ final class Application
         }
 
         $response->send();
+        $this->flushAfterResponse();
     }
 
     private function dispatch(Request $request, Config $config, Database $database): JsonResponse
@@ -968,7 +973,7 @@ final class Application
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
 
-            $this->publishKioskAndClubSnapshots($config, $database, $state);
+            $this->deferKioskAndClubSnapshots($config, $database, $state);
 
             return JsonResponse::ok($state);
         }
@@ -985,7 +990,7 @@ final class Application
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
 
-            $this->publishKioskAndClubSnapshots($config, $database, $state);
+            $this->deferKioskAndClubSnapshots($config, $database, $state);
 
             return JsonResponse::ok($state);
         }
@@ -1000,7 +1005,7 @@ final class Application
                 return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
             }
 
-            $this->publishKioskAndClubSnapshots($config, $database, $state);
+            $this->deferKioskAndClubSnapshots($config, $database, $state);
 
             return JsonResponse::ok($state);
         }
@@ -1305,7 +1310,12 @@ final class Application
 
         $clubRepository = new ClubRepository($database);
         $tournamentRepository = new TournamentRepository($database);
+        $liveRepository = new TournamentLiveRepository($database);
         $dashboard = $clubRepository->getDashboard($clubId);
+        $club = $clubRepository->findById($clubId);
+        $live = $club !== null && isset($club['slug'])
+            ? $liveRepository->byClubSlug((string) $club['slug'])
+            : null;
 
         if ($dashboard === null) {
             return;
@@ -1320,9 +1330,53 @@ final class Application
                 'dashboard' => $dashboard,
                 'match_calls' => $tournamentRepository->listMatchCallsByClubId($clubId),
                 'screen' => $this->buildScreenPayload($database, $config, null, $clubId),
+                'live' => $live,
                 'server_time' => gmdate(DATE_ATOM),
             ]
         );
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function deferKioskAndClubSnapshots(Config $config, Database $database, array $state): void
+    {
+        if (!$config->realtimePublishEnabled()) {
+            return;
+        }
+
+        $this->afterResponse[] = function () use ($config, $database, $state): void {
+            $this->publishKioskAndClubSnapshots($config, $database, $state);
+        };
+    }
+
+    private function flushAfterResponse(): void
+    {
+        if ($this->afterResponse === []) {
+            return;
+        }
+
+        ignore_user_abort(true);
+
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        } else {
+            while (ob_get_level() > 0) {
+                @ob_end_flush();
+            }
+            @flush();
+        }
+
+        $callbacks = $this->afterResponse;
+        $this->afterResponse = [];
+
+        foreach ($callbacks as $callback) {
+            try {
+                $callback();
+            } catch (Throwable) {
+                // Realtime fanout happens after the response and must never affect scoring.
+            }
+        }
     }
 
     /**
