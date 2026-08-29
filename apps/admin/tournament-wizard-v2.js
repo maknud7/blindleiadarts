@@ -24,7 +24,7 @@ if (host) {
   }
 
   const style = document.createElement("style");
-  style.textContent = `.tw-backdrop{position:fixed;inset:0;background:rgba(5,8,12,.62);backdrop-filter:blur(8px);display:grid;place-items:center;padding:16px;z-index:1200}.tw-backdrop.hidden{display:none}.tw-dialog{width:min(620px,100%);overflow:hidden;background:linear-gradient(180deg,var(--panel-2),var(--panel));color:#f4f7fb;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 90px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.02)}.tw-head,.tw-body,.tw-actions{padding:20px}.tw-head{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;background:rgba(255,255,255,.012)}.tw-head h2{margin:3px 0 7px;color:#f4f7fb}.tw-head .muted{max-width:510px}.tw-close{width:40px;height:40px;flex:0 0 40px;padding:0;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--muted);font-size:25px;line-height:1;cursor:pointer}.tw-close:hover{transform:none;color:#f4f7fb;background:#202a38;border-color:var(--line)}.tw-body{background:var(--panel)}.tw-form{display:grid;gap:14px}.tw-form label{display:grid;gap:7px;color:#cbd5e1}.tw-form input{background:#0f151e;color:#fff;border-color:var(--line)}.tw-form input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,185,73,.12)}.tw-auto{padding:14px 15px;border:1px solid rgba(233,185,73,.25);background:rgba(233,185,73,.055);border-radius:14px}.tw-auto strong{display:block;margin-bottom:5px;color:#f4f7fb}.tw-actions{border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:#111821}.tw-actions .button.quiet{color:#c7d0dc;border-color:var(--line);background:#161e29}.tw-actions .button.quiet:hover{background:#202a38;color:#f4f7fb}.tw-message{margin:0;padding:11px 20px;border-top:1px solid var(--line);border-radius:0;background:#111821}.tw-message.bad{border-top-color:rgba(255,107,107,.45);color:#ffc4c4;background:rgba(255,107,107,.07)}.tw-message.good{border-top-color:rgba(77,212,166,.4);color:#aaf1d9;background:rgba(77,212,166,.06)}@media(max-width:640px){.tw-backdrop{padding:10px;place-items:end center}.tw-dialog{width:100%;max-height:calc(100dvh - 20px);overflow:auto;border-radius:20px}.tw-head,.tw-body,.tw-actions{padding:17px}.tw-actions{position:sticky;bottom:0}}`;
+  style.textContent = `.tw-backdrop{position:fixed;inset:0;background:rgba(5,8,12,.62);backdrop-filter:blur(8px);display:grid;place-items:center;padding:16px;z-index:1200}.tw-backdrop.hidden{display:none}.tw-dialog{width:min(620px,100%);overflow:hidden;background:linear-gradient(180deg,var(--panel-2),var(--panel));color:#f4f7fb;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 90px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.02);transition:transform .18s ease,box-shadow .18s ease}.tw-dialog.is-success{transform:scale(.99);box-shadow:0 18px 60px rgba(0,0,0,.35),0 0 0 2px rgba(77,212,166,.18)}.tw-head,.tw-body,.tw-actions{padding:20px}.tw-head{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;background:rgba(255,255,255,.012)}.tw-head h2{margin:3px 0 7px;color:#f4f7fb}.tw-head .muted{max-width:510px}.tw-close{width:40px;height:40px;flex:0 0 40px;padding:0;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--muted);font-size:25px;line-height:1;cursor:pointer}.tw-close:hover{transform:none;color:#f4f7fb;background:#202a38;border-color:var(--line)}.tw-body{background:var(--panel)}.tw-form{display:grid;gap:14px}.tw-form label{display:grid;gap:7px;color:#cbd5e1}.tw-form input{background:#0f151e;color:#fff;border-color:var(--line)}.tw-form input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,185,73,.12)}.tw-auto{padding:14px 15px;border:1px solid rgba(233,185,73,.25);background:rgba(233,185,73,.055);border-radius:14px}.tw-auto strong{display:block;margin-bottom:5px;color:#f4f7fb}.tw-actions{border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:#111821}.tw-actions .button.quiet{color:#c7d0dc;border-color:var(--line);background:#161e29}.tw-actions .button.quiet:hover{background:#202a38;color:#f4f7fb}.tw-message{margin:0;padding:11px 20px;border-top:1px solid var(--line);border-radius:0;background:#111821}.tw-message.bad{border-top-color:rgba(255,107,107,.45);color:#ffc4c4;background:rgba(255,107,107,.07)}.tw-message.good{border-top-color:rgba(77,212,166,.4);color:#aaf1d9;background:rgba(77,212,166,.09);font-weight:800}.tw-create-busy{position:relative;padding-left:42px!important}.tw-create-busy::before{content:"";position:absolute;left:17px;top:50%;width:15px;height:15px;margin-top:-8px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:twspin .7s linear infinite}@keyframes twspin{to{transform:rotate(360deg)}}@media(max-width:640px){.tw-backdrop{padding:10px;place-items:end center}.tw-dialog{width:100%;max-height:calc(100dvh - 20px);overflow:auto;border-radius:20px}.tw-head,.tw-body,.tw-actions{padding:17px}.tw-actions{position:sticky;bottom:0}}`;
   document.head.appendChild(style);
 
   const openButton = document.createElement("button");
@@ -62,6 +62,7 @@ if (host) {
   }
   function open() {
     document.getElementById("twForm").reset();
+    document.querySelector(".tw-dialog")?.classList.remove("is-success");
     hideMessage();
     const next = new Date();
     next.setSeconds(0, 0);
@@ -70,8 +71,25 @@ if (host) {
     document.getElementById("twStart").value = localInput(next);
     renderAutoText();
     root.classList.remove("hidden");
+    window.setTimeout(() => document.getElementById("twName")?.focus(), 80);
   }
   function close() { if (!creating) root.classList.add("hidden"); }
+
+  async function selectCreatedTournament(id) {
+    document.getElementById("tcRefresh")?.click();
+    document.getElementById("refreshAllButton")?.click();
+    document.getElementById("tcRefresh")?.click();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+      const select = document.getElementById("tcTournament");
+      if (select?.querySelector(`option[value="${id}"]`)) {
+        select.value = String(id);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+    }
+    return false;
+  }
 
   async function createTournament(event) {
     event.preventDefault();
@@ -83,8 +101,14 @@ if (host) {
     if (Number.isNaN(start.getTime())) return show("Sett planlagt start.");
 
     creating = true;
+    hideMessage();
     const button = document.getElementById("twCreate");
+    const cancel = document.getElementById("twCancel");
+    const closeButton = document.getElementById("twClose");
     button.disabled = true;
+    cancel.disabled = true;
+    closeButton.disabled = true;
+    button.classList.add("tw-create-busy");
     button.textContent = "Oppretter …";
     let id = 0;
     try {
@@ -108,18 +132,21 @@ if (host) {
         rotate_checkin_code: true,
       }});
 
-      show("Turneringen er opprettet. Påmelding og check-in følger automatisk flyten.", "good");
-      window.setTimeout(() => {
-        creating = false;
-        root.classList.add("hidden");
-        document.getElementById("refreshAllButton")?.click();
-        document.getElementById("tcRefresh")?.click();
-      }, 500);
+      button.classList.remove("tw-create-busy");
+      button.textContent = "✓ Opprettet";
+      document.querySelector(".tw-dialog")?.classList.add("is-success");
+      show("Turneringen er opprettet og åpnes nå.", "good");
+      await selectCreatedTournament(id);
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+      root.classList.add("hidden");
     } catch (error) {
       show(error.message + (id ? ` Turnering ID ${id} ble opprettet og kan åpnes i turneringsrommet.` : ""));
-      creating = false;
     } finally {
+      creating = false;
       button.disabled = false;
+      cancel.disabled = false;
+      closeButton.disabled = false;
+      button.classList.remove("tw-create-busy");
       button.textContent = "Opprett turnering";
     }
   }
