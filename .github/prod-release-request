@@ -1,5 +1,5 @@
-release_sha=ea8f5b139f0f7084353804f8004cfe44a1930926
+release_sha=2da2c60e1e6d406731340e3869c232b6ccd1a1fc
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-08-28T19:58:00+02:00
-purpose=auth_login_audit_softlaunch
+requested_at=2026-08-29T07:57:18+02:00
+purpose=prod_health_release_path_fix
