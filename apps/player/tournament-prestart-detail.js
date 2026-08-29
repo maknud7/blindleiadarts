@@ -2,10 +2,11 @@ const API_ROOT = "../api/v1";
 let activeTournamentId = 0;
 let refreshTimer = null;
 
-function token(){ return localStorage.getItem("bd:token") || ""; }
+function token(){ return localStorage.getItemByKey ? localStorage.getItemByKey("bd:token") : (localStorage.getItem("bd:token") || ""); }
 function esc(value){ return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 function parseDate(value){ if(!value) return null; const d=new Date(String(value).replace(" ","T")); return Number.isNaN(d.getTime())?null:d; }
 function formatClock(value){ const d=parseDate(value); return d ? new Intl.DateTimeFormat("nb-NO",{hour:"2-digit",minute:"2-digit"}).format(d) : ""; }
+function formatLabel(value){ return ({groups_playoff:"Gruppespill → sluttspill",groups_only:"Gruppespill",single_elimination:"Cup",swiss:"Swiss"})[String(value||"")] || String(value||""); }
 async function api(path,{auth=false}={}){ const headers={}; if(auth&&token()) headers.Authorization=`Bearer ${token()}`; const r=await fetch(`${API_ROOT}${path}`,{headers,cache:"no-store"}); const p=await r.json().catch(()=>null); if(!r.ok||!p?.ok) throw new Error(p?.error?.message||`Forespørselen feilet (${r.status})`); return p.data; }
 
 const style=document.createElement("style");
@@ -45,7 +46,7 @@ async function enhance(){
   if(!action&&!overview) return;
   const [statusData,planData]=await Promise.all([
     token()?api(`/tournaments/${activeTournamentId}/check-in-status`,{auth:true}).catch(()=>null):Promise.resolve(null),
-    overview?api(`/tournaments/${activeTournamentId}/wizard-plan`,{auth:true}).catch(()=>null):Promise.resolve(null)
+    overview?api(`/tournaments/${activeTournamentId}/wizard-plan`).catch(()=>null):Promise.resolve(null)
   ]);
   const status=statusData||null;
   if(action&&status){
@@ -64,11 +65,24 @@ async function enhance(){
   }
   const plan=planData?.plan||null;
   if(overview&&plan&&!overview.querySelector(".tdx-format-lines")){
+    const format=String(plan.tournament_format||"");
+    const score=Number(plan.starting_score||0);
     const groupBo=Number(plan.group_best_of_legs||0), playoffBo=Number(plan.playoff_best_of_legs||0), qualifiers=Number(plan.qualifiers_per_group||0);
-    if(groupBo||playoffBo||qualifiers){
-      const box=document.createElement("div"); box.className="tdx-format-lines";
-      box.innerHTML=`<div class="tdx-format-line"><span>Format</span><strong>Gruppespill → sluttspill</strong></div><div class="tdx-format-line"><span>Gruppespill</span><strong>501${groupBo?` · Best av ${groupBo}`:""}</strong></div>${qualifiers?`<div class="tdx-format-line"><span>Videre</span><strong>Topp ${qualifiers} fra hver gruppe</strong></div>`:""}${playoffBo?`<div class="tdx-format-line"><span>Sluttspill</span><strong>501 · Best av ${playoffBo}</strong></div>`:""}`;
-      overview.appendChild(box);
+    if(format&&score){
+      const lines=[`<div class="tdx-format-line"><span>Format</span><strong>${esc(formatLabel(format))}</strong></div>`];
+      if(["groups_playoff","groups_only"].includes(format)){
+        lines.push(`<div class="tdx-format-line"><span>Gruppespill</span><strong>${score}${groupBo?` · Best av ${groupBo}`:""}</strong></div>`);
+      }
+      if(format==="groups_playoff"&&qualifiers){
+        lines.push(`<div class="tdx-format-line"><span>Videre</span><strong>Topp ${qualifiers} fra hver gruppe</strong></div>`);
+      }
+      if(format==="groups_playoff"&&playoffBo){
+        lines.push(`<div class="tdx-format-line"><span>Sluttspill</span><strong>${score} · Best av ${playoffBo}</strong></div>`);
+      }
+      if(format==="single_elimination"&&playoffBo){
+        lines.push(`<div class="tdx-format-line"><span>Kamper</span><strong>${score} · Best av ${playoffBo}</strong></div>`);
+      }
+      const box=document.createElement("div"); box.className="tdx-format-lines"; box.innerHTML=lines.join(""); overview.appendChild(box);
     }
   }
 }
