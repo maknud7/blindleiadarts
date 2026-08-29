@@ -18,21 +18,35 @@
   let pausedUntil = 0;
   let context = { club_id: null, club_slug: null, tournament_id: null };
 
-  function installTestEnvironmentFrame() {
+  function isTestEnvironment() {
     const hostname = String(window.location.hostname || "").toLowerCase();
-    if (!(hostname === "test.blindleiadarts.ingenting.org" || hostname.startsWith("test."))) return;
+    return hostname === "test.blindleiadarts.ingenting.org" || hostname.startsWith("test.");
+  }
+
+  function installTestEnvironmentFrame() {
+    if (!isTestEnvironment()) return;
     if (document.getElementById("bd-test-environment-frame")) return;
 
     const frame = document.createElement("div");
     frame.id = "bd-test-environment-frame";
     frame.setAttribute("aria-hidden", "true");
-    frame.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none;border:4px solid #f2c94c;box-sizing:border-box;";
+    frame.style.cssText = "position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;border:4px solid #f2c94c!important;box-sizing:border-box!important;display:block!important;visibility:visible!important;opacity:1!important;";
 
     const badge = document.createElement("div");
     badge.textContent = "TEST";
-    badge.style.cssText = "position:absolute;top:0;left:50%;transform:translateX(-50%);padding:2px 10px 3px;border-radius:0 0 8px 8px;background:#f2c94c;color:#3b2d00;font:800 11px/1.2 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:.08em;box-shadow:0 1px 3px rgba(0,0,0,.12);";
+    badge.style.cssText = "position:absolute!important;top:0!important;left:50%!important;transform:translateX(-50%)!important;padding:3px 12px 4px!important;border-radius:0 0 8px 8px!important;background:#f2c94c!important;color:#3b2d00!important;font:800 12px/1.2 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif!important;letter-spacing:.08em!important;box-shadow:0 1px 3px rgba(0,0,0,.12)!important;display:block!important;visibility:visible!important;opacity:1!important;";
     frame.appendChild(badge);
-    document.documentElement.appendChild(frame);
+    (document.body || document.documentElement).appendChild(frame);
+  }
+
+  function keepTestEnvironmentFrameAlive() {
+    if (!isTestEnvironment()) return;
+    installTestEnvironmentFrame();
+    window.setInterval(installTestEnvironmentFrame, 1000);
+    document.addEventListener("DOMContentLoaded", installTestEnvironmentFrame);
+    window.addEventListener("load", installTestEnvironmentFrame);
+    window.addEventListener("pageshow", installTestEnvironmentFrame);
+    window.addEventListener("bd:portal-view", installTestEnvironmentFrame);
   }
 
   function surface() {
@@ -205,7 +219,7 @@
   window.addEventListener("bd:portal-view", (event) => push("navigation", { portal_view: event.detail?.target || null }));
   window.addEventListener("pagehide", () => flush({ keepalive: true }));
 
-  installTestEnvironmentFrame();
+  keepTestEnvironmentFrameAlive();
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => push("page_view"), { once: true });
   } else {
