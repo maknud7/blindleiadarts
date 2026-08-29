@@ -31,6 +31,23 @@ function isUpcoming(tournament){
   return d.getTime()>=Date.now()-18*60*60*1000;
 }
 
+function syncTournamentList(items){
+  const list=document.getElementById("tournamentList");
+  if(!list)return;
+  const names=new Set(items.map(item=>String(item.name||"").trim()).filter(Boolean));
+  list.querySelectorAll("[data-upcoming-overflow]").forEach(node=>node.remove());
+  const cards=[...list.querySelectorAll(":scope > .list-item")];
+  cards.forEach(card=>{
+    const name=String(card.querySelector("strong")?.textContent||"").trim();
+    card.classList.toggle("hidden",!names.has(name));
+  });
+  for(const item of items){
+    const name=String(item.name||"").trim();
+    const card=cards.find(node=>String(node.querySelector("strong")?.textContent||"").trim()===name);
+    if(card){card.classList.remove("hidden");list.appendChild(card);}
+  }
+}
+
 async function renderNextTournament(){
   const id=clubId();
   const card=ensureNextTournamentCard();
@@ -40,6 +57,7 @@ async function renderNextTournament(){
     const items=(Array.isArray(data?.items)?data.items:[])
       .filter(isUpcoming)
       .sort((a,b)=>(dateValue(a.start_at)?.getTime()??Number.MAX_SAFE_INTEGER)-(dateValue(b.start_at)?.getTime()??Number.MAX_SAFE_INTEGER));
+    syncTournamentList(items);
     const next=items[0];
     if(!next){card.classList.add("hidden");card.innerHTML="";return;}
     const registration=String(next.registration_state||"open");
@@ -60,6 +78,6 @@ function refresh(){hideClubSwitcher();renderNextTournament();}
 addStyles();
 hideClubSwitcher();
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",refresh,{once:true});else refresh();
-window.addEventListener("bd:portal-view",e=>{hideClubSwitcher();if(e.detail?.target==="tournaments")window.setTimeout(renderNextTournament,50);});
+window.addEventListener("bd:portal-view",e=>{hideClubSwitcher();if(e.detail?.target==="tournaments"){window.setTimeout(renderNextTournament,80);window.setTimeout(renderNextTournament,500);}});
 document.getElementById("clubSelect")?.addEventListener("change",refresh);
-window.addEventListener("bd:player-state-changed",()=>window.setTimeout(refresh,50));
+window.addEventListener("bd:player-state-changed",()=>window.setTimeout(refresh,80));
