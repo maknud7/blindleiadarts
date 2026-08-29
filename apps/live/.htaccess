@@ -1,4 +1,3 @@
-Options -MultiViews
 RewriteEngine On
 
 # Keep the canonical public address without a trailing slash so relative Live
