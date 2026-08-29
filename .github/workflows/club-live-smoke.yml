@@ -1,0 +1,71 @@
+name: Club Live Smoke
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: club-live-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for matching test release
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in $(seq 1 40); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then exit 0; fi
+            sleep 10
+          done
+          echo "Club Live smoke failed: expected release did not become live." >&2
+          exit 1
+
+      - name: Verify canonical club Live link
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+
+          live_json="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/club-live.php?club_id=1&cb=$RANDOM")"
+          live_code="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["club"]["live_code"])' <<<"$live_json")"
+          live_url="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["live_url"])' <<<"$live_json")"
+
+          if [[ ! "$live_code" =~ ^[0-9]{4}$ ]]; then
+            echo "Club Live smoke failed: invalid Live code: $live_code" >&2
+            exit 1
+          fi
+          if [[ "$live_url" != "$base/live/$live_code" ]]; then
+            echo "Club Live smoke failed: unexpected canonical URL: $live_url" >&2
+            exit 1
+          fi
+
+          resolver="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/api/club-live.php?code=$live_code&cb=$RANDOM")"
+          grep -Fq '"slug":"blindleia-dartklubb"' <<<"$resolver"
+          grep -Fq "\"live_code\":\"$live_code\"" <<<"$resolver"
+
+          live_html="$(curl -fsSL --connect-timeout 5 --max-time 15 "$live_url?cb=$RANDOM")"
+          grep -Fq 'route-bootstrap.js' <<<"$live_html"
+          grep -Fq 'blindleia-dartklubb-logo.png' <<<"$live_html"
+
+          effective_url="$(curl -fsSL --connect-timeout 5 --max-time 15 -o /dev/null -w '%{url_effective}' "$live_url/")"
+          if [[ "$effective_url" != "$live_url" ]]; then
+            echo "Club Live smoke failed: trailing-slash canonicalization ended at $effective_url" >&2
+            exit 1
+          fi
+
+          echo "CLUB_LIVE_CODE=$live_code"
+          echo "CLUB_LIVE_URL=$live_url"
+          echo "CLUB_LIVE_SMOKE_OK=yes"
