@@ -14,23 +14,11 @@
       if (legacy) {
         const raw = String(window.location.hash || "").replace(/^#/, "").trim();
         const normalized = raw.startsWith("admin/") ? raw.slice(6) : raw;
-        const routes = {
-          overview: "club",
-          tournaments: "tournament-admin",
-          seasons: "seasons",
-          playerbase: "playerbase",
-          players: "members",
-          kiosks: "equipment",
-          integrations: "settings",
-          superadmin: "superadmin",
-        };
-        const target = routes[normalized] || "club";
-        window.location.replace(`${legacy[1] || "/"}#${target}`);
+        const routes = { overview:"club", tournaments:"tournament-admin", seasons:"seasons", playerbase:"playerbase", players:"members", kiosks:"equipment", integrations:"settings", superadmin:"superadmin" };
+        window.location.replace(`${legacy[1] || "/"}#${routes[normalized] || "club"}`);
         return;
       }
-      try {
-        if (localStorage.getItem("bd:token")) document.documentElement.classList.add("admin-session-pending");
-      } catch {}
+      try { if (localStorage.getItem("bd:token")) document.documentElement.classList.add("admin-session-pending"); } catch {}
     })();
   </script>
   <link rel="stylesheet" href="./styles.css">
@@ -52,11 +40,7 @@
   <section id="authGate" class="auth-shell">
     <div class="login-card">
       <div class="brand-mark">BD</div>
-      <div>
-        <p class="eyebrow">Blindleia Darts</p>
-        <h1>Logg inn</h1>
-        <p class="muted">Du ser bare funksjonene rollen din gir tilgang til.</p>
-      </div>
+      <div><p class="eyebrow">Blindleia Darts</p><h1>Logg inn</h1><p class="muted">Du ser bare funksjonene rollen din gir tilgang til.</p></div>
       <form id="loginForm" class="login-form">
         <label><span>E-postadresse</span><input id="loginUsername" type="email" autocomplete="email" inputmode="email" required></label>
         <label><span>Passord</span><input id="loginPassword" type="password" autocomplete="current-password" required></label>
@@ -65,94 +49,31 @@
       <div id="loginMessage" class="message hidden"></div>
     </div>
   </section>
-
   <div id="adminApp" class="app hidden">
     <header class="topbar">
-      <div class="topbar-brand">
-        <div class="brand-mark small">BD</div>
-        <div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Administrasjon</strong></div>
-      </div>
+      <div class="topbar-brand"><div class="brand-mark small">BD</div><div><p class="eyebrow">Blindleia Darts</p><strong id="clubName">Administrasjon</strong></div></div>
       <div class="topbar-actions">
         <select id="clubSelect" aria-label="Velg klubb"></select>
-        <a class="button secondary" href="../#home">Min side</a>
-        <a class="button secondary" href="../#statistics" target="_blank" rel="noopener">Statistikk</a>
-        <a class="button secondary" href="../live/" target="_blank" rel="noopener">Live</a>
-        <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button>
-        <button id="logoutButton" type="button" class="button quiet">Logg ut</button>
+        <a class="button secondary" href="../#home">Min side</a><a class="button secondary" href="../#statistics" target="_blank" rel="noopener">Statistikk</a><a class="button secondary" href="../live/" target="_blank" rel="noopener">Live</a>
+        <button id="refreshAllButton" type="button" class="button secondary">Oppdater</button><button id="logoutButton" type="button" class="button quiet">Logg ut</button>
       </div>
     </header>
-
     <main class="main">
-      <nav class="section-nav portal-menu" aria-label="Administrasjonsmeny">
-        <span class="admin-menu-label">Administrasjon</span>
-        <a href="#overview" data-portal-nav>Oversikt</a>
-        <a href="#tournaments" data-portal-nav>Turneringer</a>
-        <a href="#players" data-portal-nav>Medlemmer</a>
-        <a href="#kiosks" data-portal-nav>Utstyr</a>
-        <a href="#integrations" data-portal-nav>Innstillinger</a>
-      </nav>
-
+      <nav class="section-nav portal-menu" aria-label="Administrasjonsmeny"><span class="admin-menu-label">Administrasjon</span><a href="#overview" data-portal-nav>Oversikt</a><a href="#tournaments" data-portal-nav>Turneringer</a><a href="#players" data-portal-nav>Medlemmer</a><a href="#kiosks" data-portal-nav>Utstyr</a><a href="#integrations" data-portal-nav>Innstillinger</a></nav>
       <section id="overview" data-portal-section="overview" class="portal-view">
-        <div class="hero">
-          <div>
-            <p class="eyebrow">Klubbdrift</p>
-            <h1>Administrasjon</h1>
-            <p class="muted">Turneringer, medlemmer, utstyr og innstillinger for klubben.</p>
-          </div>
-          <div id="globalMessage" class="message hidden"></div>
-        </div>
+        <div class="hero"><div><p class="eyebrow">Klubbdrift</p><h1>Administrasjon</h1><p class="muted">Turneringer, medlemmer, utstyr og innstillinger for klubben.</p></div><div id="globalMessage" class="message hidden"></div></div>
         <div id="metrics" class="metrics"></div>
-        <div class="portal-shortcuts">
-          <a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Gjennomfør kvelden fra innsjekk til resultat</span></a>
-          <a class="shortcut-card" href="#players" data-portal-nav><strong>Medlemmer</strong><span>Kontingent, tilgang og invitasjoner</span></a>
-          <a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Utstyr</strong><span>Skiver, nettbrett, Scolia og venue-skjermer</span></a>
-        </div>
-        <div class="panel health-tracker">
-          <div class="health-tracker-head">
-            <div><p class="eyebrow">Drift og selvdiagnose</p><h2>Helsesjekk</h2><p class="muted">Måler hele plattformkjeden og peker også ut uavklarte identitetskonflikter.</p></div>
-            <button id="runHealthTracker" type="button" class="button secondary">Kjør helsesjekk</button>
-          </div>
-          <div id="healthTrackerSummary" class="health-summary neutral"><div><strong>Ikke kjørt ennå</strong><p>Tester database, profiler, kamphistorikk, identiteter og portal.</p></div><span class="health-overall">—</span></div>
-          <div id="healthTrackerResults" class="health-results"><div class="empty">Helsesjekken starter automatisk.</div></div>
-        </div>
+        <div class="portal-shortcuts"><a class="shortcut-card" href="#tournaments" data-portal-nav><strong>Turneringer</strong><span>Gjennomfør kvelden fra innsjekk til resultat</span></a><a class="shortcut-card" href="#players" data-portal-nav><strong>Medlemmer</strong><span>Kontingent, tilgang og invitasjoner</span></a><a class="shortcut-card" href="#kiosks" data-portal-nav><strong>Utstyr</strong><span>Skiver, nettbrett, Scolia og venue-skjermer</span></a></div>
+        <div class="panel health-tracker"><div class="health-tracker-head"><div><p class="eyebrow">Drift og selvdiagnose</p><h2>Helsesjekk</h2><p class="muted">Måler hele plattformkjeden og peker også ut uavklarte identitetskonflikter.</p></div><button id="runHealthTracker" type="button" class="button secondary">Kjør helsesjekk</button></div><div id="healthTrackerSummary" class="health-summary neutral"><div><strong>Ikke kjørt ennå</strong><p>Tester database, profiler, kamphistorikk, identiteter og portal.</p></div><span class="health-overall">—</span></div><div id="healthTrackerResults" class="health-results"><div class="empty">Helsesjekken starter automatisk.</div></div></div>
       </section>
-
-      <section id="tournaments" data-portal-section="tournaments" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Turneringer</p><h2>Turneringsadministrasjon</h2></div>
-          <div class="panel-actions"><button id="createTournamentButton" type="button">Ny turnering</button></div>
-        </div>
-        <div id="tournamentAdmin"></div>
-      </section>
-
-      <section id="players" data-portal-section="players" class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Medlemmer</p><h2>Medlemsregister</h2></div>
-        </div>
-        <div id="memberRegistryStatus"></div>
-      </section>
-
-      <section id="kiosks" data-portal-section="kiosks" class="panel">
-        <div class="panel-head"><div><p class="eyebrow">Utstyr</p><h2>Skiver og nettbrett</h2></div></div>
-        <div id="equipmentAdmin"></div>
-      </section>
-
-      <section id="integrations" data-portal-section="integrations" class="panel">
-        <div class="panel-head"><div><p class="eyebrow">Innstillinger</p><h2>Klubbinnstillinger</h2></div></div>
-        <div id="integrationSettings"></div>
-      </section>
+      <section id="tournaments" data-portal-section="tournaments" class="panel"></section>
+      <section id="players" data-portal-section="players" class="panel"><div id="memberRegistryStatus"></div></section>
+      <section id="kiosks" data-portal-section="kiosks" class="panel"></section>
+      <section id="integrations" data-portal-section="integrations" class="panel"></section>
     </main>
   </div>
-
   <script src="./app.js"></script>
-  <script src="./tournament-admin.js"></script>
-  <script src="./tournament-operations-admin.js"></script>
-  <script src="./tournament-playoff-admin.js"></script>
   <script src="./member-onboarding-admin.js?v=20260829-1025"></script>
   <script src="./member-mobile-expand.js?v=20260829-0955"></script>
-  <script src="./equipment-admin.js"></script>
-  <script src="./health-tracker.js"></script>
-  <script src="./player-identity-admin.js"></script>
-  <script src="./payment-settings.js"></script>
 </body>
 </html>
