@@ -1,4 +1,6 @@
 const API_ROOT = "../api/v1";
+let latestUpcomingCount = 0;
+let tournamentObserver = null;
 
 function token(){ return localStorage.getItem("bd:token") || ""; }
 function clubId(){ return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:playerClubId") || 0); }
@@ -31,14 +33,38 @@ function isUpcoming(tournament){
   return d.getTime()>=Date.now()-18*60*60*1000;
 }
 
+function syncEmptyState(){
+  const list=document.getElementById("tournamentList");
+  if(!list)return;
+  const candidates=[...list.querySelectorAll(".mini-card,.list-item,article,div")]
+    .filter(node=>String(node.textContent||"").includes("Ingen kommende turneringer"));
+  candidates.forEach(node=>{
+    if(latestUpcomingCount>0){
+      node.classList.add("hidden");
+      node.setAttribute("aria-hidden","true");
+      node.style.setProperty("display","none","important");
+    }else{
+      node.classList.remove("hidden");
+      node.removeAttribute("aria-hidden");
+      node.style.removeProperty("display");
+    }
+  });
+}
+
+function observeTournamentList(){
+  const list=document.getElementById("tournamentList");
+  if(!list||tournamentObserver)return;
+  tournamentObserver=new MutationObserver(()=>syncEmptyState());
+  tournamentObserver.observe(list,{childList:true,subtree:true});
+}
+
 function syncTournamentList(items){
   const list=document.getElementById("tournamentList");
   if(!list)return;
+  latestUpcomingCount=items.length;
   const names=new Set(items.map(item=>String(item.name||"").trim()).filter(Boolean));
   list.querySelectorAll("[data-upcoming-overflow]").forEach(node=>node.remove());
-
-  const emptyStates=[...list.children].filter(node=>String(node.textContent||"").includes("Ingen kommende turneringer"));
-  emptyStates.forEach(node=>node.classList.toggle("hidden",items.length>0));
+  syncEmptyState();
 
   const cards=[...list.querySelectorAll(":scope > .list-item")];
   cards.forEach(card=>{
@@ -50,12 +76,14 @@ function syncTournamentList(items){
     const card=cards.find(node=>String(node.querySelector("strong")?.textContent||"").trim()===name);
     if(card){card.classList.remove("hidden");list.appendChild(card);}
   }
+  syncEmptyState();
 }
 
 async function renderNextTournament(){
   const id=clubId();
   const card=ensureNextTournamentCard();
   if(!id||!card)return;
+  observeTournamentList();
   try{
     const data=await api(`/clubs/${id}/registration-tournaments`);
     const items=(Array.isArray(data?.items)?data.items:[])
@@ -69,6 +97,7 @@ async function renderNextTournament(){
     card.classList.remove("hidden");
     card.innerHTML=`<div><span class="next-tournament-kicker">Neste turnering</span><strong>${esc(next.name||"Turnering")}</strong><small>${esc(fmt(next.start_at))} · ${esc(status)}</small></div><span class="next-tournament-chevron" aria-hidden="true">›</span>`;
     card.onclick=()=>{const candidate=[...document.querySelectorAll("#tournamentList .list-item")].find(el=>(el.querySelector("strong")?.textContent||"").trim()===String(next.name||"").trim());candidate?.scrollIntoView({behavior:"smooth",block:"center"});};
+    syncEmptyState();
   }catch{card.classList.add("hidden");}
 }
 
