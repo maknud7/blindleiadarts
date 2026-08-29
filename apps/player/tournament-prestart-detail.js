@@ -2,7 +2,7 @@ const API_ROOT = "../api/v1";
 let activeTournamentId = 0;
 let refreshTimer = null;
 
-function token(){ return localStorage.getItemByKey ? localStorage.getItemByKey("bd:token") : (localStorage.getItem("bd:token") || ""); }
+function token(){ return localStorage.getItem("bd:token") || ""; }
 function esc(value){ return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 function parseDate(value){ if(!value) return null; const d=new Date(String(value).replace(" ","T")); return Number.isNaN(d.getTime())?null:d; }
 function formatClock(value){ const d=parseDate(value); return d ? new Intl.DateTimeFormat("nb-NO",{hour:"2-digit",minute:"2-digit"}).format(d) : ""; }
