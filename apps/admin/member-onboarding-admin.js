@@ -3,8 +3,8 @@ const LINKS_ENDPOINT = "../api/onboarding-links.php";
 const REACTIVATE_ENDPOINT = "../api/member-account-reactivate.php";
 
 const panel = document.getElementById("players");
-if (panel) {
-  const MEMBER_UI_VERSION = "20260829-0915";
+if (panel && !panel.querySelector(".member-access-block")) {
+  const MEMBER_UI_VERSION = "20260829-0935";
   if (!document.querySelector('link[data-member-onboarding-css]')) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
@@ -19,12 +19,12 @@ if (panel) {
     <section class="member-account-intro">
       <div>
         <p class="eyebrow">Medlemsadministrasjon</p>
-        <h3>Medlem, kontingent og tilgang på ett sted</h3>
-        <p>Standardlisten viser aktive medlemmer. Kontingentstatus følger samme regler som Blindleia-admin, og klubbadmin kan styre tilgangsnivå på andre brukerkontoer.</p>
+        <h3>Medlem, betaling og tilgang på ett sted</h3>
+        <p>Betalingsmønster, aktivt autotrekk og faktisk betalingsstatus vises hver for seg. Det er samme skille som i Blindleia-admin.</p>
       </div>
       <div class="member-account-flow" aria-label="Kontoflyt">
-        <div><span>1</span><strong>Medlem</strong><small>Samme aktiv/inaktiv-status som admin.</small></div>
-        <div><span>2</span><strong>Kontingent</strong><small>Fast, mulig fast, sporadisk og restanse.</small></div>
+        <div><span>1</span><strong>Medlem</strong><small>Aktiv eller inaktiv etter medlemsreglene.</small></div>
+        <div><span>2</span><strong>Betaling</strong><small>Betalt nå, autotrekk, restanse og betalingsmønster.</small></div>
         <div><span>3</span><strong>Tilgang</strong><small>Medlem, klubbadmin eller superadmin.</small></div>
       </div>
     </section>
@@ -34,8 +34,10 @@ if (panel) {
       <div class="member-filters" role="group" aria-label="Filtrer medlemmer">
         <button type="button" class="active" data-member-filter="active">Aktive</button>
         <button type="button" data-member-filter="needs">Krever handling</button>
-        <button type="button" data-member-filter="all">Alle</button>
+        <button type="button" data-member-filter="autodebit">Autotrekk</button>
+        <button type="button" data-member-filter="arrears">Utestående</button>
         <button type="button" data-member-filter="inactive">Inaktive</button>
+        <button type="button" data-member-filter="all">Alle</button>
       </div>
       <span id="memberAccessCount" class="pill">—</span>
     </div>
@@ -46,7 +48,7 @@ if (panel) {
 
     <div class="table-wrap member-access-table-wrap">
       <table>
-        <thead><tr><th>Medlem</th><th>Kontingent</th><th>Brukerkonto og tilgang</th><th>Handling</th></tr></thead>
+        <thead><tr><th>Medlem</th><th>Betaling</th><th>Brukerkonto og tilgang</th><th>Handling</th></tr></thead>
         <tbody id="memberAccessRows"></tbody>
       </table>
     </div>
@@ -196,6 +198,14 @@ if (panel) {
       || String(item.membership?.code || "") === "inaktiv";
   }
 
+  function hasActiveAutoDebit(item) {
+    return Boolean(item.membership?.stripe?.active);
+  }
+
+  function hasArrears(item) {
+    return Number(item.membership?.arrears || 0) > 0.001;
+  }
+
   function requiresAction(item) {
     if (isInactiveMember(item)) return false;
     const duesNeedsAction = Boolean(item.membership?.needs_follow_up);
@@ -203,49 +213,83 @@ if (panel) {
     return duesNeedsAction || accountNeedsAction;
   }
 
-  function duesTone(membership) {
-    if (String(membership?.code || "") === "inaktiv") return "neutral";
-    if (Boolean(membership?.stripe?.problem) || Number(membership?.arrears || 0) > 0) return "bad";
-    if (Boolean(membership?.needs_follow_up)) return "warning";
-    if (["fast"].includes(String(membership?.code || ""))) return "good";
-    if (["mulig_fast", "under_vurdering"].includes(String(membership?.code || ""))) return "warning";
-    return "neutral";
+  function patternTone(code) {
+    switch (String(code || "")) {
+      case "fast": return "good";
+      case "mulig_fast":
+      case "under_vurdering": return "warning";
+      case "tidligere_fast": return "warning";
+      case "inaktiv": return "neutral";
+      default: return "neutral";
+    }
+  }
+
+  function paymentNow(membership) {
+    const currentLabel = membership?.current_period_label || "inneværende måned";
+    const previousLabel = membership?.previous_period_label || "forrige måned";
+    const stripeActive = Boolean(membership?.stripe?.active);
+    const stripeProblem = Boolean(membership?.stripe?.problem);
+    const code = String(membership?.code || "");
+
+    if (Boolean(membership?.paid_current)) {
+      return { label: `Betalt ${currentLabel}`, tone: "good", detail: "Full kontingent registrert" };
+    }
+    if (stripeActive) {
+      return {
+        label: "Avventer autotrekk",
+        tone: "good",
+        detail: String(membership?.stripe?.status || "") === "trialing"
+          ? "Første trekk er planlagt senere"
+          : "Automatisk trekk er aktivt",
+      };
+    }
+    if (stripeProblem) {
+      return { label: "Autotrekk krever oppfølging", tone: "bad", detail: `Stripe-status: ${membership?.stripe?.status || "ukjent"}` };
+    }
+    if (code === "fast") {
+      return {
+        label: `Mangler ${currentLabel}`,
+        tone: "warning",
+        detail: Boolean(membership?.paid_previous) ? "Forrige måned er fullt betalt" : `Mangler også ${previousLabel}`,
+      };
+    }
+    if (code === "inaktiv") {
+      return { label: membership?.label || "Inaktiv", tone: "neutral", detail: membership?.reason || "" };
+    }
+    return { label: "Ingen løpende betalingsalarm", tone: "neutral", detail: membership?.latest_paid_period_label ? `Sist fullt betalt ${membership.latest_paid_period_label}` : "Ingen full betaling registrert ennå" };
   }
 
   function duesCell(membership) {
     if (!membership || !membership.code) {
-      return `<span class="badge neutral">Ukjent</span><small>Kunne ikke beregne kontingentstatus</small>`;
+      return `<span class="badge neutral">Ukjent</span><small>Kunne ikke beregne betalingsstatus</small>`;
     }
 
-    const tone = duesTone(membership);
-    const label = membership.label || "Ukjent";
-    const currentLabel = membership.current_period_label || "inneværende måned";
+    const now = paymentNow(membership);
     const arrears = Number(membership.arrears || 0);
-    const currentAmount = Number(membership.current_amount || 0);
-    const monthlyAmount = Number(membership.monthly_amount || 0);
+    const missing = Array.isArray(membership.missing) ? membership.missing : [];
+    const missingLabels = missing.map((item) => item?.period_label).filter(Boolean);
     const stripeActive = Boolean(membership.stripe?.active);
     const stripeProblem = Boolean(membership.stripe?.problem);
-    let primary = "";
+    const needsFollowUp = Boolean(membership.needs_follow_up);
 
-    if (stripeProblem) {
-      primary = "Stripe-avtalen trenger oppfølging";
-    } else if (arrears > 0) {
-      primary = `${formatMoney(arrears)} utestående`;
-    } else if (Boolean(membership.paid_current)) {
-      primary = `${currentLabel} fullt betalt`;
-    } else if (stripeActive) {
-      primary = `Aktivt autotrekk · avventer ${String(currentLabel).toLocaleLowerCase("nb")}`;
-    } else if (currentAmount > 0 && monthlyAmount > 0) {
-      primary = `${formatMoney(currentAmount)} av ${formatMoney(monthlyAmount)} registrert ${String(currentLabel).toLocaleLowerCase("nb")}`;
-    } else if (membership.latest_paid_period_label) {
-      primary = `Sist fullt betalt ${String(membership.latest_paid_period_label).toLocaleLowerCase("nb")}`;
-    } else {
-      primary = membership.reason || "Ingen full betaling registrert ennå";
-    }
+    const badges = [
+      `<span class="badge ${now.tone}">${escapeHtml(now.label)}</span>`,
+      stripeActive ? `<span class="badge good">Autotrekk</span>` : "",
+      stripeProblem ? `<span class="badge bad">Autotrekk-problem</span>` : "",
+      needsFollowUp ? `<span class="badge warning">Oppfølging</span>` : "",
+    ].filter(Boolean).join("");
 
-    const reason = String(membership.reason || "").trim();
-    const showReason = reason && reason !== primary && !primary.includes(reason);
-    return `<span class="badge ${tone}">${escapeHtml(label)}</span><small>${escapeHtml(primary)}</small>${showReason ? `<small class="member-dues-reason">${escapeHtml(reason)}</small>` : ""}`;
+    const arrearsHtml = arrears > 0
+      ? `<div class="member-payment-arrears"><strong>${escapeHtml(formatMoney(arrears))} utestående</strong>${missingLabels.length ? `<span>${escapeHtml(missingLabels.join(", "))}</span>` : ""}</div>`
+      : "";
+
+    return `<div class="member-payment-stack">
+      <div class="member-payment-badges">${badges}</div>
+      <small>${escapeHtml(now.detail)}</small>
+      ${arrearsHtml}
+      <div class="member-payment-pattern"><span>Betalingsmønster</span><span class="badge ${patternTone(membership.code)}">${escapeHtml(membership.label || membership.code)}</span></div>
+      ${membership.reason ? `<small class="member-dues-reason">${escapeHtml(membership.reason)}</small>` : ""}
+    </div>`;
   }
 
   function accessLabel(level) {
@@ -331,9 +375,11 @@ if (panel) {
     if (state.filter === "active" && inactive) return false;
     if (state.filter === "inactive" && !inactive) return false;
     if (state.filter === "needs" && !requiresAction(item)) return false;
+    if (state.filter === "autodebit" && !hasActiveAutoDebit(item)) return false;
+    if (state.filter === "arrears" && !hasArrears(item)) return false;
 
     if (!state.search) return true;
-    const haystack = `${item.member_name || ""} ${item.player?.display_name || ""} ${item.membership?.member_number || ""} ${item.account?.email || ""} ${item.membership?.label || ""}`.toLocaleLowerCase("nb");
+    const haystack = `${item.member_name || ""} ${item.player?.display_name || ""} ${item.membership?.member_number || ""} ${item.account?.email || ""} ${item.membership?.label || ""} ${item.membership?.stripe?.status || ""}`.toLocaleLowerCase("nb");
     return haystack.includes(state.search);
   }
 
@@ -341,6 +387,8 @@ if (panel) {
     return state.items.filter(matchesFilter).sort((a, b) => {
       const actionOrder = Number(requiresAction(b)) - Number(requiresAction(a));
       if (actionOrder !== 0) return actionOrder;
+      const arrearsOrder = Number(b.membership?.arrears || 0) - Number(a.membership?.arrears || 0);
+      if (arrearsOrder !== 0 && (requiresAction(a) || requiresAction(b))) return arrearsOrder;
       return collator.compare(a.player?.display_name || a.member_name || "", b.player?.display_name || b.member_name || "");
     });
   }
@@ -364,7 +412,7 @@ if (panel) {
       const inactiveClass = isInactiveMember(item) ? " member-row-inactive" : "";
       return `<tr class="${inactiveClass.trim()}" data-member-id="${Number(item.member_id)}">
         <td data-label="Medlem"><strong>${escapeHtml(playerName)}</strong>${memberNumber ? `<small>Medlemsnr. ${escapeHtml(memberNumber)}</small>` : ""}</td>
-        <td data-label="Kontingent">${duesCell(item.membership)}</td>
+        <td data-label="Betaling">${duesCell(item.membership)}</td>
         <td data-label="Brukerkonto"><span class="badge ${tone}">${escapeHtml(label)}</span>${accountDetails(item, stage)}</td>
         <td data-label="Handling" class="member-access-actions">${actionHtml(item, stage)}</td>
       </tr>`;
@@ -408,11 +456,15 @@ if (panel) {
 
   function renderSummary() {
     const active = state.items.filter((item) => !isInactiveMember(item)).length;
+    const autoDebit = state.items.filter((item) => !isInactiveMember(item) && hasActiveAutoDebit(item)).length;
     const needs = state.items.filter(requiresAction).length;
+    const arrears = state.items.filter((item) => !isInactiveMember(item) && hasArrears(item)).length;
     const inactive = state.items.filter(isInactiveMember).length;
     const cards = [
       ["active", "Aktive", active],
+      ["autodebit", "Autotrekk", autoDebit],
       ["needs", "Krever handling", needs],
+      ["arrears", "Utestående", arrears],
       ["inactive", "Inaktive", inactive],
     ];
     el.summary.innerHTML = cards.map(([filter, label, value]) =>
@@ -420,8 +472,18 @@ if (panel) {
     ).join("");
   }
 
+  function dedupeMembers(items) {
+    const seen = new Set();
+    return (items || []).filter((item) => {
+      const memberId = Number(item?.member_id || 0);
+      if (!memberId || seen.has(memberId)) return false;
+      seen.add(memberId);
+      return true;
+    });
+  }
+
   function render(data) {
-    state.items = data.items || [];
+    state.items = dedupeMembers(data.items);
     state.pending = data.pending_registrations || [];
     state.permissions = data.permissions || {};
     renderSummary();
