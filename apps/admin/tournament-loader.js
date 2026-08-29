@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260828-0848";
+const MODULE_VERSION = "20260829-1418";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -22,6 +22,15 @@ function moduleUrl(path) {
   const url = new URL(path, import.meta.url);
   url.searchParams.set("v", MODULE_VERSION);
   return url.href;
+}
+
+function ensurePolishCss() {
+  if (document.getElementById("tournamentMobilePolish")) return;
+  const link = document.createElement("link");
+  link.id = "tournamentMobilePolish";
+  link.rel = "stylesheet";
+  link.href = moduleUrl("./tournament-mobile-polish.css");
+  document.head.appendChild(link);
 }
 
 function showLoading() {
@@ -70,6 +79,7 @@ async function loadModules() {
   if (loading) return loading;
 
   showLoading();
+  ensurePolishCss();
   host.dataset.tournamentModules = "loading";
 
   loading = (async () => {
