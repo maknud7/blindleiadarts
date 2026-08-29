@@ -23,15 +23,29 @@ document.addEventListener("click",(event)=>{ const open=event.target instanceof 
 
 function schedule(){ clearTimeout(refreshTimer); refreshTimer=setTimeout(enhance,80); }
 
+function polishCurrentTab(dialog){
+  const overviewActive=!!dialog.querySelector('[data-tab="overview"].active');
+  if(!overviewActive) dialog.querySelectorAll(".tdx-format-lines").forEach((node)=>node.remove());
+
+  const playersActive=!!dialog.querySelector('[data-tab="players"].active');
+  if(playersActive){
+    dialog.querySelectorAll(".tdx-person small").forEach((node)=>{
+      if(String(node.textContent||"").trim()==="Påmeldt") node.remove();
+    });
+  }
+  return overviewActive;
+}
+
 async function enhance(){
   const dialog=document.querySelector("dialog.tdx-detail");
   if(!dialog?.open||!activeTournamentId) return;
   const action=dialog.querySelector('.tdx-actions [data-action="checkin"]');
-  const overview=dialog.querySelector('.tdx-section');
+  const overviewActive=polishCurrentTab(dialog);
+  const overview=overviewActive?dialog.querySelector('.tdx-section'):null;
   if(!action&&!overview) return;
   const [statusData,planData]=await Promise.all([
     token()?api(`/tournaments/${activeTournamentId}/check-in-status`,{auth:true}).catch(()=>null):Promise.resolve(null),
-    api(`/tournaments/${activeTournamentId}/wizard-plan`,{auth:true}).catch(()=>null)
+    overview?api(`/tournaments/${activeTournamentId}/wizard-plan`,{auth:true}).catch(()=>null):Promise.resolve(null)
   ]);
   const status=statusData||null;
   if(action&&status){
@@ -44,7 +58,7 @@ async function enhance(){
     }
     if(notOpen&&!dialog.querySelector(".tdx-prestart-note")){
       const note=document.createElement("div"); note.className="tdx-prestart-note";
-      note.innerHTML=`<strong>Innsjekk åpner ${esc(formatClock(status.opens_at))}</strong><span>Du kan sjekke inn fra 2 timer før turneringsstart.</span>`;
+      note.innerHTML=`<strong>Innsjekk åpner ${esc(formatClock(status.opens_at))}</strong><span>Knappen blir aktiv når innsjekken åpner.</span>`;
       dialog.querySelector(".tdx-hero")?.appendChild(note);
     }
   }
