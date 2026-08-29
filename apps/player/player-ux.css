@@ -3,3 +3,78 @@
 @media(max-width:760px){.player-now-main{grid-template-columns:1fr}.player-now-actions{justify-content:flex-start}.player-now-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.player-now-card{padding:17px 15px!important;gap:13px}.player-now-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.player-now-head h2{font-size:22px}.player-now-hint{grid-column:1/-1}.player-now-status{font-size:10px;padding:6px 8px}.player-now-main{gap:14px}.player-now-main .player-now-copy>strong{font-size:25px}.player-now-main .player-now-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.player-now-main .player-now-actions>*{width:100%;text-align:center}.player-now-facts{grid-template-columns:1fr 1fr}.player-now-journey{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.player-now-journey span{text-align:center;padding:5px 3px;font-size:9px}.portal-nav a.admin-nav-link{margin-left:0}}
 @media(max-width:430px){.player-now-main .player-now-actions{grid-template-columns:1fr}.player-now-facts{grid-template-columns:1fr}.player-now-head{grid-template-columns:1fr}.player-now-status{justify-self:start}.player-now-hint{grid-column:auto}}
+
+/* Mobile UX consolidation · 2026-08-29 */
+@media(max-width:680px){
+  :root{--mobile-gutter:12px;--mobile-touch:48px}
+  body{background:#f7f9fc!important;padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))}
+  .shell{width:100%!important;padding:10px var(--mobile-gutter) 24px!important;gap:10px!important}
+
+  /* Brand header becomes compact; content gets the screen. */
+  .portal-header.hero{padding:8px 2px 6px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+  .portal-header .brandline{align-items:center!important;gap:10px!important}
+  .portal-header .brand-badge{width:46px!important;height:46px!important;border-radius:11px!important}
+  .portal-header .eyebrow{display:none!important}
+  .portal-header h1{font-size:23px!important;line-height:1.08!important}
+  #clubIntro{display:none!important}
+  .portal-context{display:none!important}
+
+  /* Persistent thumb navigation; profile moves behind the fourth slot. */
+  .portal-nav.portal-menu{position:fixed!important;z-index:80!important;left:0!important;right:0!important;bottom:0!important;margin:0!important;padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px))!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:4px!important;border:0!important;border-top:1px solid #dfe6ed!important;border-radius:0!important;background:rgba(255,255,255,.97)!important;box-shadow:0 -8px 24px rgba(17,42,73,.07)!important;backdrop-filter:blur(16px)}
+  .portal-nav.portal-menu a{min-width:0!important;min-height:52px!important;padding:8px 4px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:0!important;border-radius:11px!important;background:transparent!important;color:#6b7f92!important;font-size:11px!important;font-weight:800!important;text-align:center!important}
+  .portal-nav.portal-menu a.active{background:#2f6fed!important;color:#fff!important}
+  .portal-nav.portal-menu a.admin-nav-link{display:none!important}
+
+  /* One visual level: cards are subtle and content-oriented. */
+  .card,.mini-card,.list-item,.profile-card,.summary-card,.table-card,.stat-card,.match-result-card{border:1px solid #e0e7ee!important;border-radius:14px!important;background:#fff!important;box-shadow:none!important}
+  [data-portal-section].card{padding:14px!important}
+  .section-head{gap:8px!important;margin-bottom:2px!important}
+  .section-head h2{font-size:22px!important;line-height:1.12!important}
+  .content-subhead{margin-top:14px!important}
+
+  /* The now-card is the one place allowed to visually lead. */
+  .player-now-card{padding:15px 14px!important;border-radius:15px!important;box-shadow:none!important}
+  .player-now-card::before{width:3px!important}
+  .player-now-main .player-now-copy>strong{font-size:24px!important}
+  .player-now-hint{display:none!important}
+  .player-now-meta{gap:5px!important}
+  .player-now-meta span{padding:5px 7px!important;font-size:10px!important}
+  .player-now-facts{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}
+  .player-now-facts>div{padding:8px!important;border-radius:9px!important}
+  .player-now-journey{display:none!important}
+
+  /* Consistent controls and feedback. */
+  input,select,button,.button{min-height:var(--mobile-touch)!important;border-radius:11px!important;font-size:16px!important}
+  button,.button{padding:11px 14px!important}
+  .ghost{background:#fff!important}
+  .message,.inline-status{border-radius:11px!important;box-shadow:none!important}
+
+  /* Tournament lists read as actionable rows, not nested cards. */
+  #tournamentList,.match-result-list{gap:0!important;border:1px solid #e0e7ee!important;border-radius:14px!important;overflow:hidden!important;background:#fff!important}
+  #tournamentList>.mini-card,#tournamentList>.list-item,#tournamentList>.card,.match-result-list>.match-result-card{margin:0!important;border:0!important;border-bottom:1px solid #edf1f4!important;border-radius:0!important;padding:13px!important}
+  #tournamentList>*:last-child,.match-result-list>.match-result-card:last-child{border-bottom:0!important}
+  .tournament-view-tabs{border:0!important;background:#eef3f7!important;border-radius:11px!important;padding:3px!important}
+  .tournament-view-tabs button{min-height:42px!important;font-size:12px!important;padding:8px 5px!important}
+
+  /* Statistics and profiles: mobile drill-down instead of wide chrome. */
+  .stats-grid{gap:7px!important}
+  .stat-card{padding:12px!important}
+  .stat-card strong{font-size:1.45rem!important}
+  .player-directory{gap:0!important;border:1px solid #e0e7ee!important;border-radius:14px!important;overflow:hidden!important;background:#fff!important}
+  .player-card{border:0!important;border-bottom:1px solid #edf1f4!important;border-radius:0!important;padding:13px!important;min-height:54px!important}
+  .player-card:last-child{border-bottom:0!important}
+  .profile-card{padding:14px!important}
+  .profile-head{gap:8px!important}
+  .profile-close{min-height:42px!important;font-size:13px!important}
+
+  /* Dialogs behave like mobile sheets. */
+  .match-detail-dialog,.ci-dialog{width:100vw!important;max-width:none!important;max-height:94vh!important;margin:auto 0 0!important;border-radius:18px 18px 0 0!important}
+  .match-detail-content{max-height:94vh!important;padding:14px!important}
+  .match-stat-board,.leg-card{border-color:#e0e7ee!important;box-shadow:none!important}
+}
+
+@media(max-width:430px){
+  .portal-nav.portal-menu a{font-size:10px!important}
+  .player-now-facts{grid-template-columns:1fr 1fr!important}
+  .stats-grid{grid-template-columns:1fr 1fr!important}
+}
