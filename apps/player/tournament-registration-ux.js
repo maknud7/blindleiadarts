@@ -136,7 +136,7 @@ function focusRegistrations(registrations) {
 function focusUpcomingTournaments(tournaments) {
   if (!tournamentList) return;
 
-  tournamentList.querySelector("[data-upcoming-overflow]")?.remove();
+  tournamentList.querySelectorAll("[data-upcoming-overflow]").forEach((node) => node.remove());
   const cards = [...tournamentList.querySelectorAll(":scope > .list-item")];
   const upcoming = tournaments
     .filter(isUpcomingTournament)
@@ -155,12 +155,19 @@ function focusUpcomingTournaments(tournaments) {
     orderedCards.push(card);
   });
 
-  if (!orderedCards.length) {
+  if (!upcoming.length) {
     const empty = document.createElement("div");
     empty.className = "mini-card";
     empty.dataset.upcomingOverflow = "empty";
     empty.innerHTML = `<strong>Ingen kommende turneringer</strong><p class="muted">Ferdige turneringer og kamper finner du under Statistikk.</p>`;
     tournamentList.appendChild(empty);
+    return;
+  }
+
+  // API-et kan være klart før app.js har rukket å rendre turneringskortene.
+  // Da skal vi aldri vise en falsk tomtilstand; vent på neste DOM-runde i stedet.
+  if (!orderedCards.length) {
+    scheduleEnhance(180);
     return;
   }
 
