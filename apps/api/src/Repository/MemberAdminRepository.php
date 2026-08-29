@@ -37,8 +37,6 @@ final class MemberAdminRepository
         $globalRoles = $this->identityPrefix . 'global_user_roles';
         $clubRoles = $this->identityPrefix . 'club_user_roles';
 
-        // Deliberately select exactly one player and one account for each member.
-        // Historical accounts must never cause a duplicate member row in the admin UI.
         $sql = "SELECT
                     m.id AS member_id,
                     m.navn AS member_name,
@@ -142,6 +140,7 @@ final class MemberAdminRepository
                     'email' => $row['email'] !== null ? (string) $row['email'] : null,
                     'status' => $status,
                     'access_level' => (string) ($row['access_level'] ?? 'player'),
+                    'can_manage_access' => $row['player_id'] !== null,
                     'invited_at' => $row['invited_at'],
                     'claimed_at' => $row['claimed_at'],
                     'last_login_at' => $row['last_login_at'],
@@ -153,15 +152,12 @@ final class MemberAdminRepository
 
         $result->free();
         $stmt->close();
-
         return ['items' => $items, 'summary' => $summary];
     }
 
     /**
-     * Set the effective access level for another active account.
-     *
-     * Club admins may switch player <-> club_admin inside their own club.
-     * Only super admins may grant or remove the global super_admin role.
+     * Club admins may switch player <-> club_admin in the selected club.
+     * Only super admins may assign or remove the global super_admin role.
      *
      * @return array{account_id:int,access_level:string}
      */
@@ -204,7 +200,6 @@ final class MemberAdminRepository
         $targetStmt->execute();
         $target = $targetStmt->get_result()->fetch_assoc() ?: null;
         $targetStmt->close();
-
         if ($target === null) {
             throw new InvalidArgumentException('Brukerkontoen finnes ikke.');
         }
@@ -235,7 +230,6 @@ final class MemberAdminRepository
         $superStmt->execute();
         $targetIsSuperAdmin = $superStmt->get_result()->fetch_assoc() !== null;
         $superStmt->close();
-
         if ($targetIsSuperAdmin && !$actorIsSuperAdmin) {
             throw new InvalidArgumentException('Bare superadmin kan endre tilgang for en annen superadmin.');
         }
@@ -263,6 +257,8 @@ final class MemberAdminRepository
                 }
             }
 
+            // This deletion is intentionally scoped to the selected club. It must
+            // never revoke club_admin from another club.
             $deleteClub = $this->connection->prepare(
                 "DELETE FROM `{$clubRoles}` WHERE club_id=? AND user_account_id=? AND role='club_admin'"
             );
@@ -282,7 +278,10 @@ final class MemberAdminRepository
                 $insertClub->close();
             }
 
-            $legacyRole = $accessLevel;
+            // user_accounts.role is legacy compatibility only. Recalculate it from
+            // all remaining canonical role rows instead of blindly copying the role
+            // chosen for this one club.
+            $legacyRole = $this->legacyRoleForAccount($targetAccountId, $globalRoles, $clubRoles);
             $updateLegacy = $this->connection->prepare(
                 "UPDATE `{$users}` SET role=? WHERE id=?"
             );
@@ -291,15 +290,32 @@ final class MemberAdminRepository
             $updateLegacy->close();
 
             $this->connection->commit();
-
-            return [
-                'account_id' => $targetAccountId,
-                'access_level' => $accessLevel,
-            ];
+            return ['account_id' => $targetAccountId, 'access_level' => $accessLevel];
         } catch (Throwable $error) {
             $this->connection->rollback();
             throw $error;
         }
+    }
+
+    private function legacyRoleForAccount(int $accountId, string $globalRoles, string $clubRoles): string
+    {
+        $stmt = $this->connection->prepare(
+            "SELECT
+                EXISTS(SELECT 1 FROM `{$globalRoles}` WHERE user_account_id=? AND role='super_admin') AS is_super,
+                EXISTS(SELECT 1 FROM `{$clubRoles}` WHERE user_account_id=? AND role='club_admin') AS is_club_admin"
+        );
+        $stmt->bind_param('ii', $accountId, $accountId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: [];
+        $stmt->close();
+
+        if ((int) ($row['is_super'] ?? 0) === 1) {
+            return 'super_admin';
+        }
+        if ((int) ($row['is_club_admin'] ?? 0) === 1) {
+            return 'club_admin';
+        }
+        return 'player';
     }
 
     private function identityClubId(int $localClubId): int
@@ -317,8 +333,7 @@ final class MemberAdminRepository
             "SELECT ic.id
                FROM `{$localClubs}` lc
                INNER JOIN `{$identityClubs}` ic ON ic.slug=lc.slug
-              WHERE lc.id=?
-              LIMIT 1"
+              WHERE lc.id=? LIMIT 1"
         );
         $stmt->bind_param('i', $localClubId);
         $stmt->execute();
