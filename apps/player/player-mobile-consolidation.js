@@ -25,6 +25,6 @@ import("./remove-checkout-percentage.js?v=20260830-1835")
   .then(()=>import("./tournament-discovery-ux.js?v=20260830-1818"))
   .then(()=>import("./tournament-calendar-polish.js?v=20260829-1945"))
   .then(()=>import("./tournament-prestart-detail.js?v=20260829-2055"))
-  .then(()=>import("./tournament-groups-detail.js?v=20260830-0715"))
+  .then(()=>import("./tournament-groups-detail.js?v=20260830-2225"))
   .then(()=>import("./tournament-inline-admin.js?v=20260830-0715"))
   .then(()=>import("./tournament-finished-participants-polish.js?v=20260829-2326"));
