@@ -11,16 +11,16 @@ async function api(path,{auth=false}={}){ const headers={}; if(auth&&token()) he
 
 const style=document.createElement("style");
 style.textContent=`
-.tdx-detail-tabs{grid-template-columns:repeat(4,minmax(0,1fr))!important;min-width:0}
-.tdx-detail-tabs button{min-width:0}
+.tdx-detail-tabs{display:flex!important;grid-template-columns:none!important;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0}.tdx-detail-tabs::-webkit-scrollbar{display:none}.tdx-detail-tabs button{flex:0 0 auto!important;width:auto!important;min-width:0!important;padding-left:14px!important;padding-right:14px!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important}
 .tdx-groups-panel{display:grid;gap:14px;min-width:0}
 .tdx-group-picker{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none}.tdx-group-picker::-webkit-scrollbar{display:none}
-.tdx-group-picker button{flex:0 0 auto;border:1px solid #d4e0eb;border-radius:999px;background:#fff;color:#63788f;padding:9px 14px;font-weight:850}.tdx-group-picker button.active{background:#174f91;border-color:#174f91;color:#fff}
+.tdx-group-picker button{flex:0 0 auto!important;width:auto!important;min-width:0!important;border:1px solid #d4e0eb;border-radius:999px;background:#fff;color:#63788f;padding:9px 14px;font-weight:850;white-space:nowrap}.tdx-group-picker button.active{background:#174f91;border-color:#174f91;color:#fff}
 .tdx-group-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}.tdx-group-head h3{margin:0}.tdx-group-head p{margin:3px 0 0;color:#73869a;font-size:13px}
 .tdx-group-table{display:grid;min-width:0}.tdx-group-tr{display:grid;grid-template-columns:28px minmax(0,1fr) 30px 30px 30px 42px 32px;align-items:center;gap:5px;min-height:44px;border-top:1px solid #e8eef3;font-size:13px}.tdx-group-tr:first-child{border-top:0}.tdx-group-tr.is-me{background:#eef5ff;margin:0 -8px;padding:0 8px;border-radius:10px}.tdx-group-tr.is-qualified .tdx-group-pos{color:#176b35}.tdx-group-th{color:#8090a0;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;min-height:30px}.tdx-group-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0b2b50;font-weight:800}.tdx-group-pos{font-weight:900;color:#63788f}.tdx-group-stat{text-align:right;color:#435b73}.tdx-group-points{font-weight:900;color:#0b2b50}.tdx-qualified-mark{color:#2d7a45;margin-left:4px}
 .tdx-group-legend{display:flex;gap:12px;flex-wrap:wrap;color:#718399;font-size:12px;margin-top:8px}.tdx-group-legend strong{color:#2d7a45}
-.tdx-group-matches{display:grid}.tdx-group-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:11px 0;border-top:1px solid #e8eef3}.tdx-group-match:first-child{border-top:0}.tdx-group-match span:first-child{text-align:left}.tdx-group-match span:last-child{text-align:right}.tdx-group-match strong{font-size:15px;color:#0b2b50}.tdx-group-match small{grid-column:1/-1;color:#7a8da0}.tdx-group-live{color:#b22b2b!important}
-@media(max-width:520px){.tdx-detail-tabs{display:flex!important;grid-template-columns:none!important;overflow-x:auto;scrollbar-width:none}.tdx-detail-tabs::-webkit-scrollbar{display:none}.tdx-detail-tabs button{flex:1 0 auto;padding-left:12px!important;padding-right:12px!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important}.tdx-group-tr{grid-template-columns:25px minmax(0,1fr) 27px 27px 39px 30px}.tdx-group-tr>*:nth-child(5){display:none}.tdx-group-th>*:nth-child(5){display:none}}
+.tdx-group-matches{display:grid}.tdx-group-match{appearance:none;width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:12px 4px;border-top:1px solid #e8eef3;cursor:pointer;border-radius:10px}.tdx-group-match:first-child{border-top:0}.tdx-group-match:active,.tdx-group-match:hover{background:#f4f8fc}.tdx-group-match span:first-child{text-align:left}.tdx-group-match span:nth-child(3){text-align:right}.tdx-group-match strong{font-size:15px;color:#0b2b50}.tdx-group-match small{grid-column:1/-1;color:#7a8da0}.tdx-group-live{color:#b22b2b!important}.tdx-match-chevron{color:#9aabba!important;margin-left:5px;font-weight:900}
+.tdx-match-detail{border:0;padding:0;width:min(92vw,520px);max-width:520px;border-radius:20px;background:#fff;color:#0b2b50;box-shadow:0 22px 60px rgba(6,31,58,.28)}.tdx-match-detail::backdrop{background:rgba(4,20,38,.46)}.tdx-match-detail-card{padding:18px;display:grid;gap:16px}.tdx-match-detail-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.tdx-match-detail-head h3{margin:0}.tdx-match-close{border:0;background:#edf3f8;color:#0b2b50;border-radius:999px;width:38px;height:38px;font-size:22px}.tdx-match-detail-score{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;background:#f4f7fa;border-radius:16px;padding:16px}.tdx-match-detail-score span:last-child{text-align:right}.tdx-match-detail-score strong{font-size:24px}.tdx-match-detail-meta{display:grid;gap:8px;color:#667c92;font-size:13px}.tdx-match-detail-meta div{display:flex;justify-content:space-between;gap:14px}.tdx-match-detail-meta b{color:#0b2b50;text-align:right}
+@media(max-width:520px){.tdx-detail-tabs button{padding-left:12px!important;padding-right:12px!important}.tdx-group-tr{grid-template-columns:25px minmax(0,1fr) 27px 27px 39px 30px}.tdx-group-tr>*:nth-child(5){display:none}.tdx-group-th>*:nth-child(5){display:none}}
 `;
 document.head.appendChild(style);
 
@@ -86,13 +86,21 @@ function score(match){
   if(String(match.status)==="in_progress") return "LIVE";
   return "–";
 }
+function statusLabel(match){ return ({completed:"Ferdig",in_progress:"Pågår",assigned:"Tildelt",pending:"Ikke startet",cancelled:"Avlyst"})[String(match.status||"")]||String(match.status||""); }
 function renderMatches(group,data){
   const matches=mergedMatches(data).filter(match=>matchGroup(match,group)).sort((a,b)=>{
     const weight={in_progress:0,assigned:1,pending:2,completed:3};
     return (weight[String(a.status)]??9)-(weight[String(b.status)]??9)||num(a.id)-num(b.id);
   });
   if(!matches.length) return `<p class="muted">Ingen kamper i gruppen ennå.</p>`;
-  return `<div class="tdx-group-matches">${matches.map(match=>`<div class="tdx-group-match"><span>${esc(match.player_a_name||"Spiller A")}</span><strong class="${String(match.status)==="in_progress"?"tdx-group-live":""}">${esc(score(match))}</strong><span>${esc(match.player_b_name||"Spiller B")}</span><small>${esc(match.round_label||match.bracket_label||group.name||"Gruppespill")}${match.board_number?` · Skive ${num(match.board_number)}`:""}</small></div>`).join("")}</div>`;
+  return `<div class="tdx-group-matches">${matches.map(match=>`<button type="button" class="tdx-group-match" data-match-id="${num(match.id)}"><span>${esc(match.player_a_name||"Spiller A")}</span><strong class="${String(match.status)==="in_progress"?"tdx-group-live":""}">${esc(score(match))}</strong><span>${esc(match.player_b_name||"Spiller B")}</span><small>${esc(match.round_label||match.bracket_label||group.name||"Gruppespill")}${match.board_number?` · Skive ${num(match.board_number)}`:""}<span class="tdx-match-chevron">›</span></small></button>`).join("")}</div>`;
+}
+function showMatchDetail(match,group){
+  document.querySelector("dialog.tdx-match-detail")?.remove();
+  const modal=document.createElement("dialog"); modal.className="tdx-match-detail";
+  const bo=num(match.best_of_legs); const avgA=match.player_a_average??match.player_a_three_dart_average??match.player_a_3da; const avgB=match.player_b_average??match.player_b_three_dart_average??match.player_b_3da;
+  modal.innerHTML=`<div class="tdx-match-detail-card"><div class="tdx-match-detail-head"><div><h3>Kampdetaljer</h3><small>${esc(match.round_label||match.bracket_label||group.name||"Gruppespill")}</small></div><button type="button" class="tdx-match-close" aria-label="Lukk">×</button></div><div class="tdx-match-detail-score"><span><b>${esc(match.player_a_name||"Spiller A")}</b></span><strong>${esc(score(match))}</strong><span><b>${esc(match.player_b_name||"Spiller B")}</b></span></div><div class="tdx-match-detail-meta"><div><span>Status</span><b>${esc(statusLabel(match))}</b></div>${bo?`<div><span>Format</span><b>Best av ${bo}</b></div>`:""}${match.board_number?`<div><span>Skive</span><b>${num(match.board_number)}</b></div>`:""}${avgA||avgB?`<div><span>3-dart average</span><b>${avg(avgA)} · ${avg(avgB)}</b></div>`:""}</div></div>`;
+  document.body.appendChild(modal); modal.querySelector(".tdx-match-close")?.addEventListener("click",()=>modal.close()); modal.addEventListener("click",e=>{if(e.target===modal)modal.close();}); modal.addEventListener("close",()=>modal.remove(),{once:true}); modal.showModal();
 }
 
 async function openGroups(id,button){
@@ -110,10 +118,11 @@ async function openGroups(id,button){
     let selected=num(groups[0]?.id);
     const render=()=>{
       const group=groups.find(item=>num(item.id)===selected)||groups[0]; selected=num(group.id);
-      const groupMatches=mergedMatches(data).filter(match=>matchGroup(match,group));
+      const allMatches=mergedMatches(data); const groupMatches=allMatches.filter(match=>matchGroup(match,group));
       const done=groupMatches.length>0&&groupMatches.every(match=>String(match.status)==="completed");
-      panel.innerHTML=`<div class="tdx-group-picker">${groups.map(item=>`<button type="button" class="${num(item.id)===selected?"active":""}" data-group-id="${num(item.id)}">${esc(item.name||`Gruppe ${num(item.sort_order)||""}`)}</button>`).join("")}</div><div class="tdx-section"><div class="tdx-group-head"><div><h3>${esc(group.name||"Gruppe")}</h3><p>${done?"Ferdig":groupMatches.some(match=>String(match.status)==="in_progress")?"Pågår nå":"Gruppespill"}</p></div><span class="tdx-pill">${(tableFor(data,group)?.rows||group.players||[]).length} spillere</span></div>${renderTable(group,data)}</div><div class="tdx-section"><div class="tdx-group-head"><div><h3>Kamper i ${esc(group.name||"gruppen")}</h3><p>Pågående først, deretter kommende og ferdige.</p></div></div>${renderMatches(group,data)}</div>`;
+      panel.innerHTML=`<div class="tdx-group-picker">${groups.map(item=>`<button type="button" class="${num(item.id)===selected?"active":""}" data-group-id="${num(item.id)}">${esc(item.name||`Gruppe ${num(item.sort_order)||""}`)}</button>`).join("")}</div><div class="tdx-section"><div class="tdx-group-head"><div><h3>${esc(group.name||"Gruppe")}</h3><p>${done?"Ferdig":groupMatches.some(match=>String(match.status)==="in_progress")?"Pågår nå":"Gruppespill"}</p></div><span class="tdx-pill">${(tableFor(data,group)?.rows||group.players||[]).length} spillere</span></div>${renderTable(group,data)}</div><div class="tdx-section"><div class="tdx-group-head"><div><h3>Kamper i ${esc(group.name||"gruppen")}</h3><p>Trykk på en kamp for detaljer.</p></div></div>${renderMatches(group,data)}</div>`;
       panel.querySelectorAll("[data-group-id]").forEach(node=>node.addEventListener("click",()=>{selected=num(node.dataset.groupId);render();}));
+      panel.querySelectorAll("[data-match-id]").forEach(node=>node.addEventListener("click",()=>{const match=allMatches.find(item=>num(item.id)===num(node.dataset.matchId));if(match)showMatchDetail(match,group);}));
     };
     render();
   }catch(error){ panel.innerHTML=`<div class="tdx-section"><h3>Grupper</h3><p class="muted">${esc(error.message)}</p></div>`; }
