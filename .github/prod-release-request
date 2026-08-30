@@ -1,5 +1,5 @@
-release_sha=98eecd7f59a6b4887018d1205206d6fd29d84885
+release_sha=26a5ddeccf6f6306cb1a4ca74bc413697b59291f
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-08-30T12:18:00+02:00
+requested_at=2026-08-30T20:24:00+02:00
 purpose=release_latest_verified_test_to_prod
