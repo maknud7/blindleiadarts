@@ -1,5 +1,5 @@
-release_sha=2da2c60e1e6d406731340e3869c232b6ccd1a1fc
+release_sha=98eecd7f59a6b4887018d1205206d6fd29d84885
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-08-29T07:57:18+02:00
-purpose=prod_health_release_path_fix
+requested_at=2026-08-30T12:18:00+02:00
+purpose=release_latest_verified_test_to_prod
