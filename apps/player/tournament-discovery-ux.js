@@ -119,8 +119,9 @@ function render(){
   root.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openDetail(Number(b.dataset.open))));
 }
 function rowHtml(t){
-  const reg=regFor(t); const count=Number(t.registration_count||0); const mine=reg&&!['withdrawn','no_show'].includes(String(reg.status||''));
-  return `<button class="tdx-row" data-open="${Number(t.id)}"><span class="tdx-row-main"><span class="tdx-row-title">${esc(t.name)}</span><span class="tdx-row-sub">${esc(fmtDate(t.start_at))}${fmtTime(t.start_at)?` · ${esc(fmtTime(t.start_at))}`:""} · ${esc(publicStatus(t))}</span></span><span class="tdx-row-side">${mine?`<span class="tdx-pill">${esc(statusLabel(reg.status))}</span>`:`<span class="tdx-pill">${count} ${count===1?"deltaker":"deltakere"}</span>`}<span class="tdx-chevron">›</span></span></button>`;
+  const reg=regFor(t); const count=Number(t.registration_count||0); const mine=reg&&!['withdrawn','no_show'].includes(String(reg.status||'')); const finished=isFinished(t);
+  const side=finished?`<span class="tdx-pill">Resultater</span>`:mine?`<span class="tdx-pill">${esc(statusLabel(reg.status))}</span>`:`<span class="tdx-pill">${count} ${count===1?"deltaker":"deltakere"}</span>`;
+  return `<button class="tdx-row" data-open="${Number(t.id)}"><span class="tdx-row-main"><span class="tdx-row-title">${esc(t.name)}</span><span class="tdx-row-sub">${esc(fmtDate(t.start_at))}${fmtTime(t.start_at)?` · ${esc(fmtTime(t.start_at))}`:""} · ${esc(publicStatus(t))}</span></span><span class="tdx-row-side">${side}<span class="tdx-chevron">›</span></span></button>`;
 }
 
 async function openDetail(id){
@@ -130,9 +131,9 @@ async function openDetail(id){
   catch(error){ dialog.innerHTML=`<div class="tdx-page"><div class="tdx-page-head"><button class="tdx-back">‹</button><div class="tdx-page-title"><h2>Kunne ikke åpne turneringen</h2><p>${esc(error.message)}</p></div></div></div>`; dialog.querySelector('.tdx-back')?.addEventListener('click',()=>dialog.close()); }
 }
 function renderDetail(t,players,matches,reg,tab){
-  const completed=matches.filter(m=>String(m.status)==="completed"); const participantCount=players.filter(p=>String(p.status)!=="withdrawn").length;
+  const completed=matches.filter(m=>String(m.status)==="completed"); const participantCount=players.filter(p=>String(p.status)!=="withdrawn").length; const finished=isFinished(t);
   dialog.innerHTML=`<div class="tdx-page"><div class="tdx-page-head"><button class="tdx-back">‹</button><div class="tdx-page-title"><h2>${esc(t.name)}</h2><p>${esc(fmtDate(t.start_at))}${fmtTime(t.start_at)?` · ${esc(fmtTime(t.start_at))}`:""}</p></div></div>
-    <div class="tdx-content"><div class="tdx-hero"><div class="tdx-status-row"><span class="tdx-pill">${esc(publicStatus(t))}</span>${reg?`<span class="tdx-pill">${esc(statusLabel(reg.status))}</span>`:""}</div><h1>${esc(t.name)}</h1><div class="tdx-facts"><div class="tdx-fact"><small>Når</small><strong>${esc(fmtLong(t.start_at))}</strong></div><div class="tdx-fact"><small>Deltakere</small><strong>${participantCount}</strong></div><div class="tdx-fact"><small>Kamper</small><strong>${matches.length}</strong></div><div class="tdx-fact"><small>Ferdige</small><strong>${completed.length}</strong></div></div></div>
+    <div class="tdx-content"><div class="tdx-hero"><div class="tdx-status-row"><span class="tdx-pill">${esc(publicStatus(t))}</span>${reg&&!finished?`<span class="tdx-pill">${esc(statusLabel(reg.status))}</span>`:""}</div><h1>${esc(t.name)}</h1><div class="tdx-facts"><div class="tdx-fact"><small>Når</small><strong>${esc(fmtLong(t.start_at))}</strong></div><div class="tdx-fact"><small>Deltakere</small><strong>${participantCount}</strong></div><div class="tdx-fact"><small>Kamper</small><strong>${matches.length}</strong></div><div class="tdx-fact"><small>Ferdige</small><strong>${completed.length}</strong></div></div></div>
     <div class="tdx-detail-tabs"><button class="${tab==="overview"?"active":""}" data-tab="overview">Oversikt</button><button class="${tab==="players"?"active":""}" data-tab="players">Deltakere</button><button class="${tab==="matches"?"active":""}" data-tab="matches">Kamper</button></div>${tab==="players"?playersHtml(players):tab==="matches"?matchesHtml(matches):overviewHtml(t,players,matches)}</div>${actionsHtml(t,reg)}</div>`;
   dialog.querySelector('.tdx-back')?.addEventListener('click',()=>dialog.close()); dialog.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>renderDetail(t,players,matches,reg,b.dataset.tab))); dialog.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>performAction(t,b.dataset.action)));
 }
