@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260831-2115";
+const MODULE_VERSION = "20260831-2140";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -83,9 +83,12 @@ async function loadModules() {
   host.dataset.tournamentModules = "loading";
 
   loading = (async () => {
+    // tournament-admin creates the canonical workspace DOM. Everything below can
+    // start as soon as that shell exists instead of creating a long import waterfall.
     await import(moduleUrl("./tournament-admin.js"));
-    await import(moduleUrl("./test-tournament-tools.js"));
+
     await Promise.all([
+      import(moduleUrl("./test-tournament-tools.js")),
       import(moduleUrl("./tournament-checkin-admin.js")),
       import(moduleUrl("./tournament-wizard-v2.js")),
       import(moduleUrl("./tournament-flow-ux.js")),
@@ -94,12 +97,18 @@ async function loadModules() {
       import(moduleUrl("./tournament-delete-admin.js")),
       import(moduleUrl("./tournament-start-format.js")),
     ]);
+
+    // Workspace positioning is the only dependency for the visual/canonical layer.
     await import(moduleUrl("./tournament-workspace-ux.js"));
-    await import(moduleUrl("./tournament-canonical-ux.js"));
-    await import(moduleUrl("./tournament-empty-state.js"));
-    await import(moduleUrl("./tournament-leader-v2.js"));
+    await Promise.all([
+      import(moduleUrl("./tournament-canonical-ux.js")),
+      import(moduleUrl("./tournament-empty-state.js")),
+      import(moduleUrl("./tournament-leader-v2.js")),
+      import(moduleUrl("./tournament-admin-focus.js")),
+    ]);
+
+    // This adapter reads state produced by the leader and board selector, so keep it last.
     await import(moduleUrl("./tournament-leader-v2-board-state.js"));
-    await import(moduleUrl("./tournament-admin-focus.js"));
 
     host.dataset.tournamentModules = "ready";
     hideLoading();
