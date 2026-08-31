@@ -41,7 +41,7 @@ try {
     $repo=new TournamentCheckinRepository($database);
     $settings=$repo->updateTournamentSettings($ids['t1'],['checkin_method'=>'admin_or_code']);
     $code=(string)($settings['checkin_code']??'');
-    $assert(strlen($code)===6,'Tournament check-in code was not generated.');
+    $assert(strlen($code)===3,'Tournament check-in code was not generated as a three-letter code.');
 
     $byCode=$repo->checkInPlayer($ids['t1'],$ids['a'],false,$code,false);
     $assert(($byCode['status']??'')==='checked_in','Correct venue code did not check player in.');
