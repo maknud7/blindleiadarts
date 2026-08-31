@@ -110,6 +110,7 @@ jobs:
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
           test -f dist/test/api/test-player-candidates.php
+          test -f dist/test/api/kiosk-scolia-ui.php
           test -f dist/test/admin/scolia-admin.js
           test -f dist/test/admin/board-admin-core.mjs
           test -f dist/test/admin/season-admin.js
@@ -138,6 +139,9 @@ jobs:
           test -f dist/test/kiosk/admin-mode.js
           test -f dist/test/kiosk/brand-light.css
           test -f dist/test/kiosk/tablet-portrait.css
+          test -f dist/test/kiosk/scolia-live-ux.js
+          test -f dist/test/kiosk/scolia-live-ux.css
+          php -l dist/test/api/kiosk-scolia-ui.php >/dev/null
           grep -Fq 'viewport-fit=cover' dist/test/onboarding/index.html
           grep -Fq 'data-toggle-password' dist/test/onboarding/index.html
           grep -Fq 'portal-brand.css' dist/test/packages/ui-assets/portal-menu.js
@@ -158,9 +162,12 @@ jobs:
           grep -Fq '"orientation": "portrait"' dist/test/kiosk/manifest.webmanifest
           grep -Fq './brand-light.css' dist/test/kiosk/index.html
           grep -Fq './tablet-portrait.css' dist/test/kiosk/index.html
+          grep -Fq 'scolia-live-ux.css' dist/test/kiosk/index.html
+          grep -Fq 'scolia-live-ux.js' dist/test/kiosk/index.html
           grep -Fq 'height: 100dvh' dist/test/kiosk/tablet-portrait.css
           grep -Fq 'overflow: hidden' dist/test/kiosk/tablet-portrait.css
           grep -Fq 'tablet-portrait.css' dist/test/kiosk/service-worker.js
+          grep -Fq 'scolia-live-ux.js' dist/test/kiosk/service-worker.js
           grep -Fq 'type="email" placeholder="E-postadresse"' dist/test/player/index.html
           grep -Fq '<span>E-postadresse</span>' dist/test/admin/index.html
           grep -Fq '>Medlemmer</a>' dist/test/admin/index.html
@@ -209,6 +216,23 @@ jobs:
             fi
           }
 
+          check_status_contains() {
+            local label="$1"
+            local url="$2"
+            local expected_status="$3"
+            local needle="$4"
+            echo "VERIFY: $label"
+            local response_file status body
+            response_file="$(mktemp)"
+            status="$(curl -sS --max-time 15 -o "$response_file" -w '%{http_code}' "$url" || true)"
+            body="$(cat "$response_file")"
+            rm -f "$response_file"
+            if [[ "$status" != "$expected_status" ]] || ! grep -Fq "$needle" <<<"$body"; then
+              echo "Verification failed: $label returned HTTP ${status:-unknown} without expected marker: $needle" >&2
+              exit 1
+            fi
+          }
+
           echo "VERIFY: release SHA"
           release=""
           for attempt in 1 2 3 4 5; do
@@ -228,7 +252,7 @@ jobs:
           check_contains "admin UX" "$base/admin/admin-ux.js" "Neste anbefalte steg"
           check_contains "canonical board scoring" "$base/admin/board-admin-core.mjs" "production_hardware"
           check_contains "all TEST player candidates" "$base/admin/test-tournament-tools.js" "alle aktive spillere i TEST"
-          check_contains "TEST player candidate endpoint" "$base/api/test-player-candidates.php" "authentication_required"
+          check_status_contains "TEST player candidate endpoint" "$base/api/test-player-candidates.php" "401" "authentication_required"
           check_contains "activity admin" "$base/admin/activity-admin.js" "Aktivitet"
           check_contains "public statistics" "$base/player/" "Statistikk"
           check_contains "player profile" "$base/player/" "Min profil"
@@ -249,6 +273,9 @@ jobs:
           check_contains "kiosk portrait manifest" "$base/kiosk/manifest.webmanifest" '"orientation": "portrait"'
           check_contains "kiosk viewport height" "$base/kiosk/tablet-portrait.css" "height: 100dvh"
           check_contains "kiosk overflow" "$base/kiosk/tablet-portrait.css" "overflow: hidden"
+          check_contains "Scolia live kiosk JS" "$base/kiosk/scolia-live-ux.js" "Angre siste Scolia-kast"
+          check_contains "Scolia live kiosk CSS" "$base/kiosk/scolia-live-ux.css" ".scolia-darts-grid"
+          check_status_contains "Scolia kiosk UI endpoint guard" "$base/api/kiosk-scolia-ui.php" "422" "kiosk_context_required"
 
           echo "VERIFY: activity endpoint write"
           activity_ok="no"
