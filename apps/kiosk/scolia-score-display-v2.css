@@ -1,0 +1,91 @@
+/* Scolia live v2: use the normal undo position, and let the throw dominate the screen. */
+body.scolia-live-active .scoreboard #undoButton {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+body.scolia-live-active .scoreboard #undoButton.scolia-routing-active {
+  border-color: rgba(23, 48, 71, .22);
+  background: rgba(255, 255, 255, .88);
+}
+
+/* The technical Scolia undo remains as the implementation target, not a second visible control. */
+body.scolia-live-active #scoliaLiveSurface .scolia-undo-button {
+  display: none !important;
+}
+
+body.scolia-live-active #scoliaLiveSurface .scolia-live-footer {
+  min-height: 24px;
+}
+
+body.scolia-live-active #scoliaLiveSurface .scolia-live-hint {
+  width: 100%;
+  text-align: center;
+}
+
+@media (orientation: portrait) and (min-width: 480px) and (min-height: 720px) {
+  body.scolia-live-active .player-card h2 {
+    min-height: 34px !important;
+    font-size: clamp(22px, 4.1vw, 32px) !important;
+    line-height: 1 !important;
+  }
+
+  body.scolia-live-active .remaining {
+    font-size: clamp(78px, 14vw, 106px) !important;
+    line-height: .78 !important;
+    letter-spacing: -.055em !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface {
+    padding: 8px 10px !important;
+    gap: 5px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-live-header {
+    min-height: 22px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-live-content {
+    grid-template-rows: 28px minmax(0, 1fr) minmax(126px, .78fr) !important;
+    gap: 6px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-live-title > span {
+    font-size: clamp(20px, 3.8vw, 28px) !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-darts-grid {
+    gap: 7px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-dart-slot {
+    border-radius: 16px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-dart-slot strong {
+    font-size: clamp(58px, 10.5vw, 86px) !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-total {
+    padding: 5px 16px !important;
+    border-radius: 16px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-total strong {
+    font-size: clamp(92px, 17vw, 132px) !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-live-footer {
+    min-height: 20px !important;
+  }
+
+  body.scolia-live-active #scoliaLiveSurface .scolia-live-hint {
+    font-size: 10px !important;
+  }
+}
