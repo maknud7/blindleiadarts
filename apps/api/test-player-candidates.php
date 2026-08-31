@@ -70,22 +70,21 @@ try {
     $localClubs = $dataPrefix . 'clubs';
     $identityPlayers = $identityPrefix . 'players';
     $identityClubs = $identityPrefix . 'clubs';
-    $identityUsers = $identityPrefix . 'user_accounts';
 
     $sql = "SELECT
                 tp.id,
-                ip.display_name,
-                ip.first_name,
-                ip.last_name,
-                ip.nickname,
-                ip.avatar_url,
+                COALESCE(ip.display_name,tp.display_name) AS display_name,
+                COALESCE(ip.first_name,tp.first_name) AS first_name,
+                COALESCE(ip.last_name,tp.last_name) AS last_name,
+                COALESCE(ip.nickname,tp.nickname) AS nickname,
+                COALESCE(ip.avatar_url,tp.avatar_url) AS avatar_url,
                 tp.member_id,
                 1 AS is_active,
-                'prod_identity' AS identity_source
+                CASE WHEN ip.id IS NULL THEN 'test_player' ELSE 'prod_identity' END AS identity_source
             FROM `{$localPlayers}` tp
             INNER JOIN `{$localClubs}` tc ON tc.id=tp.club_id
-            INNER JOIN `{$identityClubs}` ic ON ic.slug=tc.slug
-            INNER JOIN `{$identityPlayers}` ip ON ip.id=(
+            LEFT JOIN `{$identityClubs}` ic ON ic.slug=tc.slug
+            LEFT JOIN `{$identityPlayers}` ip ON ip.id=(
                 SELECT MIN(ip2.id)
                 FROM `{$identityPlayers}` ip2
                 WHERE ip2.club_id=ic.id
@@ -94,26 +93,9 @@ try {
                   AND ip2.merged_into_player_id IS NULL
             )
             WHERE tp.club_id=?
-              AND tp.member_id IS NOT NULL
               AND tp.is_active=1
               AND tp.merged_into_player_id IS NULL
-              AND tp.id=(
-                  SELECT MIN(tp2.id)
-                  FROM `{$localPlayers}` tp2
-                  WHERE tp2.club_id=tp.club_id
-                    AND tp2.member_id=tp.member_id
-                    AND tp2.is_active=1
-                    AND tp2.merged_into_player_id IS NULL
-              )
-              AND EXISTS (
-                  SELECT 1
-                  FROM `{$identityUsers}` ua
-                  LEFT JOIN `{$identityPlayers}` uap ON uap.id=ua.player_id
-                  WHERE ua.is_active=1
-                    AND ua.account_status='active'
-                    AND COALESCE(ua.member_id,uap.member_id)=tp.member_id
-              )
-            ORDER BY ip.display_name ASC";
+            ORDER BY COALESCE(ip.display_name,tp.display_name) ASC";
 
     $statement = $database->connection()->prepare($sql);
     $statement->bind_param('i', $clubId);
