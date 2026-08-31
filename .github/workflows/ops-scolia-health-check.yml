@@ -1,0 +1,27 @@
+name: Ops Scolia Health Check
+
+on:
+  push:
+    branches:
+      - ops/scolia-health-check
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check canonical PROD Scolia health
+        run: |
+          set -Eeuo pipefail
+          echo '=== PROD_SCOLIA_HEALTH ==='
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 \
+            'https://blindleiadart.ingenting.org/api/scolia-health.php?cb='"$RANDOM" | jq .
+
+      - name: Check TEST view of shared Scolia health
+        run: |
+          set -Eeuo pipefail
+          echo '=== TEST_SCOLIA_HEALTH ==='
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 \
+            'https://test.blindleiadart.ingenting.org/api/scolia-health.php?cb='"$RANDOM" | jq .
