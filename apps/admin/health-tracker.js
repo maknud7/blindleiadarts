@@ -1,4 +1,5 @@
 const HEALTH_URL = "../api/health.php";
+const SCOLIA_HEALTH_URL = "../api/scolia-health.php";
 const healthRoot = document.getElementById("healthTrackerResults");
 const healthSummary = document.getElementById("healthTrackerSummary");
 const healthRunButton = document.getElementById("runHealthTracker");
@@ -48,6 +49,73 @@ async function fetchHealth() {
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Helsesjekken brukte mer enn 20 sekunder og ble avbrutt.");
     throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function scoliaHealthProbe() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const started = performance.now();
+  try {
+    const url = new URL(SCOLIA_HEALTH_URL, window.location.href);
+    url.searchParams.set("cb", String(Date.now()));
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+    const payload = await response.json().catch(() => null);
+    const elapsed = Math.round(performance.now() - started);
+    if (!response.ok || !payload?.ok) {
+      return {
+        name: "scolia_bridge",
+        label: "Scolia bridge og fysiske skiver",
+        status: "fail",
+        ms: elapsed,
+        detail: { error: payload?.error?.code || `HTTP ${response.status}` },
+      };
+    }
+
+    const data = payload.data || {};
+    const boards = Array.isArray(data.boards) ? data.boards : [];
+    const configuredBoards = Number(data.configured_boards || 0);
+    const secretConfigured = Boolean(data.secret_configured);
+    const bridgeAlive = data.bridge_alive === true;
+    const boardWarning = boards.some((board) => !board.heartbeat_fresh || String(board.connection_state || "") !== "connected");
+
+    let status = "ok";
+    if (!secretConfigured || (configuredBoards > 0 && !bridgeAlive)) status = "fail";
+    else if (configuredBoards === 0 || boardWarning) status = "warn";
+
+    const boardSummary = boards.length
+      ? boards.map((board) => {
+          const number = Number(board.board_number || 0);
+          const state = String(board.connection_state || "ukjent");
+          const route = String(board.route || "prod").toUpperCase();
+          return `Skive ${number}: ${state} (${route})`;
+        }).join(", ")
+      : "ingen aktive Scolia-skiver";
+
+    const age = data.latest_heartbeat_age_seconds;
+    return {
+      name: "scolia_bridge",
+      label: "Scolia bridge og fysiske skiver",
+      status,
+      ms: elapsed,
+      detail: {
+        bridge: String(data.bridge_status || "ukjent"),
+        heartbeat: age === null || age === undefined ? "mangler" : `${Number(age)} s siden`,
+        skiver: boardSummary,
+        test_lease: Number(data.active_test_leases || 0),
+        prod_innstilling: data.configuration_scope === "production_hardware",
+      },
+    };
+  } catch (error) {
+    return {
+      name: "scolia_bridge",
+      label: "Scolia bridge og fysiske skiver",
+      status: "fail",
+      ms: Math.round(performance.now() - started),
+      detail: { error: error?.name === "AbortError" ? "timeout etter 12 sekunder" : error?.message || "nettverksfeil" },
+    };
   } finally {
     window.clearTimeout(timeout);
   }
@@ -151,7 +219,7 @@ function renderHealth(payload, responseOk) {
   const overallOk = Boolean(payload?.ok) && responseOk && failures.length === 0;
   const tone = overallOk ? (warnings.length ? "warning" : "good") : "bad";
   const title = overallOk
-    ? (warnings.length ? `Fungerer, men ${warnings.length} treg sjekk` : "Alle kontroller er OK")
+    ? (warnings.length ? `Fungerer, men ${warnings.length} kontroll${warnings.length === 1 ? "" : "er"} trenger oppmerksomhet` : "Alle kontroller er OK")
     : `${Math.max(1, failures.length)} kontroll feiler`;
 
   healthSummary.className = `health-summary ${tone}`;
@@ -171,7 +239,7 @@ function renderHealth(payload, responseOk) {
             <span class="health-dot" aria-hidden="true"></span>
             <div><strong>${healthEsc(item.label || item.name)}</strong>${detail ? `<small>${healthEsc(detail)}</small>` : ""}</div>
           </div>
-          <div class="health-check-time"><strong>${Number(item.ms || 0).toFixed(0)} ms</strong><span>${status === "ok" ? "OK" : status === "warn" ? "Treg" : "Feil"}</span></div>
+          <div class="health-check-time"><strong>${Number(item.ms || 0).toFixed(0)} ms</strong><span>${status === "ok" ? "OK" : status === "warn" ? "Obs" : "Feil"}</span></div>
         </article>`;
       }).join("")
     : `<div class="empty">Ingen detaljer fra helsesjekken.</div>`;
@@ -185,15 +253,16 @@ async function runHealthTracker() {
     healthRunButton.textContent = "Diagnostiserer …";
   }
   healthSummary.className = "health-summary neutral";
-  healthSummary.innerHTML = `<div><strong>Kjører selvdiagnose</strong><p>Tester server, portal og canonical identiteter.</p></div><span class="health-overall">…</span>`;
+  healthSummary.innerHTML = `<div><strong>Kjører selvdiagnose</strong><p>Tester server, portal, canonical identiteter og Scolia bridge.</p></div><span class="health-overall">…</span>`;
   healthRoot.innerHTML = `<div class="empty">Henter målinger …</div>`;
 
   try {
-    const [{ response, payload }, authenticated] = await Promise.all([
+    const [{ response, payload }, scolia, authenticated] = await Promise.all([
       fetchHealth(),
+      scoliaHealthProbe(),
       authenticatedDiagnostics(),
     ]);
-    payload.diagnostics = [...(Array.isArray(payload.diagnostics) ? payload.diagnostics : []), ...authenticated];
+    payload.diagnostics = [...(Array.isArray(payload.diagnostics) ? payload.diagnostics : []), scolia, ...authenticated];
     renderHealth(payload, response.ok);
   } catch (error) {
     healthSummary.className = "health-summary bad";
