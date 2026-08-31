@@ -5,9 +5,9 @@ Production-oriented tournament platform for Blindleia Dartklubb with three prima
 - kiosk tablets at each board
 - public screen / venue display
 - club admin backoffice
-- future member portal for players and club members
+- player and member portal
 
-The platform is designed to run the venue locally without depending on Challonge or other external systems at runtime. External systems are supported through generic provider connectors.
+The platform is designed to run the venue locally without depending on Challonge, DartsAtlas or other external systems at runtime. External systems are supported through bounded integrations while Blindleia Darts remains canonical.
 
 ## Repository Shape
 
@@ -17,6 +17,7 @@ The platform is designed to run the venue locally without depending on Challonge
   /kiosk
   /screen
   /admin
+  /player
 /packages
   /domain
   /connectors
@@ -26,6 +27,7 @@ The platform is designed to run the venue locally without depending on Challonge
   /handover
   /api
   /db
+  /user-guides
 /infra
   /sql
   /deploy
@@ -35,64 +37,61 @@ The platform is designed to run the venue locally without depending on Challonge
 
 - API-first: all frontends talk to the internal API only.
 - Internal domain first: local entities and rules are the source of truth.
-- Provider boundaries: Challonge and future systems plug in through generic adapters.
+- Provider boundaries: external systems plug in through bounded adapters and must not become runtime truth.
 - Event-oriented design: state changes should align with explicit domain events.
 - Venue runtime independence: local tournament operations must continue without external availability.
 - Reuse before duplication: when the same domain data, meaning, calculation or interaction already exists elsewhere in the platform, reuse the existing canonical API field, calculation, component or UI pattern instead of creating a parallel variant. Only introduce a new variant when the context genuinely requires different semantics or behavior, and document why.
 - Shared domain concepts should look and behave consistently across surfaces. A match card, player link, statistic or status with the same meaning should have one canonical implementation where practical, with surface-specific wrappers limited to layout or context rather than duplicated business logic.
+- User documentation is part of the product contract. A change to user-visible behavior is not complete until its player/admin guide impact has been reviewed.
 
 ## Current Product Surfaces
 
-- `apps/api`: internal API and domain orchestration, currently expected to stay PHP-friendly.
+- `apps/api`: internal API and domain orchestration, currently PHP-friendly.
 - `apps/kiosk`: match input UI for each board kiosk.
-- `apps/screen`: public venue display for live boards and rankings.
-- `apps/admin`: future club admin backoffice.
-- future member-facing login area for registrations, stats, and member self-service.
-
-## Priority Roadmap
-
-1. Stabilize kiosk match lifecycle.
-2. Ensure match completion transitions cleanly to idle or next assignment.
-3. Confirm averages and countdown overlay on win.
-4. Clean and version internal API contracts.
-5. Add admin media upload flows for club and sponsor branding.
-6. Introduce generic provider framework.
-7. Implement Challonge as the first connector.
-8. Add member login, tournament registration, and personal stats.
-9. Expand the platform toward club operations such as payments and bookkeeping support.
-
-## Milestones
-
-- Milestone 1: Core runtime
-- Milestone 2: Admin basics
-- Milestone 3: Rankings
-- Milestone 4: Challonge connector
+- `apps/live` / screen surfaces: public venue display for live boards, queues, tables, playoffs, ELO and highlights.
+- `apps/admin`: club administration and tournament operations.
+- `apps/player`: member/player portal for tournaments, statistics, profiles, membership and self-service.
 
 ## Key Rule
 
-Keep the core match engine local. Connector logic must not leak provider-specific assumptions into UI or domain code.
+Keep the core match engine and canonical competition data local. Connector logic must not leak provider-specific assumptions into UI or domain code.
 
 Before adding a new calculation, field, component or interaction for an existing concept, search for an existing canonical implementation and reuse it when the semantics are the same.
+
+## Mandatory pre-push user-guide check
+
+Before **every Git push**, review whether the diff changes anything a player or club administrator needs to understand: workflow, navigation, terminology, permissions, status rules, tournament behavior, match/stat data, membership/payment behavior, equipment or Live.
+
+The canonical in-product guides live in `packages/ui-assets/user-guide.js`. The maintenance checklist and decision rules live in `docs/user-guides/README.md`.
+
+Every push must end with one explicit conclusion:
+
+- `Guide impact: updated` – the guide was changed together with the user-visible behavior.
+- `Guide impact: none` – the diff was reviewed and does not change how a player or admin uses or understands the platform.
+
+Do not push first and update the guide afterwards. The guide-impact review belongs in the same logical change.
 
 ## Deployment
 
 GitHub-first deployment files are included for:
 
-- automatic deploy from `develop` to test
+- automatic deploy from `develop` to TEST
 - manual deploy from GitHub Actions to production
-- manual database migrations for test and production using table prefixes in one shared database
+- database migrations for test and production using table prefixes in one shared database
 
 Setup details are documented in `docs/handover/GITHUB_DEPLOY_SETUP.md`.
 
-## Longer-Term Product Scope
+## Product Scope
 
-The platform is expected to grow beyond venue runtime into a broader club system with:
+The platform covers and continues to expand around:
 
-- player and member login
-- tournament signup and self-service
-- personal statistics such as averages, checkout data, and ELO
-- member payment tracking
-- grasrotandel follow-up
-- bookkeeping and club operations support
+- player/member login and activation
+- tournament signup, check-in and self-service
+- groups, matches, playoffs and canonical scoring
+- player statistics, averages and ELO
+- club member payment tracking
+- equipment and Scolia integration
+- public Live/venue display
+- club operations and future reporting support
 
-These capabilities should be added as separate bounded areas around the same core platform rather than folded directly into kiosk-specific runtime code.
+These capabilities should remain separate bounded areas around the same canonical core rather than becoming duplicated side systems.
