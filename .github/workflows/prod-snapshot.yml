@@ -1,0 +1,78 @@
+name: Production Snapshot
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/prod-snapshot-request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate snapshot request
+        if: github.event_name == 'push'
+        run: |
+          set -Eeuo pipefail
+          test -f .github/prod-snapshot-request
+          grep -Fxq 'create_fresh_prod_snapshot=YES' .github/prod-snapshot-request
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Create verified production snapshot
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          echo "Creating internal production snapshot: ${backup_prefix}*"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_SNAPSHOT_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Read-only production preflight
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: |
+          set +e
+          php infra/sql/prod_preflight.php | tee /tmp/prod-preflight.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 && "$status" -ne 2 ]]; then
+            exit "$status"
+          fi
+          echo "Production preflight captured after snapshot (status=$status)."
+
+      - name: Report snapshot
+        run: |
+          echo "PROD_SNAPSHOT_BACKUP_OK=yes"
+          echo "PROD_SNAPSHOT_PREFIX=${PROD_SNAPSHOT_PREFIX}"
