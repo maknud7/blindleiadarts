@@ -1,6 +1,6 @@
-release_sha=73585c131389460e87d2bfeaa50d549cab075e32
+release_sha=206bd5b59a9670a2ee6bb3cbf78090825b131dbf
 backup_confirmed=YES
 migration_review_confirmed=NO
-requested_at=2026-08-31T14:20:00+02:00
-purpose=deploy_scolia_bridge_health_status
-backup_prefix=bd_backup_20260831_121559_
+requested_at=2026-08-31T14:47:42+02:00
+purpose=deploy_scolia_idle_bridge
+backup_prefix=bd_backup_20260831_124553_
