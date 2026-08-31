@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v23";
+const SHELL_CACHE = "bd-kiosk-shell-v24";
 const SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const SHELL = [
   "./club-tablet-ux.css",
   "./state-visibility-fix.css",
   "./tablet-action-row-fix.css",
+  "./prod-test-entry.css",
   "../packages/ui-assets/brand-tokens.css",
   "../packages/ui-assets/blindleia-system.css",
   "./realtime-refresh-compat.js",
@@ -24,6 +25,7 @@ const SHELL = [
   "./scolia-runtime.js",
   "./admin-mode.js",
   "./test-mode.js",
+  "./prod-test-entry.js",
   "./kiosk-ux-v2.js",
   "./kiosk-brand-v3.js",
   "./terminal-refresh.js",

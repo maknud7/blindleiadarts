@@ -1,0 +1,5 @@
+#prodTestModeSettings{margin-top:12px;padding:13px 14px;border:1px solid rgba(181,132,0,.34);border-radius:13px;background:rgba(245,197,66,.08);display:grid;gap:10px}
+#prodTestModeSettings strong{display:block;color:var(--text)}
+#prodTestModeSettings small{display:block;line-height:1.4;margin-top:4px}
+#prodTestModeSettings .test-mode-settings-actions{display:flex;gap:8px;flex-wrap:wrap}
+#prodStartTestMode{border-color:#d9a918!important;background:#f5c542!important;color:#332500!important;font-weight:900!important}

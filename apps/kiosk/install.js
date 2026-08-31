@@ -6,6 +6,35 @@ document.head.appendChild(kioskBrandStyles);
 document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#0b3145");
 document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute("content", "default");
 
+function ensureExtendedKioskRuntime() {
+  if (!document.getElementById("prodTestEntryStyles")) {
+    const css = document.createElement("link");
+    css.id = "prodTestEntryStyles";
+    css.rel = "stylesheet";
+    css.href = "./prod-test-entry.css?v=20260831-1715";
+    document.head.appendChild(css);
+  }
+
+  const load = (id, src) => new Promise((resolve) => {
+    if (document.getElementById(id)) { resolve(); return; }
+    const script = document.createElement("script");
+    script.id = id;
+    script.src = src;
+    script.async = false;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", () => {
+      console.warn(`Kunne ikke laste kiosk-runtime: ${src}`);
+      resolve();
+    }, { once: true });
+    document.body.appendChild(script);
+  });
+
+  load("prodTestEntryRuntime", "./prod-test-entry.js?v=20260831-1715")
+    .then(() => load("scoliaRuntime", "./scolia-runtime.js?v=20260831-1715"));
+}
+
+ensureExtendedKioskRuntime();
+
 let deferredInstallPrompt = null;
 
 const isStandalone = () => window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
