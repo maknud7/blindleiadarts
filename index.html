@@ -9,8 +9,8 @@
   <meta name="apple-mobile-web-app-title" content="Blindleia Darts">
   <title>Blindleia Darts</title>
   <link rel="manifest" href="./api/pwa-manifest.php">
-  <link rel="icon" href="./static/club-logos/blindleia-dartklubb-logo.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="./static/club-logos/blindleia-dartklubb-logo.png">
+  <link rel="icon" href="./static/club-logos/blindleia-dartklubb-logo.svg?v=20260831-1305" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./static/club-logos/blindleia-dartklubb-logo.png?v=20260831-1305">
   <script>
     (() => {
       const isTest = /(^|[.-])test([.-]|$)/i.test(window.location.hostname)
@@ -20,8 +20,6 @@
       document.title = "Blindleia Darts TEST";
       document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#f3c23c");
       document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", "Blindleia Darts TEST");
-      document.querySelector('link[rel="icon"]')?.setAttribute("href", "./static/club-logos/blindleia-dartklubb-test.svg");
-      document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute("href", "./static/club-logos/blindleia-dartklubb-test.svg");
     })();
   </script>
   <style>
@@ -43,7 +41,7 @@
   </main>
 
   <script type="module">
-    const VERSION = "20260831-1255";
+    const VERSION = "20260831-1305";
     const app = (await import(`./packages/ui-assets/app-core.js?v=${VERSION}`)).default;
     const bootText = document.getElementById("portalBootText");
     const rootPath = window.location.pathname.endsWith("/")
