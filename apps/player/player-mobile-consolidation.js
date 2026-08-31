@@ -38,4 +38,4 @@ import("./remove-checkout-percentage.js?v=20260830-1835")
   .then(()=>import("./tournament-compact-match-links.js?v=20260830-2335"))
   .then(()=>import("./tournament-inline-admin.js?v=20260830-0715"))
   .then(()=>import("./tournament-finished-participants-polish.js?v=20260829-2326"))
-  .then(()=>import("./tournament-detail-desktop-ux.js?v=20260831-0845"));
+  .then(()=>import("./tournament-detail-desktop-ux.js?v=20260831-0855"));
