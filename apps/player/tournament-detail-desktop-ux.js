@@ -45,7 +45,7 @@ function detailLoadStyles(){
   const link = document.createElement("link");
   link.id = "tournamentDetailDesktopUxStyles";
   link.rel = "stylesheet";
-  link.href = new URL("./tournament-detail-desktop-ux.css?v=20260831-0845", import.meta.url).href;
+  link.href = new URL("./tournament-detail-desktop-ux.css?v=20260831-1015", import.meta.url).href;
   document.head.appendChild(link);
 }
 
@@ -60,8 +60,10 @@ function detailDirectName(node){
 }
 
 function markDetailPlayerRow(row, name, { arrow = false } = {}){
-  if(!row || !name) return;
-  row.dataset.tdxProfileName = detailNormalizeName(name);
+  if(!row) return;
+  const playerId = Number(row.dataset.tdxPlayerId || 0);
+  if(!playerId && !name) return;
+  if(name) row.dataset.tdxProfileName = detailNormalizeName(name);
   row.classList.add("is-player-link");
   row.setAttribute("role", "button");
   row.setAttribute("tabindex", "0");
@@ -97,7 +99,7 @@ function enhanceTournamentDetail(){
 
 function scheduleDetailEnhance(){
   window.clearTimeout(detailEnhanceTimer);
-  detailEnhanceTimer = window.setTimeout(enhanceTournamentDetail, 50);
+  detailEnhanceTimer = window.setTimeout(enhanceTournamentDetail, 35);
 }
 
 function openDetailPlayerProfile(playerId){
@@ -122,8 +124,14 @@ function openDetailPlayerProfile(playerId){
   window.setTimeout(open, 80);
 }
 
-async function openDetailPlayerByName(row){
-  if(!row || !detailTournamentId) return;
+async function openDetailPlayer(row){
+  if(!row) return;
+  const directId = Number(row.dataset.tdxPlayerId || 0);
+  if(directId){
+    openDetailPlayerProfile(directId);
+    return;
+  }
+  if(!detailTournamentId) return;
   const name = String(row.dataset.tdxProfileName || "");
   if(!name) return;
   row.classList.add("is-loading-player");
@@ -146,20 +154,20 @@ document.addEventListener("click", event => {
     scheduleDetailEnhance();
   }
 
-  const playerRow = source?.closest("[data-tdx-profile-name]");
+  const playerRow = source?.closest("[data-tdx-player-id],[data-tdx-profile-name]");
   if(playerRow){
     event.preventDefault();
     event.stopPropagation();
-    openDetailPlayerByName(playerRow).catch(() => undefined);
+    openDetailPlayer(playerRow).catch(() => undefined);
   }
 }, true);
 
 document.addEventListener("keydown", event => {
   if(!["Enter", " "].includes(event.key)) return;
-  const row = event.target instanceof Element ? event.target.closest("[data-tdx-profile-name]") : null;
+  const row = event.target instanceof Element ? event.target.closest("[data-tdx-player-id],[data-tdx-profile-name]") : null;
   if(!row) return;
   event.preventDefault();
-  openDetailPlayerByName(row).catch(() => undefined);
+  openDetailPlayer(row).catch(() => undefined);
 });
 
 const detailObserver = new MutationObserver(scheduleDetailEnhance);
