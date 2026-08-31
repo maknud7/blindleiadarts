@@ -1,15 +1,16 @@
 {
   "name": "blindleia-scolia-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Durable WebSocket bridge from Scolia External API to Blindleia Darts canonical scoring",
+  "description": "Durable WebSocket bridge from Scolia External API to Blindleia Darts canonical scoring with TEST lease routing",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js"
+    "start": "node server-router.js",
+    "start:legacy": "node server.js",
+    "check": "node --check server-router.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

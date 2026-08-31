@@ -65,7 +65,9 @@ copy_dir "$ROOT_DIR/static/club-logos" "$OUT_DIR/static/club-logos"
 copy_dir "$ROOT_DIR/static/sponsors" "$OUT_DIR/static/sponsors"
 copy_dir "$ROOT_DIR/static/players" "$OUT_DIR/static/players"
 
-if [[ -f "$ROOT_DIR/README.md" ]]; then
+# README is useful in TEST for migration/support work, but it is documentation,
+# not production runtime and can contain references to retired providers.
+if [[ "$ENVIRONMENT" == "test" && -f "$ROOT_DIR/README.md" ]]; then
   cp "$ROOT_DIR/README.md" "$OUT_DIR/README.md"
 fi
 

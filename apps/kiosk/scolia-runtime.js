@@ -1,13 +1,26 @@
 const API_ROOT = "../api/v1";
+const TEST_LEASE_API = "../api/kiosk-scolia-test-lease.php";
 const card = document.getElementById("scoliaScoring");
 const manual = document.getElementById("manualScoring");
+
+const TEST_MODE_KEY = "bd:kioskTestMode";
+const TEST_BOARD_ID_KEY = "bd:kioskTestPhysicalBoardId";
+const TEST_LEASE_ACTIVE_KEY = "bd:kioskScoliaLeaseActive";
+const TEST_LEASE_CODE_KEY = "bd:kioskScoliaLeaseKioskCode";
+const TEST_LEASE_PHYSICAL_KEY = "bd:kioskScoliaLeasePhysicalId";
 
 let status = null;
 let busy = false;
 let lastError = "";
+let leaseBusy = false;
+let leaseHeartbeatTimer = null;
 
 function kioskCode() { return localStorage.getItem("bd:kioskCode") || ""; }
 function pairingToken() { return localStorage.getItem("bd:kioskPairingToken") || ""; }
+function isTestEnvironment() { return document.body?.dataset?.appEnv === "test"; }
+function testModeActive() { return localStorage.getItem(TEST_MODE_KEY) === "1"; }
+function selectedPhysicalBoardId() { return Number(localStorage.getItem(TEST_BOARD_ID_KEY) || 0); }
+function testLeaseActive() { return localStorage.getItem(TEST_LEASE_ACTIVE_KEY) === "1"; }
 
 async function request(path, { method = "GET", body } = {}) {
   const headers = {};
@@ -23,6 +36,114 @@ async function request(path, { method = "GET", body } = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Scolia-feil (${response.status})`);
   return payload.data;
+}
+
+async function leaseRequest(action, body, { keepalive = false } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  const pairing = pairingToken();
+  if (pairing) headers["X-Kiosk-Pairing-Token"] = pairing;
+  const response = await fetch(`${TEST_LEASE_API}?action=${encodeURIComponent(action)}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body || {}),
+    cache: "no-store",
+    keepalive,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    const error = new Error(payload?.error?.message || `Scolia test-lease feilet (${response.status})`);
+    error.code = payload?.error?.code || "scolia_test_lease_failed";
+    throw error;
+  }
+  return payload.data;
+}
+
+function rememberLease(physicalId, code) {
+  localStorage.setItem(TEST_LEASE_ACTIVE_KEY, "1");
+  localStorage.setItem(TEST_LEASE_PHYSICAL_KEY, String(physicalId));
+  localStorage.setItem(TEST_LEASE_CODE_KEY, code);
+}
+
+function clearLeaseMarker() {
+  localStorage.removeItem(TEST_LEASE_ACTIVE_KEY);
+  localStorage.removeItem(TEST_LEASE_PHYSICAL_KEY);
+  localStorage.removeItem(TEST_LEASE_CODE_KEY);
+}
+
+async function releaseTestLease({ keepalive = false } = {}) {
+  if (!isTestEnvironment() || !testLeaseActive() || leaseBusy) return;
+  const code = localStorage.getItem(TEST_LEASE_CODE_KEY) || "";
+  const physicalId = Number(localStorage.getItem(TEST_LEASE_PHYSICAL_KEY) || 0);
+  if (!code || !physicalId || !pairingToken()) {
+    clearLeaseMarker();
+    return;
+  }
+  leaseBusy = true;
+  try {
+    await leaseRequest("release", { test_kiosk_code: code, physical_kiosk_id: physicalId }, { keepalive });
+  } catch (error) {
+    if (!keepalive) console.warn("Kunne ikke frigi Scolia test-lease:", error.message);
+  } finally {
+    clearLeaseMarker();
+    leaseBusy = false;
+  }
+}
+
+async function ensureTestLease() {
+  if (!isTestEnvironment() || leaseBusy) return;
+
+  const active = testModeActive();
+  const physicalId = selectedPhysicalBoardId();
+  const code = kioskCode();
+  const storedPhysicalId = Number(localStorage.getItem(TEST_LEASE_PHYSICAL_KEY) || 0);
+  const storedCode = localStorage.getItem(TEST_LEASE_CODE_KEY) || "";
+
+  if (!active || !physicalId || !code) {
+    if (testLeaseActive()) await releaseTestLease();
+    return;
+  }
+
+  if (testLeaseActive() && storedPhysicalId === physicalId && storedCode === code) return;
+  if (testLeaseActive()) await releaseTestLease();
+
+  leaseBusy = true;
+  try {
+    const data = await leaseRequest("acquire", { test_kiosk_code: code, physical_kiosk_id: physicalId });
+    if (!data?.leased) return; // Physical manual boards stay exactly as before.
+    rememberLease(physicalId, code);
+    lastError = "";
+    // The lease endpoint switches the isolated alias from manual to Scolia. The
+    // ordinary kiosk polling will pick that state up without touching PROD match data.
+    setTimeout(() => refresh().catch(() => undefined), 250);
+  } catch (error) {
+    lastError = error.message;
+    console.warn("Scolia test-lease kunne ikke aktiveres:", error.message);
+  } finally {
+    leaseBusy = false;
+  }
+}
+
+async function heartbeatTestLease() {
+  if (!isTestEnvironment()) return;
+  if (!testLeaseActive()) {
+    await ensureTestLease();
+    return;
+  }
+  const code = localStorage.getItem(TEST_LEASE_CODE_KEY) || "";
+  const physicalId = Number(localStorage.getItem(TEST_LEASE_PHYSICAL_KEY) || 0);
+  const currentPhysicalId = selectedPhysicalBoardId();
+  if (!testModeActive() || !code || !physicalId || currentPhysicalId !== physicalId) {
+    await releaseTestLease();
+    return;
+  }
+  try {
+    await leaseRequest("heartbeat", { test_kiosk_code: code, physical_kiosk_id: physicalId });
+  } catch (error) {
+    // A suspended PWA can outlive the three-minute lease. Re-acquire cleanly when it wakes.
+    clearLeaseMarker();
+    lastError = error.message;
+    await ensureTestLease();
+  }
 }
 
 function esc(value) {
@@ -76,10 +197,14 @@ function render() {
   const modeLabel = board.mode === "shadow" ? "Shadow – manuell score er fortsatt fasit" : board.mode === "live" ? "Live scoring" : "Av";
   const canResume = Number(board.needs_reconciliation) === 1 || Number(board.fallback_active) === 1;
   const connected = board.connection_state === "connected";
+  const testLeaseLabel = isTestEnvironment() && testLeaseActive()
+    ? `<p class="muted" style="font-weight:800">TEST · fysisk Scolia er midlertidig routet til isolert test-runtime.</p>`
+    : "";
   card.innerHTML = `
     <div class="scolia-pulse"></div>
     <div style="width:100%;display:grid;gap:10px">
       <div><p class="eyebrow">Scolia · ${esc(modeLabel)}</p><h3>${esc(connectionText(board))}</h3></div>
+      ${testLeaseLabel}
       ${darts.length ? `<div class="dart-summary"><span>Pil 1: ${esc(dartLabel(darts[0]))}</span><span>Pil 2: ${esc(dartLabel(darts[1]))}</span><span>Pil 3: ${esc(dartLabel(darts[2]))}</span></div>` : `<p class="muted">Venter på neste registrerte pil fra skiva.</p>`}
       ${warning ? `<p class="muted" style="font-weight:700">⚠ ${esc(warning)}</p>` : ""}
       ${lastError ? `<p class="muted" style="color:#ff9c9c">${esc(lastError)}</p>` : ""}
@@ -146,6 +271,18 @@ async function refresh() {
 }
 
 if (card) {
+  ensureTestLease().catch((error) => console.warn("Scolia test-lease init feilet:", error.message));
+  if (isTestEnvironment()) {
+    leaseHeartbeatTimer = window.setInterval(() => heartbeatTestLease().catch((error) => console.warn("Scolia test-lease heartbeat feilet:", error.message)), 60000);
+    window.setInterval(() => ensureTestLease().catch(() => undefined), 5000);
+    window.addEventListener("pagehide", () => {
+      if (!testLeaseActive()) return;
+      const storedPhysicalId = Number(localStorage.getItem(TEST_LEASE_PHYSICAL_KEY) || 0);
+      if (!testModeActive() || selectedPhysicalBoardId() !== storedPhysicalId) {
+        releaseTestLease({ keepalive: true }).catch(() => undefined);
+      }
+    });
+  }
   window.setInterval(() => refresh().catch(() => undefined), 750);
   refresh().catch(() => undefined);
 }
