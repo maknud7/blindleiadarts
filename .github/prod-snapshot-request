@@ -1,0 +1,3 @@
+create_fresh_prod_snapshot=YES
+requested_at=2026-08-31T10:18:00+02:00
+purpose=prepare_scolia_test_lease_production_migration
