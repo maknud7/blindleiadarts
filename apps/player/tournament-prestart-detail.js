@@ -1,6 +1,11 @@
 const API_ROOT = "../api/v1";
+const STATUS_TTL_MS = 15000;
 let activeTournamentId = 0;
 let refreshTimer = null;
+let openingTimer = null;
+let enhancing = false;
+const statusCache = new Map();
+const planCache = new Map();
 
 function token(){ return localStorage.getItem("bd:token") || ""; }
 function esc(value){ return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
@@ -20,9 +25,18 @@ style.textContent=`
 `;
 document.head.appendChild(style);
 
-document.addEventListener("click",(event)=>{ const open=event.target instanceof Element?event.target.closest("[data-open]"):null; if(open){ activeTournamentId=Number(open.getAttribute("data-open")||0); schedule(); }},true);
+document.addEventListener("click",(event)=>{
+  const open=event.target instanceof Element?event.target.closest("[data-open]"):null;
+  if(open){
+    activeTournamentId=Number(open.getAttribute("data-open")||0);
+    schedule(100);
+  }
+},true);
 
-function schedule(){ clearTimeout(refreshTimer); refreshTimer=setTimeout(enhance,80); }
+function schedule(delay=80){
+  clearTimeout(refreshTimer);
+  refreshTimer=setTimeout(enhance,delay);
+}
 
 function polishCurrentTab(dialog){
   const overviewActive=!!dialog.querySelector('[data-tab="overview"].active');
@@ -37,54 +51,126 @@ function polishCurrentTab(dialog){
   return overviewActive;
 }
 
-async function enhance(){
-  const dialog=document.querySelector("dialog.tdx-detail");
-  if(!dialog?.open||!activeTournamentId) return;
-  const action=dialog.querySelector('.tdx-actions [data-action="checkin"]');
-  const overviewActive=polishCurrentTab(dialog);
-  const overview=overviewActive?dialog.querySelector('.tdx-section'):null;
-  if(!action&&!overview) return;
-  const [statusData,planData]=await Promise.all([
-    token()?api(`/tournaments/${activeTournamentId}/check-in-status`,{auth:true}).catch(()=>null):Promise.resolve(null),
-    overview?api(`/tournaments/${activeTournamentId}/wizard-plan`).catch(()=>null):Promise.resolve(null)
-  ]);
-  const status=statusData||null;
-  if(action&&status){
-    const notOpen=String(status.window_state)==="not_open";
-    const closed=String(status.window_state)==="closed";
-    if(notOpen||closed){
-      action.disabled=true;
-      action.removeAttribute("data-action");
-      action.textContent=notOpen?`Sjekk inn · åpner ${formatClock(status.opens_at)}`:"Innsjekk stengt";
-    }
-    if(notOpen&&!dialog.querySelector(".tdx-prestart-note")){
-      const note=document.createElement("div"); note.className="tdx-prestart-note";
-      note.innerHTML=`<strong>Innsjekk åpner ${esc(formatClock(status.opens_at))}</strong><span>Knappen blir aktiv når innsjekken åpner.</span>`;
-      dialog.querySelector(".tdx-hero")?.appendChild(note);
-    }
+async function cachedStatus(id,{force=false}={}){
+  const cached=statusCache.get(id);
+  if(!force&&cached&&Date.now()-cached.at<STATUS_TTL_MS) return cached.data;
+  if(!token()) return null;
+  const data=await api(`/tournaments/${id}/check-in-status`,{auth:true}).catch(()=>null);
+  if(data) statusCache.set(id,{at:Date.now(),data});
+  return data;
+}
+
+async function cachedPlan(id){
+  if(planCache.has(id)) return planCache.get(id);
+  const promise=api(`/tournaments/${id}/wizard-plan`).catch(()=>null);
+  planCache.set(id,promise);
+  return promise;
+}
+
+function scheduleOpeningRefresh(status){
+  clearTimeout(openingTimer);
+  const opens=parseDate(status?.opens_at);
+  if(!opens) return;
+  const delay=opens.getTime()-Date.now()+250;
+  if(delay<=0||delay>24*60*60*1000) return;
+  openingTimer=setTimeout(()=>{
+    statusCache.delete(activeTournamentId);
+    schedule(0);
+  },delay);
+}
+
+function applyCheckinState(dialog,action,status){
+  if(!action||!status) return;
+  const state=String(status.window_state||"");
+  const notOpen=state==="not_open";
+  const closed=state==="closed";
+  action.dataset.prestartCheckin="1";
+
+  if(notOpen||closed){
+    action.disabled=true;
+    action.removeAttribute("data-action");
+    const text=notOpen?`Sjekk inn · åpner ${formatClock(status.opens_at)}`:"Innsjekk stengt";
+    if(action.textContent!==text) action.textContent=text;
+  }else{
+    action.disabled=false;
+    action.dataset.action="checkin";
+    if(action.textContent!=="Sjekk inn") action.textContent="Sjekk inn";
   }
-  const plan=planData?.plan||null;
-  if(overview&&plan&&!overview.querySelector(".tdx-format-lines")){
-    const format=String(plan.tournament_format||"");
-    const score=Number(plan.starting_score||0);
-    const groupBo=Number(plan.group_best_of_legs||0), playoffBo=Number(plan.playoff_best_of_legs||0), qualifiers=Number(plan.qualifiers_per_group||0);
-    if(format&&score){
-      const lines=[`<div class="tdx-format-line"><span>Format</span><strong>${esc(formatLabel(format))}</strong></div>`];
-      if(["groups_playoff","groups_only"].includes(format)){
-        lines.push(`<div class="tdx-format-line"><span>Gruppespill</span><strong>${score}${groupBo?` · Best av ${groupBo}`:""}</strong></div>`);
-      }
-      if(format==="groups_playoff"&&qualifiers){
-        lines.push(`<div class="tdx-format-line"><span>Videre</span><strong>Topp ${qualifiers} fra hver gruppe</strong></div>`);
-      }
-      if(format==="groups_playoff"&&playoffBo){
-        lines.push(`<div class="tdx-format-line"><span>Sluttspill</span><strong>${score} · Best av ${playoffBo}</strong></div>`);
-      }
-      if(format==="single_elimination"&&playoffBo){
-        lines.push(`<div class="tdx-format-line"><span>Kamper</span><strong>${score} · Best av ${playoffBo}</strong></div>`);
-      }
-      const box=document.createElement("div"); box.className="tdx-format-lines"; box.innerHTML=lines.join(""); overview.appendChild(box);
+
+  const note=dialog.querySelector(".tdx-prestart-note");
+  if(notOpen){
+    if(!note){
+      const next=document.createElement("div");
+      next.className="tdx-prestart-note";
+      next.innerHTML=`<strong>Innsjekk åpner ${esc(formatClock(status.opens_at))}</strong><span>Knappen blir aktiv når innsjekken åpner.</span>`;
+      dialog.querySelector(".tdx-hero")?.appendChild(next);
     }
+    scheduleOpeningRefresh(status);
+  }else{
+    note?.remove();
   }
 }
 
-const observer=new MutationObserver(schedule); observer.observe(document.body,{subtree:true,childList:true});
+function applyPlan(overview,plan){
+  if(!overview||!plan||overview.querySelector(".tdx-format-lines")) return;
+  const format=String(plan.tournament_format||"");
+  const score=Number(plan.starting_score||0);
+  const groupBo=Number(plan.group_best_of_legs||0), playoffBo=Number(plan.playoff_best_of_legs||0), qualifiers=Number(plan.qualifiers_per_group||0);
+  if(!format||!score) return;
+
+  const lines=[`<div class="tdx-format-line"><span>Format</span><strong>${esc(formatLabel(format))}</strong></div>`];
+  if(["groups_playoff","groups_only"].includes(format)){
+    lines.push(`<div class="tdx-format-line"><span>Gruppespill</span><strong>${score}${groupBo?` · Best av ${groupBo}`:""}</strong></div>`);
+  }
+  if(format==="groups_playoff"&&qualifiers){
+    lines.push(`<div class="tdx-format-line"><span>Videre</span><strong>Topp ${qualifiers} fra hver gruppe</strong></div>`);
+  }
+  if(format==="groups_playoff"&&playoffBo){
+    lines.push(`<div class="tdx-format-line"><span>Sluttspill</span><strong>${score} · Best av ${playoffBo}</strong></div>`);
+  }
+  if(format==="single_elimination"&&playoffBo){
+    lines.push(`<div class="tdx-format-line"><span>Kamper</span><strong>${score} · Best av ${playoffBo}</strong></div>`);
+  }
+  const box=document.createElement("div");
+  box.className="tdx-format-lines";
+  box.innerHTML=lines.join("");
+  overview.appendChild(box);
+}
+
+async function enhance(){
+  if(enhancing) return;
+  const dialog=document.querySelector("dialog.tdx-detail");
+  if(!dialog?.open||!activeTournamentId) return;
+
+  const action=dialog.querySelector('.tdx-actions [data-action="checkin"],.tdx-actions [data-prestart-checkin="1"]');
+  const overviewActive=polishCurrentTab(dialog);
+  const overview=overviewActive?dialog.querySelector('.tdx-section'):null;
+  const needsPlan=!!overview&&!overview.querySelector(".tdx-format-lines");
+  if(!action&&!needsPlan) return;
+
+  enhancing=true;
+  try{
+    const [status,planData]=await Promise.all([
+      action?cachedStatus(activeTournamentId):Promise.resolve(null),
+      needsPlan?cachedPlan(activeTournamentId):Promise.resolve(null),
+    ]);
+    if(!dialog.open) return;
+    if(action&&action.isConnected) applyCheckinState(dialog,action,status);
+    if(overview&&overview.isConnected) applyPlan(overview,planData?.plan||null);
+  }finally{
+    enhancing=false;
+  }
+}
+
+const dialog=document.querySelector("dialog.tdx-detail");
+if(dialog){
+  const observer=new MutationObserver(()=>{
+    if(!dialog.open) return;
+    const needsCheckin=!!dialog.querySelector('.tdx-actions [data-action="checkin"]');
+    const overview=dialog.querySelector('[data-tab="overview"].active')?dialog.querySelector('.tdx-section'):null;
+    const needsPlan=!!overview&&!overview.querySelector('.tdx-format-lines');
+    const needsPlayerPolish=!!dialog.querySelector('[data-tab="players"].active .tdx-person small');
+    if(needsCheckin||needsPlan||needsPlayerPolish) schedule(60);
+  });
+  observer.observe(dialog,{subtree:true,childList:true});
+}
