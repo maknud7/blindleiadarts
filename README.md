@@ -38,6 +38,8 @@ The platform is designed to run the venue locally without depending on Challonge
 - Provider boundaries: Challonge and future systems plug in through generic adapters.
 - Event-oriented design: state changes should align with explicit domain events.
 - Venue runtime independence: local tournament operations must continue without external availability.
+- Reuse before duplication: when the same domain data, meaning, calculation or interaction already exists elsewhere in the platform, reuse the existing canonical API field, calculation, component or UI pattern instead of creating a parallel variant. Only introduce a new variant when the context genuinely requires different semantics or behavior, and document why.
+- Shared domain concepts should look and behave consistently across surfaces. A match card, player link, statistic or status with the same meaning should have one canonical implementation where practical, with surface-specific wrappers limited to layout or context rather than duplicated business logic.
 
 ## Current Product Surfaces
 
@@ -69,6 +71,8 @@ The platform is designed to run the venue locally without depending on Challonge
 ## Key Rule
 
 Keep the core match engine local. Connector logic must not leak provider-specific assumptions into UI or domain code.
+
+Before adding a new calculation, field, component or interaction for an existing concept, search for an existing canonical implementation and reuse it when the semantics are the same.
 
 ## Deployment
 
