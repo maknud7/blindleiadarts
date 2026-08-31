@@ -12,11 +12,16 @@
     return document.body.classList.contains("scolia-live-active");
   }
 
+  function setLabel(label) {
+    const next = label || DEFAULT_LABEL;
+    if (undoButton.textContent !== next) undoButton.textContent = next;
+  }
+
   function syncUndoButton() {
     if (!isScoliaLive()) {
       undoButton.classList.remove("scolia-routing-active");
       undoButton.removeAttribute("data-scolia-undo");
-      if (undoButton.textContent !== DEFAULT_LABEL) undoButton.textContent = DEFAULT_LABEL;
+      setLabel(DEFAULT_LABEL);
       return;
     }
 
@@ -25,7 +30,7 @@
     undoButton.setAttribute("data-scolia-undo", "1");
 
     if (!scoliaUndo) {
-      undoButton.textContent = DEFAULT_LABEL;
+      setLabel(DEFAULT_LABEL);
       undoButton.disabled = true;
       return;
     }
@@ -33,7 +38,7 @@
     const label = String(scoliaUndo.textContent || DEFAULT_LABEL)
       .replace(/^↶\s*/, "")
       .replace("Scolia-", "");
-    undoButton.textContent = label || DEFAULT_LABEL;
+    setLabel(label);
     undoButton.disabled = Boolean(scoliaUndo.disabled);
   }
 
