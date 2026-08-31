@@ -1,3 +1,5 @@
+import { resolveBoardScoringMode, shouldPersistRuntimeScoring } from "./board-admin-core.mjs?v=20260831-1530";
+
 const API_ROOT = "../api/v1";
 
 const kioskList = document.getElementById("kioskList");
@@ -7,6 +9,11 @@ const kioskForm = document.getElementById("kioskForm");
 const kioskScoringMode = document.getElementById("kioskScoringMode");
 const kioskScoliaSerialRow = document.getElementById("kioskScoliaSerialRow");
 const kioskScoliaSerial = document.getElementById("kioskScoliaSerial");
+const isTestEnvironment = document.documentElement.dataset.appEnv === "test"
+  || document.body?.dataset.appEnv === "test"
+  || /(^|[.-])test([.-]|$)/i.test(window.location.hostname)
+  || /\/test(?:\/|$)/i.test(window.location.pathname);
+let canonicalBoardCache = { clubId: 0, promise: null };
 
 function token() { return localStorage.getItem("bd:token") || ""; }
 function clubId() { return Number(clubSelect?.value || localStorage.getItem("bd:selectedClubId") || 0); }
@@ -20,6 +27,40 @@ async function requestJson(url, { method = "GET", body } = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
   return payload.data;
+}
+
+function resetCanonicalBoardCache() {
+  canonicalBoardCache = { clubId: 0, promise: null };
+}
+
+async function canonicalBoardMap(requestedClubId) {
+  if (requestedClubId <= 0) return new Map();
+  if (canonicalBoardCache.clubId !== requestedClubId || !canonicalBoardCache.promise) {
+    canonicalBoardCache = {
+      clubId: requestedClubId,
+      promise: requestJson(`${API_ROOT}/clubs/${requestedClubId}/scolia`)
+        .then((data) => {
+          const boards = new Map();
+          for (const board of data?.boards || []) {
+            const ids = [Number(board.id || 0), Number(board.runtime_kiosk_id || board.physical_kiosk_id || 0)];
+            ids.filter((id) => id > 0).forEach((id) => boards.set(id, board));
+          }
+          return boards;
+        })
+        .catch(() => new Map()),
+    };
+  }
+  return canonicalBoardCache.promise;
+}
+
+async function syncCanonicalBoardBadge(id, badge) {
+  const requestedClubId = clubId();
+  const boards = await canonicalBoardMap(requestedClubId);
+  if (!badge.isConnected || requestedClubId !== clubId()) return;
+  const canonical = boards.get(Number(id));
+  if (!canonical) return;
+  badge.textContent = resolveBoardScoringMode({}, canonical) === "scolia" ? "Scolia" : "Manuell";
+  badge.dataset.configurationScope = canonical.configuration_scope || "";
 }
 
 function ensureStyles() {
@@ -118,12 +159,16 @@ async function openEditor(id) {
   const board = (data.items || []).find((item) => Number(item.id) === Number(id));
   if (!board) throw new Error("Skiva finnes ikke lenger.");
   const s = scolia?.board || null;
+  const canonicalScoring = resolveBoardScoringMode(board, s);
+  const configurationScope = scolia?.configuration_scope || s?.configuration_scope || "";
+  const editorForm = document.getElementById("boardEditorForm");
+  editorForm.dataset.configurationScope = configurationScope;
   document.getElementById("boardEditorId").value = String(board.id);
   document.getElementById("boardEditorNumber").value = String(board.board_number || "");
   document.getElementById("boardEditorName").value = board.name || `Skive ${board.board_number}`;
   document.getElementById("boardEditorSponsor").value = board.sponsor_label || "";
   document.getElementById("boardEditorSponsorLogo").value = board.sponsor_logo_url || "";
-  document.getElementById("boardEditorScoring").value = board.scoring_mode === "scolia" ? "scolia" : "manual";
+  document.getElementById("boardEditorScoring").value = canonicalScoring;
   document.getElementById("boardEditorScoliaSerial").value = s?.serial_number || "";
   document.getElementById("boardEditorActive").checked = Number(board.is_active ?? 1) === 1;
   document.getElementById("boardEditorTitle").textContent = board.name || `Skive ${board.board_number}`;
@@ -139,7 +184,7 @@ async function openEditor(id) {
     : `<span class="muted">Nettbrett</span><strong>Ikke paret</strong><small class="muted">Et nytt nettbrett kan kobles via QR-pairing.</small>`;
   const runtime = document.getElementById("boardScoliaRuntime");
   const actions = document.getElementById("boardScoliaActions");
-  const isScolia = board.scoring_mode === "scolia";
+  const isScolia = canonicalScoring === "scolia";
   runtime.classList.toggle("hidden", !isScolia);
   actions.classList.toggle("hidden", !isScolia);
   runtime.innerHTML = isScolia ? `<span class="muted">Scolia-status</span><strong>${escapeHtml(s?.serial_number || "Ingen ID")}</strong><small class="muted">${escapeHtml(runtimeText(s))}</small>` : "";
@@ -171,14 +216,19 @@ async function saveEditor(event) {
       ? { serial_number: serial, mode: "live", auto_fallback_to_manual: true }
       : { mode: "off" }
     });
-    await requestJson(`${API_ROOT}/clubs/${clubId()}/kiosks/${id}`, { method: "PATCH", body: {
+    const kioskBody = {
       board_number: boardNumber,
       name,
       sponsor_label: document.getElementById("boardEditorSponsor").value.trim(),
       sponsor_logo_url: document.getElementById("boardEditorSponsorLogo").value.trim(),
-      scoring_mode: scoring,
       is_active: document.getElementById("boardEditorActive").checked ? 1 : 0,
-    }});
+    };
+    const configurationScope = document.getElementById("boardEditorForm")?.dataset.configurationScope || "";
+    if (shouldPersistRuntimeScoring({ isTestEnvironment, configurationScope })) {
+      kioskBody.scoring_mode = scoring;
+    }
+    await requestJson(`${API_ROOT}/clubs/${clubId()}/kiosks/${id}`, { method: "PATCH", body: kioskBody });
+    resetCanonicalBoardCache();
     message.className = "board-editor-message good"; message.textContent = "Skiva er lagret.";
     setTimeout(() => { closeEditor(); refreshButton?.click(); }, 450);
   } catch (error) {
@@ -216,8 +266,10 @@ function decorateRows() {
       const badge = document.createElement("span");
       badge.className = "badge neutral board-source-badge";
       badge.textContent = label;
+      badge.dataset.kioskId = String(id);
       source.replaceWith(badge);
       source = badge;
+      void syncCanonicalBoardBadge(id, badge);
     }
     if (row.querySelector(".board-edit-button")) return;
     const controls = row.querySelector(".board-controls") || row;
@@ -264,6 +316,8 @@ if (kioskList) observer.observe(kioskList, { childList: true, subtree: true });
 decorateRows();
 kioskScoringMode?.addEventListener("change", renderCreateScolia);
 kioskForm?.addEventListener("submit", createStandaloneScoliaBoard, true);
+refreshButton?.addEventListener("click", resetCanonicalBoardCache);
+clubSelect?.addEventListener("change", resetCanonicalBoardCache);
 renderCreateScolia();
 
 const kioskIntro = document.querySelector("#kiosks .panel-head .muted");

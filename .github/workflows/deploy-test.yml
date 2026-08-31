@@ -110,6 +110,7 @@ jobs:
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
           test -f dist/test/admin/scolia-admin.js
+          test -f dist/test/admin/board-admin-core.mjs
           test -f dist/test/admin/season-admin.js
           test -f dist/test/admin/checkin-admin-v2.js
           test -f dist/test/admin/tournament-wizard-v2.js
@@ -222,6 +223,7 @@ jobs:
           check_contains "admin members" "$base/admin/" "Medlemmer"
           check_contains "admin equipment" "$base/admin/" "Utstyr"
           check_contains "admin UX" "$base/admin/admin-ux.js" "Neste anbefalte steg"
+          check_contains "canonical board scoring" "$base/admin/board-admin-core.mjs" "production_hardware"
           check_contains "activity admin" "$base/admin/activity-admin.js" "Aktivitet"
           check_contains "public statistics" "$base/player/" "Statistikk"
           check_contains "player profile" "$base/player/" "Min profil"

@@ -58,6 +58,9 @@ jobs:
           find apps packages/ui-assets -type f -name '*.js' -print0 \
             | xargs -0 -n1 node --check
 
+      - name: Board admin canonical Scolia checks
+        run: node infra/tests/board_admin_core_test.mjs
+
       - name: Email-only auth surface check
         run: |
           set -Eeuo pipefail
