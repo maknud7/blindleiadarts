@@ -1,6 +1,6 @@
-release_sha=7e5e0963954cb427a8c21e80dc927a7995156f90
+release_sha=73585c131389460e87d2bfeaa50d549cab075e32
 backup_confirmed=YES
-migration_review_confirmed=YES
-requested_at=2026-08-31T13:18:00+02:00
-purpose=deploy_scolia_canonical_prod_hardware_settings
-backup_prefix=bd_backup_20260831_111711_
+migration_review_confirmed=NO
+requested_at=2026-08-31T14:20:00+02:00
+purpose=deploy_scolia_bridge_health_status
+backup_prefix=bd_backup_20260831_121559_
