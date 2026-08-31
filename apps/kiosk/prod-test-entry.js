@@ -6,6 +6,8 @@
   const TEST_LEASE_ACTIVE_KEY = "bd:kioskScoliaLeaseActive";
   const TEST_LEASE_CODE_KEY = "bd:kioskScoliaLeaseKioskCode";
   const TEST_LEASE_PHYSICAL_KEY = "bd:kioskScoliaLeasePhysicalId";
+  const TEST_EMBEDDED_KEY = "bd:kioskTestEmbedded";
+  const EMBEDDED_PHYSICAL_KEY = "bd:kioskEmbeddedTestPhysicalId";
 
   function env() {
     return document.body?.dataset?.appEnv || "prod";
@@ -13,17 +15,6 @@
 
   function pairingToken() {
     return localStorage.getItem("bd:kioskPairingToken") || "";
-  }
-
-  function ensureTestToken() {
-    let token = pairingToken();
-    if (!token) {
-      token = globalThis.crypto?.randomUUID
-        ? globalThis.crypto.randomUUID()
-        : `test-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem("bd:kioskPairingToken", token);
-    }
-    return token;
   }
 
   function testOrigin() {
@@ -70,6 +61,50 @@
     node.style.color = tone === "bad" ? "#a33" : "";
   }
 
+  function closeEmbeddedTest({ refresh = true } = {}) {
+    sessionStorage.removeItem(EMBEDDED_PHYSICAL_KEY);
+    document.getElementById("prodTestRuntimeOverlay")?.remove();
+    document.body?.classList.remove("prod-test-runtime-open");
+    if (refresh) {
+      try {
+        if (typeof refreshSnapshot === "function") refreshSnapshot();
+        else document.getElementById("refreshButton")?.click();
+      } catch {
+        // PROD remains usable even if the immediate refresh hook is unavailable.
+      }
+    }
+  }
+
+  function openEmbeddedTest(physicalId) {
+    if (env() !== "prod" || !Number(physicalId)) return false;
+    if (document.getElementById("prodTestRuntimeOverlay")) return true;
+
+    sessionStorage.setItem(EMBEDDED_PHYSICAL_KEY, String(Number(physicalId)));
+    const target = new URL("/kiosk/", testOrigin());
+    target.searchParams.set("testmode", "1");
+    target.searchParams.set("physical_board_id", String(Number(physicalId)));
+    target.searchParams.set("return_url", window.location.href);
+    target.searchParams.set("embedded", "1");
+
+    const overlay = document.createElement("div");
+    overlay.id = "prodTestRuntimeOverlay";
+    overlay.className = "prod-test-runtime-overlay";
+    overlay.innerHTML = `
+      <div class="prod-test-runtime-loading" id="prodTestRuntimeLoading">
+        <span class="spinner"></span>
+        <strong>Starter isolert testmodus …</strong>
+      </div>
+      <iframe id="prodTestRuntimeFrame" title="Blindleia TEST-kiosk" allow="fullscreen"></iframe>`;
+    const frame = overlay.querySelector("iframe");
+    frame.addEventListener("load", () => {
+      document.getElementById("prodTestRuntimeLoading")?.classList.add("hidden");
+    });
+    frame.src = target.href;
+    document.body.appendChild(overlay);
+    document.body.classList.add("prod-test-runtime-open");
+    return true;
+  }
+
   function ensureProdControl() {
     if (env() !== "prod") return;
     const meta = document.getElementById("settingsMeta");
@@ -83,7 +118,7 @@
     card.innerHTML = `
       <div>
         <strong>Testmodus</strong>
-        <small class="muted" id="prodTestModeHelp">Bruk denne fysiske skiva mot isolert TEST-runtime. PROD-pairingen beholdes og gjenopprettes når testen avsluttes.</small>
+        <small class="muted" id="prodTestModeHelp">Bruk denne fysiske skiva mot isolert TEST-runtime. Du blir på PROD-terminalen, mens kamp og scoring går til TEST.</small>
       </div>
       <div class="test-mode-settings-actions">
         <button id="prodStartTestMode" type="button" class="ghost-button test-mode-settings-button" data-kiosk-admin-control>Start testmodus</button>
@@ -104,65 +139,11 @@
       }
 
       if (button) button.disabled = true;
-      const target = new URL("/kiosk/", testOrigin());
-      target.searchParams.set("testmode", "1");
-      target.searchParams.set("physical_board_id", String(kiosk.id));
-      target.searchParams.set("return_url", window.location.href);
-      window.location.assign(target.href);
-    });
-  }
-
-  async function autoEnterTestFromProd() {
-    if (env() !== "test") return false;
-    const params = new URLSearchParams(window.location.search);
-    const physicalId = Number(params.get("physical_board_id") || 0);
-    if (!physicalId) return false;
-
-    const returnUrl = safeReturnUrl(params.get("return_url") || "");
-    if (returnUrl) localStorage.setItem(TEST_RETURN_URL_KEY, returnUrl);
-    localStorage.setItem(TEST_MODE_KEY, "1");
-
-    const token = ensureTestToken();
-    try {
-      const response = await fetch("../api/kiosk-test-mode.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Kiosk-Pairing-Token": token },
-        body: JSON.stringify({ kiosk_id: physicalId, source: "physical" }),
-        cache: "no-store",
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Kunne ikke starte testmodus (${response.status})`);
-
-      const data = payload.data;
-      localStorage.setItem("bd:kioskCode", data.kiosk.code);
-      localStorage.setItem(TEST_BOARD_ID_KEY, String(data.source_board?.id || data.physical_board?.id || physicalId));
-      localStorage.setItem(TEST_BOARD_LABEL_KEY, `${data.kiosk.name || `Skive ${data.kiosk.board_number || ""}`}${data.physical_board?.scoring_mode === "scolia" ? " · Scolia" : ""}`);
-      localStorage.removeItem("bd:kioskPairingRequestCode");
-      localStorage.removeItem("bd:kioskPairingExpires");
-
-      const clean = new URL(window.location.href);
-      clean.searchParams.delete("testmode");
-      clean.searchParams.delete("physical_board_id");
-      clean.searchParams.delete("return_url");
-      window.location.replace(clean.href);
-      return true;
-    } catch (error) {
-      console.error("Kunne ikke starte testmodus fra PROD:", error);
-      const topbar = document.querySelector(".terminal-topbar");
-      if (topbar && !document.getElementById("prodTestEntryError")) {
-        const box = document.createElement("div");
-        box.id = "prodTestEntryError";
-        box.className = "test-mode-panel";
-        box.innerHTML = `<span class="test-mode-badge">Testmodus</span><strong>Kunne ikke starte testmodus</strong><small class="muted"></small><button type="button" class="ghost-button">Tilbake til PROD</button>`;
-        box.querySelector("small").textContent = error.message || "Ukjent feil";
-        box.querySelector("button").addEventListener("click", () => {
-          const saved = localStorage.getItem(TEST_RETURN_URL_KEY) || "";
-          if (saved) window.location.replace(saved);
-        });
-        topbar.insertAdjacentElement("afterend", box);
+      if (!openEmbeddedTest(kiosk.id)) {
+        if (button) button.disabled = false;
+        setMessage("Kunne ikke åpne isolert TEST-runtime.", "bad");
       }
-      return false;
-    }
+    });
   }
 
   async function releaseLeaseBeforeReturn() {
@@ -208,6 +189,7 @@
       TEST_LEASE_ACTIVE_KEY,
       TEST_LEASE_CODE_KEY,
       TEST_LEASE_PHYSICAL_KEY,
+      TEST_EMBEDDED_KEY,
       "bd:kioskPreTestCode",
       "bd:kioskCode",
     ].forEach((key) => localStorage.removeItem(key));
@@ -215,12 +197,20 @@
 
   async function returnToProd(button) {
     const returnUrl = safeReturnUrl(localStorage.getItem(TEST_RETURN_URL_KEY) || "");
-    if (!returnUrl) return false;
     if (button) button.disabled = true;
     await releaseLeaseBeforeReturn();
     await unpairTestAlias();
+    const embedded = localStorage.getItem(TEST_EMBEDDED_KEY) === "1" && window.parent !== window;
     clearTestRuntimeMarkers();
     localStorage.removeItem(TEST_RETURN_URL_KEY);
+
+    if (embedded) {
+      const targetOrigin = returnUrl ? new URL(returnUrl).origin : window.location.origin.replace(/^https:\/\/test\./i, "https://");
+      window.parent.postMessage({ type: "bd:kiosk-test-exit" }, targetOrigin);
+      return true;
+    }
+
+    if (!returnUrl) return false;
     window.location.replace(returnUrl);
     return true;
   }
@@ -237,8 +227,19 @@
     });
   }, true);
 
+  window.addEventListener("message", (event) => {
+    if (env() !== "prod" || event.origin !== testOrigin()) return;
+    if (event.data?.type === "bd:kiosk-test-exit") {
+      closeEmbeddedTest({ refresh: true });
+    }
+  });
+
   const observer = new MutationObserver(ensureProdControl);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   ensureProdControl();
-  autoEnterTestFromProd().catch((error) => console.error(error));
+
+  if (env() === "prod") {
+    const rememberedPhysicalId = Number(sessionStorage.getItem(EMBEDDED_PHYSICAL_KEY) || 0);
+    if (rememberedPhysicalId > 0) openEmbeddedTest(rememberedPhysicalId);
+  }
 })();
