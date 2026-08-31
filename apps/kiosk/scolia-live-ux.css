@@ -1,0 +1,315 @@
+/* Scolia scoring is a display surface first: large live darts, minimal controls. */
+body.scolia-live-active #scoliaScoring,
+body.scolia-live-active #undoButton {
+  display: none !important;
+}
+
+.scolia-live-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.scolia-live-header,
+.scolia-live-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.scolia-live-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #53697d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.scolia-live-state strong {
+  color: #173047;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.scolia-live-state > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scolia-live-dot {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  border-radius: 999px;
+  background: #16a86b;
+  box-shadow: 0 0 0 4px rgba(22,168,107,.12);
+}
+
+.scolia-live-auto {
+  flex: 0 0 auto;
+  color: #697d90;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.scolia-live-content {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) minmax(112px, .8fr);
+  gap: 10px;
+}
+
+.scolia-live-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.scolia-live-title > span {
+  color: #173047;
+  font-size: clamp(21px, 3.5vw, 29px);
+  font-weight: 950;
+  letter-spacing: -.025em;
+}
+
+.scolia-live-title small {
+  overflow: hidden;
+  color: #6b7f92;
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scolia-darts-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scolia-dart-slot {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 2px solid #d8e2ea;
+  border-radius: 18px;
+  background: #f7fafc;
+}
+
+.scolia-dart-slot.has-dart {
+  border-color: #8db4d6;
+  background: #eef6fb;
+}
+
+.scolia-dart-slot span {
+  color: #6a7e90;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.scolia-dart-slot strong {
+  max-width: 100%;
+  color: #142d44;
+  font-size: clamp(46px, 8.5vw, 76px);
+  font-weight: 950;
+  line-height: .9;
+  letter-spacing: -.055em;
+  white-space: nowrap;
+}
+
+.scolia-total {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-items: end;
+  gap: 16px;
+  padding: 8px 18px;
+  border-radius: 18px;
+  background: #edf3f7;
+}
+
+.scolia-total span {
+  justify-self: start;
+  color: #61768a;
+  font-size: 14px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.scolia-total strong {
+  max-width: 100%;
+  color: #102b43;
+  font-size: clamp(72px, 14vw, 118px);
+  font-weight: 950;
+  line-height: .78;
+  letter-spacing: -.065em;
+}
+
+.scolia-total.is-bust span,
+.scolia-total.is-bust strong {
+  color: #8a2f2f;
+}
+
+.scolia-live-footer {
+  min-height: 44px;
+}
+
+.scolia-live-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: #6a7e90;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scolia-undo-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 15px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.scolia-live-error {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 64px;
+  z-index: 2;
+  padding: 9px 12px;
+  border: 1px solid rgba(150,45,45,.25);
+  border-radius: 10px;
+  background: #fff1f1;
+  color: #8a2f2f;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+@media (orientation: portrait) and (min-width: 480px) and (min-height: 720px) {
+  body.scolia-live-active .scoreboard {
+    grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr) !important;
+  }
+
+  body.scolia-live-active .player-card h2 {
+    min-height: 31px !important;
+    font-size: clamp(19px, 3.8vw, 28px) !important;
+  }
+
+  body.scolia-live-active .remaining {
+    font-size: clamp(63px, 12vw, 86px) !important;
+    line-height: .82 !important;
+  }
+
+  body.scolia-live-active .match-center {
+    justify-content: center !important;
+  }
+
+  .scolia-live-surface {
+    padding: 9px 11px !important;
+    gap: 6px !important;
+    border-radius: 16px !important;
+  }
+
+  .scolia-live-header {
+    min-height: 26px;
+  }
+
+  .scolia-live-content {
+    grid-template-rows: 30px minmax(0, 1fr) minmax(104px, .72fr);
+    gap: 7px;
+  }
+
+  .scolia-live-title > span {
+    font-size: clamp(19px, 3.6vw, 26px);
+  }
+
+  .scolia-live-title small {
+    font-size: 10px;
+  }
+
+  .scolia-darts-grid {
+    gap: 7px;
+  }
+
+  .scolia-dart-slot {
+    border-radius: 14px;
+  }
+
+  .scolia-dart-slot strong {
+    font-size: clamp(48px, 9vw, 72px);
+  }
+
+  .scolia-total {
+    padding: 5px 14px;
+    border-radius: 14px;
+  }
+
+  .scolia-total strong {
+    font-size: clamp(78px, 15vw, 112px);
+  }
+
+  .scolia-live-footer {
+    min-height: 40px;
+  }
+
+  .scolia-undo-button {
+    min-height: 40px !important;
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+  }
+}
+
+@media (max-width: 540px) {
+  .scolia-live-state > span:last-child,
+  .scolia-live-auto,
+  .scolia-live-hint {
+    display: none;
+  }
+
+  .scolia-live-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .scolia-live-content {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .scolia-dart-slot strong {
+    font-size: clamp(34px, 11vw, 56px);
+  }
+
+  .scolia-total strong {
+    font-size: clamp(64px, 20vw, 96px);
+  }
+}
