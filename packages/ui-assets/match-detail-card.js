@@ -30,11 +30,25 @@ function winningCheckout(match,legs,visits){
   const winnerId=Number(finalLeg?.winner_player_id||0);
   if(!winnerId)return {a:null,b:null};
   const legNo=Number(finalLeg.leg_number||0);
-  const winningVisit=[...visits].filter(v=>Number(v.leg_number||0)===legNo&&Number(v.player_id||0)===winnerId&&!Number(v.is_bust||0)&&Number(v.remaining_after)===0).at(-1);
+  const winningVisit=[...visits].filter(v=>Number(v.leg_number||0)===legNo&&Number(v.player_id||0)===winnerId&&!Number(v.is_bust||0)&&Number(v.remaining_after)===0).sort((x,y)=>Number(x.visit_number||0)-Number(y.visit_number||0)).at(-1);
   const checkout=first(finalLeg?.winning_checkout,winningVisit?.score);
   if(winnerId===Number(match.player_a_id))return {a:checkout,b:null};
   if(winnerId===Number(match.player_b_id))return {a:null,b:checkout};
   return {a:null,b:null};
+}
+function orderedLegVisits(leg,visits,match){
+  const startId=Number(leg?.starting_player_id||0);
+  const aId=Number(match?.player_a_id||0),bId=Number(match?.player_b_id||0);
+  const otherId=startId===aId?bId:startId===bId?aId:0;
+  return [...visits].sort((x,y)=>{
+    const xv=Number(x.visit_number||0),yv=Number(y.visit_number||0);
+    if(xv!==yv)return xv-yv;
+    const xp=Number(x.player_id||0),yp=Number(y.player_id||0);
+    if(startId&&xp!==yp){if(xp===startId)return -1;if(yp===startId)return 1;if(otherId&&xp===otherId)return -1;if(otherId&&yp===otherId)return 1;}
+    const xc=String(x.created_at||""),yc=String(y.created_at||"");
+    if(xc!==yc)return xc.localeCompare(yc);
+    return Number(x.id||0)-Number(y.id||0);
+  });
 }
 
 export async function openSharedMatchCard(matchId){
@@ -50,7 +64,7 @@ export async function openSharedMatchCard(matchId){
     <div class="bd-shared-match-meta">${match.best_of_legs?`<span>Best av ${Number(match.best_of_legs)}</span>`:""}<span>${esc(({completed:"Ferdig",in_progress:"Pågår",assigned:"Tildelt",pending:"Ikke startet"})[String(match.status||"")]||String(match.status||""))}</span></div>
     <section class="bd-shared-match-elo"><div class="bd-shared-match-elo-grid">${eloPlayer(nameA,eloEvent?.rating_a_before,eloEvent?.rating_a_after)}${eloPlayer(nameB,eloEvent?.rating_b_before,eloEvent?.rating_b_after)}</div></section>
     <div class="bd-shared-match-board"><div class="bd-shared-match-names"><strong>${esc(nameA)}</strong><span></span><strong>${esc(nameB)}</strong></div>${row("3DA",a.average,b.average,2,"primary")}${row("First 9",a.first_nine_average,b.first_nine_average,2)}${row("Vinnende checkout",checkout.a,checkout.b,0,"checkout")}${row("100+",a.score_100_plus,b.score_100_plus)}${row("140+",a.score_140_plus,b.score_140_plus)}${row("180",a.score_180,b.score_180)}</div>
-    <div class="bd-shared-match-legs"><strong>Legs</strong>${legs.length?legs.map(leg=>{const lv=visitsByLeg.get(Number(leg.leg_number))||[];const winner=Number(leg.winner_player_id)===Number(match.player_a_id)?nameA:Number(leg.winner_player_id)===Number(match.player_b_id)?nameB:"—";return `<article class="bd-shared-match-leg"><button type="button" data-shared-leg="${Number(leg.leg_number)}"><span><strong>Leg ${Number(leg.leg_number)}</strong><small>${esc(winner)} vant</small></span><span>3DA ${val(leg.player_a_average,2)} / ${val(leg.player_b_average,2)}</span></button><div class="bd-shared-match-visits hidden" data-shared-visits="${Number(leg.leg_number)}">${lv.length?lv.map(v=>`<div class="bd-shared-visit"><span>${Number(v.player_id)===Number(match.player_a_id)?esc(nameA):esc(nameB)}</span><strong>${Number(v.score)}</strong><span>${v.is_bust?"Bust":`${Number(v.remaining_after)} igjen`}</span></div>`).join(""):'<p class="muted">Ingen kastdetaljer lagret.</p>'}</div></article>`;}).join(""):'<p class="muted">Ingen leg-detaljer lagret.</p>'}</div>`;
+    <div class="bd-shared-match-legs"><strong>Legs</strong>${legs.length?legs.map(leg=>{const raw=visitsByLeg.get(Number(leg.leg_number))||[];const lv=orderedLegVisits(leg,raw,match);const winner=Number(leg.winner_player_id)===Number(match.player_a_id)?nameA:Number(leg.winner_player_id)===Number(match.player_b_id)?nameB:"—";return `<article class="bd-shared-match-leg"><button type="button" data-shared-leg="${Number(leg.leg_number)}"><span><strong>Leg ${Number(leg.leg_number)}</strong><small>${esc(winner)} vant</small></span><span>3DA ${val(leg.player_a_average,2)} / ${val(leg.player_b_average,2)}</span></button><div class="bd-shared-match-visits hidden" data-shared-visits="${Number(leg.leg_number)}">${lv.length?lv.map(v=>`<div class="bd-shared-visit"><span>${Number(v.player_id)===Number(match.player_a_id)?esc(nameA):esc(nameB)}</span><strong>${Number(v.score)}</strong><span>${v.is_bust?"Bust":`${Number(v.remaining_after)} igjen`}</span></div>`).join(""):'<p class="muted">Ingen kastdetaljer lagret.</p>'}</div></article>`;}).join(""):'<p class="muted">Ingen leg-detaljer lagret.</p>'}</div>`;
     root.querySelector(".bd-shared-match-close")?.addEventListener("click",()=>dialog.close());root.querySelectorAll("[data-shared-leg]").forEach(btn=>btn.addEventListener("click",()=>root.querySelector(`[data-shared-visits="${btn.dataset.sharedLeg}"]`)?.classList.toggle("hidden")));
   }catch(error){root.innerHTML=`<div class="bd-shared-match-head"><h2>Kunne ikke hente kampen</h2><p>${esc(error.message)}</p><button type="button" class="bd-shared-match-close">×</button></div>`;root.querySelector(".bd-shared-match-close")?.addEventListener("click",()=>dialog.close());}
 }
