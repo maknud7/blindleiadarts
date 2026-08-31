@@ -68,6 +68,13 @@ final class EloReadRepository
         }
         unset($row);
 
+        // Canonical ranking rule: a player does not belong in an ELO ranking
+        // until at least one ELO-rated match has actually been played.
+        $rows = array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => (int) ($row['elo_matches_played'] ?? 0) > 0
+        ));
+
         usort($rows, static function (array $a, array $b): int {
             $rating = ((float) $b['elo_rating']) <=> ((float) $a['elo_rating']);
             return $rating !== 0 ? $rating : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
