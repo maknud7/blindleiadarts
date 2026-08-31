@@ -13,10 +13,16 @@ dialog.tdx-detail .tdx-content{
   overflow-x:hidden!important;
   overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
+  align-content:start!important;
+  grid-auto-rows:max-content;
 }
 
 dialog.tdx-detail .tdx-page-head{
   flex:0 0 auto;
+}
+
+dialog.tdx-detail .tdx-detail-tabs{
+  align-self:start!important;
 }
 
 .tdx-person.is-player-link,
@@ -165,12 +171,15 @@ dialog.tdx-detail .tdx-page-head{
     grid-template-columns:none!important;
     gap:6px!important;
     min-width:0!important;
+    min-height:54px!important;
+    max-height:54px!important;
     overflow:visible!important;
     padding:6px!important;
     border:1px solid #dbe5ee!important;
     border-radius:14px!important;
     background:#edf2f7!important;
     box-shadow:0 7px 16px rgba(15,49,82,.08)!important;
+    align-items:stretch!important;
   }
 
   dialog.tdx-detail .tdx-detail-tabs button,
@@ -178,7 +187,9 @@ dialog.tdx-detail .tdx-page-head{
     flex:1 1 0!important;
     width:auto!important;
     min-width:92px!important;
-    min-height:42px!important;
+    min-height:40px!important;
+    height:40px!important;
+    max-height:40px!important;
     padding:8px 12px!important;
     border:0!important;
     border-radius:10px!important;
@@ -237,7 +248,7 @@ dialog.tdx-detail .tdx-page-head{
   }
 
   dialog.tdx-detail .tdx-group-tr{
-    grid-template-columns:42px minmax(220px,1fr) 54px 54px 54px 68px 52px!important;
+    grid-template-columns:42px minmax(220px,1fr) 54px 54px 54px 68px 76px 52px!important;
     min-height:49px!important;
     gap:8px!important;
     padding:0 9px;
