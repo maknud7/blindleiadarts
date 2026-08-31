@@ -7,7 +7,9 @@ namespace Blindleia\Dartkiosk\Api;
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
+use Blindleia\Dartkiosk\Api\Repository\ScoliaHardwareSettingsRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
+use Blindleia\Dartkiosk\Api\Repository\ScoliaRoutedEventRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Service\CanonicalScoringService;
@@ -34,6 +36,8 @@ final class ScoliaApplication
             $config = Config::load($this->rootPath);
             $database = new Database($config);
             $repo = new ScoliaRepository($database);
+            $hardware = new ScoliaHardwareSettingsRepository($database);
+            $routedEvents = new ScoliaRoutedEventRepository($database);
             $service = new ScoliaScoringService(
                 $repo,
                 new CanonicalScoringService($database, $config),
@@ -41,7 +45,7 @@ final class ScoliaApplication
             );
             $users = new UserAccountRepository($database);
             $kiosks = new KioskRepository($database);
-            $response = $this->dispatch($request, $path, $config, $repo, $service, $users, $kiosks);
+            $response = $this->dispatch($request, $path, $config, $repo, $hardware, $routedEvents, $service, $users, $kiosks);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception $error) {
@@ -66,6 +70,8 @@ final class ScoliaApplication
         string $path,
         Config $config,
         ScoliaRepository $repo,
+        ScoliaHardwareSettingsRepository $hardware,
+        ScoliaRoutedEventRepository $routedEvents,
         ScoliaScoringService $service,
         UserAccountRepository $users,
         KioskRepository $kiosks
@@ -78,14 +84,17 @@ final class ScoliaApplication
                 return JsonResponse::error(401, 'scolia_bridge_unauthorized', 'Invalid Scolia bridge secret.');
             }
             if ($method === 'GET' && $path === 'v1/scolia/bridge/config') {
-                return JsonResponse::ok(['boards' => $repo->listBridgeBoards()]);
+                return JsonResponse::ok(['boards' => $hardware->listBridgeBoards()] + $hardware->scope());
             }
             if ($method === 'POST' && $path === 'v1/scolia/bridge/events') {
                 $body = $request->jsonBody();
                 $serial = trim((string) ($body['serial_number'] ?? ''));
+                $kioskId = (int) ($body['kiosk_id'] ?? 0);
                 $message = is_array($body['message'] ?? null) ? $body['message'] : [];
-                if ($serial === '' || $message === []) return JsonResponse::error(422, 'scolia_event_invalid', 'serial_number and message are required.');
-                $queued = $repo->enqueueEvent($serial, $message);
+                if ($serial === '' || $kioskId <= 0 || $message === []) {
+                    return JsonResponse::error(422, 'scolia_event_invalid', 'serial_number, kiosk_id and message are required.');
+                }
+                $queued = $routedEvents->enqueueEvent($serial, $kioskId, $message);
                 $drain = $service->drain(20);
                 return JsonResponse::ok(['event' => $queued, 'drain' => $drain], $queued['duplicate'] ? 200 : 202);
             }
@@ -114,16 +123,24 @@ final class ScoliaApplication
             return JsonResponse::error(404, 'scolia_bridge_route_not_found', 'Unknown bridge route.');
         }
 
-        // Admin: general Scolia configuration and operations dashboard.
+        // Admin: Scolia master settings are always canonical PROD hardware settings.
+        // Queue/incidents remain isolated in the active runtime environment.
         if (preg_match('#^v1/clubs/(\d+)/scolia(?:/(.*))?$#', $path, $m) === 1) {
             $clubId = (int) $m[1];
             $admin = $this->requireAdmin($request, $users, $clubId);
             if ($admin instanceof JsonResponse) return $admin;
             $tail = (string) ($m[2] ?? '');
-            if ($method === 'GET' && $tail === '') return JsonResponse::ok($repo->adminDashboard($clubId));
-            if ($method === 'GET' && $tail === 'settings') return JsonResponse::ok(['settings' => $repo->getClubSettings($clubId)]);
+            if ($method === 'GET' && $tail === '') {
+                $dashboard = $repo->adminDashboard($clubId);
+                $dashboard['settings'] = $hardware->getClubSettings($clubId);
+                $dashboard['boards'] = $hardware->listBoards($clubId);
+                return JsonResponse::ok(array_merge($dashboard, $hardware->scope()));
+            }
+            if ($method === 'GET' && $tail === 'settings') {
+                return JsonResponse::ok(['settings' => $hardware->getClubSettings($clubId)] + $hardware->scope());
+            }
             if (in_array($method, ['PATCH','PUT'], true) && $tail === 'settings') {
-                return JsonResponse::ok(['settings' => $repo->updateClubSettings($clubId, $request->jsonBody(), (int) $admin['id'])]);
+                return JsonResponse::ok(['settings' => $hardware->updateClubSettings($clubId, $request->jsonBody(), (int) $admin['id'])] + $hardware->scope());
             }
             if ($method === 'POST' && preg_match('#^incidents/(\d+)/resolve$#', $tail, $i) === 1) {
                 return JsonResponse::ok(['resolved' => $repo->resolveIncident($clubId, (int) $i[1], (int) $admin['id'])]);
@@ -138,15 +155,30 @@ final class ScoliaApplication
             return JsonResponse::error(404, 'scolia_admin_route_not_found', 'Unknown Scolia admin route.');
         }
 
-        // Admin: per-board mapping and recovery actions. Scolia boards are live-only;
-        // mode=off is retained internally for boards whose scoring type is manual.
+        // Admin: per-board mapping is canonical PROD master data. Runtime actions
+        // target the current environment's kiosk (a TEST alias during test mode).
         if (preg_match('#^v1/clubs/(\d+)/kiosks/(\d+)/scolia(?:/(.*))?$#', $path, $m) === 1) {
             $clubId = (int) $m[1];
             $kioskId = (int) $m[2];
             $admin = $this->requireAdmin($request, $users, $clubId);
             if ($admin instanceof JsonResponse) return $admin;
             $tail = (string) ($m[3] ?? '');
-            if ($method === 'GET' && $tail === '') return JsonResponse::ok(['board' => $repo->getBoardRuntimeStatus($clubId, $kioskId)]);
+
+            $canonical = $hardware->getBoardSettings($clubId, $kioskId);
+            if ($canonical === null) return JsonResponse::error(404, 'kiosk_not_found', 'Boardet ble ikke funnet.');
+            $runtimeId = (int) ($canonical['runtime_kiosk_id'] ?? 0);
+
+            if ($method === 'GET' && $tail === '') {
+                $runtime = [];
+                if ($runtimeId > 0) {
+                    try {
+                        $runtime = $repo->getBoardRuntimeStatus($clubId, $runtimeId);
+                    } catch (ValidationException) {
+                        $runtime = [];
+                    }
+                }
+                return JsonResponse::ok(['board' => array_merge($runtime, $canonical)] + $hardware->scope());
+            }
             if (in_array($method, ['PATCH','PUT'], true) && $tail === '') {
                 $body = $request->jsonBody();
                 if (($body['mode'] ?? null) === 'shadow') $body['mode'] = 'live';
@@ -154,19 +186,23 @@ final class ScoliaApplication
                     return JsonResponse::error(422, 'scolia_mode_invalid', 'Scolia-board kan bare bruke live scoring.');
                 }
                 if (($body['mode'] ?? null) === 'live') $body['auto_fallback_to_manual'] = true;
-                $board = $repo->updateBoardSettings($clubId, $kioskId, $body, (int) $admin['id']);
+                $board = $hardware->updateBoardSettings($clubId, $kioskId, $body, (int) $admin['id']);
                 if ($board === null) return JsonResponse::error(404, 'kiosk_not_found', 'Boardet ble ikke funnet.');
-                return JsonResponse::ok(['board' => $board]);
+                return JsonResponse::ok(['board' => $board] + $hardware->scope());
+            }
+
+            if ($runtimeId <= 0) {
+                return JsonResponse::error(409, 'scolia_runtime_not_active', 'Denne fysiske skiva har ingen aktiv runtime i dette miljøet.');
             }
             if ($method === 'POST' && $tail === 'fallback') {
-                $repo->markDisconnected($kioskId, 'Manuell fallback aktivert av admin.');
-                return JsonResponse::ok(['board' => $repo->getBoardRuntimeStatus($clubId, $kioskId)]);
+                $repo->markDisconnected($runtimeId, 'Manuell fallback aktivert av admin.');
+                return JsonResponse::ok(['board' => $repo->getBoardRuntimeStatus($clubId, $runtimeId)]);
             }
             if ($method === 'POST' && $tail === 'resume') {
-                $command = $service->resumeAfterReconciliation($clubId, $kioskId, (int) $admin['id']);
-                return JsonResponse::ok(['command' => $command, 'board' => $repo->getBoardRuntimeStatus($clubId, $kioskId)]);
+                $command = $service->resumeAfterReconciliation($clubId, $runtimeId, (int) $admin['id']);
+                return JsonResponse::ok(['command' => $command, 'board' => $repo->getBoardRuntimeStatus($clubId, $runtimeId)]);
             }
-            if ($method === 'POST' && $tail === 'reset-phase') return JsonResponse::ok(['command' => $service->resetPhase($clubId, $kioskId, (int) $admin['id'])]);
+            if ($method === 'POST' && $tail === 'reset-phase') return JsonResponse::ok(['command' => $service->resetPhase($clubId, $runtimeId, (int) $admin['id'])]);
             return JsonResponse::error(404, 'scolia_board_route_not_found', 'Unknown Scolia board route.');
         }
 
