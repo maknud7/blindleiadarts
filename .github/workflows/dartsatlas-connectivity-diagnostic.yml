@@ -7,16 +7,58 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Apply Mandagsserien round 4 migration in TEST
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Fix migrator bind types if needed
+        id: fix
         shell: bash
         run: |
-          set -u
+          set -Eeuo pipefail
+          file='apps/api/atlas-migrate-test.php'
+          if grep -Fq "bind_param('iisissiiiiii'" "$file"; then
+            sed -i "s/bind_param('iisissiiiiii'/bind_param('iisissiiiii'/" "$file"
+            php -l "$file"
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add "$file"
+            git commit -m 'Fix DartsAtlas migrator match binding'
+            git push origin HEAD:develop
+            echo 'patched=yes' >> "$GITHUB_OUTPUT"
+          else
+            echo 'patched=no' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for fixed revision in TEST
+        if: steps.fix.outputs.patched == 'no'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          expected="$GITHUB_SHA"
+          for attempt in $(seq 1 50); do
+            release="$(curl -fsS --max-time 15 "https://test.blindleiadarts.ingenting.org/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$expected" <<<"$release"; then
+              echo "TEST_RELEASE=$expected"
+              exit 0
+            fi
+            echo "Waiting for TEST deploy ($attempt/50)"
+            sleep 6
+          done
+          echo 'TEST did not reach expected revision in time' >&2
+          exit 1
+
+      - name: Apply Mandagsserien round 4 migration in TEST
+        if: steps.fix.outputs.patched == 'no'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
           body="$(mktemp)"
           status="$(curl -sS -L --max-time 240 -o "$body" -w '%{http_code}' \
             'https://test.blindleiadarts.ingenting.org/api/atlas-migrate-test.php?tournament=jort2WSBWFwN&apply=1' || true)"
@@ -24,14 +66,8 @@ jobs:
           php -r '
             $raw=file_get_contents($argv[1]);
             $d=json_decode($raw,true);
-            if(!is_array($d)) {
-              echo "APPLY_JSON=invalid\n";
-              echo substr($raw,0,4000)."\n";
-              exit(1);
-            }
-            echo "APPLY_JSON=ok\n";
+            if(!is_array($d)) { echo "APPLY_JSON=invalid\n"; echo substr($raw,0,4000)."\n"; exit(1); }
             echo "OK=" . (!empty($d["ok"]) ? "yes" : "no") . "\n";
-            echo "MODE=" . (string)($d["mode"] ?? "") . "\n";
             echo "ERROR=" . (string)($d["error"] ?? "") . "\n";
             echo "MESSAGE=" . (string)($d["message"] ?? "") . "\n";
             echo "TOURNAMENT_ID=" . (string)($d["tournament_id"] ?? "") . "\n";
@@ -39,10 +75,7 @@ jobs:
             echo "CHAMPION=" . json_encode($d["champion"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
             echo "ELO=" . json_encode($d["elo"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
             echo "VISITS_IMPORTED=" . (!empty($d["visits_imported"]) ? "yes" : "no") . "\n";
-            if(empty($d["ok"])) {
-              echo "PLAN=" . json_encode($d["plan"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-              exit(2);
-            }
+            if(empty($d["ok"])) exit(2);
           ' "$body"
           rm -f "$body"
-          test "$status" = "200"
+          test "$status" = '200'
