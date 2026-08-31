@@ -443,7 +443,7 @@ try {
             $stmt->close();
         } else {
             $stmt = $db->prepare("INSERT INTO `{$prefix}matches` (tournament_id,tournament_group_id,round_label,round_number,bracket_label,provider_metadata,status,best_of_legs,legs_to_win,player_a_id,player_b_id,winner_player_id) VALUES (?,?,?,?,?,?,'completed',?,?,?,?,?)");
-            $stmt->bind_param('iisissiiiiii', $tournamentId, $groupId, $match['round_label'], $roundNumber, $bracketLabel, $providerMeta, $match['best_of_legs'], $match['legs_to_win'], $playerA, $playerB, $winner);
+            $stmt->bind_param('iisissiiiii', $tournamentId, $groupId, $match['round_label'], $roundNumber, $bracketLabel, $providerMeta, $match['best_of_legs'], $match['legs_to_win'], $playerA, $playerB, $winner);
             $stmt->execute();
             $matchId = (int) $stmt->insert_id;
             $stmt->close();
