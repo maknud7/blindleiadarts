@@ -120,6 +120,14 @@ final class LiveHighlightsApplication
         }
         unset($row);
 
+        // Ranking/statistics lists only contain players with an actual result.
+        // Operational rosters and group membership are handled elsewhere and still
+        // show players before their first match.
+        $rows = array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => (int) ($row['played'] ?? 0) > 0
+        ));
+
         usort($rows, static function (array $a, array $b): int {
             $cmp = ((int) $b['points']) <=> ((int) $a['points']);
             if ($cmp !== 0) return $cmp;
