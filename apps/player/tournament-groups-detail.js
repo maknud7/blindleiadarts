@@ -16,16 +16,26 @@ style.textContent=`
 .tdx-group-picker{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none}.tdx-group-picker::-webkit-scrollbar{display:none}
 .tdx-group-picker button{flex:0 0 auto!important;width:auto!important;min-width:0!important;border:1px solid #d4e0eb!important;border-radius:999px!important;background:#fff!important;color:#63788f!important;padding:9px 14px!important;font-weight:850!important;white-space:nowrap!important;box-shadow:none!important}.tdx-group-picker button.active{background:#174f91!important;border-color:#174f91!important;color:#fff!important}
 .tdx-group-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}.tdx-group-head h3{margin:0}.tdx-group-head p{margin:3px 0 0;color:#73869a;font-size:13px}
-.tdx-group-table{display:grid;min-width:0}.tdx-group-tr{display:grid;grid-template-columns:28px minmax(0,1fr) 30px 30px 30px 42px 32px;align-items:center;gap:5px;min-height:44px;border-top:1px solid #e8eef3;font-size:13px}.tdx-group-tr:first-child{border-top:0}.tdx-group-tr.is-me{background:#eef5ff;margin:0 -8px;padding:0 8px;border-radius:10px}.tdx-group-tr.is-qualified .tdx-group-pos{color:#176b35}.tdx-group-th{color:#8090a0;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;min-height:30px}.tdx-group-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0b2b50;font-weight:800}.tdx-group-pos{font-weight:900;color:#63788f}.tdx-group-stat{text-align:right;color:#435b73}.tdx-group-points{font-weight:900;color:#0b2b50}.tdx-qualified-mark{color:#2d7a45;margin-left:4px}
+.tdx-group-table{display:grid;min-width:0}.tdx-group-tr{display:grid;grid-template-columns:28px minmax(0,1fr) 30px 30px 30px 42px 54px 32px;align-items:center;gap:5px;min-height:44px;border-top:1px solid #e8eef3;font-size:13px}.tdx-group-tr:first-child{border-top:0}.tdx-group-tr.is-me{background:#eef5ff;margin:0 -8px;padding:0 8px;border-radius:10px}.tdx-group-tr.is-qualified .tdx-group-pos{color:#176b35}.tdx-group-th{color:#8090a0;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;min-height:30px}.tdx-group-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0b2b50;font-weight:800}.tdx-group-pos{font-weight:900;color:#63788f}.tdx-group-stat{text-align:right;color:#435b73}.tdx-group-3da{font-variant-numeric:tabular-nums}.tdx-group-points{font-weight:900;color:#0b2b50}.tdx-qualified-mark{color:#2d7a45;margin-left:4px}
 .tdx-group-legend{display:flex;gap:12px;flex-wrap:wrap;color:#718399;font-size:12px;margin-top:8px}.tdx-group-legend strong{color:#2d7a45}
 .tdx-group-matches{display:grid}.tdx-section .tdx-group-match{appearance:none!important;-webkit-appearance:none!important;box-sizing:border-box!important;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;margin:0!important;border:0!important;border-top:1px solid #e8eef3!important;border-radius:0!important;background:#fff!important;background-image:none!important;color:#0b2b50!important;box-shadow:none!important;font:inherit!important;font-size:14px!important;font-weight:400!important;line-height:1.25!important;text-align:inherit!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;align-items:center!important;gap:8px!important;padding:10px 2px!important;cursor:pointer!important}.tdx-section .tdx-group-match:first-child{border-top:0!important}.tdx-section .tdx-group-match:active,.tdx-section .tdx-group-match:hover{background:#f4f8fc!important;transform:none!important}.tdx-group-match span:first-child{text-align:left}.tdx-group-match span:nth-child(3){text-align:right}.tdx-group-match strong{font-size:14px!important;color:#0b2b50!important}.tdx-group-match small{grid-column:1/-1;color:#7a8da0!important;font-size:11px!important;text-align:left!important}.tdx-group-live{color:#b22b2b!important}.tdx-match-chevron{color:#9aabba!important;margin-left:5px;font-weight:900}
 .tdx-match-detail{border:0;padding:0;width:min(92vw,520px);max-width:520px;border-radius:20px;background:#fff;color:#0b2b50;box-shadow:0 22px 60px rgba(6,31,58,.28)}.tdx-match-detail::backdrop{background:rgba(4,20,38,.46)}.tdx-match-detail-card{padding:18px;display:grid;gap:16px}.tdx-match-detail-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.tdx-match-detail-head h3{margin:0}.tdx-match-close{border:0;background:#edf3f8;color:#0b2b50;border-radius:999px;width:38px;height:38px;font-size:22px}.tdx-match-detail-score{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;background:#f4f7fa;border-radius:16px;padding:16px}.tdx-match-detail-score span:last-child{text-align:right}.tdx-match-detail-score strong{font-size:24px}.tdx-match-detail-meta{display:grid;gap:8px;color:#667c92;font-size:13px}.tdx-match-detail-meta div{display:flex;justify-content:space-between;gap:14px}.tdx-match-detail-meta b{color:#0b2b50;text-align:right}
-@media(max-width:520px){.tdx-detail-tabs button{padding-left:12px!important;padding-right:12px!important}.tdx-group-tr{grid-template-columns:25px minmax(0,1fr) 27px 27px 39px 30px}.tdx-group-tr>*:nth-child(5){display:none}.tdx-group-th>*:nth-child(5){display:none}.tdx-section .tdx-group-match{padding:9px 2px!important;font-size:13px!important}.tdx-group-match strong{font-size:13px!important}}
+@media(max-width:520px){.tdx-detail-tabs button{padding-left:12px!important;padding-right:12px!important}.tdx-group-tr{grid-template-columns:25px minmax(0,1fr) 27px 27px 39px 48px 30px}.tdx-group-tr>*:nth-child(5){display:none}.tdx-group-th>*:nth-child(5){display:none}.tdx-section .tdx-group-match{padding:9px 2px!important;font-size:13px!important}.tdx-group-match strong{font-size:13px!important}}
 `;
 document.head.appendChild(style);
 
-document.addEventListener("click",event=>{ const open=event.target instanceof Element?event.target.closest("[data-open]"):null; if(open){ activeTournamentId=Number(open.getAttribute("data-open")||0); schedule(); } },true);
-function schedule(){ clearTimeout(timer); timer=setTimeout(enhance,90); }
+document.addEventListener("click",event=>{
+  const source=event.target instanceof Element?event.target:null;
+  const open=source?.closest("[data-open]");
+  if(open){ activeTournamentId=Number(open.getAttribute("data-open")||0); schedule(); }
+  const groupTab=source?.closest('dialog.tdx-detail .tdx-detail-tabs [data-tab="groups"]');
+  if(groupTab&&activeTournamentId){
+    event.preventDefault();
+    event.stopPropagation();
+    openGroups(activeTournamentId,groupTab);
+  }
+},true);
+function schedule(){ clearTimeout(timer); timer=setTimeout(enhance,40); }
 
 async function load(id){
   if(cache.has(id)) return cache.get(id);
@@ -53,7 +63,6 @@ function enhance(){
     button.textContent="Grupper";
     const overview=tabs.querySelector('[data-tab="overview"]');
     if(overview?.nextSibling) tabs.insertBefore(button,overview.nextSibling); else tabs.prepend(button);
-    button.addEventListener("click",()=>openGroups(activeTournamentId,button));
   }
 }
 
@@ -74,9 +83,9 @@ function renderTable(group,data){
     const playerId=num(row.player_id);
     const diff=num(row.leg_diff);
     const qualified=q>0&&position<=q;
-    return `<div class="tdx-group-tr ${playerId===me?"is-me":""} ${qualified?"is-qualified":""}"><span class="tdx-group-pos">${position}</span><span class="tdx-group-name">${esc(row.display_name||row.player_name||"Spiller")}${qualified?`<span class="tdx-qualified-mark">✓</span>`:""}</span><span class="tdx-group-stat">${num(row.played)}</span><span class="tdx-group-stat">${num(row.wins)}</span><span class="tdx-group-stat">${num(row.losses)}</span><span class="tdx-group-stat">${diff>0?"+":""}${diff}</span><span class="tdx-group-stat tdx-group-points">${num(row.points)}</span></div>`;
+    return `<div class="tdx-group-tr ${playerId===me?"is-me":""} ${qualified?"is-qualified":""}" data-tdx-player-id="${playerId}"><span class="tdx-group-pos">${position}</span><span class="tdx-group-name">${esc(row.display_name||row.player_name||"Spiller")}${qualified?`<span class="tdx-qualified-mark">✓</span>`:""}</span><span class="tdx-group-stat">${num(row.played)}</span><span class="tdx-group-stat">${num(row.wins)}</span><span class="tdx-group-stat">${num(row.losses)}</span><span class="tdx-group-stat">${diff>0?"+":""}${diff}</span><span class="tdx-group-stat tdx-group-3da">${avg(row.three_dart_average)}</span><span class="tdx-group-stat tdx-group-points">${num(row.points)}</span></div>`;
   }).join("");
-  return `<div class="tdx-group-table"><div class="tdx-group-tr tdx-group-th"><span>#</span><span>Spiller</span><span class="tdx-group-stat">K</span><span class="tdx-group-stat">V</span><span class="tdx-group-stat">T</span><span class="tdx-group-stat">+/-</span><span class="tdx-group-stat">P</span></div>${body}</div>${q>0?`<div class="tdx-group-legend"><span><strong>✓</strong> Videre til sluttspill</span><span>Ved likt: legdiff → 3DA → innbyrdes</span></div>`:""}`;
+  return `<div class="tdx-group-table"><div class="tdx-group-tr tdx-group-th"><span>#</span><span>Spiller</span><span class="tdx-group-stat">K</span><span class="tdx-group-stat">V</span><span class="tdx-group-stat">T</span><span class="tdx-group-stat">+/-</span><span class="tdx-group-stat" title="3-dart average i gruppespillet">3DA</span><span class="tdx-group-stat">P</span></div>${body}</div>${q>0?`<div class="tdx-group-legend"><span><strong>✓</strong> Videre til sluttspill</span><span>Ved likt: legdiff → 3DA → innbyrdes</span></div>`:""}`;
 }
 
 function score(match){
