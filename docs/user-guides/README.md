@@ -11,6 +11,14 @@ The canonical user-facing guide content lives in:
 
 Both player and admin surfaces load that shared module through `packages/ui-assets/portal-menu.js`. Do not create separate copies of the same guide text in each frontend.
 
+## Guide format
+
+The in-product guide is an **operational manual**, not a collection of feature blurbs. A topic should normally answer a concrete question such as “How do I add a normal board?” or “How do I check players in and start a tournament?”.
+
+For workflows, use numbered steps in the same order the user performs them in the UI. Include prerequisites, the exact navigation path, what to enter/select, the action that commits the change, and how the user verifies that it worked. Use explanatory notes only after the procedure when they prevent a common misunderstanding.
+
+Write club-neutral instructions where the behavior is generic. Blindleia-specific wording should only be used where the functionality genuinely depends on Blindleia. This keeps the documentation suitable for the platform to be used by other small dart clubs later.
+
 ## Mandatory guide-impact check before every Git push
 
 Before **every** push to Git, review the intended diff and decide whether it changes anything a player or administrator needs to understand.
@@ -47,10 +55,11 @@ If a bug fix changes the intended behavior or corrects a guide that was describi
 
 - The guide describes **current behavior**, not future plans.
 - Reuse the same terms as the UI and canonical domain model.
-- Prefer short operational instructions over implementation details.
+- Prefer task titles, numbered procedures and verification steps over general descriptions.
 - When the same concept exists on several surfaces, describe the canonical behavior once and only add surface-specific context when it genuinely differs.
 - Do not document a default value as a rule unless it actually is the product rule.
 - Migrated or historical data must be described according to the same semantics as native data once it is canonical.
+- A workflow guide must be understandable by a new club administrator without repository or database knowledge.
 
 ## Review checklist
 
@@ -60,5 +69,6 @@ Before pushing:
 - [ ] I reviewed the diff for admin-facing impact.
 - [ ] I checked shared/canonical concepts affected by the change.
 - [ ] I updated the guide if the workflow, rule, term or visible data changed.
+- [ ] Any new/changed workflow has a real step-by-step procedure, not only a feature explanation.
 - [ ] I verified that the guide still describes what TEST will actually do after deploy.
 - [ ] I can state `Guide impact: updated` or `Guide impact: none` for this push.

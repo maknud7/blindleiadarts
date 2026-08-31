@@ -1,4 +1,4 @@
-import(new URL("./user-guide.js?v=20260831-1125", import.meta.url).href)
+import(new URL("./user-guide.js?v=20260831-1145", import.meta.url).href)
   .catch((error) => console.warn("User guide unavailable", error));
 
 const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20260827-1900", import.meta.url).href)).default;
