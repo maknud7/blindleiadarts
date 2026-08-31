@@ -13,57 +13,42 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Compare GitHub and server DartsAtlas access
+      - name: Dry-run Mandagsserien round 4 migration in TEST
         shell: bash
         run: |
           set -u
           body="$(mktemp)"
-          headers="$(mktemp)"
-          status="$(curl -sS -L --max-time 25 \
-            -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36' \
-            -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
-            -D "$headers" -o "$body" -w '%{http_code}' \
-            'https://www.dartsatlas.com/seasons/rFByCgOqI1rq' || true)"
-          echo "GITHUB_DARTSATLAS_STATUS=$status"
-          grep -Ei '^(HTTP/|server:|cf-|content-type:)' "$headers" || true
-          rm -f "$body" "$headers"
-
-          body="$(mktemp)"
-          status="$(curl -sS -L --max-time 120 -o "$body" -w '%{http_code}' \
-            'https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq' || true)"
-          echo "SERVER_SEASON_PROBE_STATUS=$status"
+          status="$(curl -sS -L --max-time 180 -o "$body" -w '%{http_code}' \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-migrate-test.php?tournament=jort2WSBWFwN' || true)"
+          echo "DRY_RUN_HTTP_STATUS=$status"
           php -r '
             $d=json_decode(file_get_contents($argv[1]),true);
-            foreach (($d["tournaments"] ?? []) as $id=>$name) printf("TOURNAMENT=%s|%s\n",$id,$name);
+            if(!is_array($d)) {
+              echo "DRY_RUN_JSON=invalid\n";
+              echo substr(file_get_contents($argv[1]),0,2000)."\n";
+              exit(1);
+            }
+            echo "DRY_RUN_JSON=ok\n";
+            echo "OK=" . (!empty($d["ok"]) ? "yes" : "no") . "\n";
+            echo "MODE=" . (string)($d["mode"] ?? "") . "\n";
+            $p=$d["plan"] ?? [];
+            echo "TOURNAMENT=" . (string)($p["tournament_name"] ?? "") . "\n";
+            echo "DATE=" . (string)($p["tournament_date"] ?? "") . "\n";
+            echo "SEASON_ID=" . (string)($p["season"]["id"] ?? "") . "\n";
+            echo "SEASON_NAME=" . (string)($p["season"]["name"] ?? "") . "\n";
+            echo "CHAMPION=" . (string)($p["champion"] ?? "") . "\n";
+            echo "PLAYERS=" . (string)($p["player_count"] ?? "") . "\n";
+            echo "MAPPED_PLAYERS=" . (string)($p["mapped_player_count"] ?? "") . "\n";
+            echo "MATCHES=" . (string)($p["match_count"] ?? "") . "\n";
+            echo "BLOCKING=" . json_encode($p["blocking_errors"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "MAPPING_ERRORS=" . json_encode($p["player_mapping_errors"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "PARSE_ERRORS=" . json_encode($p["match_parse_errors"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "EXISTING=" . json_encode($p["existing_tournament"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "GROUPS=" . json_encode($p["groups"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            foreach (($p["player_map"] ?? []) as $name=>$map) {
+              printf("MAP=%s|%s|%s\n",$name,(string)($map["player_id"]??""),(string)($map["source"]??""));
+            }
+            if ($status = 0) {}
           ' "$body"
           rm -f "$body"
-
-      - name: Inspect Mandagsserien round 4 via Blindleia server
-        shell: bash
-        run: |
-          set -u
-          body="$(mktemp)"
-          status="$(curl -sS -L --max-time 150 -o "$body" -w '%{http_code}' \
-            'https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=jort2WSBWFwN' || true)"
-          echo "ROUND4_PROBE_STATUS=$status"
-          php -r '
-            $d=json_decode(file_get_contents($argv[1]),true);
-            if(!is_array($d)){echo "ROUND4_JSON=invalid\n"; exit;}
-            echo "ROUND4_JSON=ok\n";
-            $allPlayers=[];$allMatches=[];
-            foreach (($d["pages"] ?? []) as $page=>$p) {
-              printf("PAGE_%s_STATUS=%s_BYTES=%s\n",strtoupper(str_replace("-","_",$page)),(string)($p["status"]??""),(string)($p["body_bytes"]??""));
-              foreach (($p["players"]??[]) as $id=>$name) $allPlayers[$id]=$name;
-              foreach (($p["matches"]??[]) as $id=>$label) $allMatches[$id]=$label;
-            }
-            echo "PLAYERS_BEGIN\n";
-            foreach($allPlayers as $id=>$name) printf("%s|%s\n",$id,$name);
-            echo "PLAYERS_END\nMATCHES_BEGIN\n";
-            foreach($allMatches as $id=>$label) printf("%s|%s\n",$id,$label);
-            echo "MATCHES_END\n";
-            foreach (["root","groups","group-1","group-2","results"] as $page) {
-              $text=(string)($d["pages"][$page]["visible_text"]??"");
-              if($text!=="") printf("VISIBLE_%s=%s\n",strtoupper(str_replace("-","_",$page)),substr($text,0,16000));
-            }
-          ' "$body"
-          rm -f "$body"
+          test "$status" = "200"
