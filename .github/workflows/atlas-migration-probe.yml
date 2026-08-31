@@ -1,0 +1,54 @@
+name: Atlas Migration Probe
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/atlas-migration-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe current Mandagsserien source and canonical APIs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, re, urllib.request
+
+          def get(url):
+              req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept':'text/html,application/json'})
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return r.status, r.geturl(), r.read().decode('utf-8','replace')
+
+          season='rFByCgOqI1rq'
+          urls=[
+              f'https://www.dartsatlas.com/seasons/{season}',
+              f'https://www.dartsatlas.com/seasons/{season}/tournaments/results',
+              f'https://www.dartsatlas.com/seasons/{season}/tournaments/calendar',
+          ]
+          found={}
+          for url in urls:
+              try:
+                  status,effective,body=get(url)
+                  print('SOURCE',status,effective,'bytes',len(body))
+                  for tid,text in re.findall(r'<a\b[^>]*href=["\'](?:https?://www\.dartsatlas\.com)?/tournaments/([A-Za-z0-9_-]+)(?:[^"\']*)["\'][^>]*>(.*?)</a>',body,re.I|re.S):
+                      clean=re.sub(r'<[^>]+>',' ',text)
+                      clean=re.sub(r'\s+',' ',clean).strip()
+                      if clean: found[tid]=clean
+              except Exception as e:
+                  print('SOURCE_ERROR',url,repr(e))
+          print('TOURNAMENTS_JSON',json.dumps(found,ensure_ascii=False,sort_keys=True))
+
+          for base in ['https://blindleiadart.ingenting.org','https://test.blindleiadart.ingenting.org']:
+              for path in ['/api/v1/clubs/blindleia-dartklubb/tournaments','/api/v1/tournaments','/api/v1/seasons']:
+                  try:
+                      status,effective,body=get(base+path)
+                      print('CANONICAL',base,path,status,'bytes',len(body),body[:12000].replace('\n',' '))
+                  except Exception as e:
+                      print('CANONICAL_ERROR',base,path,repr(e))
+          PY
