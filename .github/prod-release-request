@@ -1,5 +1,6 @@
-release_sha=26a5ddeccf6f6306cb1a4ca74bc413697b59291f
+release_sha=5f65b29c2f33c2366054a63a890f292110a98a64
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-08-30T20:24:00+02:00
-purpose=release_latest_verified_test_to_prod
+requested_at=2026-08-31T12:29:00+02:00
+purpose=enable_scolia_test_lease_and_promote_board4_config
+backup_prefix=bd_backup_20260831_101955_
