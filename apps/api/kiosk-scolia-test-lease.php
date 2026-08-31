@@ -26,7 +26,7 @@ try {
     $database = new Database($config);
     $db = $database->connection();
     $testPrefix = $database->tablePrefix();
-    $hardwarePrefix = $config->hardwareTablePrefix();
+    $hardwarePrefix = $database->hardwareTablePrefix();
     foreach ([$testPrefix, $hardwarePrefix] as $prefix) {
         if (!preg_match('/^[A-Za-z0-9_]+$/', $prefix)) {
             throw new RuntimeException('Ugyldig tabellprefiks.');
@@ -51,7 +51,7 @@ try {
     }
 
     $testKiosks = $testPrefix . 'kiosks';
-    $testBoardSettings = $testPrefix . 'scolia_board_settings';
+    $testRuntimeBinding = $testPrefix . 'scolia_board_settings';
     $testBoardRuntime = $testPrefix . 'scolia_board_runtime';
     $testBuffers = $testPrefix . 'scolia_visit_buffers';
     $physicalKiosks = $hardwarePrefix . 'kiosks';
@@ -69,7 +69,7 @@ try {
     $testKiosk = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
     if ($testKiosk === null || empty($testKiosk['source_kiosk_id'])) {
-        $respond(['ok' => false, 'error' => ['code' => 'test_alias_required', 'message' => 'Velg en fysisk skive i testmodus først.']], 409);
+        $respond(['ok' => false, 'error' => ['code' => 'test_alias_required', 'message' => 'Velg en fysisk PROD-skive i testmodus først.']], 409);
     }
     $storedPairingHash = (string) ($testKiosk['pairing_token_hash'] ?? '');
     if ($storedPairingHash === '' || !password_verify($pairingToken, $storedPairingHash)) {
@@ -83,8 +83,8 @@ try {
         $respond(['ok' => false, 'error' => ['code' => 'physical_board_mismatch', 'message' => 'Testterminalen peker på en annen fysisk skive.']], 409);
     }
 
-    // Keep stale leases self-healing. A crashed or closed PWA can therefore never
-    // reserve a physical Scolia indefinitely.
+    // A lease is the only TEST-owned Scolia state. Serial/token/master settings
+    // remain exclusively in the canonical PROD hardware namespace.
     $db->query("DELETE FROM `{$leaseTable}` WHERE expires_at<=NOW(3)");
 
     if ($action === 'release') {
@@ -95,7 +95,9 @@ try {
             $stmt->execute();
             $stmt->close();
 
-            $stmt = $db->prepare("UPDATE `{$testBoardSettings}` SET mode='off' WHERE kiosk_id=?");
+            // Remove the ephemeral TEST runtime binding completely. It is not a
+            // second Scolia configuration and must never survive the lease.
+            $stmt = $db->prepare("DELETE FROM `{$testRuntimeBinding}` WHERE kiosk_id=?");
             $stmt->bind_param('i', $testKioskId);
             $stmt->execute();
             $stmt->close();
@@ -125,7 +127,12 @@ try {
             throw $error;
         }
 
-        $respond(['ok' => true, 'data' => ['released' => true, 'physical_kiosk_id' => $physicalKioskId, 'test_kiosk_id' => $testKioskId]]);
+        $respond(['ok' => true, 'data' => [
+            'released' => true,
+            'physical_kiosk_id' => $physicalKioskId,
+            'test_kiosk_id' => $testKioskId,
+            'configuration_scope' => 'production_hardware',
+        ]]);
     }
 
     if ($action === 'heartbeat') {
@@ -140,7 +147,7 @@ try {
         if ($updated < 1) {
             $respond(['ok' => false, 'error' => ['code' => 'scolia_test_lease_expired', 'message' => 'Scolia-testleasen har utløpt. Velg skiva på nytt.']], 409);
         }
-        $respond(['ok' => true, 'data' => ['active' => true, 'expires_in_seconds' => 180]]);
+        $respond(['ok' => true, 'data' => ['active' => true, 'expires_in_seconds' => 180, 'configuration_scope' => 'production_hardware']]);
     }
 
     if ($action !== 'acquire') {
@@ -162,18 +169,24 @@ try {
     $physical = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
     if ($physical === null) {
-        $respond(['ok' => false, 'error' => ['code' => 'physical_board_not_found', 'message' => 'Den fysiske skiva finnes ikke.']], 404);
+        $respond(['ok' => false, 'error' => ['code' => 'physical_board_not_found', 'message' => 'Den fysiske PROD-skiva finnes ikke.']], 404);
     }
     if ((string) ($physical['scoring_mode'] ?? '') !== 'scolia') {
-        $respond(['ok' => true, 'data' => ['leased' => false, 'reason' => 'not_scolia', 'physical_kiosk_id' => $physicalKioskId, 'test_kiosk_id' => $testKioskId]]);
+        $respond(['ok' => true, 'data' => [
+            'leased' => false,
+            'reason' => 'not_scolia',
+            'physical_kiosk_id' => $physicalKioskId,
+            'test_kiosk_id' => $testKioskId,
+            'configuration_scope' => 'production_hardware',
+        ]]);
     }
 
-    $serial = trim((string) ($physical['serial_number'] ?? ''));
+    $serial = strtoupper(trim((string) ($physical['serial_number'] ?? '')));
     $token = trim((string) ($physical['access_token'] ?? ''));
     if ($serial === '' || (string) ($physical['mode'] ?? '') !== 'live' || (int) ($physical['club_scolia_enabled'] ?? 0) !== 1 || $token === '') {
         $respond(['ok' => false, 'error' => [
             'code' => 'scolia_physical_not_ready',
-            'message' => 'Den fysiske Scolia-skiva mangler aktivt serienummer, klubbtilkobling eller access token.'
+            'message' => 'Den fysiske Scolia-skiva mangler aktivt serienummer, klubbtilkobling eller access token i PROD-innstillingene.'
         ]], 409);
     }
 
@@ -187,29 +200,27 @@ try {
     }
 
     $autoFallback = (int) ($physical['auto_fallback_to_manual'] ?? 1) === 1 ? 1 : 0;
-    $forceOverride = 1; // TEST must be able to take over the one physical WebSocket deterministically.
-    $forwardOverride = $physical['forward_messages_override'] === null
-        ? (int) ($physical['forward_messages_to_scolia'] ?? 0)
-        : (int) $physical['forward_messages_override'];
 
     $db->begin_transaction();
     try {
-        // Serial numbers are unique inside one runtime. Remove a stale test mapping before
-        // assigning the physical Scolia to the currently selected alias.
-        $stmt = $db->prepare("DELETE FROM `{$testBoardSettings}` WHERE serial_number=? AND kiosk_id<>?");
-        $stmt->bind_param('si', $serial, $testKioskId);
+        // Remove any legacy TEST copy of this physical serial. From this point on
+        // the TEST row is only an ephemeral mode binding for ScoliaScoringService.
+        $stmt = $db->prepare("DELETE FROM `{$testRuntimeBinding}` WHERE serial_number=?");
+        $stmt->bind_param('s', $serial);
         $stmt->execute();
         $stmt->close();
 
+        $nullSerial = null;
+        $nullOverride = null;
         $stmt = $db->prepare(
-            "INSERT INTO `{$testBoardSettings}`
+            "INSERT INTO `{$testRuntimeBinding}`
              (kiosk_id,serial_number,mode,auto_fallback_to_manual,force_connect_override,forward_messages_override,updated_by_user_id)
              VALUES (?,?,'live',?,?,?,NULL)
-             ON DUPLICATE KEY UPDATE serial_number=VALUES(serial_number),mode='live',
-                 auto_fallback_to_manual=VALUES(auto_fallback_to_manual),force_connect_override=VALUES(force_connect_override),
-                 forward_messages_override=VALUES(forward_messages_override),updated_by_user_id=NULL"
+             ON DUPLICATE KEY UPDATE serial_number=NULL,mode='live',
+                 auto_fallback_to_manual=VALUES(auto_fallback_to_manual),force_connect_override=NULL,
+                 forward_messages_override=NULL,updated_by_user_id=NULL"
         );
-        $stmt->bind_param('isiii', $testKioskId, $serial, $autoFallback, $forceOverride, $forwardOverride);
+        $stmt->bind_param('isiii', $testKioskId, $nullSerial, $autoFallback, $nullOverride, $nullOverride);
         $stmt->execute();
         $stmt->close();
 
@@ -250,6 +261,8 @@ try {
         'board_number' => (int) $physical['board_number'],
         'serial_number' => $serial,
         'expires_in_seconds' => 180,
+        'configuration_scope' => 'production_hardware',
+        'shared_across_environments' => true,
     ]]);
 } catch (Throwable $error) {
     $respond(['ok' => false, 'error' => [
