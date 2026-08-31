@@ -30,6 +30,7 @@ document.getElementById("clubSelect")?.addEventListener("change",hideClubSwitche
 window.addEventListener("bd:player-state-changed",hideClubSwitcher);
 
 import("./remove-checkout-percentage.js?v=20260830-1835")
+  .then(()=>import("./tournament-sidebar-nav-failsafe.js?v=20260831-1055"))
   .then(()=>import("./tournament-discovery-ux.js?v=20260831-1004b"))
   .then(()=>import("./tournament-calendar-polish.js?v=20260829-1945"))
   .then(()=>import("./tournament-prestart-detail.js?v=20260831-0905"))
