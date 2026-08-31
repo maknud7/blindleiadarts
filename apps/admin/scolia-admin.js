@@ -28,6 +28,9 @@ function ensureStyles() {
     .scolia-equipment{margin-top:22px;border-top:1px solid var(--line);padding-top:22px}
     .scolia-equipment-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
     .scolia-equipment-head h3{margin:2px 0 4px}
+    .prod-scope-banner{margin:0 0 16px;padding:12px 14px;border:1px solid rgba(255,194,92,.55);border-radius:12px;background:rgba(255,194,92,.08);display:flex;gap:10px;align-items:flex-start}
+    .prod-scope-badge{white-space:nowrap;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:rgba(255,194,92,.18)}
+    .prod-scope-banner p{margin:0}
     .integration-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
     .integration-card{border:1px solid var(--line);border-radius:16px;padding:16px;background:rgba(255,255,255,.02);display:grid;gap:12px}
     .integration-card h4{margin:0}
@@ -51,7 +54,7 @@ function ensureStyles() {
     .scolia-advanced{margin-top:2px}
     .scolia-advanced summary{cursor:pointer;font-weight:600}
     .scolia-advanced .integration-grid{margin-top:14px}
-    @media(max-width:900px){.scolia-equipment-head{display:grid}.integration-grid{grid-template-columns:1fr}.queue-grid{grid-template-columns:repeat(3,1fr)}.settings-grid{grid-template-columns:1fr}.settings-grid .wide{grid-column:auto}}
+    @media(max-width:900px){.scolia-equipment-head{display:grid}.prod-scope-banner{display:grid}.integration-grid{grid-template-columns:1fr}.queue-grid{grid-template-columns:repeat(3,1fr)}.settings-grid{grid-template-columns:1fr}.settings-grid .wide{grid-column:auto}}
   `;
   document.head.appendChild(style);
 }
@@ -70,29 +73,34 @@ function ensurePanel() {
       <div>
         <p class="eyebrow">Automatisk scoring</p>
         <h3>Scolia</h3>
-        <p class="muted">Én klubbkonto kan brukes mot flere Scolia-skiver. Serienummer og scoringstype settes på hver enkelt skive over.</p>
+        <p class="muted">Én klubbkonto kan brukes mot flere Scolia-skiver. Serienummer og scoringstype settes på hver enkelt fysisk skive.</p>
       </div>
       <button id="scoliaRefresh" type="button" class="button secondary">Oppdater status</button>
+    </div>
+
+    <div class="prod-scope-banner">
+      <span class="prod-scope-badge">PROD-innstilling</span>
+      <p><strong>Felles fysisk konfigurasjon for TEST og PROD.</strong><br><span class="muted">Token, serienummer og Scolia-oppsett lagres bare i canonical PROD-utstyrsregister. Endringer du gjør her gjelder den virkelige skiva også når admin åpnes fra TEST. TEST har kun en midlertidig lease når en fysisk skive brukes til testkamp.</span></p>
     </div>
 
     <div id="scoliaAdminMessage" class="integration-status hidden"></div>
 
     <div class="integration-grid">
       <form id="scoliaGeneralForm" class="integration-card">
-        <div><p class="eyebrow">Klubbkonto</p><h4>Scolia API-tilkobling</h4></div>
-        <p class="muted">Service Account opprettes av Scolia for klubben. I Blindleia trenger du bare access tokenet til denne kontoen – det finnes ikke et eget Service Account-ID eller brukernavn som skal fylles inn her.</p>
+        <div><p class="eyebrow">Klubbkonto · PROD</p><h4>Scolia API-tilkobling</h4></div>
+        <p class="muted">Service Account opprettes av Scolia for klubben. I Blindleia trenger du bare access tokenet. Det lagres én gang i PROD-utstyrsregisteret og deles av begge miljøer.</p>
         <div class="settings-grid">
           <label class="check-row wide"><input id="scoliaEnabled" type="checkbox"><span>Aktiver Scolia for klubben</span></label>
           <label class="wide"><span>Service Account access token</span><input id="scoliaToken" type="password" autocomplete="new-password" placeholder="Ikke endre lagret token"></label>
         </div>
-        <div class="integration-actions"><button type="submit" class="button">Lagre Scolia-oppsett</button></div>
+        <div class="integration-actions"><button type="submit" class="button">Lagre PROD-innstilling</button></div>
         <p id="scoliaTokenHint" class="muted"></p>
       </form>
 
       <div class="integration-card">
-        <div><p class="eyebrow">Skiver</p><h4>Flere Scolia-enheter</h4></div>
-        <p class="muted">Opprett eller rediger hver skive separat og velg <strong>Scolia</strong> som scoring. Legg inn serienummeret til den fysiske Scolia-enheten på den aktuelle skiva.</p>
-        <div class="integration-status good"><strong>Klar for flere skiver</strong><br><span class="muted">Access tokenet er klubbnivå. Serienummeret er skivenivå, slik at Skive 1, Skive 2 osv. kan ha hver sin Scolia.</span></div>
+        <div><p class="eyebrow">Fysiske skiver · PROD</p><h4>Flere Scolia-enheter</h4></div>
+        <p class="muted">Rediger den fysiske skiva og velg <strong>Scolia</strong> som scoring. Serienummeret tilhører den fysiske skiva og finnes ikke som en separat TEST-kopi.</p>
+        <div class="integration-status good"><strong>Én canonical konfigurasjon</strong><br><span class="muted">Access token er klubbnivå. Serienummer er skivenivå. TEST-leasen bestemmer bare om kastene midlertidig går til en TEST-kamp.</span></div>
       </div>
     </div>
 
@@ -100,7 +108,7 @@ function ensurePanel() {
       <summary>Avansert drift og feilsøking</summary>
       <div class="integration-grid">
         <form id="scoliaAdvancedForm" class="integration-card">
-          <div><p class="eyebrow">Bridge</p><h4>Tekniske innstillinger</h4></div>
+          <div><p class="eyebrow">Bridge · PROD-innstilling</p><h4>Tekniske innstillinger</h4></div>
           <div class="settings-grid">
             <label class="check-row"><input id="scoliaForce" type="checkbox"><span>forceConnect ved tilkobling</span></label>
             <label class="check-row"><input id="scoliaForward" type="checkbox"><span>Forward eventer til Scolia-appen</span></label>
@@ -109,15 +117,15 @@ function ensurePanel() {
             <label><span>Retry base (sek)</span><input id="scoliaRetryBase" type="number" min="1" max="300"></label>
             <label><span>Behold råeventer (dager)</span><input id="scoliaRetention" type="number" min="1" max="365"></label>
           </div>
-          <div class="integration-actions"><button type="submit" class="button secondary">Lagre avansert</button><button id="scoliaDrain" type="button" class="button secondary">Kjør kø nå</button></div>
+          <div class="integration-actions"><button type="submit" class="button secondary">Lagre PROD-innstilling</button><button id="scoliaDrain" type="button" class="button secondary">Kjør kø nå</button></div>
         </form>
 
-        <div class="integration-card"><div><p class="eyebrow">Durable eventkø</p><h4>Køstatus</h4></div><div id="scoliaQueue" class="queue-grid"></div><p class="muted">Failed prøves automatisk på nytt. Dead-letter krever manuell handling.</p></div>
+        <div class="integration-card"><div><p class="eyebrow">Runtime i aktivt miljø</p><h4>Køstatus</h4></div><div id="scoliaQueue" class="queue-grid"></div><p class="muted">Kø, feil og eventer gjelder miljøet du står i. Selve Scolia-konfigurasjonen over er alltid canonical PROD.</p></div>
       </div>
 
       <div class="integration-grid" style="margin-top:18px">
-        <div class="integration-card"><div><p class="eyebrow">Driftsavvik</p><h4>Åpne Scolia-feil</h4></div><div id="scoliaIncidents" class="incident-list"></div></div>
-        <div class="integration-card"><div><p class="eyebrow">Dead-letter / siste feil</p><h4>Eventer som trenger hjelp</h4></div><div id="scoliaFailedEvents" class="incident-list"></div></div>
+        <div class="integration-card"><div><p class="eyebrow">Runtime i aktivt miljø</p><h4>Åpne Scolia-feil</h4></div><div id="scoliaIncidents" class="incident-list"></div></div>
+        <div class="integration-card"><div><p class="eyebrow">Runtime i aktivt miljø</p><h4>Eventer som trenger hjelp</h4></div><div id="scoliaFailedEvents" class="incident-list"></div></div>
       </div>
     </details>`;
 
@@ -142,6 +150,10 @@ function renderGeneral() {
   const settings = dashboard?.settings || {};
   const enabled = document.getElementById("scoliaEnabled");
   if (!enabled) return;
+  if (dashboard?.configuration_scope && dashboard.configuration_scope !== "production_hardware") {
+    message("Scolia-konfigurasjonen peker ikke på canonical PROD-utstyr. Lagring er stoppet.", "bad");
+    document.querySelectorAll("#scoliaGeneralForm button[type=submit],#scoliaAdvancedForm button[type=submit]").forEach((button) => { button.disabled = true; });
+  }
   enabled.checked = bool(settings.enabled);
   document.getElementById("scoliaForce").checked = bool(settings.force_connect);
   document.getElementById("scoliaForward").checked = bool(settings.forward_messages_to_scolia);
@@ -151,7 +163,7 @@ function renderGeneral() {
   document.getElementById("scoliaRetention").value = Number(settings.event_retention_days || 30);
   document.getElementById("scoliaToken").value = "";
   document.getElementById("scoliaToken").placeholder = settings.access_token_configured ? "Lagret token – skriv bare for å bytte" : "Lim inn access token fra Scolia Service Account";
-  document.getElementById("scoliaTokenHint").textContent = settings.access_token_configured ? `Service Account-token er lagret (${settings.access_token_masked || "maskert"}). Verdien vises aldri tilbake i admin.` : "Ingen Service Account access token er lagret for denne klubben ennå.";
+  document.getElementById("scoliaTokenHint").textContent = settings.access_token_configured ? `PROD-token er lagret (${settings.access_token_masked || "maskert"}). Verdien vises aldri tilbake i admin.` : "Ingen Service Account access token er lagret i canonical PROD-innstilling ennå.";
 }
 
 function renderQueue() {
@@ -217,7 +229,7 @@ async function saveGeneral(event) {
   const accessToken = document.getElementById("scoliaToken").value.trim();
   if (accessToken) body.access_token = accessToken;
   await request(`/clubs/${clubId()}/scolia/settings`, { method: "PATCH", body });
-  message("Scolia-oppsettet er lagret.");
+  message("Canonical PROD-innstillinger for Scolia er lagret.");
   await load();
 }
 
@@ -225,7 +237,7 @@ async function saveAdvanced(event) {
   event.preventDefault();
   const body = settingsBody({ includeGeneral: false, includeAdvanced: true });
   await request(`/clubs/${clubId()}/scolia/settings`, { method: "PATCH", body });
-  message("Avanserte Scolia-innstillinger er lagret.");
+  message("Avanserte canonical PROD-innstillinger er lagret.");
   await load();
 }
 
