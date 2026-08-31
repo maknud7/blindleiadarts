@@ -44,10 +44,49 @@ try {
     $prodKiosks = $prodPrefix . 'kiosks';
     $prodBoards = $prodPrefix . 'scolia_board_settings';
     $prodClubs = $prodPrefix . 'scolia_club_settings';
+    $prodTournaments = $prodPrefix . 'tournaments';
     $leases = $prodPrefix . 'scolia_test_leases';
     $testKiosks = $testPrefix . 'kiosks';
 
-    $db->query("DELETE FROM `{$leases}` WHERE expires_at<=NOW(3)");
+    // Do not DELETE expired leases on every router poll. Expired rows are ignored
+    // by the joins below and are cleaned up by the lease lifecycle itself. This
+    // keeps the normal idle bridge path read-only.
+    $activitySql = "SELECT club_id,
+                           MAX(CASE
+                               WHEN status='in_progress' THEN 1
+                               WHEN status IN ('draft','ready')
+                                    AND start_at IS NOT NULL
+                                    AND start_at BETWEEN DATE_SUB(NOW(3), INTERVAL 8 HOUR)
+                                                     AND DATE_ADD(NOW(3), INTERVAL 30 MINUTE)
+                               THEN 1 ELSE 0 END) AS tournament_active,
+                           MIN(CASE
+                               WHEN status IN ('draft','ready')
+                                    AND start_at > DATE_ADD(NOW(3), INTERVAL 30 MINUTE)
+                               THEN start_at ELSE NULL END) AS next_start_at,
+                           MIN(CASE
+                               WHEN status IN ('draft','ready')
+                                    AND start_at > DATE_ADD(NOW(3), INTERVAL 30 MINUTE)
+                               THEN TIMESTAMPDIFF(SECOND, NOW(3), DATE_SUB(start_at, INTERVAL 30 MINUTE))
+                               ELSE NULL END) AS next_activation_seconds
+                    FROM `{$prodTournaments}`
+                   WHERE status IN ('draft','ready','in_progress')
+                   GROUP BY club_id";
+    $activityResult = $db->query($activitySql);
+    $clubActivity = [];
+    $nextActivationSeconds = null;
+    while ($activity = $activityResult->fetch_assoc()) {
+        $clubId = (int) $activity['club_id'];
+        $clubActivity[$clubId] = [
+            'active' => (int) ($activity['tournament_active'] ?? 0) === 1,
+            'next_start_at' => $activity['next_start_at'] ?? null,
+        ];
+        if ($activity['next_activation_seconds'] !== null) {
+            $seconds = max(0, (int) $activity['next_activation_seconds']);
+            if ($nextActivationSeconds === null || $seconds < $nextActivationSeconds) {
+                $nextActivationSeconds = $seconds;
+            }
+        }
+    }
 
     // Serial, token and board behavior are read exclusively from canonical PROD
     // master data. A TEST lease only changes the runtime destination kiosk.
@@ -67,8 +106,24 @@ try {
 
     $result = $db->query($sql);
     $boards = [];
+    $configuredBoardCount = 0;
+    $activeTestLeases = 0;
+    $activeTournamentClubs = [];
     while ($row = $result->fetch_assoc()) {
+        $configuredBoardCount++;
+        $clubId = (int) $row['club_id'];
         $leasedToTest = (int) ($row['active_test_kiosk_id'] ?? 0) > 0;
+        $tournamentActive = (bool) ($clubActivity[$clubId]['active'] ?? false);
+        if (!$leasedToTest && !$tournamentActive) {
+            continue;
+        }
+
+        if ($leasedToTest) {
+            $activeTestLeases++;
+        } else {
+            $activeTournamentClubs[$clubId] = true;
+        }
+
         $force = $row['force_connect_override'] === null ? (int) $row['force_connect'] : (int) $row['force_connect_override'];
         $forward = $row['forward_messages_override'] === null
             ? (int) $row['forward_messages_to_scolia'] : (int) $row['forward_messages_override'];
@@ -77,7 +132,7 @@ try {
             'connection_key' => (string) $row['serial_number'],
             'kiosk_id' => $leasedToTest ? (int) $row['active_test_kiosk_id'] : (int) $row['physical_kiosk_id'],
             'physical_kiosk_id' => (int) $row['physical_kiosk_id'],
-            'club_id' => (int) $row['club_id'],
+            'club_id' => $clubId,
             'code' => $leasedToTest ? (string) $row['test_code'] : (string) $row['code'],
             'name' => $leasedToTest ? (string) $row['test_name'] : (string) $row['name'],
             'board_number' => $leasedToTest ? (int) $row['test_board_number'] : (int) $row['board_number'],
@@ -92,6 +147,7 @@ try {
                 ? 'https://test.blindleiadart.ingenting.org/api/v1'
                 : 'https://blindleiadart.ingenting.org/api/v1',
             'environment' => $leasedToTest ? 'test' : 'prod',
+            'activation_reason' => $leasedToTest ? 'test_lease' : 'tournament',
             'lease_expires_at' => $leasedToTest ? (string) ($row['expires_at'] ?? '') : null,
             'configuration_scope' => 'production_hardware',
         ];
@@ -99,10 +155,17 @@ try {
 
     $respond(['ok' => true, 'data' => [
         'boards' => $boards,
+        'bridge_mode' => $boards === [] ? 'idle' : 'active',
+        'idle_poll_seconds' => 300,
+        'prewarm_minutes' => 30,
+        'late_start_grace_hours' => 8,
+        'next_activation_in_seconds' => $nextActivationSeconds,
         'router_environment' => $config->appEnv(),
         'configuration_scope' => 'production_hardware',
         'shared_across_environments' => true,
-        'active_test_leases' => count(array_filter($boards, static fn (array $board): bool => $board['environment'] === 'test')),
+        'configured_boards' => $configuredBoardCount,
+        'active_test_leases' => $activeTestLeases,
+        'active_tournament_clubs' => count($activeTournamentClubs),
     ]]);
 } catch (Throwable $error) {
     $respond(['ok' => false, 'error' => [
