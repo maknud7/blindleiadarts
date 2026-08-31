@@ -55,7 +55,10 @@ $config = [
         'publish_secret' => getenv('REALTIME_PUBLISH_SECRET') ?: '',
     ],
     'scolia' => [
-        'bridge_secret' => getenv('SCOLIA_BRIDGE_SECRET') ?: '',
+        // Scolia is an active platform capability. A deploy without the
+        // bridge credential would produce a green-looking but unusable router,
+        // so config generation must fail closed instead of writing an empty value.
+        'bridge_secret' => env_required('SCOLIA_BRIDGE_SECRET'),
     ],
     'db' => [
         'host' => env_required('DB_HOST'),
