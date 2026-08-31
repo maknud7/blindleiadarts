@@ -32,7 +32,7 @@ window.addEventListener("bd:player-state-changed",hideClubSwitcher);
 import("./remove-checkout-percentage.js?v=20260830-1835")
   .then(()=>import("./tournament-discovery-ux.js?v=20260830-1818"))
   .then(()=>import("./tournament-calendar-polish.js?v=20260829-1945"))
-  .then(()=>import("./tournament-prestart-detail.js?v=20260829-2055"))
+  .then(()=>import("./tournament-prestart-detail.js?v=20260831-0905"))
   .then(()=>import("./tournament-groups-detail.js?v=20260830-2315"))
   .then(()=>import("./shared-match-card-adapter.js?v=20260831-0750"))
   .then(()=>import("./tournament-compact-match-links.js?v=20260830-2335"))
