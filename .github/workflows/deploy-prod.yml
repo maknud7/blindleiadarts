@@ -313,7 +313,7 @@ jobs:
 
           live_html="$(curl --fail --silent --show-error "$root/live/?cb=$RANDOM")"
           grep -Fq 'data-bd-surface="live"' <<<"$live_html"
-          grep -Fq 'live-v2.js' <<<"$live_html"
+          grep -Fq 'route-bootstrap.js' <<<"$live_html"
 
           echo "PRODUCTION_DEPLOYMENT_VERIFIED=yes"
           echo "PRODUCTION_SHA=$EXPECTED_SHA"
