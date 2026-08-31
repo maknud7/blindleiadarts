@@ -10,7 +10,7 @@ use Throwable;
 
 final class TournamentFlowRepository
 {
-    private const MIN_PLAYERS = 4;
+    private const MIN_PLAYERS = 2;
 
     private mysqli $connection;
     private string $tablePrefix;
@@ -56,7 +56,7 @@ final class TournamentFlowRepository
 
         $checkedIn = $this->countRegistrations($tournamentId, ['checked_in']);
         if ($checkedIn < self::MIN_PLAYERS) {
-            throw new ValidationException('not_enough_checked_in_players', 'Minst fire spillere må delta før turneringen kan startes.');
+            throw new ValidationException('not_enough_checked_in_players', 'Minst to spillere må delta før turneringen kan startes.');
         }
 
         if ($status === 'in_progress') {
