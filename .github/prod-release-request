@@ -1,6 +1,6 @@
-release_sha=0614f8317a5344c34b5ca2add030376210aa3a3b
+release_sha=7e5e0963954cb427a8c21e80dc927a7995156f90
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-08-31T12:40:00+02:00
-purpose=fix_scolia_test_routing_origin
-backup_prefix=bd_backup_20260831_101955_
+requested_at=2026-08-31T13:18:00+02:00
+purpose=deploy_scolia_canonical_prod_hardware_settings
+backup_prefix=bd_backup_20260831_111711_
