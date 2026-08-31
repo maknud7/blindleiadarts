@@ -78,21 +78,26 @@ async function scoliaHealthProbe() {
     const boards = Array.isArray(data.boards) ? data.boards : [];
     const configuredBoards = Number(data.configured_boards || 0);
     const secretConfigured = Boolean(data.secret_configured);
+    const bridgeRequired = Boolean(data.bridge_required);
     const bridgeAlive = data.bridge_alive === true;
-    const boardWarning = boards.some((board) => !board.heartbeat_fresh || String(board.connection_state || "") !== "connected");
+    const boardWarning = boards.some((board) =>
+      Boolean(board.expected_active)
+      && (!board.heartbeat_fresh || String(board.connection_state || "") !== "connected")
+    );
 
     let status = "ok";
-    if (!secretConfigured || (configuredBoards > 0 && !bridgeAlive)) status = "fail";
+    if (!secretConfigured || (bridgeRequired && !bridgeAlive)) status = "fail";
     else if (configuredBoards === 0 || boardWarning) status = "warn";
 
     const boardSummary = boards.length
       ? boards.map((board) => {
           const number = Number(board.board_number || 0);
+          if (!board.expected_active) return `Skive ${number}: dvale`;
           const state = String(board.connection_state || "ukjent");
           const route = String(board.route || "prod").toUpperCase();
           return `Skive ${number}: ${state} (${route})`;
         }).join(", ")
-      : "ingen aktive Scolia-skiver";
+      : "ingen konfigurerte Scolia-skiver";
 
     const age = data.latest_heartbeat_age_seconds;
     return {
@@ -101,8 +106,10 @@ async function scoliaHealthProbe() {
       status,
       ms: elapsed,
       detail: {
-        bridge: String(data.bridge_status || "ukjent"),
-        heartbeat: age === null || age === undefined ? "mangler" : `${Number(age)} s siden`,
+        bridge: data.bridge_status === "sleeping" ? "dvale" : String(data.bridge_status || "ukjent"),
+        heartbeat: !bridgeRequired
+          ? "ikke nødvendig i dvale"
+          : (age === null || age === undefined ? "mangler" : `${Number(age)} s siden`),
         skiver: boardSummary,
         test_lease: Number(data.active_test_leases || 0),
         prod_innstilling: data.configuration_scope === "production_hardware",

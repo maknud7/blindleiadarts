@@ -49,15 +49,43 @@ try {
     $kiosks = $hardwarePrefix . 'kiosks';
     $boardSettings = $hardwarePrefix . 'scolia_board_settings';
     $clubSettings = $hardwarePrefix . 'scolia_club_settings';
+    $tournaments = $hardwarePrefix . 'tournaments';
     $leases = $hardwarePrefix . 'scolia_test_leases';
 
-    foreach ([$kiosks, $boardSettings, $clubSettings, $leases] as $table) {
+    foreach ([$kiosks, $boardSettings, $clubSettings, $tournaments, $leases] as $table) {
         if (!$tableExists($db, $table)) {
             throw new RuntimeException('Scolia health schema is incomplete.');
         }
     }
 
-    $sql = "SELECT k.id AS physical_kiosk_id,k.board_number,k.name,
+    $activitySql = "SELECT club_id,
+                           MAX(CASE
+                               WHEN status='in_progress' THEN 1
+                               WHEN status IN ('draft','ready')
+                                    AND start_at IS NOT NULL
+                                    AND start_at BETWEEN DATE_SUB(NOW(3), INTERVAL 8 HOUR)
+                                                     AND DATE_ADD(NOW(3), INTERVAL 30 MINUTE)
+                               THEN 1 ELSE 0 END) AS tournament_active,
+                           MIN(CASE
+                               WHEN status IN ('draft','ready')
+                                    AND start_at > DATE_ADD(NOW(3), INTERVAL 30 MINUTE)
+                               THEN start_at ELSE NULL END) AS next_start_at
+                      FROM `{$tournaments}`
+                     WHERE status IN ('draft','ready','in_progress')
+                     GROUP BY club_id";
+    $activityResult = $db->query($activitySql);
+    $clubActivity = [];
+    $nextTournamentStartAt = null;
+    while ($activity = $activityResult->fetch_assoc()) {
+        $clubId = (int) $activity['club_id'];
+        $clubActivity[$clubId] = (int) ($activity['tournament_active'] ?? 0) === 1;
+        if (!empty($activity['next_start_at'])
+            && ($nextTournamentStartAt === null || strcmp((string) $activity['next_start_at'], $nextTournamentStartAt) < 0)) {
+            $nextTournamentStartAt = (string) $activity['next_start_at'];
+        }
+    }
+
+    $sql = "SELECT k.id AS physical_kiosk_id,k.club_id,k.board_number,k.name,
                    l.test_kiosk_id,l.expires_at
               FROM `{$boardSettings}` s
               INNER JOIN `{$kiosks}` k ON k.id=s.kiosk_id AND k.is_active=1
@@ -70,23 +98,33 @@ try {
     $configuredBoards = $db->query($sql)->fetch_all(MYSQLI_ASSOC);
 
     $boards = [];
+    $expectedActiveCount = 0;
     $freshHeartbeatCount = 0;
     $connectedCount = 0;
     $activeTestLeases = 0;
+    $activeTournamentBoards = 0;
     $latestHeartbeatAt = null;
     $latestHeartbeatAge = null;
 
     foreach ($configuredBoards as $configured) {
+        $clubId = (int) $configured['club_id'];
         $physicalId = (int) $configured['physical_kiosk_id'];
         $testKioskId = (int) ($configured['test_kiosk_id'] ?? 0);
         $leasedToTest = $testKioskId > 0;
+        $tournamentActive = (bool) ($clubActivity[$clubId] ?? false);
+        $expectedActive = $leasedToTest || $tournamentActive;
+        $activationReason = $leasedToTest ? 'test_lease' : ($tournamentActive ? 'tournament' : 'none');
+
+        if ($leasedToTest) $activeTestLeases++;
+        if ($tournamentActive && !$leasedToTest) $activeTournamentBoards++;
+        if ($expectedActive) $expectedActiveCount++;
+
         $runtimePrefix = $leasedToTest ? $testPrefix : $hardwarePrefix;
         $runtimeKioskId = $leasedToTest ? $testKioskId : $physicalId;
-        if ($leasedToTest) $activeTestLeases++;
-
         $runtimeTable = $runtimePrefix . 'scolia_board_runtime';
         $runtime = null;
-        if ($tableExists($db, $runtimeTable)) {
+
+        if ($expectedActive && $tableExists($db, $runtimeTable)) {
             $stmt = $db->prepare(
                 "SELECT connection_state,board_status,board_phase,error_type,fallback_active,needs_reconciliation,
                         last_bridge_heartbeat_at,last_event_at,
@@ -103,9 +141,9 @@ try {
         $heartbeatAge = isset($runtime['heartbeat_age_seconds']) && $runtime['heartbeat_age_seconds'] !== null
             ? max(0, (int) $runtime['heartbeat_age_seconds'])
             : null;
-        $heartbeatFresh = $heartbeatAge !== null && $heartbeatAge <= 60;
-        $connectionState = (string) ($runtime['connection_state'] ?? 'unknown');
-        $connected = $heartbeatFresh && $connectionState === 'connected';
+        $heartbeatFresh = $expectedActive && $heartbeatAge !== null && $heartbeatAge <= 60;
+        $connectionState = $expectedActive ? (string) ($runtime['connection_state'] ?? 'unknown') : 'sleeping';
+        $connected = $expectedActive && $heartbeatFresh && $connectionState === 'connected';
 
         if ($heartbeatFresh) $freshHeartbeatCount++;
         if ($connected) $connectedCount++;
@@ -118,6 +156,8 @@ try {
             'board_number' => (int) $configured['board_number'],
             'name' => (string) $configured['name'],
             'route' => $leasedToTest ? 'test' : 'prod',
+            'expected_active' => $expectedActive,
+            'activation_reason' => $activationReason,
             'test_lease_active' => $leasedToTest,
             'lease_expires_at' => $leasedToTest ? (string) ($configured['expires_at'] ?? '') : null,
             'connection_state' => $connectionState,
@@ -134,11 +174,12 @@ try {
 
     $secretConfigured = trim($config->scoliaBridgeSecret()) !== '';
     $configuredCount = count($boards);
-    $bridgeAlive = $configuredCount === 0 ? null : $freshHeartbeatCount > 0;
+    $bridgeRequired = $expectedActiveCount > 0;
+    $bridgeAlive = $bridgeRequired ? $freshHeartbeatCount > 0 : null;
     $bridgeStatus = !$secretConfigured
         ? 'misconfigured'
-        : ($configuredCount === 0
-            ? 'idle'
+        : (!$bridgeRequired
+            ? 'sleeping'
             : ($bridgeAlive ? 'online' : 'stale'));
 
     $respond([
@@ -149,14 +190,19 @@ try {
             'configuration_scope' => 'production_hardware',
             'secret_configured' => $secretConfigured,
             'bridge_status' => $bridgeStatus,
+            'bridge_required' => $bridgeRequired,
             'bridge_alive' => $bridgeAlive,
             'heartbeat_stale_after_seconds' => 60,
             'latest_heartbeat_at' => $latestHeartbeatAt,
             'latest_heartbeat_age_seconds' => $latestHeartbeatAge,
             'configured_boards' => $configuredCount,
+            'expected_active_boards' => $expectedActiveCount,
             'fresh_heartbeat_boards' => $freshHeartbeatCount,
             'connected_boards' => $connectedCount,
             'active_test_leases' => $activeTestLeases,
+            'active_tournament_boards' => $activeTournamentBoards,
+            'next_tournament_start_at' => $nextTournamentStartAt,
+            'prewarm_minutes' => 30,
             'boards' => $boards,
         ],
     ]);

@@ -10,9 +10,10 @@ const ROUTER_URL = String(
   || new URL("../scolia-bridge-router.php", `${API_BASE}/`).toString()
 );
 const SCOLIA_WSS_URL = String(process.env.SCOLIA_WSS_URL || "wss://game.scoliadarts.com/api/v1/external");
-const CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_POLL_MS || 10000));
+const ACTIVE_CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_POLL_MS || 10000));
+const IDLE_CONFIG_POLL_MS = Math.max(60000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 300000));
 const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
-const DRAIN_POLL_MS = Math.max(500, Number(process.env.SCOLIA_DRAIN_POLL_MS || 2000));
+const DRAIN_POLL_MS = Math.max(1000, Number(process.env.SCOLIA_DRAIN_POLL_MS || 5000));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
 const SPOOL_DIR = path.resolve(process.env.SCOLIA_SPOOL_DIR || "./data/scolia-spool");
 const COMMAND_ACK_TIMEOUT_MS = Math.max(2000, Number(process.env.SCOLIA_COMMAND_ACK_TIMEOUT_MS || 8000));
@@ -26,7 +27,9 @@ await fs.mkdir(SPOOL_DIR, { recursive: true });
 
 const connections = new Map();
 let flushing = false;
-let routerFallbackWarned = false;
+let routerUnavailableWarned = false;
+let configTimer = null;
+let lastBridgeMode = "unknown";
 
 function bridgeHeaders(extra = {}) {
   return {
@@ -60,23 +63,14 @@ async function targetApi(apiBase, pathname, options = {}) {
 async function bridgeConfig() {
   try {
     const data = await requestJson(ROUTER_URL);
-    routerFallbackWarned = false;
+    routerUnavailableWarned = false;
     return data;
   } catch (error) {
-    if (!routerFallbackWarned) {
-      console.warn(`Scolia router unavailable (${error.message}); falling back to ${API_BASE}.`);
-      routerFallbackWarned = true;
+    if (!routerUnavailableWarned) {
+      console.warn(`Scolia router unavailable (${error.message}); keeping current bridge state and retrying.`);
+      routerUnavailableWarned = true;
     }
-    const data = await targetApi(API_BASE, "/scolia/bridge/config");
-    return {
-      ...data,
-      boards: (data.boards || []).map((board) => ({
-        ...board,
-        connection_key: board.connection_key || board.serial_number || String(board.kiosk_id),
-        target_api_base: board.target_api_base || API_BASE,
-        environment: board.environment || "default",
-      })),
-    };
+    throw error;
   }
 }
 
@@ -219,6 +213,7 @@ class BoardConnection {
   async onOpen() {
     this.state = "connected";
     this.reconnectAttempt = 0;
+    console.log(`Skive ${this.config.board_number}: Scolia connected · ${String(this.config.environment || "prod").toUpperCase()}`);
     await spool(
       this.config.serial_number,
       this.config.target_api_base,
@@ -276,6 +271,7 @@ class BoardConnection {
     const reason = `${code}: ${reasonBuffer?.toString("utf8") || "connection closed"}`;
     this.state = "disconnected";
     if (!this.closedByConfig) {
+      console.warn(`Skive ${this.config.board_number}: Scolia disconnected · reconnecting`);
       await spool(
         this.config.serial_number,
         this.config.target_api_base,
@@ -338,6 +334,15 @@ class BoardConnection {
   }
 }
 
+function setBridgeMode(mode) {
+  const normalized = mode === "active" ? "active" : "idle";
+  if (normalized === lastBridgeMode) return;
+  lastBridgeMode = normalized;
+  console.log(normalized === "active"
+    ? "Scolia bridge ACTIVE · tournament/test demand detected"
+    : "Scolia bridge IDLE · no tournament or TEST lease; physical sockets are sleeping");
+}
+
 async function reconcileConfig() {
   const data = await bridgeConfig();
   const wanted = new Map(
@@ -347,7 +352,7 @@ async function reconcileConfig() {
   for (const [connectionKey, connection] of connections.entries()) {
     const next = wanted.get(connectionKey);
     if (!next) {
-      connection.stop("board disabled or routing changed");
+      connection.stop("bridge idle or routing changed");
       connections.delete(connectionKey);
       continue;
     }
@@ -366,6 +371,9 @@ async function reconcileConfig() {
     connections.set(connectionKey, connection);
     connection.start();
   }
+
+  setBridgeMode(data.bridge_mode || (connections.size > 0 ? "active" : "idle"));
+  return data;
 }
 
 function groupedConnections() {
@@ -380,6 +388,7 @@ function groupedConnections() {
 
 async function heartbeat() {
   const groups = groupedConnections();
+  if (groups.size === 0) return;
   await Promise.all([...groups.entries()].map(async ([apiBase, items]) => {
     const boards = items.map((connection) => ({ kiosk_id: Number(connection.config.kiosk_id), state: connection.state }));
     await targetApi(apiBase, "/scolia/bridge/heartbeat", { method: "POST", body: { boards } });
@@ -387,7 +396,8 @@ async function heartbeat() {
 }
 
 async function drainServerQueue() {
-  const targets = new Set([API_BASE]);
+  if (connections.size === 0) return;
+  const targets = new Set();
   for (const connection of connections.values()) targets.add(connection.config.target_api_base || API_BASE);
   await Promise.all([...targets].map((apiBase) => targetApi(apiBase, "/scolia/bridge/drain", {
     method: "POST",
@@ -395,23 +405,60 @@ async function drainServerQueue() {
   }).catch((error) => console.warn(`Queue drain failed for ${apiBase}:`, error.message))));
 }
 
+function nextConfigDelay(data) {
+  if ((data?.bridge_mode || "idle") === "active") return ACTIVE_CONFIG_POLL_MS;
+
+  let delay = Math.max(
+    60000,
+    Number(data?.idle_poll_seconds || 0) > 0
+      ? Number(data.idle_poll_seconds) * 1000
+      : IDLE_CONFIG_POLL_MS
+  );
+
+  const nextActivationSeconds = Number(data?.next_activation_in_seconds);
+  if (Number.isFinite(nextActivationSeconds) && nextActivationSeconds >= 0) {
+    delay = Math.min(delay, Math.max(5000, nextActivationSeconds * 1000));
+  }
+  return delay;
+}
+
+async function configLoop() {
+  let delay = connections.size > 0 ? ACTIVE_CONFIG_POLL_MS : IDLE_CONFIG_POLL_MS;
+  try {
+    const data = await reconcileConfig();
+    delay = nextConfigDelay(data);
+  } catch (error) {
+    console.warn("Scolia config refresh failed:", error.message);
+  } finally {
+    clearTimeout(configTimer);
+    configTimer = setTimeout(configLoop, delay);
+  }
+}
+
 async function boot() {
   console.log(`Blindleia Scolia Bridge starting. Control=${API_BASE}, router=${ROUTER_URL}, spool=${SPOOL_DIR}`);
   await flushSpool().catch((error) => console.warn("Initial spool flush failed:", error.message));
-  await reconcileConfig().catch((error) => console.error("Initial Scolia config failed:", error.message));
+  await configLoop();
 
-  setInterval(() => reconcileConfig().catch((error) => console.warn("Scolia config refresh failed:", error.message)), CONFIG_POLL_MS);
-  setInterval(() => flushSpool().catch((error) => console.warn("Spool flush failed:", error.message)), 1000);
+  // Local spool checks are cheap and make a failed delivery durable. No API call is
+  // made when the spool is empty.
+  setInterval(() => flushSpool().catch((error) => console.warn("Spool flush failed:", error.message)), 5000);
+  // These functions return immediately without HTTP/DB traffic while the bridge is idle.
   setInterval(() => heartbeat().catch((error) => console.warn("Bridge heartbeat failed:", error.message)), HEARTBEAT_MS);
   setInterval(() => drainServerQueue().catch((error) => console.warn("Server queue drain failed:", error.message)), DRAIN_POLL_MS);
 }
 
-process.on("SIGTERM", () => {
+function shutdown() {
+  clearTimeout(configTimer);
   for (const connection of connections.values()) connection.stop("bridge shutdown");
+}
+
+process.on("SIGTERM", () => {
+  shutdown();
   process.exit(0);
 });
 process.on("SIGINT", () => {
-  for (const connection of connections.values()) connection.stop("bridge shutdown");
+  shutdown();
   process.exit(0);
 });
 
