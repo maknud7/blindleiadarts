@@ -89,12 +89,12 @@ final class ScoliaApplication
             if ($method === 'POST' && $path === 'v1/scolia/bridge/events') {
                 $body = $request->jsonBody();
                 $serial = trim((string) ($body['serial_number'] ?? ''));
-                $kioskId = (int) ($body['kiosk_id'] ?? 0);
                 $message = is_array($body['message'] ?? null) ? $body['message'] : [];
-                if ($serial === '' || $kioskId <= 0 || $message === []) {
-                    return JsonResponse::error(422, 'scolia_event_invalid', 'serial_number, kiosk_id and message are required.');
+                $routedKioskId = isset($body['kiosk_id']) && (int) $body['kiosk_id'] > 0 ? (int) $body['kiosk_id'] : null;
+                if ($serial === '' || $message === []) {
+                    return JsonResponse::error(422, 'scolia_event_invalid', 'serial_number and message are required.');
                 }
-                $queued = $routedEvents->enqueueEvent($serial, $kioskId, $message);
+                $queued = $routedEvents->enqueueEvent($serial, $message, $routedKioskId);
                 $drain = $service->drain(20);
                 return JsonResponse::ok(['event' => $queued, 'drain' => $drain], $queued['duplicate'] ? 200 : 202);
             }
