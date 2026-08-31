@@ -72,6 +72,10 @@ function ensureGateStyles() {
   const style = document.createElement("style");
   style.id = "checkinWindowGateStyles";
   style.textContent = `
+    button[data-checkin]:not([data-checkin-window-original-text]),
+    button[data-px-checkin]:not([data-checkin-window-original-text]) {
+      visibility:hidden!important;
+    }
     button.checkin-window-disabled:disabled,
     .player-now-actions button.checkin-window-disabled:disabled {
       background:#e7edf4!important;
@@ -201,6 +205,7 @@ async function gateButton(button, tournamentId) {
     applyWindowState(button, status);
     return status;
   } catch (error) {
+    rememberButtonState(button);
     console.warn("Kunne ikke hente innsjekkvindu", error);
     return null;
   }
