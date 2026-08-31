@@ -9,7 +9,26 @@ The canonical user-facing guide content lives in:
 
 `packages/ui-assets/user-guide.js`
 
-Both player and admin surfaces load that shared module through `packages/ui-assets/portal-menu.js`. Do not create separate copies of the same guide text in each frontend.
+Role/topic access for the guide lives in:
+
+`packages/ui-assets/user-guide-access.js`
+
+Both player and admin surfaces load the shared guide through `packages/ui-assets/portal-menu.js`. Do not create separate copies of the same guide text in each frontend.
+
+## Access control
+
+The guide must follow the same authenticated role model as the product. Showing a feature in documentation is part of the user experience, so users should not be presented with procedures for functionality they cannot access.
+
+Current roles are `player`, `club_admin` and `super_admin` for guide purposes:
+
+- On the player surface, authenticated users see player topics only.
+- On the admin surface, only `club_admin` and `super_admin` may see club-administration topics.
+- Superadmin-only topics, when added, must be explicitly limited to `super_admin`.
+- Guide topics are **deny-by-default**. A new topic must be explicitly added to the topic-access map in `user-guide-access.js` before it becomes visible.
+- If a future role gets narrower product permissions, its guide topic list must be narrowed at the same time. Do not grant guide access merely because a user can open the general portal.
+- If a user has no accessible guide topics on the current surface, the guide launcher is hidden.
+
+Guide access is not a substitute for backend authorization. APIs and product features remain the security boundary; the guide mirrors those permissions so the documentation matches what the user can actually do.
 
 ## Guide format
 
@@ -40,7 +59,7 @@ Check the guide whenever the change affects any of these areas:
 
 For each push, the developer/agent must make one of two explicit decisions:
 
-1. **Guide impact: updated** – user-visible behavior changed, so `packages/ui-assets/user-guide.js` is updated in the same logical change.
+1. **Guide impact: updated** – user-visible behavior changed, so the guide and, when relevant, its access map are updated in the same logical change.
 2. **Guide impact: none** – the change is internal only and does not alter how a player or admin uses or understands the platform.
 
 The check is required even when the answer is “none”.
@@ -60,6 +79,7 @@ If a bug fix changes the intended behavior or corrects a guide that was describi
 - Do not document a default value as a rule unless it actually is the product rule.
 - Migrated or historical data must be described according to the same semantics as native data once it is canonical.
 - A workflow guide must be understandable by a new club administrator without repository or database knowledge.
+- Documentation visibility must follow product permissions; adding a topic requires an explicit access decision.
 
 ## Review checklist
 
@@ -69,6 +89,8 @@ Before pushing:
 - [ ] I reviewed the diff for admin-facing impact.
 - [ ] I checked shared/canonical concepts affected by the change.
 - [ ] I updated the guide if the workflow, rule, term or visible data changed.
+- [ ] I checked whether guide topic access must change for any role.
+- [ ] Any new/changed topic is explicitly present in the guide access map (deny-by-default).
 - [ ] Any new/changed workflow has a real step-by-step procedure, not only a feature explanation.
 - [ ] I verified that the guide still describes what TEST will actually do after deploy.
 - [ ] I can state `Guide impact: updated` or `Guide impact: none` for this push.

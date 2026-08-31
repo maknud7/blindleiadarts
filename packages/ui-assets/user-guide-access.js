@@ -1,4 +1,36 @@
 const STYLE_ID = "bdUserGuideAccessStyles";
+const SURFACE = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview" ? "admin" : "player";
+const app = window.BlindleiaApp;
+
+// Guide access follows the authenticated product role. New guide topics are deny-by-default:
+// they must be explicitly added here when the guide is changed.
+const TOPIC_ACCESS = Object.freeze({
+  player: Object.freeze({
+    activate: ["player", "club_admin", "super_admin"],
+    signup: ["player", "club_admin", "super_admin"],
+    "follow-tournament": ["player", "club_admin", "super_admin"],
+    "match-card": ["player", "club_admin", "super_admin"],
+    elo: ["player", "club_admin", "super_admin"],
+    statistics: ["player", "club_admin", "super_admin"],
+    membership: ["player", "club_admin", "super_admin"],
+  }),
+  admin: Object.freeze({
+    "board-setup-options": ["club_admin", "super_admin"],
+    "normal-board": ["club_admin", "super_admin"],
+    "pair-tablet": ["club_admin", "super_admin"],
+    scolia: ["club_admin", "super_admin"],
+    "member-activation": ["club_admin", "super_admin"],
+    "create-tournament": ["club_admin", "super_admin"],
+    "checkin-start": ["club_admin", "super_admin"],
+    "run-tournament": ["club_admin", "super_admin"],
+    elo: ["club_admin", "super_admin"],
+    "live-finish": ["club_admin", "super_admin"],
+  }),
+});
+
+let currentRole = "";
+let accessResolved = false;
+let resolvingAccess = null;
 
 function closeMobileDrawer() {
   document.body.classList.remove("unified-mobile-drawer-open");
@@ -16,9 +48,91 @@ function closeMobileDrawer() {
   }
 }
 
+function allowedTopicIds() {
+  if (!accessResolved || !currentRole) return new Set();
+  const access = TOPIC_ACCESS[SURFACE] || {};
+  return new Set(Object.entries(access)
+    .filter(([, roles]) => roles.includes(currentRole))
+    .map(([id]) => id));
+}
+
+function hasGuideAccess() {
+  return allowedTopicIds().size > 0;
+}
+
+function setLauncherVisibility() {
+  const visible = hasGuideAccess();
+  document.querySelectorAll(".bd-guide-open,#bdGuideMobileOpen").forEach((node) => {
+    node.classList.toggle("hidden", !visible);
+    node.toggleAttribute("hidden", !visible);
+    node.setAttribute("aria-hidden", visible ? "false" : "true");
+    if ("disabled" in node) node.disabled = !visible;
+  });
+}
+
+function applyDialogAccess() {
+  const dialog = document.querySelector("dialog.bd-user-guide");
+  if (!dialog) return;
+  const allowed = allowedTopicIds();
+  const buttons = [...dialog.querySelectorAll(".bd-guide-toc button[data-topic]")];
+
+  buttons.forEach((button) => {
+    const permitted = allowed.has(String(button.dataset.topic || ""));
+    button.classList.toggle("hidden", !permitted);
+    button.toggleAttribute("hidden", !permitted);
+    button.setAttribute("aria-hidden", permitted ? "false" : "true");
+    button.disabled = !permitted;
+  });
+
+  const visibleButtons = buttons.filter((button) => !button.hidden && !button.disabled);
+  const active = buttons.find((button) => button.classList.contains("active"));
+  if (active && (active.hidden || active.disabled) && visibleButtons[0]) {
+    visibleButtons[0].click();
+  }
+
+  if (!visibleButtons.length && dialog.open) {
+    const article = dialog.querySelector(".bd-guide-article");
+    if (article) {
+      article.innerHTML = `<p class="bd-guide-group">Tilgang</p><h3>Ingen guider tilgjengelig</h3><p class="bd-guide-summary">Denne kontoen har ikke tilgang til guideemner på denne flaten.</p>`;
+    }
+  }
+}
+
+async function resolveAccess() {
+  if (resolvingAccess) return resolvingAccess;
+  resolvingAccess = (async () => {
+    const token = localStorage.getItem("bd:token") || "";
+    if (!token) {
+      currentRole = "";
+      accessResolved = true;
+      return;
+    }
+    try {
+      const user = app?.session?.resolve ? await app.session.resolve() : null;
+      currentRole = String(user?.role || "");
+    } catch {
+      currentRole = "";
+    } finally {
+      accessResolved = true;
+    }
+  })();
+
+  try {
+    await resolvingAccess;
+  } finally {
+    resolvingAccess = null;
+    setLauncherVisibility();
+    applyDialogAccess();
+  }
+}
+
 function openGuide() {
   closeMobileDrawer();
-  window.BlindleiaUserGuide?.open?.();
+  resolveAccess().then(() => {
+    if (!hasGuideAccess()) return;
+    window.BlindleiaUserGuide?.open?.();
+    window.setTimeout(applyDialogAccess, 0);
+  });
 }
 
 function ensureStyles() {
@@ -83,10 +197,10 @@ function ensureStyles() {
         background:rgba(255,255,255,.14)!important;
         color:#fff!important;
       }
-      .unified-mobile-bottom-nav:has(.bd-guide-mobile-open){
+      .unified-mobile-bottom-nav:has(.bd-guide-mobile-open:not([hidden])){
         grid-template-columns:repeat(5,minmax(0,1fr))!important;
       }
-      .unified-mobile-bottom-nav .bd-guide-mobile-open{
+      .unified-mobile-bottom-nav .bd-guide-mobile-open:not([hidden]){
         display:flex!important;
       }
       .bd-guide-mobile-icon{
@@ -112,8 +226,9 @@ function ensureMobileButton() {
   if (!button) {
     button = document.createElement("button");
     button.id = "bdGuideMobileOpen";
-    button.className = "bd-guide-mobile-open";
+    button.className = "bd-guide-mobile-open hidden";
     button.type = "button";
+    button.hidden = true;
     button.setAttribute("aria-label", "Åpne brukerguide");
     button.innerHTML = `<span class="bd-guide-mobile-icon" aria-hidden="true">?</span><span>Guide</span>`;
     button.addEventListener("click", openGuide);
@@ -126,10 +241,39 @@ function ensureMobileButton() {
 function refresh() {
   ensureStyles();
   ensureMobileButton();
+  setLauncherVisibility();
+  applyDialogAccess();
 }
 
 const observer = new MutationObserver(refresh);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refresh, { once: true });
-else refresh();
+window.addEventListener("storage", (event) => {
+  if (event.key !== "bd:token") return;
+  accessResolved = false;
+  currentRole = "";
+  resolveAccess().catch(() => undefined);
+});
+window.addEventListener("bd:session", () => {
+  accessResolved = false;
+  currentRole = "";
+  resolveAccess().catch(() => undefined);
+});
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    refresh();
+    resolveAccess().catch(() => undefined);
+  }, { once: true });
+} else {
+  refresh();
+  resolveAccess().catch(() => undefined);
+}
+
+window.BlindleiaUserGuideAccess = Object.freeze({
+  surface: SURFACE,
+  role: () => currentRole,
+  allowedTopicIds: () => [...allowedTopicIds()],
+  canOpen: hasGuideAccess,
+  refresh: applyDialogAccess,
+});
