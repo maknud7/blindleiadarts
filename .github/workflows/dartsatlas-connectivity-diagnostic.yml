@@ -13,44 +13,50 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for this revision in TEST
+      - name: Validate all Mandagsserien round 4 match details through TEST server
         shell: bash
         run: |
           set -Eeuo pipefail
-          expected="$GITHUB_SHA"
-          for attempt in $(seq 1 60); do
-            release="$(curl -fsS --max-time 15 "https://test.blindleiadarts.ingenting.org/release.json?cb=$RANDOM" || true)"
-            if grep -Fq "$expected" <<<"$release"; then
-              echo "TEST_RELEASE=$expected"
-              exit 0
+          ids=(
+            r4TtG8kymADI 67airnT2p86H zoGenUGrVdYF MBjQ16jF3i9q fGlAsv0R6c27 ZaAKjrep2k3g LYzNi7xXM2KT rgBn5j2RcbOZ Qn2H6tx9P04u BfLZUtvbH7Wp 1MpNsq1NnB6v SQO33OKlWEu3 plSH19dgo5y9 9MCQwujqvnkF QJrtaaQUMHb5
+            wkHMp6FmkTqk JMJMCpfLa4rn j707Oogyfyju y2NfxIvHPPNr YCA09XkUxbDS ql89KYKZEr0L Ddi349OApI6t iZoHG6vgc9ic rQVJzOfuoN50 d4udoc8W2m5w QuRL7b9gRLDs eT1gCWST9n7c rbqSMvkhMds1 BEYMmRovCefs ihBZN9L8b0p2
+            MARRHq8auTBb UN0unUpEOGva 5B2RoYmLKX0m AFaCEVd8cQJt l36LyJJYsyKc vfjjkAeWIWnf BrCVGX5yRm9R
+          )
+          ok=0
+          failed=0
+          total_legs=0
+          total_visits=0
+          total_darts=0
+          : > /tmp/match-details.tsv
+          for id in "${ids[@]}"; do
+            body="$(mktemp)"
+            status="$(curl -sS -L --max-time 90 -o "$body" -w '%{http_code}' "https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=$id" || true)"
+            line="$(php -r '
+              $d=json_decode(file_get_contents($argv[1]),true);
+              if(!is_array($d)||empty($d["ok"])) {
+                printf("FAIL\t%s\t%s\t%s\t%s\t0\t0\t0",$argv[2],(string)($d["error"]??"invalid_json"),(string)($d["message"]??""),(string)($d["status"]??""));
+                exit;
+              }
+              printf("OK\t%s\t%s vs %s\t%s-%s\t%d\t%d\t%d",$argv[2],(string)$d["players"]["a"],(string)$d["players"]["b"],(string)$d["legs_won"]["a"],(string)$d["legs_won"]["b"],(int)$d["leg_count"],(int)$d["visit_count"],(int)$d["darts_count"]);
+            ' "$body" "$id")"
+            echo -e "$line" | tee -a /tmp/match-details.tsv
+            if [[ "$status" == "200" && "$line" == OK$'\t'* ]]; then
+              ok=$((ok+1))
+              IFS=$'\t' read -r _ _ _ _ legs visits darts <<< "$line"
+              total_legs=$((total_legs+legs))
+              total_visits=$((total_visits+visits))
+              total_darts=$((total_darts+darts))
+            else
+              failed=$((failed+1))
             fi
-            echo "Waiting for TEST deploy ($attempt/60)"
-            sleep 6
+            rm -f "$body"
+            sleep 1
           done
-          echo 'TEST did not reach expected revision in time' >&2
-          exit 1
-
-      - name: Apply Mandagsserien round 4 migration in TEST
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          body="$(mktemp)"
-          status="$(curl -sS -L --max-time 240 -o "$body" -w '%{http_code}' \
-            'https://test.blindleiadarts.ingenting.org/api/atlas-migrate-test.php?tournament=jort2WSBWFwN&apply=1' || true)"
-          echo "APPLY_HTTP_STATUS=$status"
-          php -r '
-            $raw=file_get_contents($argv[1]);
-            $d=json_decode($raw,true);
-            if(!is_array($d)) { echo "APPLY_JSON=invalid\n"; echo substr($raw,0,4000)."\n"; exit(1); }
-            echo "OK=" . (!empty($d["ok"]) ? "yes" : "no") . "\n";
-            echo "ERROR=" . (string)($d["error"] ?? "") . "\n";
-            echo "MESSAGE=" . (string)($d["message"] ?? "") . "\n";
-            echo "TOURNAMENT_ID=" . (string)($d["tournament_id"] ?? "") . "\n";
-            echo "VERIFY=" . json_encode($d["verify"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "CHAMPION=" . json_encode($d["champion"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "ELO=" . json_encode($d["elo"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "VISITS_IMPORTED=" . (!empty($d["visits_imported"]) ? "yes" : "no") . "\n";
-            if(empty($d["ok"])) exit(2);
-          ' "$body"
-          rm -f "$body"
-          test "$status" = '200'
+          echo "VALIDATED_MATCHES=$ok"
+          echo "FAILED_MATCHES=$failed"
+          echo "TOTAL_LEGS=$total_legs"
+          echo "TOTAL_VISITS=$total_visits"
+          echo "TOTAL_DARTS=$total_darts"
+          test "$ok" -eq 37
+          test "$failed" -eq 0
+          test "$total_legs" -eq 48
