@@ -45,7 +45,7 @@ function detailLoadStyles(){
   const link = document.createElement("link");
   link.id = "tournamentDetailDesktopUxStyles";
   link.rel = "stylesheet";
-  link.href = new URL("./tournament-detail-desktop-ux.css?v=20260831-1015", import.meta.url).href;
+  link.href = new URL("./tournament-detail-desktop-ux.css?v=20260831-1040", import.meta.url).href;
   document.head.appendChild(link);
 }
 
