@@ -1,5 +1,5 @@
-.home-stats-section{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;gap:16px!important}
-.home-stats-section>.section-head{align-items:flex-end;padding:2px 2px 0}
+.home-stats-section{background:transparent!important;border:0!important;box-shadow:none!important;padding:17px!important;gap:16px!important}
+.home-stats-section>.section-head{align-items:flex-end;padding:0}
 .home-stats-section>.section-head h2{font-size:28px;letter-spacing:-.035em}
 .home-dashboard-subtitle{margin-top:4px;font-size:14px;line-height:1.45}
 
@@ -85,6 +85,7 @@ body .home-match-row:hover{background:#f8fbff!important}
 }
 
 @media(max-width:680px){
+  .home-stats-section{padding:13px!important}
   .home-stats-section>.section-head h2{font-size:24px}
   .home-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
   .home-stat-card{grid-template-columns:38px minmax(0,1fr);gap:9px;padding:12px;border-radius:13px}
