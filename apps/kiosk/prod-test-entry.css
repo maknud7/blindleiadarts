@@ -3,3 +3,8 @@
 #prodTestModeSettings small{display:block;line-height:1.4;margin-top:4px}
 #prodTestModeSettings .test-mode-settings-actions{display:flex;gap:8px;flex-wrap:wrap}
 #prodStartTestMode{border-color:#d9a918!important;background:#f5c542!important;color:#332500!important;font-weight:900!important}
+body.prod-test-runtime-open{overflow:hidden!important}
+.prod-test-runtime-overlay{position:fixed;inset:0;z-index:100000;background:#f3f8fb;display:block}
+.prod-test-runtime-overlay iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#f3f8fb}
+.prod-test-runtime-loading{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:10px;background:#f3f8fb;color:#17344a;font:800 16px/1.2 system-ui,sans-serif}
+.prod-test-runtime-loading.hidden{display:none}
