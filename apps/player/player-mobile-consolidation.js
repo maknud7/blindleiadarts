@@ -30,11 +30,11 @@ document.getElementById("clubSelect")?.addEventListener("change",hideClubSwitche
 window.addEventListener("bd:player-state-changed",hideClubSwitcher);
 
 import("./remove-checkout-percentage.js?v=20260830-1835")
-  .then(()=>import("./tournament-discovery-ux.js?v=20260831-1040"))
+  .then(()=>import("./tournament-discovery-ux.js?v=20260831-1004b"))
   .then(()=>import("./tournament-calendar-polish.js?v=20260829-1945"))
   .then(()=>import("./tournament-prestart-detail.js?v=20260831-0905"))
   .then(()=>import("./tournament-groups-detail.js?v=20260831-1025"))
-  .then(()=>import("./shared-match-card-adapter.js?v=20260831-0925"))
+  .then(()=>import("./shared-match-card-adapter.js?v=20260831-1004b"))
   .then(()=>import("./tournament-compact-match-links.js?v=20260830-2335"))
   .then(()=>import("./tournament-inline-admin.js?v=20260830-0715"))
   .then(()=>import("./tournament-finished-participants-polish.js?v=20260829-2326"))
