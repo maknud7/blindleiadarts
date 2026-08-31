@@ -10,9 +10,8 @@ use mysqli;
 use Throwable;
 
 /**
- * Accepts a bridge event only when the canonical physical serial and the routed
- * runtime kiosk agree. This is the boundary that allows one physical PROD Scolia
- * to feed an isolated TEST match during an explicit lease.
+ * Resolves every inbound event from canonical PROD hardware data. In TEST the
+ * runtime destination comes only from an active canonical Scolia lease.
  */
 final class ScoliaRoutedEventRepository
 {
@@ -28,11 +27,11 @@ final class ScoliaRoutedEventRepository
     }
 
     /** @param array<string,mixed> $message @return array{id:int,duplicate:bool} */
-    public function enqueueEvent(string $serial, int $routedKioskId, array $message): array
+    public function enqueueEvent(string $serial, array $message, ?int $routedKioskId = null): array
     {
         $serial = strtoupper(trim($serial));
-        if ($serial === '' || $routedKioskId <= 0) {
-            throw new ValidationException('scolia_route_invalid', 'Scolia-eventet mangler canonical serial eller routed kiosk.', 422);
+        if ($serial === '') {
+            throw new ValidationException('scolia_route_invalid', 'Scolia-eventet mangler canonical serial.', 422);
         }
 
         $physical = $this->physicalBoardBySerial($serial);
@@ -43,24 +42,37 @@ final class ScoliaRoutedEventRepository
         $physicalId = (int) $physical['physical_kiosk_id'];
         $clubId = 0;
         if ($this->dataPrefix === $this->hardwarePrefix) {
-            if ($routedKioskId !== $physicalId) {
+            $resolvedKioskId = $routedKioskId !== null && $routedKioskId > 0 ? $routedKioskId : $physicalId;
+            if ($resolvedKioskId !== $physicalId) {
                 throw new ValidationException('scolia_route_mismatch', 'Scolia-eventet peker på feil fysisk PROD-skive.', 409);
             }
+            $routedKioskId = $physicalId;
             $clubId = (int) $physical['club_id'];
         } else {
+            // TEST can never choose a Scolia board by its own settings. The active
+            // lease in the canonical hardware namespace is the only routing source.
+            $leaseTable = $this->hardwarePrefix . 'scolia_test_leases';
             $stmt = $this->connection->prepare(sprintf(
-                'SELECT k.club_id,c.slug FROM `%1$skiosks` k
-                 INNER JOIN `%1$sclubs` c ON c.id=k.club_id
-                 WHERE k.id=? AND k.source_kiosk_id=? AND k.is_active=1 LIMIT 1',
+                'SELECT l.test_kiosk_id,k.club_id,c.slug
+                 FROM `%1$s` l
+                 INNER JOIN `%2$skiosks` k ON k.id=l.test_kiosk_id AND k.source_kiosk_id=l.physical_kiosk_id AND k.is_active=1
+                 INNER JOIN `%2$sclubs` c ON c.id=k.club_id
+                 WHERE l.physical_kiosk_id=? AND l.expires_at>NOW(3) LIMIT 1',
+                $leaseTable,
                 $this->dataPrefix
             ));
-            $stmt->bind_param('ii', $routedKioskId, $physicalId);
+            $stmt->bind_param('i', $physicalId);
             $stmt->execute();
             $runtime = $stmt->get_result()->fetch_assoc() ?: null;
             $stmt->close();
             if ($runtime === null || trim((string) ($runtime['slug'] ?? '')) !== trim((string) ($physical['club_slug'] ?? ''))) {
-                throw new ValidationException('scolia_test_lease_route_invalid', 'TEST-routen samsvarer ikke med den canonical fysiske Scolia-skiva.', 409);
+                throw new ValidationException('scolia_test_lease_required', 'Ingen aktiv TEST-lease finnes for denne fysiske Scolia-skiva.', 409);
             }
+            $leaseKioskId = (int) $runtime['test_kiosk_id'];
+            if ($routedKioskId !== null && $routedKioskId > 0 && $routedKioskId !== $leaseKioskId) {
+                throw new ValidationException('scolia_test_lease_route_invalid', 'Bridge-routen samsvarer ikke med aktiv TEST-lease.', 409);
+            }
+            $routedKioskId = $leaseKioskId;
             $clubId = (int) $runtime['club_id'];
         }
 
