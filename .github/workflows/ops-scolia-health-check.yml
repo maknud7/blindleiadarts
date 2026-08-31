@@ -25,3 +25,5 @@ jobs:
           echo '=== TEST_SCOLIA_HEALTH ==='
           curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 \
             'https://test.blindleiadart.ingenting.org/api/scolia-health.php?cb='"$RANDOM" | jq .
+
+# health-run: 2026-08-31T16:39:10+02:00
