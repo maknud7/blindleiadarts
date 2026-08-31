@@ -5,6 +5,7 @@ const isTestEnvironment = document.documentElement.dataset.appEnv === "test"
 
 if (isTestEnvironment) {
   const API_ROOT = "../api/v1";
+  const CANDIDATE_URL = "../api/test-player-candidates.php";
   const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
   const state = { players: [], registrations: [], busy: false };
 
@@ -37,6 +38,26 @@ if (isTestEnvironment) {
     return payload.data;
   }
 
+  async function canonicalPlayers(retry429 = true) {
+    const headers = token() ? { Authorization: `Bearer ${token()}` } : {};
+    const response = await fetch(`${CANDIDATE_URL}?club_id=${encodeURIComponent(String(clubId()))}`, {
+      headers,
+      cache: "no-store",
+    });
+    if (response.status === 429 && retry429) {
+      const retryAfter = Number(response.headers.get("Retry-After") || 1);
+      await sleep(Math.max(900, Math.min(5000, retryAfter * 1000)));
+      return canonicalPlayers(false);
+    }
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+      error.code = payload?.error?.code || "request_failed";
+      throw error;
+    }
+    return payload.data;
+  }
+
   function activeRegistrations() {
     return (state.registrations || []).filter((registration) => ["registered", "checked_in", "waitlisted", "paused"].includes(String(registration.status || "")));
   }
@@ -47,7 +68,11 @@ if (isTestEnvironment) {
 
   function availablePlayers() {
     const used = activePlayerIds();
-    return state.players.filter((player) => Number(player.id) > 0 && !used.has(Number(player.id)));
+    return state.players.filter((player) => Number(player.id) > 0
+      && Number(player.member_id) > 0
+      && Number(player.is_active) === 1
+      && String(player.identity_source || "") === "prod_identity"
+      && !used.has(Number(player.id)));
   }
 
   function ensureStyles() {
@@ -79,12 +104,12 @@ if (isTestEnvironment) {
     panel.innerHTML = `
       <summary>TEST · legg til ekte spillere</summary>
       <div class="tc-test-body">
-        <p class="tc-test-note">Legger ekte spillerprofiler inn som <strong>påmeldt</strong>. Innsjekk skjer senere gjennom den ordinære innsjekkflyten når innsjekkvinduet åpner. Kampdata, statistikk og ELO forblir i TEST-databasen.</p>
+        <p class="tc-test-note">Listen kommer fra <strong>aktive PROD-kontoer</strong>. TEST bruker bare en lokal spiller-ID som peker på samme medlem; brukere og medlemsidentitet kopieres ikke. Spillerne legges inn som <strong>påmeldt</strong>, og innsjekk skjer senere gjennom ordinær flyt.</p>
         <div class="tc-test-toolbar">
           <label><span>Søk spiller</span><input id="tcTestSearch" type="search" placeholder="Søk etter navn …" autocomplete="off"></label>
           <button id="tcTestReload" class="button quiet" type="button">Oppdater liste</button>
         </div>
-        <div id="tcTestPlayerList" class="tc-test-player-list"><span class="muted">Henter spillere …</span></div>
+        <div id="tcTestPlayerList" class="tc-test-player-list"><span class="muted">Henter aktive PROD-kontoer …</span></div>
         <div class="tc-test-actions">
           <button id="tcTestAddSelected" class="button" type="button">Legg til valgte</button>
           <button id="tcTestAdd8" class="button secondary" type="button">Legg til 8 tilfeldige</button>
@@ -110,7 +135,7 @@ if (isTestEnvironment) {
       <label class="tc-test-player" data-search-name="${esc(String(player.display_name || "").toLowerCase())}">
         <input type="checkbox" data-test-player value="${Number(player.id)}">
         <span>${esc(player.display_name || `Spiller ${Number(player.id)}`)}</span>
-      </label>`).join("") : `<span class="muted">Alle tilgjengelige spillere er allerede lagt til.</span>`;
+      </label>`).join("") : `<span class="muted">Ingen flere aktive PROD-kontoer er tilgjengelige for denne turneringen.</span>`;
     applySearch();
   }
 
@@ -124,7 +149,7 @@ if (isTestEnvironment) {
   async function loadData() {
     if (!clubId() || !tournamentId() || !token()) return;
     const [players, detail] = await Promise.all([
-      api(`/clubs/${clubId()}/players`),
+      canonicalPlayers(),
       api(`/tournaments/${tournamentId()}`),
     ]);
     state.players = players.items || [];
