@@ -1,6 +1,6 @@
-release_sha=a31093ba408880ebaaab439577bb8ea496286066
+release_sha=db9f54a4cc15f511585b764745d02a1f51c5a2a5
 backup_confirmed=YES
 migration_review_confirmed=NO
-requested_at=2026-08-31T17:15:00+02:00
-purpose=deploy_prod_kiosk_test_mode_entry
+requested_at=2026-08-31T17:52:00+02:00
+purpose=fix_prod_to_embedded_test_mode_and_reuse_test_board
 backup_prefix=bd_backup_20260831_151409_
