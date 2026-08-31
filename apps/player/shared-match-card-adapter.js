@@ -1,4 +1,4 @@
-import { openSharedMatchCard } from "../../packages/ui-assets/match-detail-card.js?v=20260831-1008";
+import { openSharedMatchCard } from "../../packages/ui-assets/match-detail-card.js?v=20260831-1035";
 
 function openPlayerProfile(playerId){
   const id=Number(playerId||0);
