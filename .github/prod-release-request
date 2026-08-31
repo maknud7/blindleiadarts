@@ -1,6 +1,6 @@
-release_sha=e90621a50f2957890aa049ee904cd36917310a22
+release_sha=a31093ba408880ebaaab439577bb8ea496286066
 backup_confirmed=YES
-migration_review_confirmed=YES
-requested_at=2026-08-31T15:38:00+02:00
-purpose=deploy_scolia_superadmin_guide
-backup_prefix=bd_backup_20260831_133525_
+migration_review_confirmed=NO
+requested_at=2026-08-31T17:15:00+02:00
+purpose=deploy_prod_kiosk_test_mode_entry
+backup_prefix=bd_backup_20260831_151409_
