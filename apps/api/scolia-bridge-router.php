@@ -101,7 +101,7 @@ try {
             'forward_messages_to_scolia' => $forward,
             'disconnect_fallback_enabled' => (int) ($row['disconnect_fallback_enabled'] ?? 1),
             'target_api_base' => $leasedToTest
-                ? 'https://test.blindleiadarts.ingenting.org/api/v1'
+                ? 'https://test.blindleiadart.ingenting.org/api/v1'
                 : 'https://blindleiadart.ingenting.org/api/v1',
             'environment' => $leasedToTest ? 'test' : 'prod',
             'lease_expires_at' => $leasedToTest ? (string) ($row['expires_at'] ?? '') : null,
