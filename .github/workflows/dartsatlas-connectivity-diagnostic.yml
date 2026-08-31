@@ -13,94 +13,57 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Test DartsAtlas directly from GitHub runner
+      - name: Compare GitHub and server DartsAtlas access
         shell: bash
         run: |
           set -u
-          URL='https://www.dartsatlas.com/seasons/rFByCgOqI1rq'
           body="$(mktemp)"
           headers="$(mktemp)"
           status="$(curl -sS -L --max-time 25 \
             -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36' \
             -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
-            -H 'Accept-Language: nb-NO,nb;q=0.9,en;q=0.8' \
-            -D "$headers" -o "$body" -w '%{http_code}' "$URL" || true)"
+            -D "$headers" -o "$body" -w '%{http_code}' \
+            'https://www.dartsatlas.com/seasons/rFByCgOqI1rq' || true)"
           echo "GITHUB_DARTSATLAS_STATUS=$status"
-          echo "GITHUB_DARTSATLAS_BYTES=$(wc -c < "$body" | tr -d ' ')"
-          echo 'GITHUB_DARTSATLAS_HEADERS_BEGIN'
-          grep -Ei '^(HTTP/|server:|cf-|content-type:|location:)' "$headers" || true
-          echo 'GITHUB_DARTSATLAS_HEADERS_END'
-          title="$(grep -Eio '<title[^>]*>[^<]*</title>' "$body" | head -1 | sed -E 's/<[^>]+>//g' || true)"
-          echo "GITHUB_DARTSATLAS_TITLE=$title"
+          grep -Ei '^(HTTP/|server:|cf-|content-type:)' "$headers" || true
           rm -f "$body" "$headers"
 
-      - name: Test DartsAtlas from Blindleia TEST server
-        shell: bash
-        run: |
-          set -u
-          URL='https://test.blindleiadarts.ingenting.org/api/atlas-import-probe.php'
           body="$(mktemp)"
-          status="$(curl -sS -L --max-time 120 -o "$body" -w '%{http_code}' "$URL" || true)"
-          echo "SERVER_PROBE_HTTP_STATUS=$status"
-          echo "SERVER_PROBE_BYTES=$(wc -c < "$body" | tr -d ' ')"
+          status="$(curl -sS -L --max-time 120 -o "$body" -w '%{http_code}' \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq' || true)"
+          echo "SERVER_SEASON_PROBE_STATUS=$status"
           php -r '
-            $raw = file_get_contents($argv[1]);
-            $data = json_decode($raw, true);
-            if (!is_array($data)) {
-              echo "SERVER_PROBE_JSON=invalid\n";
-              echo "SERVER_PROBE_PREVIEW=" . substr(preg_replace("/\\s+/", " ", $raw), 0, 500) . "\n";
-              exit(0);
-            }
-            echo "SERVER_PROBE_JSON=ok\n";
-            foreach (($data["pages"] ?? []) as $name => $page) {
-              printf("SERVER_DARTSATLAS_PAGE_%s_STATUS=%s BYTES=%s CLOUDFLARE=%s TITLE=%s\n",
-                strtoupper(preg_replace("/[^A-Za-z0-9]+/", "_", (string)$name)),
-                (string)($page["status"] ?? ""),
-                (string)($page["body_bytes"] ?? ""),
-                !empty($page["cloudflare"]) ? "yes" : "no",
-                str_replace(["\r", "\n"], " ", (string)($page["title"] ?? ""))
-              );
-            }
-            foreach (($data["match_details"] ?? []) as $id => $match) {
-              printf("SERVER_DARTSATLAS_MATCH_%s_STATUS=%s BYTES=%s CLOUDFLARE=%s\n",
-                strtoupper(preg_replace("/[^A-Za-z0-9]+/", "_", (string)$id)),
-                (string)($match["status"] ?? ""),
-                (string)($match["body_bytes"] ?? ""),
-                !empty($match["cloudflare"]) ? "yes" : "no"
-              );
-            }
+            $d=json_decode(file_get_contents($argv[1]),true);
+            foreach (($d["tournaments"] ?? []) as $id=>$name) printf("TOURNAMENT=%s|%s\n",$id,$name);
           ' "$body"
           rm -f "$body"
 
-      - name: Discover current Mandagsserien tournaments from server
+      - name: Inspect Mandagsserien round 4 via Blindleia server
         shell: bash
         run: |
           set -u
-          URL='https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq'
           body="$(mktemp)"
-          status="$(curl -sS -L --max-time 120 -o "$body" -w '%{http_code}' "$URL" || true)"
-          echo "SEASON_PROBE_HTTP_STATUS=$status"
+          status="$(curl -sS -L --max-time 150 -o "$body" -w '%{http_code}' \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=jort2WSBWFwN' || true)"
+          echo "ROUND4_PROBE_STATUS=$status"
           php -r '
-            $raw = file_get_contents($argv[1]);
-            $data = json_decode($raw, true);
-            if (!is_array($data)) {
-              echo "SEASON_PROBE_JSON=invalid\n";
-              exit(0);
+            $d=json_decode(file_get_contents($argv[1]),true);
+            if(!is_array($d)){echo "ROUND4_JSON=invalid\n"; exit;}
+            echo "ROUND4_JSON=ok\n";
+            $allPlayers=[];$allMatches=[];
+            foreach (($d["pages"] ?? []) as $page=>$p) {
+              printf("PAGE_%s_STATUS=%s_BYTES=%s\n",strtoupper(str_replace("-","_",$page)),(string)($p["status"]??""),(string)($p["body_bytes"]??""));
+              foreach (($p["players"]??[]) as $id=>$name) $allPlayers[$id]=$name;
+              foreach (($p["matches"]??[]) as $id=>$label) $allMatches[$id]=$label;
             }
-            echo "SEASON_PROBE_JSON=ok\n";
-            foreach (($data["pages"] ?? []) as $name => $page) {
-              printf("SEASON_PAGE_%s_STATUS=%s BYTES=%s\n", strtoupper((string)$name), (string)($page["source_status"] ?? ""), (string)($page["body_bytes"] ?? ""));
-            }
-            echo "TOURNAMENTS_BEGIN\n";
-            foreach (($data["tournaments"] ?? []) as $id => $name) {
-              printf("%s\t%s\n", (string)$id, str_replace(["\r", "\n", "\t"], " ", (string)$name));
-            }
-            echo "TOURNAMENTS_END\n";
-            foreach (["root", "results", "calendar"] as $key) {
-              $text = (string)($data["pages"][$key]["visible_text"] ?? "");
-              if ($text !== "") {
-                echo "VISIBLE_" . strtoupper($key) . "=" . substr($text, 0, 12000) . "\n";
-              }
+            echo "PLAYERS_BEGIN\n";
+            foreach($allPlayers as $id=>$name) printf("%s|%s\n",$id,$name);
+            echo "PLAYERS_END\nMATCHES_BEGIN\n";
+            foreach($allMatches as $id=>$label) printf("%s|%s\n",$id,$label);
+            echo "MATCHES_END\n";
+            foreach (["root","groups","group-1","group-2","results"] as $page) {
+              $text=(string)($d["pages"][$page]["visible_text"]??"");
+              if($text!=="") printf("VISIBLE_%s=%s\n",strtoupper(str_replace("-","_",$page)),substr($text,0,16000));
             }
           ' "$body"
           rm -f "$body"
