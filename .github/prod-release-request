@@ -1,6 +1,6 @@
-release_sha=206bd5b59a9670a2ee6bb3cbf78090825b131dbf
+release_sha=e90621a50f2957890aa049ee904cd36917310a22
 backup_confirmed=YES
-migration_review_confirmed=NO
-requested_at=2026-08-31T14:47:42+02:00
-purpose=deploy_scolia_idle_bridge
-backup_prefix=bd_backup_20260831_124553_
+migration_review_confirmed=YES
+requested_at=2026-08-31T15:38:00+02:00
+purpose=deploy_scolia_superadmin_guide
+backup_prefix=bd_backup_20260831_133525_
