@@ -1,0 +1,138 @@
+/*
+ * Venue wall readability overrides.
+ * Keep the one-screen 16:9 layout, but do not sacrifice ELO or legibility.
+ */
+@media (min-width: 1180px) and (min-height: 650px) {
+  /* Give the upcoming queue more room than recent results. */
+  body.phase-live #liveDashboard > .two-column:has(#queue) {
+    grid-template-rows: minmax(0, 1.25fr) minmax(0, .75fr);
+  }
+
+  /* A wall display should show the most useful next matches, not squeeze ten rows. */
+  body.phase-live #queue .list-row:nth-child(n+6),
+  body.phase-live #results .list-row:nth-child(n+4) {
+    display: none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row {
+    padding: 5px 2px;
+    gap: 8px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong {
+    font-size: .78rem;
+    line-height: 1.12;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small {
+    margin-top: 3px;
+    font-size: .6rem;
+    line-height: 1.12;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .badge,
+  body.phase-live #liveDashboard > .two-column:has(#queue) .result-score {
+    font-size: .64rem;
+  }
+
+  /* ELO was intentionally hidden in Venue Wall v3. Restore it and share the
+     lower-right area with the evening highlights instead. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) {
+    grid-template-rows: minmax(0, 1.35fr) minmax(0, .65fr);
+    gap: 5px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) {
+    display: grid !important;
+    min-height: 0;
+    height: 100%;
+    padding: 7px 8px;
+    grid-template-rows: 24px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head {
+    min-height: 20px;
+    margin: 0 0 2px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head .eyebrow {
+    display: none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head h2 {
+    font-size: .78rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+  }
+
+  body.phase-live #elo {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
+  body.phase-live #elo .list-row:nth-child(n+7) {
+    display: none;
+  }
+
+  body.phase-live #elo .list-row {
+    min-height: 0;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 3px 1px;
+  }
+
+  body.phase-live #elo .rank {
+    font-size: .65rem;
+  }
+
+  body.phase-live #elo .list-row strong {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .7rem;
+    line-height: 1.05;
+  }
+
+  body.phase-live #elo .list-row small {
+    display: none;
+  }
+
+  body.phase-live #elo .rating {
+    font-size: .76rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#highlights) {
+    min-height: 0;
+    height: 100%;
+  }
+}
+
+@media (min-width: 1180px) and (max-height: 800px) {
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row {
+    padding: 4px 1px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong {
+    font-size: .72rem;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small {
+    font-size: .56rem;
+  }
+
+  body.phase-live #elo .list-row strong {
+    font-size: .66rem;
+  }
+
+  body.phase-live #elo .rating {
+    font-size: .7rem;
+  }
+}
