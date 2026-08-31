@@ -13,42 +13,36 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Dry-run Mandagsserien round 4 migration in TEST
+      - name: Apply Mandagsserien round 4 migration in TEST
         shell: bash
         run: |
           set -u
           body="$(mktemp)"
-          status="$(curl -sS -L --max-time 180 -o "$body" -w '%{http_code}' \
-            'https://test.blindleiadarts.ingenting.org/api/atlas-migrate-test.php?tournament=jort2WSBWFwN' || true)"
-          echo "DRY_RUN_HTTP_STATUS=$status"
+          status="$(curl -sS -L --max-time 240 -o "$body" -w '%{http_code}' \
+            'https://test.blindleiadarts.ingenting.org/api/atlas-migrate-test.php?tournament=jort2WSBWFwN&apply=1' || true)"
+          echo "APPLY_HTTP_STATUS=$status"
           php -r '
-            $d=json_decode(file_get_contents($argv[1]),true);
+            $raw=file_get_contents($argv[1]);
+            $d=json_decode($raw,true);
             if(!is_array($d)) {
-              echo "DRY_RUN_JSON=invalid\n";
-              echo substr(file_get_contents($argv[1]),0,2000)."\n";
+              echo "APPLY_JSON=invalid\n";
+              echo substr($raw,0,4000)."\n";
               exit(1);
             }
-            echo "DRY_RUN_JSON=ok\n";
+            echo "APPLY_JSON=ok\n";
             echo "OK=" . (!empty($d["ok"]) ? "yes" : "no") . "\n";
             echo "MODE=" . (string)($d["mode"] ?? "") . "\n";
-            $p=$d["plan"] ?? [];
-            echo "TOURNAMENT=" . (string)($p["tournament_name"] ?? "") . "\n";
-            echo "DATE=" . (string)($p["tournament_date"] ?? "") . "\n";
-            echo "SEASON_ID=" . (string)($p["season"]["id"] ?? "") . "\n";
-            echo "SEASON_NAME=" . (string)($p["season"]["name"] ?? "") . "\n";
-            echo "CHAMPION=" . (string)($p["champion"] ?? "") . "\n";
-            echo "PLAYERS=" . (string)($p["player_count"] ?? "") . "\n";
-            echo "MAPPED_PLAYERS=" . (string)($p["mapped_player_count"] ?? "") . "\n";
-            echo "MATCHES=" . (string)($p["match_count"] ?? "") . "\n";
-            echo "BLOCKING=" . json_encode($p["blocking_errors"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "MAPPING_ERRORS=" . json_encode($p["player_mapping_errors"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "PARSE_ERRORS=" . json_encode($p["match_parse_errors"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "EXISTING=" . json_encode($p["existing_tournament"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            echo "GROUPS=" . json_encode($p["groups"] ?? [],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
-            foreach (($p["player_map"] ?? []) as $name=>$map) {
-              printf("MAP=%s|%s|%s\n",$name,(string)($map["player_id"]??""),(string)($map["source"]??""));
+            echo "ERROR=" . (string)($d["error"] ?? "") . "\n";
+            echo "MESSAGE=" . (string)($d["message"] ?? "") . "\n";
+            echo "TOURNAMENT_ID=" . (string)($d["tournament_id"] ?? "") . "\n";
+            echo "VERIFY=" . json_encode($d["verify"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "CHAMPION=" . json_encode($d["champion"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "ELO=" . json_encode($d["elo"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+            echo "VISITS_IMPORTED=" . (!empty($d["visits_imported"]) ? "yes" : "no") . "\n";
+            if(empty($d["ok"])) {
+              echo "PLAN=" . json_encode($d["plan"] ?? null,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n";
+              exit(2);
             }
-            if ($status = 0) {}
           ' "$body"
           rm -f "$body"
           test "$status" = "200"
