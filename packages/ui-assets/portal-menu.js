@@ -13,6 +13,29 @@ function ensureStylesheet(url) {
   document.head.appendChild(link);
 }
 
+function ensureFavicon() {
+  const iconHref = new URL("../../static/club-logos/blindleia-dartklubb-logo.svg?v=20260831-1305", import.meta.url).href;
+  const touchHref = new URL("../../static/club-logos/blindleia-dartklubb-logo.png?v=20260831-1305", import.meta.url).href;
+
+  let icon = document.querySelector('link[rel="icon"]');
+  if (!icon) {
+    icon = document.createElement("link");
+    icon.rel = "icon";
+    document.head.appendChild(icon);
+  }
+  icon.type = "image/svg+xml";
+  icon.href = iconHref;
+
+  let touch = document.querySelector('link[rel="apple-touch-icon"]');
+  if (!touch) {
+    touch = document.createElement("link");
+    touch.rel = "apple-touch-icon";
+    document.head.appendChild(touch);
+  }
+  touch.href = touchHref;
+}
+
+ensureFavicon();
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
