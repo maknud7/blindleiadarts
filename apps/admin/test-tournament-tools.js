@@ -79,17 +79,16 @@ if (isTestEnvironment) {
     panel.innerHTML = `
       <summary>TEST · legg til ekte spillere</summary>
       <div class="tc-test-body">
-        <p class="tc-test-note">Bruker ekte spiller-ID-er fra klubben, men turnering, kampdata, statistikk og ELO blir liggende i TEST-databasen. Ingen trenger å logge inn selv for denne testen.</p>
+        <p class="tc-test-note">Legger ekte spillerprofiler inn som <strong>påmeldt</strong>. Innsjekk skjer senere gjennom den ordinære innsjekkflyten når innsjekkvinduet åpner. Kampdata, statistikk og ELO forblir i TEST-databasen.</p>
         <div class="tc-test-toolbar">
           <label><span>Søk spiller</span><input id="tcTestSearch" type="search" placeholder="Søk etter navn …" autocomplete="off"></label>
           <button id="tcTestReload" class="button quiet" type="button">Oppdater liste</button>
         </div>
         <div id="tcTestPlayerList" class="tc-test-player-list"><span class="muted">Henter spillere …</span></div>
         <div class="tc-test-actions">
-          <button id="tcTestAddSelected" class="button secondary" type="button">Legg til valgte</button>
-          <button id="tcTestCheckSelected" class="button" type="button">Legg til + sjekk inn</button>
-          <button id="tcTestAdd8" class="button secondary" type="button">8 tilfeldige + innsjekk</button>
-          <button id="tcTestAdd16" class="button secondary" type="button">16 tilfeldige + innsjekk</button>
+          <button id="tcTestAddSelected" class="button" type="button">Legg til valgte</button>
+          <button id="tcTestAdd8" class="button secondary" type="button">Legg til 8 tilfeldige</button>
+          <button id="tcTestAdd16" class="button secondary" type="button">Legg til 16 tilfeldige</button>
         </div>
         <div id="tcTestStatus" class="tc-test-status"></div>
       </div>`;
@@ -135,7 +134,7 @@ if (isTestEnvironment) {
 
   function setBusy(busy, text = "") {
     state.busy = busy;
-    ["tcTestReload", "tcTestAddSelected", "tcTestCheckSelected", "tcTestAdd8", "tcTestAdd16"].forEach((id) => {
+    ["tcTestReload", "tcTestAddSelected", "tcTestAdd8", "tcTestAdd16"].forEach((id) => {
       const button = document.getElementById(id);
       if (button) button.disabled = busy;
     });
@@ -143,26 +142,14 @@ if (isTestEnvironment) {
     if (status && text !== undefined) status.textContent = text;
   }
 
-  async function addOne(playerId, checkIn) {
+  async function addOne(playerId) {
     const tid = tournamentId();
-    if (!tid || !playerId) return { added: false, checked: false };
-    let registration;
-    try {
-      const result = await api(`/tournaments/${tid}/registrations`, { method: "POST", body: { player_id: playerId } });
-      registration = result.registration || null;
-    } catch (error) {
-      if (!/already|påmeldt|registrert/i.test(error.message || "")) throw error;
-    }
-    let checked = false;
-    if (checkIn && String(registration?.status || "registered") !== "waitlisted") {
-      await sleep(120);
-      await api(`/tournaments/${tid}/admin-check-in/${playerId}`, { method: "POST", body: { force: true } });
-      checked = true;
-    }
-    return { added: true, checked };
+    if (!tid || !playerId) return false;
+    await api(`/tournaments/${tid}/registrations`, { method: "POST", body: { player_id: playerId } });
+    return true;
   }
 
-  async function syncTournamentRoom(checkIn) {
+  async function syncTournamentRoom() {
     const expected = activeRegistrations().length;
     document.getElementById("tcRefresh")?.click();
 
@@ -176,12 +163,11 @@ if (isTestEnvironment) {
       }
     }
 
-    const filter = checkIn ? "checked" : "all";
-    document.querySelector(`[data-tc-filter="${filter}"]`)?.click();
+    document.querySelector('[data-tc-filter="pending"]')?.click();
     return synced;
   }
 
-  async function runBatch(ids, checkIn) {
+  async function runBatch(ids) {
     const unique = [...new Set(ids.map(Number).filter(Boolean))];
     if (!unique.length || state.busy) return;
     setBusy(true, `Starter · 0/${unique.length}`);
@@ -191,9 +177,9 @@ if (isTestEnvironment) {
       for (let index = 0; index < unique.length; index += 1) {
         const playerId = unique[index];
         const player = state.players.find((item) => Number(item.id) === playerId);
-        setBusy(true, `${checkIn ? "Legger til og sjekker inn" : "Legger til"} ${player?.display_name || `spiller ${playerId}`} · ${index + 1}/${unique.length}`);
+        setBusy(true, `Legger til ${player?.display_name || `spiller ${playerId}`} · ${index + 1}/${unique.length}`);
         try {
-          await addOne(playerId, checkIn);
+          await addOne(playerId);
           ok += 1;
         } catch (error) {
           failures.push(`${player?.display_name || playerId}: ${error.message}`);
@@ -202,13 +188,12 @@ if (isTestEnvironment) {
       }
 
       await loadData();
-      const synced = await syncTournamentRoom(checkIn);
-      const viewLabel = checkIn ? "Sjekket inn" : "Alle";
+      const synced = await syncTournamentRoom();
       const baseMessage = failures.length
-        ? `${ok}/${unique.length} ferdig. Feil: ${failures.join(" · ")}`
-        : `${ok} spiller${ok === 1 ? "" : "e"} lagt til${checkIn ? " og sjekket inn" : ""}.`;
+        ? `${ok}/${unique.length} lagt til. Feil: ${failures.join(" · ")}`
+        : `${ok} spiller${ok === 1 ? "" : "e"} lagt til som påmeldt.`;
       setBusy(false, synced
-        ? `${baseMessage} Viser dem nå under «${viewLabel}».`
+        ? `${baseMessage} De vises nå under «Mangler innsjekk».`
         : `${baseMessage} Registreringene er lagret, men deltakerlisten rakk ikke å synkronisere automatisk. Trykk Oppdater.`);
     } catch (error) {
       setBusy(false, error.message);
@@ -227,10 +212,9 @@ if (isTestEnvironment) {
   function bindPanel() {
     document.getElementById("tcTestSearch")?.addEventListener("input", applySearch);
     document.getElementById("tcTestReload")?.addEventListener("click", () => loadData().catch((error) => setBusy(false, error.message)));
-    document.getElementById("tcTestAddSelected")?.addEventListener("click", () => runBatch(selectedPlayerIds(), false));
-    document.getElementById("tcTestCheckSelected")?.addEventListener("click", () => runBatch(selectedPlayerIds(), true));
-    document.getElementById("tcTestAdd8")?.addEventListener("click", () => runBatch(randomPlayerIds(8), true));
-    document.getElementById("tcTestAdd16")?.addEventListener("click", () => runBatch(randomPlayerIds(16), true));
+    document.getElementById("tcTestAddSelected")?.addEventListener("click", () => runBatch(selectedPlayerIds()));
+    document.getElementById("tcTestAdd8")?.addEventListener("click", () => runBatch(randomPlayerIds(8)));
+    document.getElementById("tcTestAdd16")?.addEventListener("click", () => runBatch(randomPlayerIds(16)));
     document.getElementById("tcTournament")?.addEventListener("change", () => window.setTimeout(() => loadData().catch(() => undefined), 250));
     document.getElementById("clubSelect")?.addEventListener("change", () => window.setTimeout(() => loadData().catch(() => undefined), 250));
     loadData().catch((error) => setBusy(false, error.message));
