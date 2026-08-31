@@ -34,6 +34,7 @@ function ensureStyles() {
     .board-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.board-editor-grid .wide{grid-column:1/-1}.board-editor label{display:grid;gap:6px;font-size:13px;color:var(--muted)}.board-editor input,.board-editor select{width:100%;box-sizing:border-box}
     .board-editor-device,.board-scolia-runtime{margin:15px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025);display:grid;gap:5px}.board-editor-device strong,.board-scolia-runtime strong{color:var(--text)}
     .board-editor-device.test-terminal{border-color:rgba(245,197,66,.62);background:rgba(245,197,66,.12);box-shadow:inset 4px 0 0 #f5c542}.test-terminal-badge{display:inline-flex;align-items:center;margin-right:7px;padding:3px 7px;border-radius:999px;background:#f5c542;color:#332500;font-size:10px;line-height:1;font-weight:900;letter-spacing:.09em}
+    .prod-setting-inline{display:inline-flex;align-items:center;margin-left:6px;padding:2px 6px;border-radius:999px;background:rgba(255,194,92,.18);color:#ffd786;font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
     .board-editor-actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:18px}.board-editor-actions .right,.board-runtime-actions{display:flex;gap:8px;flex-wrap:wrap}.board-editor-message{margin-top:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--line)}.board-editor-message.bad{border-color:rgba(255,107,107,.45)}.board-editor-message.good{border-color:rgba(77,212,166,.4)}
     .board-active-row{display:flex!important;grid-column:1/-1!important;align-items:center;gap:9px!important}.board-active-row input{width:auto!important}.board-source-badge{white-space:nowrap}
     @media(max-width:650px){.board-editor-grid{grid-template-columns:1fr}.board-editor-grid .wide{grid-column:auto}.board-editor-actions{align-items:stretch;flex-direction:column}.board-editor-actions .right{display:grid}}
@@ -54,7 +55,7 @@ function ensureDialog() {
         <div class="board-editor-grid">
           <label><span>Skivenummer</span><input id="boardEditorNumber" type="number" min="1" required></label>
           <label><span>Scoringtype</span><select id="boardEditorScoring"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label>
-          <label id="boardEditorScoliaRow" class="wide hidden"><span>Scolia-ID / serienummer</span><input id="boardEditorScoliaSerial" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"><small class="muted">ID-en må være unik. At den finnes hos Scolia bekreftes av bridge-tilkoblingen.</small></label>
+          <label id="boardEditorScoliaRow" class="wide hidden"><span>Scolia-ID / serienummer <span class="prod-setting-inline">PROD-innstilling</span></span><input id="boardEditorScoliaSerial" maxlength="120" autocomplete="off" placeholder="ID fra Scolia"><small class="muted">Fysisk serienummer lagres i canonical PROD-utstyrsregister og er felles for TEST og PROD. ID-en må være unik.</small></label>
           <label class="wide"><span>Visningsnavn</span><input id="boardEditorName" maxlength="120" required></label>
           <label class="wide"><span>Sponsor / presentert av</span><input id="boardEditorSponsor" maxlength="150"></label>
           <label class="wide"><span>Sponsorlogo (URL)</span><input id="boardEditorSponsorLogo" type="url" maxlength="255"></label>
@@ -266,4 +267,4 @@ kioskForm?.addEventListener("submit", createStandaloneScoliaBoard, true);
 renderCreateScolia();
 
 const kioskIntro = document.querySelector("#kiosks .panel-head .muted");
-if (kioskIntro) kioskIntro.textContent = "Alt som gjelder skiva ligger her. Velg scoringtype og koble Scolia-ID på skiva når scoringtypen er Scolia.";
+if (kioskIntro) kioskIntro.textContent = "Alt som gjelder skiva ligger her. Scolia-ID og fysisk scoringtype er PROD-innstillinger som deles av TEST og PROD.";
