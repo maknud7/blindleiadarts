@@ -50,4 +50,14 @@ final class Database
     {
         return $this->config->identityTablePrefix();
     }
+
+    /**
+     * Physical equipment and integration master data are canonical across
+     * environments. TEST runtime data can therefore remain isolated while both
+     * TEST and PROD edit the same physical board/Scolia configuration.
+     */
+    public function hardwareTablePrefix(): string
+    {
+        return $this->config->hardwareTablePrefix();
+    }
 }
