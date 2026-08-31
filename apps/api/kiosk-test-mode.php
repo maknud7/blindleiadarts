@@ -226,21 +226,56 @@ try {
 
     $db->begin_transaction();
     try {
+        // A physical board can already have an explicit TEST alias. Older TEST data can
+        // also contain a local row using the same club/board number from before hardware
+        // became canonical in PROD. Reuse that row instead of colliding with the unique
+        // (club_id, board_number) key. This preserves historical match foreign keys while
+        // converging the row onto the canonical physical source.
+        $sourceRuntimeId = 0;
         $stmt = $db->prepare("SELECT id FROM `{$testKiosks}` WHERE source_kiosk_id=? LIMIT 1 FOR UPDATE");
         $stmt->bind_param('i', $physicalId);
         $stmt->execute();
-        $existingId = (int) ($stmt->get_result()->fetch_assoc()['id'] ?? 0);
+        $sourceRuntimeId = (int) ($stmt->get_result()->fetch_assoc()['id'] ?? 0);
         $stmt->close();
 
-        if ($existingId > 0) {
+        $boardRuntimeId = 0;
+        $stmt = $db->prepare("SELECT id FROM `{$testKiosks}` WHERE club_id=? AND board_number=? LIMIT 1 FOR UPDATE");
+        $stmt->bind_param('ii', $testClubId, $boardNumber);
+        $stmt->execute();
+        $boardRuntimeId = (int) ($stmt->get_result()->fetch_assoc()['id'] ?? 0);
+        $stmt->close();
+
+        if ($sourceRuntimeId > 0 && $boardRuntimeId > 0 && $sourceRuntimeId !== $boardRuntimeId) {
+            // Keep the canonical source alias on the real board number. The conflicting
+            // legacy TEST row may still be referenced by old matches, so retain it but
+            // move it out of the active board registry instead of deleting it.
+            $maxResult = $db->query("SELECT COALESCE(MAX(board_number),0) AS max_board FROM `{$testKiosks}` WHERE club_id=" . (int) $testClubId);
+            $legacyBoardNumber = max($boardNumber + 1, (int) (($maxResult->fetch_assoc()['max_board'] ?? 0) + 1));
+            $maxResult->free();
+            $legacyName = 'Historisk TEST-skive';
             $stmt = $db->prepare(
-                "UPDATE `{$testKiosks}` SET club_id=?,code=?,name=?,board_number=?,sponsor_label=?,sponsor_logo_url=?,scoring_mode=?,
-                    pairing_token_hash=?,paired_device_name=?,paired_at=NOW(),last_seen_at=NOW(),is_active=1 WHERE id=?"
+                "UPDATE `{$testKiosks}` SET board_number=?,name=?,is_active=0,pairing_token_hash=NULL,paired_device_name=NULL,paired_at=NULL,last_seen_at=NULL WHERE id=?"
             );
-            $stmt->bind_param('ississsssi', $testClubId, $aliasCode, $name, $boardNumber, $sponsorLabel, $sponsorLogo, $runtimeScoring, $tokenHash, $deviceName, $existingId);
+            $stmt->bind_param('isi', $legacyBoardNumber, $legacyName, $boardRuntimeId);
             $stmt->execute();
             $stmt->close();
-            $runtimeId = $existingId;
+            $runtimeId = $sourceRuntimeId;
+        } elseif ($sourceRuntimeId > 0) {
+            $runtimeId = $sourceRuntimeId;
+        } elseif ($boardRuntimeId > 0) {
+            $runtimeId = $boardRuntimeId;
+        } else {
+            $runtimeId = 0;
+        }
+
+        if ($runtimeId > 0) {
+            $stmt = $db->prepare(
+                "UPDATE `{$testKiosks}` SET source_kiosk_id=?,club_id=?,code=?,name=?,board_number=?,sponsor_label=?,sponsor_logo_url=?,scoring_mode=?,
+                    pairing_token_hash=?,paired_device_name=?,paired_at=NOW(),last_seen_at=NOW(),is_active=1 WHERE id=?"
+            );
+            $stmt->bind_param('iississsssi', $physicalId, $testClubId, $aliasCode, $name, $boardNumber, $sponsorLabel, $sponsorLogo, $runtimeScoring, $tokenHash, $deviceName, $runtimeId);
+            $stmt->execute();
+            $stmt->close();
         } else {
             $stmt = $db->prepare(
                 "INSERT INTO `{$testKiosks}`
