@@ -2,6 +2,7 @@
   const params = new URLSearchParams(window.location.search);
   const physicalId = Number(params.get("physical_board_id") || 0);
   const requested = params.get("testmode") === "1" && physicalId > 0;
+  const embedded = params.get("embedded") === "1";
   const onTestHost = /^test\./i.test(window.location.hostname) || /(^|\.)test([.-]|$)/i.test(window.location.hostname);
   if (!requested || !onTestHost) return;
 
@@ -9,6 +10,7 @@
   const TEST_BOARD_ID_KEY = "bd:kioskTestPhysicalBoardId";
   const TEST_BOARD_LABEL_KEY = "bd:kioskTestBoardLabel";
   const TEST_RETURN_URL_KEY = "bd:kioskTestReturnUrl";
+  const TEST_EMBEDDED_KEY = "bd:kioskTestEmbedded";
 
   const rawReturnUrl = params.get("return_url") || "";
   try {
@@ -20,9 +22,11 @@
   } catch {
     // Ignore malformed return URL; TEST can still start safely.
   }
+  if (embedded && window.parent !== window) localStorage.setItem(TEST_EMBEDDED_KEY, "1");
+  else localStorage.removeItem(TEST_EMBEDDED_KEY);
 
-  // Prevent the legacy TEST selector and the asynchronous PROD-entry helper from
-  // racing this direct handoff. We already captured everything needed above.
+  // Prevent the legacy TEST selector and asynchronous helpers from racing this
+  // direct handoff. The physical PROD board is already known before TEST boots.
   localStorage.removeItem(TEST_MODE_KEY);
   localStorage.removeItem(TEST_BOARD_ID_KEY);
   localStorage.removeItem(TEST_BOARD_LABEL_KEY);
@@ -30,6 +34,7 @@
   clean.searchParams.delete("testmode");
   clean.searchParams.delete("physical_board_id");
   clean.searchParams.delete("return_url");
+  clean.searchParams.delete("embedded");
   history.replaceState(null, "", clean.href);
 
   let token = localStorage.getItem("bd:kioskPairingToken") || "";
@@ -51,6 +56,15 @@
       box.querySelector("small").textContent = message || "Ukjent feil";
       box.querySelector("button")?.addEventListener("click", () => {
         const saved = localStorage.getItem(TEST_RETURN_URL_KEY) || "";
+        if (localStorage.getItem(TEST_EMBEDDED_KEY) === "1" && window.parent !== window) {
+          try {
+            const origin = saved ? new URL(saved).origin : window.location.origin.replace(/^https:\/\/test\./i, "https://");
+            window.parent.postMessage({ type: "bd:kiosk-test-exit" }, origin);
+            return;
+          } catch {
+            // Fall back to direct return below.
+          }
+        }
         if (saved) window.location.replace(saved);
       });
       topbar.insertAdjacentElement("afterend", box);
@@ -71,7 +85,9 @@
     .then(async (response) => {
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error?.message || `Kunne ikke starte testmodus (${response.status})`);
+        const message = payload?.error?.message || `Kunne ikke starte testmodus (${response.status})`;
+        const detail = String(payload?.error?.detail || "").trim();
+        throw new Error(detail ? `${message} ${detail}` : message);
       }
       const data = payload.data || {};
       if (!data.kiosk?.code) throw new Error("TEST returnerte ingen kiosk-kode.");
