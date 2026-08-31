@@ -37,10 +37,12 @@ if (isTestEnvironment) {
     return payload.data;
   }
 
+  function activeRegistrations() {
+    return (state.registrations || []).filter((registration) => ["registered", "checked_in", "waitlisted", "paused"].includes(String(registration.status || "")));
+  }
+
   function activePlayerIds() {
-    return new Set((state.registrations || [])
-      .filter((registration) => ["registered", "checked_in", "waitlisted", "paused"].includes(String(registration.status || "")))
-      .map((registration) => Number(registration.player_id || 0)));
+    return new Set(activeRegistrations().map((registration) => Number(registration.player_id || 0)));
   }
 
   function availablePlayers() {
@@ -160,6 +162,25 @@ if (isTestEnvironment) {
     return { added: true, checked };
   }
 
+  async function syncTournamentRoom(checkIn) {
+    const expected = activeRegistrations().length;
+    document.getElementById("tcRefresh")?.click();
+
+    let synced = false;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      await sleep(150);
+      const shownTotal = Number(document.getElementById("tcAllCount")?.textContent || -1);
+      if (shownTotal === expected) {
+        synced = true;
+        break;
+      }
+    }
+
+    const filter = checkIn ? "checked" : "all";
+    document.querySelector(`[data-tc-filter="${filter}"]`)?.click();
+    return synced;
+  }
+
   async function runBatch(ids, checkIn) {
     const unique = [...new Set(ids.map(Number).filter(Boolean))];
     if (!unique.length || state.busy) return;
@@ -179,9 +200,16 @@ if (isTestEnvironment) {
         }
         await sleep(180);
       }
-      setBusy(false, failures.length ? `${ok}/${unique.length} ferdig. Feil: ${failures.join(" · ")}` : `${ok} spiller${ok === 1 ? "" : "e"} lagt til${checkIn ? " og sjekket inn" : ""}.`);
+
       await loadData();
-      document.getElementById("tcRefresh")?.click();
+      const synced = await syncTournamentRoom(checkIn);
+      const viewLabel = checkIn ? "Sjekket inn" : "Alle";
+      const baseMessage = failures.length
+        ? `${ok}/${unique.length} ferdig. Feil: ${failures.join(" · ")}`
+        : `${ok} spiller${ok === 1 ? "" : "e"} lagt til${checkIn ? " og sjekket inn" : ""}.`;
+      setBusy(false, synced
+        ? `${baseMessage} Viser dem nå under «${viewLabel}».`
+        : `${baseMessage} Registreringene er lagret, men deltakerlisten rakk ikke å synkronisere automatisk. Trykk Oppdater.`);
     } catch (error) {
       setBusy(false, error.message);
     }
