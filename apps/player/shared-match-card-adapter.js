@@ -1,4 +1,4 @@
-import { openSharedMatchCard } from "../../packages/ui-assets/match-detail-card.js?v=20260831-0740";
+import { openSharedMatchCard } from "../../packages/ui-assets/match-detail-card.js?v=20260831-0750";
 
 document.addEventListener("click",event=>{
   if(!(event.target instanceof Element)) return;
