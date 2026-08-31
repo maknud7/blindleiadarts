@@ -1,0 +1,73 @@
+name: DartsAtlas Connectivity Diagnostic
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test DartsAtlas directly from GitHub runner
+        shell: bash
+        run: |
+          set -u
+          URL='https://www.dartsatlas.com/seasons/rFByCgOqI1rq'
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          status="$(curl -sS -L --max-time 25 \
+            -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36' \
+            -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+            -H 'Accept-Language: nb-NO,nb;q=0.9,en;q=0.8' \
+            -D "$headers" -o "$body" -w '%{http_code}' "$URL" || true)"
+          echo "GITHUB_DARTSATLAS_STATUS=$status"
+          echo "GITHUB_DARTSATLAS_BYTES=$(wc -c < "$body" | tr -d ' ')"
+          echo 'GITHUB_DARTSATLAS_HEADERS_BEGIN'
+          grep -Ei '^(HTTP/|server:|cf-|content-type:|location:)' "$headers" || true
+          echo 'GITHUB_DARTSATLAS_HEADERS_END'
+          title="$(grep -Eio '<title[^>]*>[^<]*</title>' "$body" | head -1 | sed -E 's/<[^>]+>//g' || true)"
+          echo "GITHUB_DARTSATLAS_TITLE=$title"
+          rm -f "$body" "$headers"
+
+      - name: Test DartsAtlas from Blindleia TEST server
+        shell: bash
+        run: |
+          set -u
+          URL='https://test.blindleiadarts.ingenting.org/api/atlas-import-probe.php'
+          body="$(mktemp)"
+          status="$(curl -sS -L --max-time 120 -o "$body" -w '%{http_code}' "$URL" || true)"
+          echo "SERVER_PROBE_HTTP_STATUS=$status"
+          echo "SERVER_PROBE_BYTES=$(wc -c < "$body" | tr -d ' ')"
+          php -r '
+            $raw = file_get_contents($argv[1]);
+            $data = json_decode($raw, true);
+            if (!is_array($data)) {
+              echo "SERVER_PROBE_JSON=invalid\n";
+              echo "SERVER_PROBE_PREVIEW=" . substr(preg_replace("/\\s+/", " ", $raw), 0, 500) . "\n";
+              exit(0);
+            }
+            echo "SERVER_PROBE_JSON=ok\n";
+            foreach (($data["pages"] ?? []) as $name => $page) {
+              printf("SERVER_DARTSATLAS_PAGE_%s_STATUS=%s BYTES=%s CLOUDFLARE=%s TITLE=%s\n",
+                strtoupper(preg_replace("/[^A-Za-z0-9]+/", "_", (string)$name)),
+                (string)($page["status"] ?? ""),
+                (string)($page["body_bytes"] ?? ""),
+                !empty($page["cloudflare"]) ? "yes" : "no",
+                str_replace(["\r", "\n"], " ", (string)($page["title"] ?? ""))
+              );
+            }
+            foreach (($data["match_details"] ?? []) as $id => $match) {
+              printf("SERVER_DARTSATLAS_MATCH_%s_STATUS=%s BYTES=%s CLOUDFLARE=%s\n",
+                strtoupper(preg_replace("/[^A-Za-z0-9]+/", "_", (string)$id)),
+                (string)($match["status"] ?? ""),
+                (string)($match["body_bytes"] ?? ""),
+                !empty($match["cloudflare"]) ? "yes" : "no"
+              );
+            }
+          ' "$body"
+          rm -f "$body"
