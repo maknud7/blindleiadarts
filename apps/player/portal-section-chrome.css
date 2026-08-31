@@ -1,0 +1,80 @@
+/* Shared section hierarchy for the player portal.
+   Equal semantic levels use the same spacing and typography across Home,
+   Tournaments, Statistics and Profile. */
+
+body[data-portal-default="home"]{
+  --portal-section-padding:17px;
+  --portal-section-title-size:28px;
+  --portal-section-copy-size:14px;
+  --portal-section-kicker-size:10px;
+  --portal-subsection-title-size:18px;
+}
+
+body[data-portal-default="home"] [data-portal-section].card{
+  padding:var(--portal-section-padding)!important;
+}
+
+body[data-portal-default="home"] [data-portal-section].card > .section-head{
+  align-items:flex-end!important;
+  gap:12px!important;
+  margin:0!important;
+  padding:0!important;
+}
+
+body[data-portal-default="home"] [data-portal-section].card > .section-head > div{
+  min-width:0;
+}
+
+body[data-portal-default="home"] [data-portal-section].card > .section-head .eyebrow,
+body[data-portal-default="home"] .player-now-head .eyebrow{
+  margin:0!important;
+  font-size:var(--portal-section-kicker-size)!important;
+  line-height:1.2!important;
+  font-weight:850!important;
+  letter-spacing:.1em!important;
+  text-transform:uppercase!important;
+}
+
+body[data-portal-default="home"] [data-portal-section].card > .section-head h2,
+body[data-portal-default="home"] .player-now-head h2{
+  margin:4px 0 0!important;
+  font-size:var(--portal-section-title-size)!important;
+  line-height:1.08!important;
+  letter-spacing:-.035em!important;
+}
+
+body[data-portal-default="home"] [data-portal-section].card > .section-head .muted,
+body[data-portal-default="home"] .player-now-head .player-now-hint{
+  margin-top:6px!important;
+  font-size:var(--portal-section-copy-size)!important;
+  line-height:1.45!important;
+}
+
+body[data-portal-default="home"] .statistics-panel-head h3,
+body[data-portal-default="home"] .home-season-overview-head h3,
+body[data-portal-default="home"] .season-table-heading h3{
+  margin:0!important;
+  font-size:var(--portal-subsection-title-size)!important;
+  line-height:1.15!important;
+  letter-spacing:-.02em!important;
+}
+
+body[data-portal-default="home"] .statistics-panel-head h3 + .muted,
+body[data-portal-default="home"] .home-season-overview-head h3 + .muted,
+body[data-portal-default="home"] .season-table-heading h3 + .muted{
+  margin-top:4px!important;
+}
+
+@media(max-width:680px){
+  body[data-portal-default="home"]{
+    --portal-section-padding:14px;
+    --portal-section-title-size:22px;
+    --portal-section-copy-size:13px;
+    --portal-subsection-title-size:17px;
+  }
+
+  body[data-portal-default="home"] [data-portal-section].card > .section-head{
+    align-items:flex-start!important;
+    gap:8px!important;
+  }
+}
