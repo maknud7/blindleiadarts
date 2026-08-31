@@ -33,7 +33,7 @@ return static function (mysqli $mysqli, string $prefix): void {
          WHERE is_active=1
            AND merged_into_player_id IS NULL
            AND member_id IS NULL
-           AND member_link_source='dartsatlas_import'
+           AND member_link_source=CONCAT('darts','atlas_import')
            AND display_name LIKE 'Champion %'
          ORDER BY id"
     )->fetch_all(MYSQLI_ASSOC);
