@@ -59,9 +59,9 @@ function detailDirectName(node){
   return direct || String(node.textContent || "").replace(/✓/g, "").trim();
 }
 
-function markDetailPlayerRow(row, playerId, { arrow = false } = {}){
-  if(!row || !playerId) return;
-  row.dataset.tdxProfilePlayer = String(playerId);
+function markDetailPlayerRow(row, name, { arrow = false } = {}){
+  if(!row || !name) return;
+  row.dataset.tdxProfileName = detailNormalizeName(name);
   row.classList.add("is-player-link");
   row.setAttribute("role", "button");
   row.setAttribute("tabindex", "0");
@@ -75,7 +75,7 @@ function markDetailPlayerRow(row, playerId, { arrow = false } = {}){
   }
 }
 
-async function enhanceTournamentDetail(){
+function enhanceTournamentDetail(){
   const dialog = document.querySelector("dialog.tdx-detail");
   if(!dialog?.open) return;
   dialog.classList.add("tdx-responsive-detail");
@@ -84,26 +84,20 @@ async function enhanceTournamentDetail(){
     .find(section => section.querySelector(".tdx-person"));
   playerSection?.classList.add("tdx-players-section");
 
-  if(!detailTournamentId) return;
-  const players = await detailPlayersForTournament(detailTournamentId);
-  if(!dialog.open || !players.size) return;
-
   dialog.querySelectorAll(".tdx-person").forEach(row => {
     const name = row.querySelector("strong")?.textContent || "";
-    const playerId = players.get(detailNormalizeName(name));
-    if(playerId) markDetailPlayerRow(row, playerId, { arrow: true });
+    markDetailPlayerRow(row, name, { arrow: true });
   });
 
   dialog.querySelectorAll(".tdx-group-tr:not(.tdx-group-th)").forEach(row => {
     const nameNode = row.querySelector(".tdx-group-name");
-    const playerId = players.get(detailNormalizeName(detailDirectName(nameNode)));
-    if(playerId) markDetailPlayerRow(row, playerId);
+    markDetailPlayerRow(row, detailDirectName(nameNode));
   });
 }
 
 function scheduleDetailEnhance(){
   window.clearTimeout(detailEnhanceTimer);
-  detailEnhanceTimer = window.setTimeout(() => enhanceTournamentDetail().catch(() => undefined), 50);
+  detailEnhanceTimer = window.setTimeout(enhanceTournamentDetail, 50);
 }
 
 function openDetailPlayerProfile(playerId){
@@ -128,6 +122,20 @@ function openDetailPlayerProfile(playerId){
   window.setTimeout(open, 80);
 }
 
+async function openDetailPlayerByName(row){
+  if(!row || !detailTournamentId) return;
+  const name = String(row.dataset.tdxProfileName || "");
+  if(!name) return;
+  row.classList.add("is-loading-player");
+  try{
+    const players = await detailPlayersForTournament(detailTournamentId);
+    const playerId = Number(players.get(name) || 0);
+    if(playerId) openDetailPlayerProfile(playerId);
+  }finally{
+    row.classList.remove("is-loading-player");
+  }
+}
+
 detailLoadStyles();
 
 document.addEventListener("click", event => {
@@ -138,22 +146,22 @@ document.addEventListener("click", event => {
     scheduleDetailEnhance();
   }
 
-  const playerRow = source?.closest("[data-tdx-profile-player]");
+  const playerRow = source?.closest("[data-tdx-profile-name]");
   if(playerRow){
     event.preventDefault();
     event.stopPropagation();
-    openDetailPlayerProfile(Number(playerRow.getAttribute("data-tdx-profile-player") || 0));
+    openDetailPlayerByName(playerRow).catch(() => undefined);
   }
 }, true);
 
 document.addEventListener("keydown", event => {
   if(!["Enter", " "].includes(event.key)) return;
-  const row = event.target instanceof Element ? event.target.closest("[data-tdx-profile-player]") : null;
+  const row = event.target instanceof Element ? event.target.closest("[data-tdx-profile-name]") : null;
   if(!row) return;
   event.preventDefault();
-  openDetailPlayerProfile(Number(row.getAttribute("data-tdx-profile-player") || 0));
+  openDetailPlayerByName(row).catch(() => undefined);
 });
 
 const detailObserver = new MutationObserver(scheduleDetailEnhance);
-detailObserver.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "open"] });
+detailObserver.observe(document.body, { subtree: true, childList: true });
 window.addEventListener("resize", scheduleDetailEnhance);
