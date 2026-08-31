@@ -112,8 +112,8 @@ const GUIDES = Object.freeze({
   },
   admin: {
     eyebrow: "Adminguide",
-    title: "Brukerguide for klubbadmin",
-    intro: "Oppgavebaserte prosedyrer for å sette opp og drifte en dartklubb. Stegene skal kunne følges uten kjennskap til hvordan systemet er bygget.",
+    title: "Brukerguide for administratorer",
+    intro: "Oppgavebaserte prosedyrer for klubbdrift. Superadmin får i tillegg egne emner for plattformdrift og feilsøking.",
     topics: [
       {
         id: "board-setup-options",
@@ -178,6 +178,25 @@ const GUIDES = Object.freeze({
           "Kontroller at hver fysisk Scolia-enhet er koblet til riktig skivenummer før bruk.",
         ],
         note: "Scolia er en scorekilde. Blindleia Darts beholder kamp-, spiller- og resultatdata som canonical data.",
+      },
+      {
+        id: "scolia-platform-operations",
+        group: "Superadmin",
+        title: "Forstå og drifte Scolia-bridgen",
+        summary: "Skille normal dvale fra et reelt driftsavvik, og vite når Scolia skal være koblet til.",
+        steps: [
+          "Når ingen relevant turnering nærmer seg og ingen TEST-lease er aktiv, skal Scolia-bridgen være i Dvale. Dvale er en frisk normaltilstand, ikke en feil.",
+          "I dvale holder bridgen ingen Scolia WebSocket åpen, skriver ikke heartbeat, poller ikke kommandoer og drenerer ikke Scolia-køen. Den gjør bare en read-only router-sjekk omtrent hvert femte minutt.",
+          "Bridgen våkner automatisk 30 minutter før planlagt turneringsstart, når en turnering er in_progress, eller når en fysisk Scolia-skive leases til TEST.",
+          "En turnering som fortsatt står draft eller ready kan vekke bridgen i opptil åtte timer etter planlagt start. Det gjør at forsinket turneringsstart ikke mister Scolia.",
+          "En TEST-lease vekker bridgen uansett ordinær turneringsplan. Fra dvale kan det ta opptil omtrent fem minutter før en ny lease blir oppdaget.",
+          "I Helsesjekk er Dvale grønt når routeren sier at aktiv Scolia ikke er nødvendig. Manglende heartbeat i dvale er derfor forventet.",
+          "Når Scolia faktisk skal være aktiv, forventes fersk bridge-heartbeat og tilkoblet fysisk skive. Gul eller rød status i denne fasen er et reelt avvik som skal undersøkes.",
+          "Scolia Service Account-token og serienummer er canonical PROD-maskinvaredata. TEST og PROD bruker de samme hardware-radene; TEST-lease endrer bare hvor hendelsene rutes og skal ikke opprette en konkurrerende kopi av innstillingene.",
+          "SCOLIA_BRIDGE_SECRET er én plattformhemmelighet mellom bridgen og Blindleia API. Den skal være samme verdi i hostingen av bridgen og API-deployen, skal aldri erstattes av Scolia-tokenet og skal aldri vises i logger eller skjermbilder.",
+          "Ved feil starter du i Helsesjekk og avgjør først om systemet forventer Dvale eller Aktiv. Hvis Aktiv forventes, kontroller deretter bridge-servicen, miljøvariablene og forbindelsen uten å kopiere hemmeligheter ut av de sikre innstillingene.",
+        ],
+        note: "Ikke hold bridgen kunstig våken mellom turneringer. Normal drift er lav aktivitet i dvale og automatisk oppvåkning når fysisk Scolia-scoring faktisk trengs.",
       },
       {
         id: "member-activation",

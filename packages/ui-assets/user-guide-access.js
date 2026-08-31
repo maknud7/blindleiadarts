@@ -19,6 +19,7 @@ const TOPIC_ACCESS = Object.freeze({
     "normal-board": ["club_admin", "super_admin"],
     "pair-tablet": ["club_admin", "super_admin"],
     scolia: ["club_admin", "super_admin"],
+    "scolia-platform-operations": ["super_admin"],
     "member-activation": ["club_admin", "super_admin"],
     "create-tournament": ["club_admin", "super_admin"],
     "checkin-start": ["club_admin", "super_admin"],

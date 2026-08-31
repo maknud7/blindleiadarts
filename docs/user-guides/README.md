@@ -3,7 +3,7 @@
 Blindleia Darts has two in-product user guides:
 
 - **Player guide** for account activation, tournaments, groups, match details, statistics, membership and the live experience.
-- **Admin guide** for member onboarding, tournament setup, check-in, tournament operations, equipment/Scolia, Live, ELO and result control.
+- **Admin guide** for member onboarding, tournament setup, check-in, tournament operations, equipment/Scolia, Live, ELO and result control. Superadmin gets the same operational club topics plus explicitly role-gated platform-operation topics such as Scolia bridge drift and diagnostics.
 
 The canonical user-facing guide content lives in:
 

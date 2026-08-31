@@ -50,6 +50,7 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
 
       - name: Verify tournament registration and group schema
         run: php infra/sql/tournament_groups_doctor.php
@@ -121,8 +122,11 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
 
-      - name: Verify account-player-member identity
-        run: php infra/sql/identity_doctor.php
+      # TEST authentication and membership are canonical in PROD. This check is
+      # deliberately read-only: PR CI must never create or delete canonical accounts,
+      # roles, sessions or onboarding invitations just to exercise TEST.
+      - name: Verify shared production identity boundary
+        run: php infra/sql/shared_identity_doctor.php
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
@@ -130,38 +134,9 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
 
-      - name: Verify member onboarding model
-        run: php infra/sql/onboarding_doctor.php
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_TABLE_PREFIX: bd_test_
-
-      - name: Seed pilot superadmin onboarding invite
-        run: php infra/sql/seed_first_superadmin_onboarding.php
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_TABLE_PREFIX: bd_test_
-
-      - name: Verify completed pilot onboarding
-        run: php infra/sql/post_onboarding_pilot_doctor.php
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_TABLE_PREFIX: bd_test_
-
-      - name: Generate test API config
+      - name: Generate isolated test API config for domain smoke tests
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
         env:
           APP_ENV: test
@@ -178,6 +153,8 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_test_
+          HARDWARE_TABLE_PREFIX: bd_test_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
@@ -210,19 +187,6 @@ jobs:
 
       - name: Exercise onsite check-in and tournament wizard plan
         run: php infra/sql/checkin_smoke.php
-
-      - name: Exercise full onboarding lifecycle
-        run: php infra/sql/onboarding_flow_smoke.php
-
-      - name: Re-verify onboarding state after smoke cleanup
-        run: php infra/sql/onboarding_doctor.php
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_TABLE_PREFIX: bd_test_
 
       - name: Release package smoke test
         run: |
