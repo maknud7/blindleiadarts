@@ -61,6 +61,9 @@ jobs:
       - name: Board admin canonical Scolia checks
         run: node infra/tests/board_admin_core_test.mjs
 
+      - name: TEST player candidate contract checks
+        run: node infra/tests/test_player_candidates_contract_test.mjs
+
       - name: Email-only auth surface check
         run: |
           set -Eeuo pipefail

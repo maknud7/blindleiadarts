@@ -96,6 +96,7 @@ foreach ($candidates as $label => $url) {
         foreach ($m as $row) {
             $href = html_entity_decode((string) $row[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $name = $clean((string) $row[2]);
+            $name = trim((string) (preg_replace('/^Champion\s+/iu', '', $name) ?? $name));
             if ($name === '') continue;
             $players[$href] = $name;
         }

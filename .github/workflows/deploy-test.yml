@@ -109,6 +109,7 @@ jobs:
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
+          test -f dist/test/api/test-player-candidates.php
           test -f dist/test/admin/scolia-admin.js
           test -f dist/test/admin/board-admin-core.mjs
           test -f dist/test/admin/season-admin.js
@@ -172,6 +173,8 @@ jobs:
           grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
           grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/test/api/config.php
+          grep -Fq "'test_player' ELSE 'prod_identity'" dist/test/api/test-player-candidates.php
+          grep -Fq 'alle aktive spillere i TEST' dist/test/admin/test-tournament-tools.js
 
       - name: Deploy test via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
@@ -224,6 +227,8 @@ jobs:
           check_contains "admin equipment" "$base/admin/" "Utstyr"
           check_contains "admin UX" "$base/admin/admin-ux.js" "Neste anbefalte steg"
           check_contains "canonical board scoring" "$base/admin/board-admin-core.mjs" "production_hardware"
+          check_contains "all TEST player candidates" "$base/admin/test-tournament-tools.js" "alle aktive spillere i TEST"
+          check_contains "TEST player candidate endpoint" "$base/api/test-player-candidates.php" "authentication_required"
           check_contains "activity admin" "$base/admin/activity-admin.js" "Aktivitet"
           check_contains "public statistics" "$base/player/" "Statistikk"
           check_contains "player profile" "$base/player/" "Min profil"

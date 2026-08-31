@@ -69,9 +69,7 @@ if (isTestEnvironment) {
   function availablePlayers() {
     const used = activePlayerIds();
     return state.players.filter((player) => Number(player.id) > 0
-      && Number(player.member_id) > 0
       && Number(player.is_active) === 1
-      && String(player.identity_source || "") === "prod_identity"
       && !used.has(Number(player.id)));
   }
 
@@ -104,12 +102,12 @@ if (isTestEnvironment) {
     panel.innerHTML = `
       <summary>TEST · legg til ekte spillere</summary>
       <div class="tc-test-body">
-        <p class="tc-test-note">Listen kommer fra <strong>aktive PROD-kontoer</strong>. TEST bruker bare en lokal spiller-ID som peker på samme medlem; brukere og medlemsidentitet kopieres ikke. Spillerne legges inn som <strong>påmeldt</strong>, og innsjekk skjer senere gjennom ordinær flyt.</p>
+        <p class="tc-test-note">Listen viser <strong>alle aktive spillere i TEST</strong>, også spillere uten brukerkonto. Medlemskoblede navn hentes fra PROD-identiteten, mens turnering, kampdata, statistikk og ELO forblir i TEST. Spillerne legges inn som <strong>påmeldt</strong>, og innsjekk skjer senere gjennom ordinær flyt.</p>
         <div class="tc-test-toolbar">
           <label><span>Søk spiller</span><input id="tcTestSearch" type="search" placeholder="Søk etter navn …" autocomplete="off"></label>
           <button id="tcTestReload" class="button quiet" type="button">Oppdater liste</button>
         </div>
-        <div id="tcTestPlayerList" class="tc-test-player-list"><span class="muted">Henter aktive PROD-kontoer …</span></div>
+        <div id="tcTestPlayerList" class="tc-test-player-list"><span class="muted">Henter aktive TEST-spillere …</span></div>
         <div class="tc-test-actions">
           <button id="tcTestAddSelected" class="button" type="button">Legg til valgte</button>
           <button id="tcTestAdd8" class="button secondary" type="button">Legg til 8 tilfeldige</button>
@@ -135,7 +133,7 @@ if (isTestEnvironment) {
       <label class="tc-test-player" data-search-name="${esc(String(player.display_name || "").toLowerCase())}">
         <input type="checkbox" data-test-player value="${Number(player.id)}">
         <span>${esc(player.display_name || `Spiller ${Number(player.id)}`)}</span>
-      </label>`).join("") : `<span class="muted">Ingen flere aktive PROD-kontoer er tilgjengelige for denne turneringen.</span>`;
+      </label>`).join("") : `<span class="muted">Ingen flere aktive TEST-spillere er tilgjengelige for denne turneringen.</span>`;
     applySearch();
   }
 

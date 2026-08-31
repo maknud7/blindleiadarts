@@ -78,6 +78,7 @@ foreach ($candidates as $label => $url) {
     if (preg_match_all('~<a\b[^>]*href=["\']([^"\']*player_stats/([^"\'/?#]+)[^"\']*)["\'][^>]*>(.*?)</a>~is', $body, $m, PREG_SET_ORDER)) {
         foreach ($m as $row) {
             $name = $clean((string) $row[3]);
+            $name = trim((string) (preg_replace('/^Champion\s+/iu', '', $name) ?? $name));
             if ($name !== '') $players[(string) $row[2]] = $name;
         }
     }
