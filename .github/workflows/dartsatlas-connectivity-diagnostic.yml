@@ -71,3 +71,36 @@ jobs:
             }
           ' "$body"
           rm -f "$body"
+
+      - name: Discover current Mandagsserien tournaments from server
+        shell: bash
+        run: |
+          set -u
+          URL='https://test.blindleiadarts.ingenting.org/api/atlas-season-probe.php?season=rFByCgOqI1rq'
+          body="$(mktemp)"
+          status="$(curl -sS -L --max-time 120 -o "$body" -w '%{http_code}' "$URL" || true)"
+          echo "SEASON_PROBE_HTTP_STATUS=$status"
+          php -r '
+            $raw = file_get_contents($argv[1]);
+            $data = json_decode($raw, true);
+            if (!is_array($data)) {
+              echo "SEASON_PROBE_JSON=invalid\n";
+              exit(0);
+            }
+            echo "SEASON_PROBE_JSON=ok\n";
+            foreach (($data["pages"] ?? []) as $name => $page) {
+              printf("SEASON_PAGE_%s_STATUS=%s BYTES=%s\n", strtoupper((string)$name), (string)($page["source_status"] ?? ""), (string)($page["body_bytes"] ?? ""));
+            }
+            echo "TOURNAMENTS_BEGIN\n";
+            foreach (($data["tournaments"] ?? []) as $id => $name) {
+              printf("%s\t%s\n", (string)$id, str_replace(["\r", "\n", "\t"], " ", (string)$name));
+            }
+            echo "TOURNAMENTS_END\n";
+            foreach (["root", "results", "calendar"] as $key) {
+              $text = (string)($data["pages"][$key]["visible_text"] ?? "");
+              if ($text !== "") {
+                echo "VISIBLE_" . strtoupper($key) . "=" . substr($text, 0, 12000) . "\n";
+              }
+            }
+          ' "$body"
+          rm -f "$body"
