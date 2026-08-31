@@ -25,6 +25,7 @@ Current roles are `player`, `club_admin` and `super_admin` for guide purposes:
 - On the admin surface, only `club_admin` and `super_admin` may see club-administration topics.
 - Superadmin-only topics, when added, must be explicitly limited to `super_admin`.
 - Guide topics are **deny-by-default**. A new topic must be explicitly added to the topic-access map in `user-guide-access.js` before it becomes visible.
+- If the correct access level for a new or changed topic is not obvious from the product permissions or workflow, **do not guess**. Ask the product owner which role(s) should see it before adding the topic to the access map.
 - If a future role gets narrower product permissions, its guide topic list must be narrowed at the same time. Do not grant guide access merely because a user can open the general portal.
 - If a user has no accessible guide topics on the current surface, the guide launcher is hidden.
 
@@ -80,6 +81,7 @@ If a bug fix changes the intended behavior or corrects a guide that was describi
 - Migrated or historical data must be described according to the same semantics as native data once it is canonical.
 - A workflow guide must be understandable by a new club administrator without repository or database knowledge.
 - Documentation visibility must follow product permissions; adding a topic requires an explicit access decision.
+- When the appropriate access level is ambiguous, clarification is mandatory before the guide is changed.
 
 ## Review checklist
 
@@ -91,6 +93,7 @@ Before pushing:
 - [ ] I updated the guide if the workflow, rule, term or visible data changed.
 - [ ] I checked whether guide topic access must change for any role.
 - [ ] Any new/changed topic is explicitly present in the guide access map (deny-by-default).
+- [ ] If the correct guide access level was ambiguous, I asked for clarification before assigning it.
 - [ ] Any new/changed workflow has a real step-by-step procedure, not only a feature explanation.
 - [ ] I verified that the guide still describes what TEST will actually do after deploy.
 - [ ] I can state `Guide impact: updated` or `Guide impact: none` for this push.
