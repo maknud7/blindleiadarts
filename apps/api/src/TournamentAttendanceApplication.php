@@ -16,7 +16,7 @@ use Throwable;
 
 final class TournamentAttendanceApplication
 {
-    private const MIN_PLAYERS = 4;
+    private const MIN_PLAYERS = 2;
 
     public function __construct(private readonly string $rootPath)
     {
@@ -30,10 +30,12 @@ final class TournamentAttendanceApplication
 
         $guest = $method === 'POST' && preg_match('#^v1/tournaments/(\d+)/registrations/guest$#', $path, $guestMatch) === 1;
         $finish = $method === 'POST' && preg_match('#^v1/tournaments/(\d+)/finish-checkin$#', $path, $finishMatch) === 1;
-        $legacyAdminRegistration = $method === 'POST' && preg_match('#^v1/tournaments/(\d+)/registrations$#', $path, $legacyMatch) === 1;
         $startGuard = $method === 'POST' && preg_match('#^v1/tournaments/(\d+)/start$#', $path, $startMatch) === 1;
 
-        if (!$guest && !$finish && !$legacyAdminRegistration && !$startGuard) {
+        // Existing-player registration is handled by the canonical Application route.
+        // This attendance layer must not intercept POST /registrations, otherwise both
+        // the admin "Legg til spiller" flow and TEST player tools dead-end with 409.
+        if (!$guest && !$finish && !$startGuard) {
             return false;
         }
 
@@ -44,7 +46,7 @@ final class TournamentAttendanceApplication
             $prefix = $database->tablePrefix();
             $users = new UserAccountRepository($database);
 
-            $tournamentId = (int) (($guestMatch[1] ?? $finishMatch[1] ?? $legacyMatch[1] ?? $startMatch[1]) ?? 0);
+            $tournamentId = (int) (($guestMatch[1] ?? $finishMatch[1] ?? $startMatch[1]) ?? 0);
             $tournament = $this->findTournament($connection, $prefix, $tournamentId);
             if ($tournament === null) {
                 $response = JsonResponse::error(404, 'tournament_not_found', 'Turneringen ble ikke funnet.');
@@ -60,13 +62,14 @@ final class TournamentAttendanceApplication
                     $response = JsonResponse::ok([
                         'attendance' => $this->finishCheckin($connection, $prefix, $tournament),
                     ]);
-                } elseif ($legacyAdminRegistration) {
-                    $response = JsonResponse::error(
-                        409,
-                        'self_registration_required',
-                        'Registrerte spillere melder seg på selv. Bruk «Legg til gjest» for en spiller som ikke er registrert.'
-                    );
                 } else {
+                    // The UI exposes one canonical "Start turnering" action. If the
+                    // tournament is still draft, finalize attendance first and then let
+                    // TournamentFlowApplication perform the actual start in the same request.
+                    if ((string) $tournament['status'] === 'draft') {
+                        $this->finishCheckin($connection, $prefix, $tournament);
+                        $tournament = $this->findTournament($connection, $prefix, $tournamentId) ?? $tournament;
+                    }
                     $this->assertStartAllowed($connection, $prefix, $tournament);
                     return false;
                 }
@@ -205,7 +208,7 @@ final class TournamentAttendanceApplication
         if ($checked < self::MIN_PLAYERS) {
             throw new ValidationException(
                 'not_enough_checked_in_players',
-                'Minst fire spillere må være sjekket inn før du kan gå videre.'
+                'Minst to spillere må være sjekket inn før du kan gå videre.'
             );
         }
 
@@ -271,7 +274,7 @@ final class TournamentAttendanceApplication
         }
         $checked = $this->checkedCount($connection, $prefix, (int) $tournament['id']);
         if ($checked < self::MIN_PLAYERS) {
-            throw new ValidationException('not_enough_checked_in_players', 'Minst fire spillere må delta i turneringen.');
+            throw new ValidationException('not_enough_checked_in_players', 'Minst to spillere må delta i turneringen.');
         }
     }
 
