@@ -79,8 +79,8 @@ function ensurePanel() {
 
     <div class="integration-grid">
       <form id="scoliaGeneralForm" class="integration-card">
-        <div><p class="eyebrow">Klubbkonto</p><h4>Scolia Service Account</h4></div>
-        <p class="muted">Denne tilkoblingen gjelder klubben. Hver Scolia-enhet kobles deretter til riktig skive med sitt eget serienummer.</p>
+        <div><p class="eyebrow">Klubbkonto</p><h4>Scolia API-tilkobling</h4></div>
+        <p class="muted">Service Account opprettes av Scolia for klubben. I Blindleia trenger du bare access tokenet til denne kontoen – det finnes ikke et eget Service Account-ID eller brukernavn som skal fylles inn her.</p>
         <div class="settings-grid">
           <label class="check-row wide"><input id="scoliaEnabled" type="checkbox"><span>Aktiver Scolia for klubben</span></label>
           <label class="wide"><span>Service Account access token</span><input id="scoliaToken" type="password" autocomplete="new-password" placeholder="Ikke endre lagret token"></label>
@@ -92,7 +92,7 @@ function ensurePanel() {
       <div class="integration-card">
         <div><p class="eyebrow">Skiver</p><h4>Flere Scolia-enheter</h4></div>
         <p class="muted">Opprett eller rediger hver skive separat og velg <strong>Scolia</strong> som scoring. Legg inn serienummeret til den fysiske Scolia-enheten på den aktuelle skiva.</p>
-        <div class="integration-status good"><strong>Klar for flere skiver</strong><br><span class="muted">Service Account er klubbnivå. Serienummeret er skivenivå, slik at Skive 1, Skive 2 osv. kan ha hver sin Scolia.</span></div>
+        <div class="integration-status good"><strong>Klar for flere skiver</strong><br><span class="muted">Access tokenet er klubbnivå. Serienummeret er skivenivå, slik at Skive 1, Skive 2 osv. kan ha hver sin Scolia.</span></div>
       </div>
     </div>
 
@@ -150,8 +150,8 @@ function renderGeneral() {
   document.getElementById("scoliaRetryBase").value = Number(settings.queue_retry_base_seconds || 2);
   document.getElementById("scoliaRetention").value = Number(settings.event_retention_days || 30);
   document.getElementById("scoliaToken").value = "";
-  document.getElementById("scoliaToken").placeholder = settings.access_token_configured ? "Lagret token – skriv bare for å bytte" : "Lim inn Scolia Service Account token";
-  document.getElementById("scoliaTokenHint").textContent = settings.access_token_configured ? `Token er lagret (${settings.access_token_masked || "maskert"}). Verdien vises aldri tilbake i admin.` : "Ingen Scolia access token er lagret ennå.";
+  document.getElementById("scoliaToken").placeholder = settings.access_token_configured ? "Lagret token – skriv bare for å bytte" : "Lim inn access token fra Scolia Service Account";
+  document.getElementById("scoliaTokenHint").textContent = settings.access_token_configured ? `Service Account-token er lagret (${settings.access_token_masked || "maskert"}). Verdien vises aldri tilbake i admin.` : "Ingen Service Account access token er lagret for denne klubben ennå.";
 }
 
 function renderQueue() {
