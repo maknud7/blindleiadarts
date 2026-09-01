@@ -127,7 +127,7 @@
 
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
 
-      await loadScript("./live-v2.js?v=20260901-1245");
+      await loadScript("./live-v2.js?v=20260901-1420");
       await loadScript("./profile-runtime.js?v=20260901-1245");
       keepProfileInSync();
     } catch (error) {
