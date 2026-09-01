@@ -1,6 +1,6 @@
-release_sha=0668f80c0289ca263790fbacbe26b707650c6528
+release_sha=25c2d77649f35705774c7451d0e3e9a880b8585a
 backup_confirmed=YES
-migration_review_confirmed=NO
-requested_at=2026-09-01T09:29:00+02:00
-purpose=group_tiebreak_legdiff_head_to_head_3da
-backup_prefix=bd_backup_20260901_072731_
+migration_review_confirmed=YES
+requested_at=2026-09-01T16:31:00+02:00
+purpose=prod_only_kiosk_entry_and_pairing_free_test_mode
+backup_prefix=bd_backup_20260901_142945_
