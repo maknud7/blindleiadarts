@@ -78,6 +78,7 @@
       .test-mode-settings-actions{display:flex;gap:8px;flex-wrap:wrap}
       .test-mode-settings-button{border-color:#d9a918!important;background:#f5c542!important;color:#332500!important;font-weight:900!important}
       .test-mode-change-button{border-color:rgba(181,132,0,.45)!important;color:#7a5600!important;background:#fffaf0!important;font-weight:800!important}
+      body.kiosk-test-mode:not(.test-mode-ready) .terminal-main{display:none!important}
       body.kiosk-test-mode.test-mode-ready .terminal-shell{outline:2px solid rgba(245,197,66,.58);outline-offset:-2px}
       body.kiosk-test-mode.test-mode-ready .terminal-topbar{box-shadow:inset 0 5px 0 #f5c542,0 8px 24px rgba(9,44,69,.16)}
       body.kiosk-test-mode #settingsButton{border-color:rgba(245,197,66,.9);box-shadow:0 0 0 2px rgba(245,197,66,.16)}
@@ -85,6 +86,12 @@
       @media(max-width:650px){.test-mode-row{display:grid}.test-mode-panel{margin:10px 10px 0}.test-mode-settings-actions{display:grid}}
     `;
     document.head.appendChild(style);
+  }
+
+  function cleanLaunchUrl() {
+    const url = new URL(window.location.href);
+    ["testmode", "physical_board_id", "return_url", "embedded"].forEach((key) => url.searchParams.delete(key));
+    history.replaceState(null, "", url.href);
   }
 
   function reloadWithoutShortcut() {
@@ -116,6 +123,9 @@
 
   function chooseAnotherTestBoard() {
     clearTestSelection();
+    localStorage.removeItem("bd:kioskCode");
+    localStorage.removeItem("bd:kioskPairingRequestCode");
+    localStorage.removeItem("bd:kioskPairingExpires");
     document.body.classList.remove("test-mode-ready");
     reloadWithoutShortcut();
   }
@@ -153,7 +163,6 @@
 
     const enabled = active();
     const hasSelection = selected();
-    const unlocked = typeof isUnlocked === "function" ? isUnlocked() : false;
     const selectedLabel = localStorage.getItem(TEST_BOARD_LABEL_KEY) || "valgt skive";
     card.classList.toggle("active", enabled);
 
@@ -162,11 +171,9 @@
     const change = document.getElementById("kioskTestModeChange");
     const helpText = enabled
       ? (hasSelection
-        ? `Aktiv nå på ${selectedLabel}. Kamp og scoring går mot isolert test-runtime. Gule markeringer viser at terminalen er i test.`
-        : "Aktiv nå. Velg skiva du vil bruke i testfeltet på hovedskjermen.")
-      : (unlocked
-        ? "Bruk isolert test-runtime uten å påvirke ordinære kamp- og scoringdata."
-        : "Lås opp admin-modus under for å starte testmodus.");
+        ? `Aktiv nå på ${selectedLabel}. Kamp og scoring går mot isolert TEST-runtime. Gule markeringer viser at terminalen er i test.`
+        : "Aktiv nå. Velg skiva du vil simulere i TEST.")
+      : "Testmodus startes fra tannhjulet på PROD-kiosken.";
     const toggleText = enabled ? "Avslutt testmodus" : "Start testmodus";
 
     if (help && help.textContent !== helpText) help.textContent = helpText;
@@ -209,12 +216,12 @@
       : `<option value="">Ingen skiver funnet</option>`;
 
     panel.innerHTML = `
-      <span class="test-mode-badge">Testmodus aktiv</span>
+      <span class="test-mode-badge">Testmodus</span>
       <strong>Velg skiva du vil teste på</strong>
-      <small class="muted">${escapeHtml(message || "Testkamper og scoring lagres isolert. Når skiva er valgt forsvinner dette feltet, og kiosken ser normal ut med diskrete gule testmarkeringer.")}</small>
+      <small class="muted">${escapeHtml(message || "Ingen pairing er nødvendig. Testkamper og scoring lagres isolert fra PROD.")}</small>
       <div class="test-mode-row" data-kiosk-admin-control>
         <select aria-label="Velg skive" ${hasItems ? "" : "disabled"}>${options}</select>
-        <button type="button" class="ghost-button" ${hasItems ? "" : "disabled"}>Bruk valgt skive</button>
+        <button type="button" class="ghost-button" ${hasItems ? "" : "disabled"}>Start på valgt skive</button>
       </div>`;
 
     const select = panel.querySelector("select");
@@ -246,13 +253,17 @@
     if (document.body?.dataset?.appEnv !== "test") return;
     const query = new URLSearchParams(window.location.search).get("testmode");
     if (query === "1") {
-      rememberNormalTerminal();
       clearTestSelection();
+      localStorage.removeItem("bd:kioskCode");
+      localStorage.removeItem("bd:kioskPairingRequestCode");
+      localStorage.removeItem("bd:kioskPairingExpires");
       setActive(true);
+      cleanLaunchUrl();
     }
     if (query === "0") {
       setActive(false);
       restoreNormalTerminal();
+      cleanLaunchUrl();
     }
 
     styles();
@@ -276,9 +287,10 @@
     replacePanel([], "Laster skiveregister …");
     try {
       const data = await jsonRequest(TEST_MODE_API);
-      replacePanel(data.items || [], (data.items || []).length
-        ? "Velg skiva du vil bruke. Når den er valgt forsvinner dette feltet, mens testdata fortsatt holdes isolert."
-        : "Det finnes ingen aktive skiver i fysisk register eller test-admin.");
+      const items = (data.items || []).filter((item) => (item.source || "physical") === "physical");
+      replacePanel(items, items.length
+        ? "Ingen pairing er nødvendig. Velg en fysisk PROD-skive; kiosken oppretter automatisk en isolert TEST-runtime for den."
+        : "Det finnes ingen aktive fysiske skiver i PROD-registeret.");
     } catch (error) {
       replacePanel([], `Kunne ikke laste skiveregister: ${error.message || "ukjent feil"}`);
       console.warn("Kiosk test mode unavailable", error);
