@@ -46,6 +46,7 @@ async function requestJson(url, { method = "GET", body, pairing = false } = {}) 
   if (!response.ok || !payload?.ok) {
     const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
     error.status = response.status;
+    error.code = payload?.error?.code || "";
     throw error;
   }
   return payload.data;
@@ -291,7 +292,10 @@ async function submitSum() {
   const dartsUsed = checkout ? await requestCheckoutDarts() : 3;
   state.mutating = true;
   try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, { method: "POST", body: { score, darts_used: dartsUsed, input_mode: "sum" } }); resetInput(); render(); }
-  catch (error) { showToast(error.message); }
+  catch (error) {
+    if (error.code === "match_not_available") await loadState().catch(() => undefined);
+    showToast(error.message);
+  }
   finally { state.mutating = false; }
 }
 async function submitDarts() {
@@ -301,7 +305,10 @@ async function submitDarts() {
   while (!checkout && darts.length < 3) darts.push({ multiplier: "S", value: 0 });
   state.mutating = true;
   try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/visit`, { method: "POST", body: { input_mode: "per_dart", darts_used: checkout ? state.darts.length : 3, darts } }); resetInput(); render(); }
-  catch (error) { showToast(error.message); }
+  catch (error) {
+    if (error.code === "match_not_available") await loadState().catch(() => undefined);
+    showToast(error.message);
+  }
   finally { state.mutating = false; }
 }
 
@@ -351,13 +358,20 @@ async function startLive() {
     state.socket = socket;
     socket.addEventListener("open", () => {
       if (state.socket !== socket) return;
-      socket.send(JSON.stringify({ type: "subscribe", channels: [`kiosk:${state.kioskCode}`] }));
+      const channels = [`kiosk:${state.kioskCode}`];
+      const clubId = Number(currentKiosk()?.club?.id || 0);
+      if (clubId > 0) channels.push(`club:${clubId}`);
+      socket.send(JSON.stringify({ type: "subscribe", channels }));
     });
     socket.addEventListener("message", (event) => {
       if (state.mutating) return;
       try {
         const message = JSON.parse(event.data);
         if (message?.type === "event" && message?.event === "snapshot" && message?.payload) {
+          if (message.payload.refresh === true) {
+            loadState().catch(() => undefined);
+            return;
+          }
           state.snapshot = message.payload;
           render();
         }
