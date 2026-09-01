@@ -1,9 +1,6 @@
 name: DartsAtlas Connectivity Diagnostic
 
 on:
-  push:
-    branches:
-      - develop
   workflow_dispatch:
 
 permissions:

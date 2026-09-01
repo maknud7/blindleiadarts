@@ -1,0 +1,149 @@
+name: Import Verified Atlas Round Four To Test
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-import-atlas-round-four-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-atlas-round-four-test
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+      MANIFEST: infra/atlas/manifests/mandagsserien-2026-04.json
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_test_
+    steps:
+      - name: Checkout exact import commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate frozen request and import scripts
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_FOUR_TO_TEST=yes' infra/sql/run-import-atlas-round-four-test.flag
+          php -l infra/sql/import_atlas_match_visits_test.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_history_lifecycle_verify.php
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            if(($m["tournament_external_id"]??"")!=="jort2WSBWFwN") throw new RuntimeException("Wrong tournament");
+            if(($m["expected_players"]??0)!==12||($m["expected_matches"]??0)!==37||($m["expected_legs"]??0)!==48) throw new RuntimeException("Frozen counts changed");
+            $ids=$m["match_external_ids"]??[];
+            if(count($ids)!==37||count(array_unique($ids))!==37) throw new RuntimeException("Expected 37 unique matches");
+            echo "ROUND4_MANIFEST_OK=yes\n";
+          '
+
+      - name: Require exact commit live on canonical TEST
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${TEST_BASE_URL%/}"
+          for attempt in $(seq 1 60); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release" && grep -Fq '"environment":"test"' <<<"$release"; then
+              echo "Exact import commit is live on TEST: $EXPECTED_SHA"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "TEST never reached exact import commit." >&2
+          exit 1
+
+      - name: Fetch all round four match details through TEST server
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/round-four-matches
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["match_external_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            target="/tmp/round-four-matches/${id}.json"
+            fetched=no
+            for attempt in $(seq 1 10); do
+              status="$(curl -sS -L --connect-timeout 8 --max-time 90 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-match-visits.php?match=${id}&cb=$RANDOM" || true)"
+              if [[ "$status" == "200" ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(is_array($d)&&($d["ok"]??false)===true?0:1);' "$target"; then
+                fetched=yes
+                break
+              fi
+              error="$(php -r '$d=json_decode(@file_get_contents($argv[1]),true);echo is_array($d)?($d["error"]??"invalid_payload"):"invalid_json";' "$target" 2>/dev/null || true)"
+              echo "Retrying ${id}: HTTP ${status}, ${error}, attempt ${attempt}/10"
+              sleep $((45 + attempt * 15))
+            done
+            if [[ "$fetched" != "yes" ]]; then
+              echo "Could not fetch verified match detail for ${id}." >&2
+              exit 1
+            fi
+            php -r '
+              $d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);
+              printf("FETCHED_MATCH id=%s legs=%d visits=%d darts=%d\n",$d["external_id"],$d["leg_count"],$d["visit_count"],$d["darts_count"]);
+            ' "$target"
+            sleep 12
+          done
+
+          php -r '
+            $manifest=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            $legs=$visits=$darts=0;
+            foreach($manifest["match_external_ids"] as $id){
+              $d=json_decode(file_get_contents("/tmp/round-four-matches/{$id}.json"),true,512,JSON_THROW_ON_ERROR);
+              if(($d["external_id"]??"")!==$id)throw new RuntimeException("Wrong payload for {$id}");
+              $legs+=(int)$d["leg_count"];$visits+=(int)$d["visit_count"];$darts+=(int)$d["darts_count"];
+            }
+            if($legs!==(int)$manifest["expected_legs"])throw new RuntimeException("Leg total drift: {$legs}");
+            echo "ROUND4_FETCH_OK=yes matches=",count($manifest["match_external_ids"])," legs={$legs} visits={$visits} darts={$darts}\n";
+          '
+
+      - name: Import canonical legs visits and statistics into TEST
+        run: |
+          set -Eeuo pipefail
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["match_external_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-four-matches/${id}.json"
+          done
+
+      - name: Verify and finalize canonical TEST round four
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external=jort2WSBWFwN
+          php infra/sql/elo_ledger_doctor.php
+          php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external=jort2WSBWFwN
+
+      - name: Report frozen TEST totals for production manifest
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $p="bd_test_";$external="jort2WSBWFwN";
+            $stmt=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");
+            $stmt->bind_param("s",$external);$stmt->execute();$tid=(int)($stmt->get_result()->fetch_assoc()["internal_id"]??0);
+            if($tid<1)throw new RuntimeException("Round four reference missing");
+            $players=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}")->fetch_assoc()["c"];
+            $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()["c"];
+            $legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            $visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            if($players!==12||$matches!==37||$legs!==48||$visits<96)throw new RuntimeException("Final TEST total drift");
+            echo "ROUND4_TEST_FINAL_OK=yes tournament_id={$tid} players={$players} matches={$matches} legs={$legs} visits={$visits}\n";
+          '
