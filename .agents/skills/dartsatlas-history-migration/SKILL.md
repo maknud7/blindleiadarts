@@ -19,12 +19,15 @@ Use this skill whenever old tournament/season data is copied from DartsAtlas int
 8. Respect DartsAtlas rate limiting. Do not parallelize scraping or evade limits. Use the established slow policy: cooldown before a run, about 12 seconds between successful match requests, and escalating backoff on 429.
 9. New migrations must be manifest/config driven. Do not create future tournament importers by runtime text replacement of a previous tournament-specific PHP file. The old #1/#2 importers may remain as migration history, but they are not the model for PROD promotion.
 10. Before any write, fetch current `develop` and inspect current schema/import files. Concurrent development is normal in this repository.
+11. Tournament format metadata is derived from canonical imported data, never wizard defaults. Group count, group best-of, qualifiers per group, playoff best-of and starting score must agree with imported groups/matches/playoff/legs before a historical tournament can be considered ready for promotion.
 
 ## Known lifecycle bugs to guard against
 
 The legacy Atlas structural importer writes `status='completed'` on `tournaments`, but historically did not populate `end_at`. It also registered all historical participants as `checked_in`, even after a completed playoff, and the detailed visit importer created completed legs without `finished_at`. Those rows contain valid historical match data but do not fully match the canonical Blindleia lifecycle. All three conditions must fail lifecycle QA and be finalized before PROD.
 
-Use `infra/sql/atlas_history_finalize.php` only after data-phase QA is green. It repairs lifecycle markers without inventing dart data: completed legs inherit the already stored match finish marker, playoff losers become eliminated, the champion remains checked in, and tournament `end_at` uses the latest already stored match finish marker. Outside TEST it requires the explicit `ALLOW_PROD_ATLAS_FINALIZE=yes` gate.
+Older Atlas imports could also retain generic tournament-wizard defaults such as group `Best av 3` or `Topp 2` even when the imported matches and playoff prove another format. `infra/sql/atlas_history_finalize.php` now reconciles this display/planning metadata from canonical groups, matches, playoff rows and legs before commit. Do not hand-enter format values to make the UI look right.
+
+Use `infra/sql/atlas_history_finalize.php` only after data-phase QA is green. It repairs lifecycle markers without inventing dart data: completed legs inherit the already stored match finish marker, playoff losers become eliminated, the champion remains checked in, tournament `end_at` uses the latest already stored match finish marker, and tournament format metadata is reconciled from the imported canonical data. Outside TEST it requires the explicit `ALLOW_PROD_ATLAS_FINALIZE=yes` gate.
 
 ## Required migration phases
 
@@ -74,11 +77,13 @@ Finalize only after data QA is green:
 
 `php infra/sql/atlas_history_finalize.php --external=<ATLAS_TOURNAMENT_ID>`
 
-Then run both final gates:
+Then run all final gates:
 
 `php infra/sql/atlas_history_verify.php --external=<ATLAS_TOURNAMENT_ID> --expected-matches=<N> --expected-players=<N> --phase=final`
 
 `php infra/sql/atlas_history_lifecycle_verify.php --external=<ATLAS_TOURNAMENT_ID>`
+
+`php infra/sql/atlas_format_metadata_verify.php --external=<ATLAS_TOURNAMENT_ID>`
 
 The verifiers are release gates, not informational inventories. They must fail on lifecycle or data inconsistencies, including:
 
@@ -92,19 +97,21 @@ The verifiers are release gates, not informational inventories. They must fail o
 - missing canonical Atlas player reference;
 - incomplete playoff/champion/final node;
 - participant lifecycle inconsistent with completed playoff;
-- missing season ranking events.
+- missing season ranking events;
+- display/planning format metadata differing from canonical groups, match best-of values, qualifiers, playoff format or leg starting score.
 
 `history_inventory.php` is useful context, but it is **not** a substitute for these verifiers.
 
 ### 6. Idempotency test in TEST
 
-Before PROD, rerun the same import/finalization once against TEST and run both strict verifiers again. The second run must not create extra tournaments, matches, players, legs, visits, ranking events or external references, and must not change winner/standings/lifecycle.
+Before PROD, rerun the same import/finalization once against TEST and run all strict verifiers again. The second run must not create extra tournaments, matches, players, legs, visits, ranking events or external references, and must not change winner/standings/lifecycle/format metadata.
 
 ### 7. API/UX smoke in TEST
 
 After DB verification, inspect the deployed TEST UI/API as a user would:
 
 - tournament is visibly finished, not active/in progress;
+- format summary matches the actual imported tournament, including group/playoff best-of and number advancing from each group;
 - group tables have all expected matches and standings;
 - playoff bracket is fully resolved and champion correct;
 - tournament result list is complete;
@@ -124,8 +131,8 @@ PROD is a separate explicit operation. Before writing PROD:
 - no TEST-only hard guard has been casually removed from an old script; use a deliberate PROD-safe importer/finalizer;
 - the exact expected deltas are known in advance.
 
-After PROD import, run the same strict verifiers with the PROD table prefix, then verify the public/player UI. If verification fails, stop further imports and repair/roll back the affected tournament before continuing.
+After PROD import, run the same strict verifiers with the PROD table prefix, including `atlas_format_metadata_verify.php`, then verify the public/player UI. If verification fails, stop further imports and repair/roll back the affected tournament before continuing.
 
 ## What to report after each migration
 
-Always report concrete evidence: external tournament ID, local tournament ID, participants, matches, legs, visits, champion, lifecycle status/end time, verifier result, and whether an idempotent rerun was tested. Never say “migrated successfully” from a workflow exit code alone.
+Always report concrete evidence: external tournament ID, local tournament ID, participants, matches, legs, visits, champion, lifecycle status/end time, derived format metadata, verifier result, and whether an idempotent rerun was tested. Never say “migrated successfully” from a workflow exit code alone.

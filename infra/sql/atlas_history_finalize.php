@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+require_once __DIR__ . '/atlas_format_metadata.php';
 
 $required = static function (string $key): string {
     $value = getenv($key);
@@ -61,6 +62,7 @@ if ($tournament === null) {
     throw new RuntimeException("DartsAtlas tournament {$externalId} is not mapped locally.");
 }
 $tournamentId = (int) $tournament['id'];
+$formatMetadata = null;
 
 $db->begin_transaction();
 try {
@@ -177,6 +179,12 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    // Planned/display format must be derived from the imported canonical match data,
+    // never left at generic wizard defaults. This also makes future Atlas migrations
+    // self-healing before they can pass finalization.
+    $formatMetadata = atlas_reconcile_format_metadata($db, $prefix, $tournamentId);
+    atlas_assert_format_metadata($db, $prefix, $tournamentId);
+
     $db->commit();
 } catch (Throwable $error) {
     $db->rollback();
@@ -205,6 +213,7 @@ echo 'ATLAS_HISTORY_FINALIZE ' . json_encode([
     'end_at' => $latestFinishedAt,
     'legs_timestamped' => $legsFinalized,
     'players_eliminated' => $eliminated,
+    'format_metadata' => $formatMetadata,
     'elo_rebuilt' => $eloRebuilt,
     'prefix' => $prefix,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
