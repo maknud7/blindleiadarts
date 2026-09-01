@@ -9,6 +9,7 @@ use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\EloLedgerRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
+use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentAdminMutationRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentLiveRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentMatchEngineRepository;
@@ -114,6 +115,21 @@ final class TournamentOperationsApplication
             $targetKioskId = (int) ($payload['kiosk_id'] ?? 0);
             $confirmInProgress = ($payload['confirm_in_progress'] ?? false) === true;
             $move = $mutations->moveMatch($tournamentId, $matchId, $targetKioskId, $confirmInProgress);
+
+            if (($move['moved'] ?? false) === true) {
+                $scolia = new ScoliaRepository($database);
+                $affectedKiosks = array_values(array_unique(array_filter([
+                    (int) ($move['from_kiosk_id'] ?? 0),
+                    (int) ($move['kiosk_id'] ?? 0),
+                ], static fn (int $id): bool => $id > 0)));
+                foreach ($affectedKiosks as $kioskId) {
+                    // A board change invalidates any partial Scolia visit or takeout lock
+                    // tied to the old board context. Canonical completed visits remain intact.
+                    $scolia->clearVisitBuffer($kioskId);
+                    $scolia->setTurnLocked($kioskId, false);
+                }
+            }
+
             $snapshot = $engine->decorateSnapshot($tournamentId, $operations->snapshot($tournamentId));
             $snapshot['move'] = $move;
             $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_match_moved');
