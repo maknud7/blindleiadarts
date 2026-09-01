@@ -34,12 +34,12 @@ try {
             $respond(['ok' => false, 'error' => ['code' => 'invalid_live_code', 'message' => 'Live-koden må være fire sifre.']], 422);
         }
         $statement = $connection->prepare(
-            sprintf('SELECT id, name, slug, live_code FROM `%s` WHERE live_code = ? LIMIT 1', $table)
+            sprintf('SELECT id, name, slug, live_code, live_display_profile FROM `%s` WHERE live_code = ? LIMIT 1', $table)
         );
         $statement->bind_param('s', $code);
     } elseif ($clubId > 0) {
         $statement = $connection->prepare(
-            sprintf('SELECT id, name, slug, live_code FROM `%s` WHERE id = ? LIMIT 1', $table)
+            sprintf('SELECT id, name, slug, live_code, live_display_profile FROM `%s` WHERE id = ? LIMIT 1', $table)
         );
         $statement->bind_param('i', $clubId);
     } else {
@@ -103,6 +103,11 @@ try {
         throw new RuntimeException('Klubben mangler gyldig Live-kode.');
     }
 
+    $profile = trim((string) ($club['live_display_profile'] ?? 'blindleia'));
+    if (!in_array($profile, ['blindleia', 'broadcast-dark'], true)) {
+        $profile = 'blindleia';
+    }
+
     $baseUrl = rtrim($config->baseUrl(), '/');
     $respond(['ok' => true, 'data' => [
         'club' => [
@@ -110,6 +115,7 @@ try {
             'name' => (string) $club['name'],
             'slug' => (string) $club['slug'],
             'live_code' => $liveCode,
+            'live_display_profile' => $profile,
         ],
         'live_url' => $baseUrl . '/live/' . $liveCode,
     ]]);
