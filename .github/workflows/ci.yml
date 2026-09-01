@@ -64,6 +64,9 @@ jobs:
       - name: TEST player candidate contract checks
         run: node infra/tests/test_player_candidates_contract_test.mjs
 
+      - name: PROD round four safety contract checks
+        run: node infra/tests/prod_round_four_contract_test.mjs
+
       - name: Email-only auth surface check
         run: |
           set -Eeuo pipefail

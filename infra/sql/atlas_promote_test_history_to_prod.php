@@ -32,14 +32,19 @@ $sourcePrefix = (string) ($manifest['source_prefix'] ?? '');
 $targetPrefix = (string) ($manifest['target_prefix'] ?? '');
 $clubSlug = (string) ($manifest['club_slug'] ?? '');
 $seasonExternalId = (string) ($manifest['season_external_id'] ?? '');
+$mode = (string) ($manifest['mode'] ?? 'initial');
 $tournamentSpecs = is_array($manifest['tournaments'] ?? null) ? $manifest['tournaments'] : [];
 $expectedTotals = is_array($manifest['expected_totals'] ?? null) ? $manifest['expected_totals'] : [];
 
 if ($sourcePrefix !== 'bd_test_' || $targetPrefix !== 'bd_prod_' || $clubSlug !== 'blindleia-dartklubb') {
     throw new RuntimeException('Promotion manifest must be bd_test_ -> bd_prod_ for Blindleia Dartklubb.');
 }
-if ($seasonExternalId === '' || count($tournamentSpecs) !== 3) {
-    throw new RuntimeException('Promotion manifest must contain the frozen season and exactly three tournaments.');
+if (!in_array($mode, ['initial', 'incremental_existing_season'], true)) {
+    throw new RuntimeException('Promotion manifest mode must be initial or incremental_existing_season.');
+}
+$expectedTournamentCount = $mode === 'initial' ? 3 : 1;
+if ($seasonExternalId === '' || count($tournamentSpecs) !== $expectedTournamentCount) {
+    throw new RuntimeException("Promotion manifest must contain the frozen season and exactly {$expectedTournamentCount} tournament(s) for {$mode} mode.");
 }
 if (($required('DB_TABLE_PREFIX')) !== $targetPrefix) {
     throw new RuntimeException('DB_TABLE_PREFIX must be bd_prod_ for promotion.');
@@ -279,8 +284,12 @@ foreach ($participantSourceIds as $sourcePlayerId) {
     }
 }
 
-if ($getRef($db, $targetPrefix, 'season', $seasonExternalId) !== null) {
+$targetSeasonRef = $getRef($db, $targetPrefix, 'season', $seasonExternalId);
+if ($mode === 'initial' && $targetSeasonRef !== null) {
     throw new RuntimeException("PROD already contains season reference {$seasonExternalId}; refusing non-clean promotion.");
+}
+if ($mode === 'incremental_existing_season' && $targetSeasonRef === null) {
+    throw new RuntimeException("PROD season reference {$seasonExternalId} is required for incremental promotion.");
 }
 
 echo "ATLAS_PROD_PROMOTION_PREFLIGHT_OK=yes" . PHP_EOL;
@@ -292,12 +301,20 @@ echo "ATLAS_PROD_PROMOTION_SOURCE_PLAYER_REFS=" . count($playerRefRows) . PHP_EO
 
 $db->begin_transaction();
 try {
-    $seasonRow = $sourceSeason;
-    unset($seasonRow['id']);
-    $seasonRow['club_id'] = $targetClubId;
-    if (array_key_exists('champion_player_id', $seasonRow)) $seasonRow['champion_player_id'] = null;
-    $targetSeasonId = $insertRow($db, $targetPrefix . 'seasons', $seasonRow);
-    $putRef($db, $targetPrefix, 'season', $seasonExternalId, 'season', $targetSeasonId);
+    if ($mode === 'initial') {
+        $seasonRow = $sourceSeason;
+        unset($seasonRow['id']);
+        $seasonRow['club_id'] = $targetClubId;
+        if (array_key_exists('champion_player_id', $seasonRow)) $seasonRow['champion_player_id'] = null;
+        $targetSeasonId = $insertRow($db, $targetPrefix . 'seasons', $seasonRow);
+        $putRef($db, $targetPrefix, 'season', $seasonExternalId, 'season', $targetSeasonId);
+    } else {
+        $targetSeasonId = (int) $targetSeasonRef['internal_id'];
+        $targetSeason = $fetchById($db, $targetPrefix . 'seasons', $targetSeasonId);
+        if ((int) $targetSeason['club_id'] !== $targetClubId) {
+            throw new RuntimeException('Existing PROD season belongs to the wrong club.');
+        }
+    }
 
     $targetPlayers = $db->query(
         "SELECT * FROM `{$targetPrefix}players` WHERE club_id={$targetClubId} OR club_id IS NULL ORDER BY id"

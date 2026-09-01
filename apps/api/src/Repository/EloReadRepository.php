@@ -68,6 +68,32 @@ final class EloReadRepository
         }
         unset($row);
 
+        // A legacy bootstrap can leave an empty, active player row with the
+        // same display name as the canonical ledger identity. The baseline
+        // fallback above would otherwise make both rows rank. Collapse exact
+        // name duplicates defensively and prefer the row backed by the ELO
+        // ledger, then actual local history, then the stable lowest id.
+        $byName = [];
+        foreach ($rows as $row) {
+            $key = mb_strtolower(trim((string) $row['display_name']), 'UTF-8');
+            if (!isset($byName[$key])) {
+                $byName[$key] = $row;
+                continue;
+            }
+            $current = $byName[$key];
+            $rank = static function (array $candidate): array {
+                return [
+                    ($candidate['elo_source'] ?? '') === 'elo_ledger' ? 1 : 0,
+                    (int) ($candidate['local_matches_played'] ?? 0),
+                    -(int) ($candidate['id'] ?? PHP_INT_MAX),
+                ];
+            };
+            if ($rank($row) > $rank($current)) {
+                $byName[$key] = $row;
+            }
+        }
+        $rows = array_values($byName);
+
         // Canonical ranking rule: a player does not belong in an ELO ranking
         // until at least one ELO-rated match has actually been played.
         $rows = array_values(array_filter(
