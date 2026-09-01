@@ -82,9 +82,10 @@ final class TournamentLiveRepository
             'boards' => $boards,
             'next_matches' => array_slice($queueItems, 0, 10),
             'recent_results' => $ops['recent_results'],
+            'qualifiers_per_group' => $this->qualifiersPerGroup($tournamentId),
             'tables' => $this->portal->getTournamentTables($tournamentId),
             'playoff' => $this->playoffs->getBracket($tournamentId),
-            'elo' => array_slice($this->elo->listClubElo((int) $tournament['club_id']), 0, 10),
+            'elo' => $this->elo->listClubElo((int) $tournament['club_id']),
             'highlights' => $this->highlights($tournamentId),
             'updated_at' => date('c'),
         ];
@@ -190,6 +191,26 @@ final class TournamentLiveRepository
         }
         $stmt->close();
         return $counts;
+    }
+
+    private function qualifiersPerGroup(int $tournamentId): ?int
+    {
+        $sql = sprintf(
+            'SELECT COALESCE(po.qualifiers_per_group, t.planned_qualifiers_per_group) AS qualifiers_per_group
+             FROM `%1$stournaments` t
+             LEFT JOIN `%1$stournament_playoffs` po ON po.tournament_id=t.id
+             WHERE t.id=? LIMIT 1',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row === null || $row['qualifiers_per_group'] === null) {
+            return null;
+        }
+        return max(0, (int) $row['qualifiers_per_group']);
     }
 
     /** @return array<string,mixed> */

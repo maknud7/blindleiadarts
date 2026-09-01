@@ -1,0 +1,32 @@
+/* Venue Wall v9
+ * Format-aware qualification marker + ELO pagination polish.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  /* Placement alone is not special. Qualification is defined by tournament format. */
+  body.phase-live #tables .portal-table tbody tr:first-child {
+    background:var(--wall-surface) !important;
+  }
+
+  body.phase-live #tables .portal-table tbody tr:nth-child(2) {
+    background:var(--wall-surface-2) !important;
+  }
+
+  body.phase-live #tables .portal-table tbody tr.qualifier-cutoff td {
+    border-bottom:3px solid var(--wall-blue) !important;
+  }
+
+  body.phase-live .elo-page-meta {
+    margin-left:auto;
+    color:var(--wall-muted) !important;
+    font-size:.62rem;
+    font-weight:900;
+    letter-spacing:.035em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  body.phase-live .elo-page-meta.hidden {
+    display:none;
+  }
+}
