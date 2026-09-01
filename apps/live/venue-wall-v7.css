@@ -1,9 +1,10 @@
 /* Venue Wall v7
- * Header readability fix. Keeps the shared Live geometry/themes intact while
- * giving the three header text lines enough vertical room and sane line-height.
+ * Content-aware wall layout + header readability.
+ * Shared by both Blindleia and Dark themes: only colours differ between themes.
  */
 
 @media (min-width:1180px) and (min-height:650px) {
+  /* Header: all three text lines must always remain fully visible. */
   body.phase-live .active-experience {
     grid-template-rows:94px minmax(0,1fr);
   }
@@ -57,6 +58,103 @@
     width:52px;
     height:52px;
   }
+
+  /* Give standings more room when there is only one live match. */
+  body.phase-live #liveDashboard:has(#boards > .board-card:not(.idle)):not(:has(#boards > .board-card:not(.idle) ~ .board-card:not(.idle))) {
+    grid-template-rows:60px 205px minmax(0,1fr);
+  }
+
+  /* One active match: one compact wide card instead of a half-empty 2-column grid. */
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) {
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,1fr);
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .players {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:minmax(0,1fr);
+    gap:0;
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .player-line {
+    grid-template-columns:minmax(0,1fr) 108px 36px;
+    border-top:0 !important;
+    padding:5px 12px;
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .player-line + .player-line {
+    border-left:1px solid var(--wall-line-soft) !important;
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .player-line strong {
+    font-size:clamp(1.12rem,1.3vw,1.55rem);
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .remaining {
+    font-size:clamp(2.35rem,2.8vw,3.35rem);
+  }
+
+  /* Three or four active matches become a genuine 2x2 matrix. */
+  body.phase-live #boards:has(> .board-card:not(.idle) ~ .board-card:not(.idle) ~ .board-card:not(.idle)) {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:repeat(2,minmax(0,1fr));
+  }
+
+  /* Standings use natural row height. A single group gets the full main width;
+     two visible groups sit side by side. More groups are paged by live-v2.js. */
+  body.phase-live #tables.tables-grid {
+    height:calc(100% - 35px);
+    min-height:0;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-auto-rows:max-content;
+    align-content:start;
+    gap:8px;
+    overflow:hidden;
+  }
+
+  body.phase-live #tables.tables-grid:has(> .table-card:only-child) {
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  body.phase-live #tables .table-card {
+    width:100%;
+    min-width:0;
+    height:auto;
+    align-self:start;
+  }
+
+  body.phase-live #tables .portal-table tbody {
+    height:auto !important;
+  }
+
+  body.phase-live #tables .portal-table tbody tr {
+    height:auto !important;
+  }
+
+  body.phase-live #tables .portal-table td {
+    height:42px;
+    padding-top:5px;
+    padding-bottom:5px;
+  }
+
+  body.phase-live #tables.tables-grid:has(> .table-card:only-child) .portal-table td:nth-child(2) strong {
+    font-size:clamp(.92rem,1vw,1.15rem);
+  }
+
+  body.phase-live .group-page-meta {
+    margin-left:auto;
+    color:var(--wall-muted);
+    font-size:.62rem;
+    font-weight:900;
+    letter-spacing:.035em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  body.phase-live .group-page-meta.hidden {
+    display:none;
+  }
 }
 
 /* Short 16:9 panels still get three complete text lines without spending too
@@ -92,5 +190,15 @@
     margin-top:2px;
     font-size:.68rem;
     line-height:1.1;
+  }
+
+  body.phase-live #liveDashboard:has(#boards > .board-card:not(.idle)):not(:has(#boards > .board-card:not(.idle) ~ .board-card:not(.idle))) {
+    grid-template-rows:48px 170px minmax(0,1fr);
+  }
+
+  body.phase-live #tables .portal-table td {
+    height:34px;
+    padding-top:3px;
+    padding-bottom:3px;
   }
 }
