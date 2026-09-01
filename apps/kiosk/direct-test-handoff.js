@@ -8,6 +8,7 @@
   const TEST_BOARD_LABEL_KEY = "bd:kioskTestBoardLabel";
   const TEST_RETURN_URL_KEY = "bd:kioskTestReturnUrl";
   const TEST_EMBEDDED_KEY = "bd:kioskTestEmbedded";
+  const TEST_SESSION_AUTH_KEY = "bd:kioskTestLaunchAuthorized";
 
   function prodHost() {
     return window.location.hostname.replace(/^test\./i, "");
@@ -38,11 +39,13 @@
   const freshReturnUrl = safeProdReturnUrl(params.get("return_url") || "");
   const storedReturnUrl = safeProdReturnUrl(localStorage.getItem(TEST_RETURN_URL_KEY) || "");
   const freshLaunch = params.get("testmode") === "1" && Boolean(freshReturnUrl);
-  const activeSession = localStorage.getItem(TEST_MODE_KEY) === "1" && Boolean(storedReturnUrl);
+  const activeSession = localStorage.getItem(TEST_MODE_KEY) === "1"
+    && sessionStorage.getItem(TEST_SESSION_AUTH_KEY) === "1"
+    && Boolean(storedReturnUrl);
 
-  // A TEST kiosk can only be entered from the PROD kiosk. Reloads during an
-  // already-started test session remain valid, but typing the TEST kiosk URL or
-  // following an old TEST link always returns to the canonical PROD terminal.
+  // A TEST kiosk can only be entered from the PROD kiosk. Reloads inside the
+  // authorized TEST frame remain valid, while a typed TEST URL, old bookmark or
+  // new TEST tab is sent to the canonical PROD terminal.
   if (!freshLaunch && !activeSession) {
     [
       TEST_MODE_KEY,
@@ -55,6 +58,7 @@
       "bd:kioskPairingRequestCode",
       "bd:kioskPairingExpires",
     ].forEach((key) => localStorage.removeItem(key));
+    sessionStorage.removeItem(TEST_SESSION_AUTH_KEY);
     redirectToProdKiosk();
     return;
   }
@@ -63,6 +67,7 @@
 
   localStorage.setItem(TEST_RETURN_URL_KEY, freshReturnUrl);
   localStorage.setItem(TEST_MODE_KEY, "1");
+  sessionStorage.setItem(TEST_SESSION_AUTH_KEY, "1");
   if (params.get("embedded") === "1" && window.parent !== window) localStorage.setItem(TEST_EMBEDDED_KEY, "1");
   else localStorage.removeItem(TEST_EMBEDDED_KEY);
 
