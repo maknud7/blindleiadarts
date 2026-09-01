@@ -106,7 +106,7 @@
         <small class="muted" id="prodTestModeHelp">Åpner isolert TEST-runtime. Du velger selv hvilken skive som skal simuleres; PROD-terminalen trenger ikke være paret.</small>
       </div>
       <div class="test-mode-settings-actions">
-        <button id="prodStartTestMode" type="button" class="ghost-button test-mode-settings-button" data-kiosk-admin-control>Start testmodus</button>
+        <button id="prodStartTestMode" type="button" class="ghost-button test-mode-settings-button">Start testmodus</button>
       </div>`;
     meta.appendChild(card);
 
