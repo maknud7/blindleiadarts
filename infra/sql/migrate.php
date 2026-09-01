@@ -104,6 +104,7 @@ $testOnlyNoopMigrations = [
     '0058_reconcile_test_elo_after_historical_import.php',
     '0059_reconcile_test_elo_for_prod_readiness.php',
     '0068_cleanup_test_champion_player_labels.php',
+    '0073_cleanup_test_legacy_board_materialization.php',
 ];
 
 $appliedCount = 0;
