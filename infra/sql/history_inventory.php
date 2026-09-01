@@ -123,10 +123,9 @@ if ($exists($db, $p . 'players') && $exists($db, $p . 'elo_current_ratings')) {
     $accountTable = $p . 'user_accounts';
 
     $duplicateNames = $db->query(
-        "SELECT LOWER(TRIM(p.display_name)) AS normalized_name,COUNT(*) AS rating_rows
-         FROM `{$eloTable}` e
-         INNER JOIN `{$playerTable}` p ON p.id=e.player_id
-         WHERE p.merged_into_player_id IS NULL
+        "SELECT LOWER(TRIM(p.display_name)) AS normalized_name,COUNT(*) AS player_rows
+         FROM `{$playerTable}` p
+         WHERE p.is_active=1 AND p.merged_into_player_id IS NULL
          GROUP BY LOWER(TRIM(p.display_name))
          HAVING COUNT(*)>1
          ORDER BY normalized_name"
@@ -151,7 +150,14 @@ if ($exists($db, $p . 'players') && $exists($db, $p . 'elo_current_ratings')) {
             'e.rating',
             'e.matches_played AS elo_matches_played',
         ];
-        $joins = ["INNER JOIN `{$eloTable}` e ON e.player_id=p.id"];
+        $joins = [
+            "LEFT JOIN `{$eloTable}` e ON e.player_id=p.id AND e.season_id=(
+                SELECT s.id FROM `{$p}seasons` s
+                WHERE s.club_id=p.club_id
+                ORDER BY s.is_active DESC,COALESCE(s.starts_on,'0000-01-01') DESC,s.id DESC
+                LIMIT 1
+            )",
+        ];
 
         if ($exists($db, $matchTable)) {
             $select[] = '(SELECT COUNT(*) FROM `' . $matchTable . '` m WHERE m.player_a_id=p.id OR m.player_b_id=p.id) AS match_count';
@@ -170,7 +176,8 @@ if ($exists($db, $p . 'players') && $exists($db, $p . 'elo_current_ratings')) {
             'SELECT ' . implode(',', $select)
             . " FROM `{$playerTable}` p " . implode(' ', $joins)
             . ' WHERE LOWER(TRIM(p.display_name))=? AND p.merged_into_player_id IS NULL'
-            . ' ORDER BY (p.member_id IS NOT NULL) DESC,p.is_active DESC,e.matches_played DESC,p.id'
+            . ' ORDER BY (SELECT COUNT(*) FROM `' . $accountTable . '` ua WHERE ua.player_id=p.id) DESC,'
+            . ' (p.member_id IS NOT NULL) DESC,p.is_active DESC,COALESCE(e.matches_played,0) DESC,p.id'
         );
         $stmt->bind_param('s', $normalizedName);
         $stmt->execute();
