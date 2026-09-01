@@ -5,6 +5,7 @@ const elo = fs.readFileSync('apps/api/src/Repository/EloReadRepository.php', 'ut
 const cleanup = fs.readFileSync('infra/sql/migrations/0069_cleanup_prod_empty_elo_shadow_players.php', 'utf8');
 const promoter = fs.readFileSync('infra/sql/atlas_promote_test_history_to_prod.php', 'utf8');
 const summaryPublisher = fs.readFileSync('infra/sql/atlas_publish_round_four_summary_test.php', 'utf8');
+const lifecycleRepair = fs.readFileSync('infra/sql/atlas_repair_round_four_match_lifecycle_test.php', 'utf8');
 
 assert.match(elo, /elo_source.*elo_ledger/s);
 assert.match(elo, /\$byName/);
@@ -17,5 +18,7 @@ assert.match(promoter, /incremental_existing_season/);
 assert.match(promoter, /required for incremental promotion/);
 assert.match(summaryPublisher, /Summary staging is TEST-only/);
 assert.match(summaryPublisher, /jort2WSBWFwN/);
+assert.match(lifecycleRepair, /Lifecycle repair changed/);
+assert.match(lifecycleRepair, /matches.*!== 37/);
 
 console.log('prod round four safety contract: ok');

@@ -43,13 +43,14 @@ jobs:
           set -Eeuo pipefail
           grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_FOUR_TO_TEST=yes' infra/sql/run-import-atlas-round-four-test.flag
           php -l infra/sql/import_atlas_match_visits_test.php
+          php -l infra/sql/atlas_repair_round_four_match_lifecycle_test.php
           php -l infra/sql/atlas_history_verify.php
           php -l infra/sql/atlas_history_finalize.php
           php -l infra/sql/atlas_history_lifecycle_verify.php
           php -r '
             $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
             if(($m["tournament_external_id"]??"")!=="jort2WSBWFwN") throw new RuntimeException("Wrong tournament");
-            if(($m["expected_players"]??0)!==12||($m["expected_matches"]??0)!==37||($m["expected_legs"]??0)!==48) throw new RuntimeException("Frozen counts changed");
+            if(($m["expected_players"]??0)!==12||($m["expected_matches"]??0)!==37||($m["expected_legs"]??0)!==48||($m["expected_visits"]??0)!==1228) throw new RuntimeException("Frozen counts changed");
             $ids=$m["match_external_ids"]??[];
             if(count($ids)!==37||count(array_unique($ids))!==37) throw new RuntimeException("Expected 37 unique matches");
             echo "ROUND4_MANIFEST_OK=yes\n";
@@ -109,9 +110,14 @@ jobs:
               if(($d["external_id"]??"")!==$id)throw new RuntimeException("Wrong payload for {$id}");
               $legs+=(int)$d["leg_count"];$visits+=(int)$d["visit_count"];$darts+=(int)$d["darts_count"];
             }
-            if($legs!==(int)$manifest["expected_legs"])throw new RuntimeException("Leg total drift: {$legs}");
+            if($legs!==(int)$manifest["expected_legs"]||$visits!==(int)$manifest["expected_visits"])throw new RuntimeException("Frozen detail total drift: legs={$legs} visits={$visits}");
             echo "ROUND4_FETCH_OK=yes matches=",count($manifest["match_external_ids"])," legs={$legs} visits={$visits} darts={$darts}\n";
           '
+
+      - name: Repair frozen TEST match lifecycle markers
+        env:
+          ALLOW_TEST_ROUND_FOUR_LIFECYCLE_REPAIR: yes
+        run: php infra/sql/atlas_repair_round_four_match_lifecycle_test.php
 
       - name: Import canonical legs visits and statistics into TEST
         run: |
