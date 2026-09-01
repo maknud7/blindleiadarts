@@ -1,0 +1,75 @@
+name: Finalize Verified Atlas Round Four In Test
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-finalize-atlas-round-four-test.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finalize-atlas-round-four-test
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_test_
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+      - name: Validate exact completion request
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'FINALIZE_VERIFIED_ATLAS_ROUND_FOUR_IN_TEST=yes' infra/sql/run-finalize-atlas-round-four-test.flag
+          php -l infra/sql/atlas_complete_round_four_metadata_test.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_history_finalize.php
+      - name: Require exact commit live on canonical TEST
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 60); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "${TEST_BASE_URL%/}/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release" && grep -Fq '"environment":"test"' <<<"$release"; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+      - name: Complete frozen match and ranking metadata
+        env:
+          ALLOW_TEST_ROUND_FOUR_METADATA_COMPLETION: yes
+        run: php infra/sql/atlas_complete_round_four_metadata_test.php
+      - name: Verify finalize and rebuild TEST ELO
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external=jort2WSBWFwN
+          php infra/sql/elo_ledger_doctor.php
+          php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external=jort2WSBWFwN
+      - name: Report exact final TEST evidence
+        run: |
+          php -r '
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_test_";$x="jort2WSBWFwN";
+            $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()["internal_id"]??0);
+            $visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            $events=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` e JOIN `{$p}matches` m ON m.id=e.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            if($tid<1||$visits!==1228||$events!==37)throw new RuntimeException("Final TEST evidence drift");
+            echo "ROUND4_TEST_FINAL_OK=yes tournament_id={$tid} players=12 matches=37 legs=48 visits={$visits} elo_events={$events}\n";
+          '

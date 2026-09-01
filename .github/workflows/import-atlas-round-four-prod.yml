@@ -1,0 +1,198 @@
+name: Promote Verified Atlas Round Four To Production
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-promote-atlas-round-four-prod.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-atlas-round-four-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+      MANIFEST: infra/sql/atlas-prod-round-four-promotion.json
+      SUMMARY_FIXTURE: infra/atlas/manifests/mandagsserien-2026-04-summary.json
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - name: Checkout exact promotion commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate frozen promotion request
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'PROMOTE_VERIFIED_ATLAS_ROUND_FOUR_TO_PROD=yes' infra/sql/run-promote-atlas-round-four-prod.flag
+          php -l infra/sql/prod_snapshot_backup.php
+          php -l infra/sql/atlas_promote_test_history_to_prod.php
+          php -l infra/sql/atlas_publish_round_four_summary_test.php
+          php -l infra/sql/migrations/0069_cleanup_prod_empty_elo_shadow_players.php
+          php -l apps/api/src/Repository/EloReadRepository.php
+          node infra/tests/prod_round_four_contract_test.mjs
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            if(($m["mode"]??"")!=="incremental_existing_season")throw new RuntimeException("Wrong promotion mode");
+            if(($m["source_prefix"]??"")!=="bd_test_"||($m["target_prefix"]??"")!=="bd_prod_")throw new RuntimeException("Wrong prefixes");
+            if(($m["season_external_id"]??"")!=="rFByCgOqI1rq"||count($m["tournaments"]??[])!==1)throw new RuntimeException("Wrong frozen scope");
+            $t=$m["tournaments"][0]??[];$tot=$m["expected_totals"]??[];
+            if(($t["external_id"]??"")!=="jort2WSBWFwN"||($t["expected_players"]??0)!==12||($t["expected_matches"]??0)!==37||($t["expected_legs"]??0)!==48||($t["expected_visits"]??0)!==1228)throw new RuntimeException("Frozen round-four counts changed");
+            if(($tot["matches"]??0)!==37||($tot["legs"]??0)!==48||($tot["visits"]??0)!==1228||($tot["atlas_player_references"]??0)!==12)throw new RuntimeException("Frozen aggregate counts changed");
+            echo "ROUND4_PROD_MANIFEST_OK=yes\n";
+          '
+
+      - name: Require exact commit live on canonical TEST
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${TEST_BASE_URL%/}"
+          for attempt in $(seq 1 60); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release" && grep -Fq '"environment":"test"' <<<"$release"; then
+              echo "Exact promotion commit is live on TEST: $EXPECTED_SHA"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "TEST never reached exact promotion commit." >&2
+          exit 1
+
+      - name: Strict TEST round four gates
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external=jort2WSBWFwN
+          php infra/sql/elo_ledger_doctor.php
+          php -r '
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_test_";$x="jort2WSBWFwN";
+            $s=$db->prepare("SELECT er.internal_id FROM `{$p}external_references` er WHERE er.external_system=\"dartsatlas\" AND er.external_entity_type=\"tournament\" AND er.external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()["internal_id"]??0);
+            $legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            $visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            if($tid<1||$legs!==48||$visits!==1228)throw new RuntimeException("TEST detail totals drifted");
+            echo "ROUND4_TEST_PROMOTION_GATE_OK=yes tournament_id={$tid} legs={$legs} visits={$visits}\n";
+          '
+
+      - name: Publish verified article in TEST
+        env:
+          DB_TABLE_PREFIX: bd_test_
+          ALLOW_TEST_ROUND_FOUR_SUMMARY: yes
+        run: php infra/sql/atlas_publish_round_four_summary_test.php "$SUMMARY_FIXTURE"
+
+      - name: Guard existing PROD history and empty shadow identities
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";
+            $activeT=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournaments` WHERE status IN (\"ready\",\"in_progress\")")->fetch_assoc()["c"];
+            $activeM=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE status IN (\"pending\",\"assigned\",\"in_progress\")")->fetch_assoc()["c"];
+            if($activeT!==0||$activeM!==0)throw new RuntimeException("Active PROD runtime exists");
+            $present=["fpC4m4hIZdjZ","FHHAnnuO8txa","PvGa73emrY6e"];$absent="jort2WSBWFwN";
+            $s=$db->prepare("SELECT COUNT(*) c FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=?");
+            foreach($present as $x){$s->bind_param("s",$x);$s->execute();if((int)$s->get_result()->fetch_assoc()["c"]!==1)throw new RuntimeException("Missing canonical PROD tournament {$x}");}
+            $s->bind_param("s",$absent);$s->execute();if((int)$s->get_result()->fetch_assoc()["c"]!==0)throw new RuntimeException("Round four is already present in PROD");
+            $pairs=[25=>1,26=>21,27=>18,28=>7,29=>4,30=>17,31=>12,32=>9,33=>10,34=>3,35=>11,36=>2];
+            foreach($pairs as $source=>$target){
+              $rows=$db->query("SELECT id,display_name,member_id,is_active,merged_into_player_id FROM `{$p}players` WHERE id IN ({$source},{$target}) ORDER BY id")->fetch_all(MYSQLI_ASSOC);$by=[];foreach($rows as $r)$by[(int)$r["id"]]=$r;
+              if(!isset($by[$source],$by[$target])||trim($by[$source]["display_name"])!==trim($by[$target]["display_name"])||$by[$source]["member_id"]!==null||(int)$by[$source]["is_active"]!==1||$by[$source]["merged_into_player_id"]!==null)throw new RuntimeException("Frozen shadow pair drift {$source} -> {$target}");
+            }
+            $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` m JOIN `{$p}external_references` er ON er.internal_id=m.tournament_id AND er.internal_entity_type=\"tournament\" AND er.external_entity_type=\"tournament\" AND er.external_system=\"dartsatlas\"")->fetch_assoc()["c"];
+            if($matches!==151)throw new RuntimeException("Existing PROD history drift: {$matches} matches");
+            echo "ROUND4_PROD_PREFLIGHT_OK=yes history_matches={$matches} shadow_pairs=12\n";
+          '
+
+      - name: Snapshot existing PROD tables inside database
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Apply reviewed PROD shadow cleanup migration
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/migrate.php | tee /tmp/prod-migrate.txt
+          grep -Fq 'PROD_EMPTY_ELO_SHADOW_CLEANUP_OK=yes' /tmp/prod-migrate.txt
+          php -r '
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";
+            $d=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1) x")->fetch_assoc()["c"];
+            if($d!==0)throw new RuntimeException("PROD active player duplicates remain: {$d}");echo "PROD_ELO_SHADOWS_REMOVED=yes\n";
+          '
+
+      - name: Promote exact verified TEST round four into staged PROD rows
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_PROMOTION: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_promote_test_history_to_prod.php "$MANIFEST" | tee /tmp/round4-prod-promotion.txt
+          grep -Fq 'ATLAS_PROD_PROMOTION_STAGED=yes' /tmp/round4-prod-promotion.txt
+
+      - name: Strict PROD data-phase gate
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=data --require-visits=1 --require-playoff=1
+
+      - name: Finalize canonical PROD round four
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_FINALIZE: yes
+        run: php infra/sql/atlas_history_finalize.php --external=jort2WSBWFwN
+
+      - name: Rebuild canonical PROD ELO
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/run_php_migration.php infra/sql/migrations/0053_rebuild_elo_in_logical_match_order.php bd_prod_
+          php infra/sql/elo_ledger_doctor.php
+
+      - name: Strict final PROD verification
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external=jort2WSBWFwN --expected-matches=37 --expected-players=12 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external=jort2WSBWFwN
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";$x="jort2WSBWFwN";
+            $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()["internal_id"]??0);if($tid<1)throw new RuntimeException("Round four PROD ref missing");
+            $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches`")->fetch_assoc()["c"];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs`")->fetch_assoc()["c"];$visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits`")->fetch_assoc()["c"];
+            if($matches!==188||$legs!==221||$visits!==5483)throw new RuntimeException("Final PROD history totals drift: ".json_encode(compact("matches","legs","visits")));
+            $summary=$db->query("SELECT title,status,published_at FROM `{$p}tournament_summaries` WHERE tournament_id={$tid} LIMIT 1")->fetch_assoc();if(!$summary||$summary["title"]!=="Arild tok sin tredje strake – og avsluttet 109"||$summary["status"]!=="published"||empty($summary["published_at"]))throw new RuntimeException("Round four article not published");
+            $dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1) x")->fetch_assoc()["c"];
+            $elo=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` e JOIN `{$p}matches` m ON m.id=e.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            if($dups!==0||$elo!==37)throw new RuntimeException("Final ELO integrity failed: duplicates={$dups}, round4_events={$elo}");
+            echo "ROUND4_PROD_FINAL_OK=yes tournament_id={$tid} matches={$matches} legs={$legs} visits={$visits} elo_events={$elo} article=published\n";
+            echo "PROD_SNAPSHOT_RETAINED_PREFIX=".getenv("PROD_BACKUP_PREFIX")."\n";
+          '
