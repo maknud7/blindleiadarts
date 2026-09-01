@@ -1,6 +1,6 @@
-release_sha=db9f54a4cc15f511585b764745d02a1f51c5a2a5
+release_sha=b59b5506d4cac92d40a7e3e37edf57d4aaf3d5e0
 backup_confirmed=YES
-migration_review_confirmed=NO
-requested_at=2026-08-31T17:52:00+02:00
-purpose=fix_prod_to_embedded_test_mode_and_reuse_test_board
-backup_prefix=bd_backup_20260831_151409_
+migration_review_confirmed=YES
+requested_at=2026-09-01T08:47:00+02:00
+purpose=fix_mandagsserien_4_format_metadata_and_future_atlas_reconciliation
+backup_prefix=bd_backup_20260901_064122_
