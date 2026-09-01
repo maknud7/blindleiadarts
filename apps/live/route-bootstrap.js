@@ -3,6 +3,7 @@
   const match = window.location.pathname.match(/\/live\/(\d{4})\/?$/i);
   const liveCode = match?.[1] || "";
   const legacyClub = new URLSearchParams(window.location.search).get("club") || "";
+  const allowedProfiles = new Set(["blindleia", "broadcast-dark"]);
 
   function liveBasePath() {
     const match = window.location.pathname.match(/^(.*\/live)(?:\/|$)/i);
@@ -23,6 +24,16 @@
       script.onerror = () => reject(new Error(`Kunne ikke laste ${src}`));
       document.body.appendChild(script);
     });
+  }
+
+  function applyClubProfile(club) {
+    const requested = String(club?.live_display_profile || "blindleia");
+    const profile = allowedProfiles.has(requested) ? requested : "blindleia";
+    document.body.dataset.liveProfile = profile;
+    document.documentElement.dataset.liveProfile = profile;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute("content", profile === "broadcast-dark" ? "#061526" : "#f3f8fb");
+    window.__BD_LIVE_CLUB__ = club ? { ...club, live_display_profile: profile } : null;
   }
 
   function showCodeEntry() {
@@ -80,8 +91,21 @@
     return payload.data.club;
   }
 
+  function keepProfileInSync() {
+    if (!liveCode) return;
+    window.setInterval(async () => {
+      try {
+        const club = await resolveClub();
+        if (club) applyClubProfile(club);
+      } catch {
+        // A temporary profile lookup error must never interrupt the live board.
+      }
+    }, 15000);
+  }
+
   async function boot() {
     if (!liveCode && !legacyClub) {
+      applyClubProfile(null);
       showCodeEntry();
       return;
     }
@@ -90,23 +114,24 @@
     try {
       const club = await resolveClub();
       if (club) {
+        applyClubProfile(club);
         const runtimeUrl = new URL(window.location.href);
         runtimeUrl.searchParams.set("club", String(club.slug));
         window.history.replaceState(null, "", runtimeUrl);
         cleanRoute = true;
+      } else {
+        applyClubProfile(null);
       }
 
-      await loadScript("./app.js?v=20260829-0945");
+      await loadScript("./app.js?v=20260901-1245");
 
-      if (cleanRoute) {
-        window.history.replaceState(null, "", originalUrl);
-      }
+      if (cleanRoute) window.history.replaceState(null, "", originalUrl);
 
-      await loadScript("./live-v2.js?v=20260828-02");
+      await loadScript("./live-v2.js?v=20260901-1245");
+      await loadScript("./profile-runtime.js?v=20260901-1245");
+      keepProfileInSync();
     } catch (error) {
-      if (cleanRoute) {
-        window.history.replaceState(null, "", originalUrl);
-      }
+      if (cleanRoute) window.history.replaceState(null, "", originalUrl);
       showInvalidLink(error?.message || "Kunne ikke åpne Live-lenken.");
     }
   }
