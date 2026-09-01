@@ -114,6 +114,88 @@ if ($exists($db, $p . 'external_references')) {
     }
 }
 
+if ($exists($db, $p . 'players') && $exists($db, $p . 'elo_current_ratings')) {
+    $playerTable = $p . 'players';
+    $eloTable = $p . 'elo_current_ratings';
+    $matchTable = $p . 'matches';
+    $tournamentPlayerTable = $p . 'tournament_players';
+    $externalTable = $p . 'external_references';
+    $accountTable = $p . 'user_accounts';
+
+    $duplicateNames = $db->query(
+        "SELECT LOWER(TRIM(p.display_name)) AS normalized_name,COUNT(*) AS rating_rows
+         FROM `{$eloTable}` e
+         INNER JOIN `{$playerTable}` p ON p.id=e.player_id
+         WHERE p.merged_into_player_id IS NULL
+         GROUP BY LOWER(TRIM(p.display_name))
+         HAVING COUNT(*)>1
+         ORDER BY normalized_name"
+    )->fetch_all(MYSQLI_ASSOC);
+
+    echo "\n=== elo duplicate display names ===\n";
+    if ($duplicateNames === []) {
+        echo "none\n";
+    }
+
+    foreach ($duplicateNames as $duplicate) {
+        $normalizedName = (string) $duplicate['normalized_name'];
+        $select = [
+            'p.id',
+            'p.club_id',
+            'p.display_name',
+            'p.member_id',
+            'p.member_link_source',
+            'p.is_active',
+            'p.merged_into_player_id',
+            'e.season_id',
+            'e.rating',
+            'e.matches_played AS elo_matches_played',
+        ];
+        $joins = ["INNER JOIN `{$eloTable}` e ON e.player_id=p.id"];
+
+        if ($exists($db, $matchTable)) {
+            $select[] = '(SELECT COUNT(*) FROM `' . $matchTable . '` m WHERE m.player_a_id=p.id OR m.player_b_id=p.id) AS match_count';
+        }
+        if ($exists($db, $tournamentPlayerTable)) {
+            $select[] = '(SELECT COUNT(*) FROM `' . $tournamentPlayerTable . '` tp WHERE tp.player_id=p.id) AS tournament_count';
+        }
+        if ($exists($db, $externalTable)) {
+            $select[] = '(SELECT COUNT(*) FROM `' . $externalTable . '` er WHERE er.internal_entity_type IN ("player","players") AND er.internal_id=p.id) AS external_ref_count';
+        }
+        if ($exists($db, $accountTable)) {
+            $select[] = '(SELECT COUNT(*) FROM `' . $accountTable . '` ua WHERE ua.player_id=p.id) AS account_count';
+        }
+
+        $stmt = $db->prepare(
+            'SELECT ' . implode(',', $select)
+            . " FROM `{$playerTable}` p " . implode(' ', $joins)
+            . ' WHERE LOWER(TRIM(p.display_name))=? AND p.merged_into_player_id IS NULL'
+            . ' ORDER BY (p.member_id IS NOT NULL) DESC,p.is_active DESC,e.matches_played DESC,p.id'
+        );
+        $stmt->bind_param('s', $normalizedName);
+        $stmt->execute();
+        $printRows('elo duplicate: ' . $normalizedName, $stmt->get_result());
+        $stmt->close();
+    }
+
+    echo 'ELO_DUPLICATE_NAMES=' . count($duplicateNames) . "\n";
+}
+
+if ($exists($db, $p . 'external_references')) {
+    $provider = 'darts' . 'atlas';
+    $stmt = $db->prepare(
+        "SELECT er.external_id,er.internal_id,t.name,t.status,t.start_at,t.end_at
+         FROM `{$p}external_references` er
+         LEFT JOIN `{$p}tournaments` t ON t.id=er.internal_id AND er.internal_entity_type='tournament'
+         WHERE er.external_system=? AND er.external_entity_type='tournament'
+         ORDER BY t.start_at,er.external_id"
+    );
+    $stmt->bind_param('s', $provider);
+    $stmt->execute();
+    $printRows('DartsAtlas tournament references', $stmt->get_result());
+    $stmt->close();
+}
+
 if ($exists($db, $p . 'connector_sync_jobs')) {
     $jobTable = $p . 'connector_sync_jobs';
     $jobCols = $columns($db, $jobTable);
