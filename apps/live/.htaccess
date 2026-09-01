@@ -2,7 +2,9 @@ RewriteEngine On
 
 # Keep the canonical public address without a trailing slash so relative Live
 # assets continue to resolve from /live/ rather than /live/NNNN/.
-RewriteRule ^([0-9]{4})/$ $1 [R=302,L]
+# Use an absolute URL path in per-directory context; a relative redirect can
+# otherwise leak the server filesystem path into Location on shared hosting.
+RewriteRule ^([0-9]{4})/$ /live/$1 [R=302,L,NE]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
