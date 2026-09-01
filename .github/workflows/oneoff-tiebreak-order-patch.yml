@@ -28,100 +28,64 @@ jobs:
 
           php_path = Path('apps/api/src/Repository/PlayerPortalRepository.php')
           text = php_path.read_text(encoding='utf-8')
-
           old_order = "            'tie_break_order' => ['leg_difference', 'three_dart_average', 'head_to_head'],"
           new_order = "            'tie_break_order' => ['leg_difference', 'head_to_head', 'three_dart_average'],"
           if text.count(old_order) != 1:
               raise SystemExit(f'Expected exactly one old tie_break_order, found {text.count(old_order)}')
           text = text.replace(old_order, new_order, 1)
 
-          old_ranking = '''        usort($rows, static function (array $a, array $b): int {
-            $cmp = ((int) $b['points']) <=> ((int) $a['points']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);
-            return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
-        });
-
-        $ranked = [];
-        for ($index = 0, $count = count($rows); $index < $count;) {
-            $bucket = [$rows[$index]];
-            $cursor = $index + 1;
-            while ($cursor < $count
-                && (int) $rows[$cursor]['points'] === (int) $rows[$index]['points']
-                && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']
-                && abs((float) $rows[$cursor]['three_dart_average'] - (float) $rows[$index]['three_dart_average']) < 0.0001) {
-                $bucket[] = $rows[$cursor];
-                $cursor++;
-            }
-
-            if (count($bucket) > 1) {
-                $headToHead = $this->headToHeadPoints(
-                    $tournamentId,
-                    array_map(static fn (array $row): int => (int) $row['player_id'], $bucket),
-                    $groupId
-                );
-                foreach ($bucket as &$row) {
-                    $row['head_to_head_points'] = (int) ($headToHead[(int) $row['player_id']] ?? 0);
-                }
-                unset($row);
-                usort($bucket, static function (array $a, array $b): int {
-                    $cmp = ((int) $b['head_to_head_points']) <=> ((int) $a['head_to_head_points']);
-                    return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
-                });
-            }
-
-            array_push($ranked, ...$bucket);
-            $index = $cursor;
-        }
-'''
-
-          new_ranking = '''        // Table points are primary. Ties are resolved by leg difference,
-        // then the mini-table/head-to-head result, then 3-dart average.
-        usort($rows, static function (array $a, array $b): int {
-            $cmp = ((int) $b['points']) <=> ((int) $a['points']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);
-            return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
-        });
-
-        $ranked = [];
-        for ($index = 0, $count = count($rows); $index < $count;) {
-            $bucket = [$rows[$index]];
-            $cursor = $index + 1;
-            while ($cursor < $count
-                && (int) $rows[$cursor]['points'] === (int) $rows[$index]['points']
-                && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']) {
-                $bucket[] = $rows[$cursor];
-                $cursor++;
-            }
-
-            if (count($bucket) > 1) {
-                $headToHead = $this->headToHeadPoints(
-                    $tournamentId,
-                    array_map(static fn (array $row): int => (int) $row['player_id'], $bucket),
-                    $groupId
-                );
-                foreach ($bucket as &$row) {
-                    $row['head_to_head_points'] = (int) ($headToHead[(int) $row['player_id']] ?? 0);
-                }
-                unset($row);
-                usort($bucket, static function (array $a, array $b): int {
-                    $cmp = ((int) $b['head_to_head_points']) <=> ((int) $a['head_to_head_points']);
-                    if ($cmp !== 0) return $cmp;
-                    $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);
-                    return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
-                });
-            }
-
-            array_push($ranked, ...$bucket);
-            $index = $cursor;
-        }
-'''
-          if text.count(old_ranking) != 1:
-              raise SystemExit(f'Expected exactly one old ranking block, found {text.count(old_ranking)}')
-          php_path.write_text(text.replace(old_ranking, new_ranking, 1), encoding='utf-8')
+          function_marker = '    private function normalizeTableRows(array $rows, int $tournamentId, ?int $groupId): array'
+          function_pos = text.index(function_marker)
+          start_marker = '        usort($rows, static function (array $a, array $b): int {'
+          end_marker = '        foreach ($ranked as $index => &$row) {'
+          block_start = text.index(start_marker, function_pos)
+          block_end = text.index(end_marker, block_start)
+          new_lines = [
+              '        // Table points are primary. Ties are resolved by leg difference,',
+              '        // then the mini-table/head-to-head result, then 3-dart average.',
+              '        usort($rows, static function (array $a, array $b): int {',
+              "            $cmp = ((int) $b['points']) <=> ((int) $a['points']);",
+              '            if ($cmp !== 0) return $cmp;',
+              "            $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);",
+              "            return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);",
+              '        });',
+              '',
+              '        $ranked = [];',
+              '        for ($index = 0, $count = count($rows); $index < $count;) {',
+              '            $bucket = [$rows[$index]];',
+              '            $cursor = $index + 1;',
+              '            while ($cursor < $count',
+              "                && (int) $rows[$cursor]['points'] === (int) $rows[$index]['points']",
+              "                && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']) {",
+              '                $bucket[] = $rows[$cursor];',
+              '                $cursor++;',
+              '            }',
+              '',
+              '            if (count($bucket) > 1) {',
+              '                $headToHead = $this->headToHeadPoints(',
+              '                    $tournamentId,',
+              "                    array_map(static fn (array $row): int => (int) $row['player_id'], $bucket),",
+              '                    $groupId',
+              '                );',
+              '                foreach ($bucket as &$row) {',
+              "                    $row['head_to_head_points'] = (int) ($headToHead[(int) $row['player_id']] ?? 0);",
+              '                }',
+              '                unset($row);',
+              '                usort($bucket, static function (array $a, array $b): int {',
+              "                    $cmp = ((int) $b['head_to_head_points']) <=> ((int) $a['head_to_head_points']);",
+              '                    if ($cmp !== 0) return $cmp;',
+              "                    $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);",
+              "                    return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);",
+              '                });',
+              '            }',
+              '',
+              '            array_push($ranked, ...$bucket);',
+              '            $index = $cursor;',
+              '        }',
+              '',
+          ]
+          text = text[:block_start] + '\n'.join(new_lines) + text[block_end:]
+          php_path.write_text(text, encoding='utf-8')
 
           js_path = Path('apps/player/tournament-groups-detail.js')
           js = js_path.read_text(encoding='utf-8')
