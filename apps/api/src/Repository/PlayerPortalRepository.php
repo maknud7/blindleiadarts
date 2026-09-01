@@ -233,7 +233,7 @@ final class PlayerPortalRepository
         return [
             'tournament' => $tournament,
             'groups' => $tables,
-            'tie_break_order' => ['leg_difference', 'three_dart_average', 'head_to_head'],
+            'tie_break_order' => ['leg_difference', 'head_to_head', 'three_dart_average'],
         ];
     }
 
@@ -573,12 +573,12 @@ final class PlayerPortalRepository
         }
         unset($row);
 
+        // Table points are primary. Ties are resolved by leg difference,
+        // then the mini-table/head-to-head result, then 3-dart average.
         usort($rows, static function (array $a, array $b): int {
             $cmp = ((int) $b['points']) <=> ((int) $a['points']);
             if ($cmp !== 0) return $cmp;
             $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);
             return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
         });
 
@@ -588,8 +588,7 @@ final class PlayerPortalRepository
             $cursor = $index + 1;
             while ($cursor < $count
                 && (int) $rows[$cursor]['points'] === (int) $rows[$index]['points']
-                && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']
-                && abs((float) $rows[$cursor]['three_dart_average'] - (float) $rows[$index]['three_dart_average']) < 0.0001) {
+                && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']) {
                 $bucket[] = $rows[$cursor];
                 $cursor++;
             }
@@ -606,6 +605,8 @@ final class PlayerPortalRepository
                 unset($row);
                 usort($bucket, static function (array $a, array $b): int {
                     $cmp = ((int) $b['head_to_head_points']) <=> ((int) $a['head_to_head_points']);
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);
                     return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
                 });
             }
@@ -613,7 +614,6 @@ final class PlayerPortalRepository
             array_push($ranked, ...$bucket);
             $index = $cursor;
         }
-
         foreach ($ranked as $index => &$row) {
             $row['position'] = $index + 1;
         }
