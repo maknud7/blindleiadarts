@@ -6,8 +6,10 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\EloLedgerRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
+use Blindleia\Dartkiosk\Api\Repository\TournamentAdminMutationRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentLiveRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentMatchEngineRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentOperationsRepository;
@@ -67,6 +69,8 @@ final class TournamentOperationsApplication
         return ($method === 'GET' && preg_match('#^v1/public/clubs/[^/]+/live$#', $path) === 1)
             || ($method === 'GET' && preg_match('#^v1/public/tournaments/\d+/live$#', $path) === 1)
             || preg_match('#^v1/tournaments/\d+/operations(?:/(reconcile|settings|boards))?$#', $path) === 1
+            || ($method === 'POST' && preg_match('#^v1/tournaments/\d+/operations/matches/\d+/move$#', $path) === 1)
+            || ($method === 'DELETE' && preg_match('#^v1/tournaments/\d+/hard-delete$#', $path) === 1)
             || ($method === 'GET' && preg_match('#^v1/kiosks/[^/]+/post-match$#', $path) === 1)
             || ($method === 'POST' && preg_match('#^v1/kiosks/[^/]+/(next-match|release-next-match)$#', $path) === 1);
     }
@@ -76,6 +80,7 @@ final class TournamentOperationsApplication
         $method = $request->method();
         $operations = new TournamentOperationsRepository($database);
         $engine = new TournamentMatchEngineRepository($database);
+        $mutations = new TournamentAdminMutationRepository($database);
 
         if ($method === 'GET' && preg_match('#^v1/public/clubs/([^/]+)/live$#', $path, $m) === 1) {
             $live = (new TournamentLiveRepository($database))->byClubSlug(urldecode((string) $m[1]));
@@ -89,6 +94,70 @@ final class TournamentOperationsApplication
             return $live === null
                 ? JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.')
                 : JsonResponse::ok($live);
+        }
+
+        if ($method === 'POST' && preg_match('#^v1/tournaments/(\d+)/operations/matches/(\d+)/move$#', $path, $m) === 1) {
+            $tournamentId = (int) $m[1];
+            $matchId = (int) $m[2];
+            $tournament = $operations->findTournament($tournamentId);
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $users = new UserAccountRepository($database);
+            $admin = $this->requireAdmin($request, $users, (int) $tournament['club_id']);
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            $targetKioskId = (int) ($payload['kiosk_id'] ?? 0);
+            $confirmInProgress = ($payload['confirm_in_progress'] ?? false) === true;
+            $move = $mutations->moveMatch($tournamentId, $matchId, $targetKioskId, $confirmInProgress);
+            $snapshot = $engine->decorateSnapshot($tournamentId, $operations->snapshot($tournamentId));
+            $snapshot['move'] = $move;
+            $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_match_moved');
+            return JsonResponse::ok($snapshot);
+        }
+
+        if ($method === 'DELETE' && preg_match('#^v1/tournaments/(\d+)/hard-delete$#', $path, $m) === 1) {
+            $tournamentId = (int) $m[1];
+            $tournament = $operations->findTournament($tournamentId);
+            if ($tournament === null) {
+                return JsonResponse::error(404, 'tournament_not_found', 'Tournament was not found.');
+            }
+
+            $users = new UserAccountRepository($database);
+            $admin = $this->requireAdmin($request, $users, (int) $tournament['club_id']);
+            if ($admin instanceof JsonResponse) {
+                return $admin;
+            }
+
+            $payload = $request->jsonBody();
+            if (($payload['confirm_delete'] ?? false) !== true) {
+                return JsonResponse::error(
+                    422,
+                    'hard_delete_confirmation_required',
+                    'Permanent deletion requires explicit confirmation.'
+                );
+            }
+
+            $connection = $database->connection();
+            $connection->begin_transaction();
+            try {
+                $elo = new EloLedgerRepository($database);
+                foreach ($mutations->matchIdsForTournament($tournamentId) as $matchId) {
+                    $elo->revertMatch($matchId);
+                }
+                $result = $mutations->hardDeleteTournament($tournamentId);
+                $connection->commit();
+            } catch (Throwable $error) {
+                $connection->rollback();
+                throw $error;
+            }
+
+            $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_deleted');
+            return JsonResponse::ok($result);
         }
 
         if (preg_match('#^v1/tournaments/(\d+)/operations(?:/(reconcile|settings|boards))?$#', $path, $m) === 1) {
@@ -109,12 +178,13 @@ final class TournamentOperationsApplication
                 return JsonResponse::ok($engine->decorateSnapshot($tournamentId, $operations->snapshot($tournamentId)));
             }
             if ($method === 'GET' && $action === 'boards') {
-                return JsonResponse::ok($engine->listBoardSelection($tournamentId));
+                return JsonResponse::ok($this->boardSelection($tournamentId, $engine, $mutations));
             }
             if (in_array($method, ['PUT', 'PATCH'], true) && $action === 'boards') {
                 $payload = $request->jsonBody();
                 $ids = is_array($payload['kiosk_ids'] ?? null) ? $payload['kiosk_ids'] : [];
-                $result = $engine->updateBoardSelection($tournamentId, $ids);
+                $mutations->replaceBoardSelection($tournamentId, $ids);
+                $result = $this->boardSelection($tournamentId, $engine, $mutations);
                 $this->publishClubRefresh($config, (int) $tournament['club_id'], 'tournament_boards_changed');
                 return JsonResponse::ok($result);
             }
@@ -183,6 +253,29 @@ final class TournamentOperationsApplication
         }
 
         return JsonResponse::error(405, 'method_not_allowed', 'Method is not supported for this operations route.');
+    }
+
+    /** @return array<string,mixed> */
+    private function boardSelection(
+        int $tournamentId,
+        TournamentMatchEngineRepository $engine,
+        TournamentAdminMutationRepository $mutations
+    ): array {
+        $selection = $engine->listBoardSelection($tournamentId);
+        $blocked = array_fill_keys($mutations->openMatchBoardIds($tournamentId), true);
+        $boards = is_array($selection['boards'] ?? null) ? $selection['boards'] : [];
+
+        foreach ($boards as &$board) {
+            $id = (int) ($board['id'] ?? 0);
+            if (($board['selected'] ?? false) === true) {
+                $board['can_remove'] = !isset($blocked[$id]);
+                $board['removal_requires_move'] = isset($blocked[$id]);
+            }
+        }
+        unset($board);
+        $selection['boards'] = $boards;
+
+        return $selection;
     }
 
     /** @return array<string,mixed>|JsonResponse */
