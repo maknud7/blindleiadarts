@@ -1,0 +1,96 @@
+/* Venue Wall v7
+ * Header readability fix. Keeps the shared Live geometry/themes intact while
+ * giving the three header text lines enough vertical room and sane line-height.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  body.phase-live .active-experience {
+    grid-template-rows:94px minmax(0,1fr);
+  }
+
+  body.phase-live .hero {
+    height:94px;
+    min-height:94px;
+    padding:8px 14px;
+    align-items:center;
+  }
+
+  body.phase-live .live-brand {
+    min-width:0;
+    height:100%;
+    display:flex;
+    align-items:center;
+  }
+
+  body.phase-live .live-brand > div {
+    min-width:0;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    overflow:visible;
+  }
+
+  body.phase-live .hero .eyebrow {
+    margin:0;
+    padding:0;
+    font-size:.72rem;
+    line-height:1.08;
+  }
+
+  body.phase-live .hero h1 {
+    margin:1px 0 0;
+    padding:0;
+    font-size:clamp(2.2rem,2.65vw,3.35rem);
+    line-height:1;
+  }
+
+  body.phase-live .hero .muted {
+    margin:3px 0 0;
+    padding:0;
+    font-size:.8rem;
+    line-height:1.15;
+  }
+
+  body.phase-live .live-logo {
+    flex:0 0 auto;
+    width:52px;
+    height:52px;
+  }
+}
+
+/* Short 16:9 panels still get three complete text lines without spending too
+ * much vertical space on the header. */
+@media (min-width:1180px) and (max-height:800px) {
+  body.phase-live .active-experience {
+    grid-template-rows:78px minmax(0,1fr);
+  }
+
+  body.phase-live .hero {
+    height:78px;
+    min-height:78px;
+    padding:6px 11px;
+  }
+
+  body.phase-live .live-logo {
+    width:44px;
+    height:44px;
+  }
+
+  body.phase-live .hero .eyebrow {
+    font-size:.62rem;
+    line-height:1.05;
+  }
+
+  body.phase-live .hero h1 {
+    margin-top:0;
+    font-size:2rem;
+    line-height:1;
+  }
+
+  body.phase-live .hero .muted {
+    margin-top:2px;
+    font-size:.68rem;
+    line-height:1.1;
+  }
+}
