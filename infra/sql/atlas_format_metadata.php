@@ -74,13 +74,15 @@ if (!function_exists('atlas_derive_format_metadata')) {
         }
         $playoff = $playoffRows[0] ?? null;
 
+        // Canonical current schema identifies group matches by tournament_group_id.
+        // Historical playoff matches have no tournament_group_id, so derive their
+        // actual best-of directly from those rows without relying on legacy phase/stage columns.
         $playoffBoRows = $db->query(
             "SELECT DISTINCT best_of_legs
                FROM `{$matches}`
               WHERE tournament_id={$tournamentId}
                 AND tournament_group_id IS NULL
                 AND best_of_legs IS NOT NULL
-                AND (phase='playoff' OR stage='single_elimination')
               ORDER BY best_of_legs"
         )->fetch_all(MYSQLI_ASSOC);
         if (count($playoffBoRows) > 1) {
