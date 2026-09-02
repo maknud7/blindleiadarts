@@ -49,6 +49,21 @@
     });
   }
 
+  function preserveScoringFeedback() {
+    const hint = document.getElementById("sumHint");
+    if (hint) {
+      const text = String(hint.textContent || "").trim();
+      const redundant = /^Gjenstår\s+\d+$/i.test(text) || text === "Trykk Lagre kast for 0";
+      hint.classList.toggle("is-redundant", redundant);
+    }
+
+    const previewMeta = document.querySelector("#kioskLiveRemaining small");
+    if (previewMeta) {
+      const text = String(previewMeta.textContent || "").trim();
+      previewMeta.classList.toggle("is-important", /^(?:BUST|CHECKOUT)$/i.test(text));
+    }
+  }
+
   function applyFinePolish() {
     document.body.classList.add("kiosk-fine-polish");
     document.body.dataset.kioskFinePolish = POLISH_VERSION;
@@ -56,6 +71,7 @@
     ensureMatchContext();
     moveUndoToScoring();
     strengthenTurnMarker();
+    preserveScoringFeedback();
   }
 
   if (typeof setConnection === "function") {
