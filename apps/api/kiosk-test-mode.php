@@ -37,11 +37,11 @@ try {
     $physicalClubs = $hardwarePrefix . 'clubs';
     $request = Request::fromGlobals();
 
-    // The original demo seed created BOARD-1..4 in every environment. Those rows
-    // are fixtures, not physical hardware, and must never be offered in test mode.
-    // Requiring the demo asset path makes this exclusion specific to the old seed
-    // and avoids hiding a legitimate board that happens to use a similar code.
-    $notLegacyDemoBoard = "NOT (k.code IN ('BOARD-1','BOARD-2','BOARD-3','BOARD-4') AND COALESCE(k.sponsor_logo_url,'') LIKE '/static/sponsors/demo-%')";
+    // The original demo seed also exists in isolated TEST data. Those local fixture
+    // rows must not be offered as standalone TEST boards. The canonical hardware
+    // namespace is different: every active row there is physical board masterdata,
+    // even if the row originally came from the early BOARD-1..4 seed.
+    $notLegacyTestFixture = "NOT (k.code IN ('BOARD-1','BOARD-2','BOARD-3','BOARD-4') AND COALESCE(k.sponsor_logo_url,'') LIKE '/static/sponsors/demo-%')";
 
     if ($request->method() === 'GET') {
         $items = [];
@@ -51,7 +51,7 @@ try {
             "SELECT k.id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,k.sponsor_label,c.name AS club_name,c.slug AS club_slug
              FROM `{$physicalKiosks}` k
              INNER JOIN `{$physicalClubs}` c ON c.id=k.club_id
-             WHERE k.is_active=1 AND {$notLegacyDemoBoard}
+             WHERE k.is_active=1
              ORDER BY c.name,k.board_number,k.id"
         );
         while ($row = $result->fetch_assoc()) {
@@ -77,7 +77,7 @@ try {
             "SELECT k.id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,k.sponsor_label,c.name AS club_name,c.slug AS club_slug
              FROM `{$testKiosks}` k
              INNER JOIN `{$testClubs}` c ON c.id=k.club_id
-             WHERE k.is_active=1 AND k.source_kiosk_id IS NULL AND {$notLegacyDemoBoard}
+             WHERE k.is_active=1 AND k.source_kiosk_id IS NULL AND {$notLegacyTestFixture}
              ORDER BY c.name,k.board_number,k.id"
         );
         while ($row = $result->fetch_assoc()) {
@@ -136,7 +136,7 @@ try {
             "SELECT k.id,k.code,k.name,k.board_number,k.sponsor_label,k.sponsor_logo_url,k.scoring_mode,c.slug AS club_slug,c.name AS club_name
              FROM `{$testKiosks}` k
              INNER JOIN `{$testClubs}` c ON c.id=k.club_id
-             WHERE k.id=? AND k.is_active=1 AND k.source_kiosk_id IS NULL AND {$notLegacyDemoBoard} LIMIT 1"
+             WHERE k.id=? AND k.is_active=1 AND k.source_kiosk_id IS NULL AND {$notLegacyTestFixture} LIMIT 1"
         );
         $stmt->bind_param('i', $selectedId);
         $stmt->execute();
@@ -194,7 +194,7 @@ try {
         "SELECT k.id,k.code,k.name,k.board_number,k.sponsor_label,k.sponsor_logo_url,k.scoring_mode,c.slug AS club_slug,c.name AS club_name
          FROM `{$physicalKiosks}` k
          INNER JOIN `{$physicalClubs}` c ON c.id=k.club_id
-         WHERE k.id=? AND k.is_active=1 AND {$notLegacyDemoBoard} LIMIT 1"
+         WHERE k.id=? AND k.is_active=1 LIMIT 1"
     );
     $stmt->bind_param('i', $physicalId);
     $stmt->execute();
