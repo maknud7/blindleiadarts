@@ -287,10 +287,10 @@
     replacePanel([], "Laster skiveregister …");
     try {
       const data = await jsonRequest(TEST_MODE_API);
-      const items = (data.items || []).filter((item) => (item.source || "physical") === "physical");
+      const items = Array.isArray(data.items) ? data.items : [];
       replacePanel(items, items.length
-        ? "Ingen pairing er nødvendig. Velg en fysisk PROD-skive; kiosken oppretter automatisk en isolert TEST-runtime for den."
-        : "Det finnes ingen aktive fysiske skiver i PROD-registeret.");
+        ? "Ingen pairing er nødvendig. Velg en aktiv skive; fysiske skiver får automatisk en isolert TEST-runtime, mens rene TEST-skiver brukes direkte."
+        : "Det finnes ingen aktive skiver i skiveregisteret.");
     } catch (error) {
       replacePanel([], `Kunne ikke laste skiveregister: ${error.message || "ukjent feil"}`);
       console.warn("Kiosk test mode unavailable", error);
