@@ -60,6 +60,7 @@ final class TournamentFlowRepository
         }
 
         if ($status === 'in_progress') {
+            $this->captureEloStartSnapshot($tournamentId);
             return [
                 'tournament_id' => $tournamentId,
                 'status' => 'in_progress',
@@ -135,6 +136,11 @@ final class TournamentFlowRepository
             $start->execute();
             $start->close();
 
+            // Freeze each checked-in player's ELO at the tournament boundary.
+            // INSERT IGNORE makes start idempotent and guarantees the entry value
+            // can never drift when live ELO changes later in the tournament.
+            $this->captureEloStartSnapshot($tournamentId);
+
             $this->connection->commit();
         } catch (Throwable $error) {
             $this->connection->rollback();
@@ -149,6 +155,26 @@ final class TournamentFlowRepository
             'withdrawn_waitlist_count' => $waitlisted,
             'already_started' => false,
         ];
+    }
+
+    private function captureEloStartSnapshot(int $tournamentId): void
+    {
+        $sql = sprintf(
+            'INSERT IGNORE INTO `%1$stournament_elo_snapshots`
+             (tournament_id,season_id,club_id,player_id,elo_before,matches_before,captured_start_at)
+             SELECT t.id,t.season_id,t.club_id,tp.player_id,
+                    COALESCE(ecr.rating,1000),COALESCE(ecr.matches_played,0),COALESCE(t.start_at,NOW())
+             FROM `%1$stournaments` t
+             INNER JOIN `%1$stournament_players` tp ON tp.tournament_id=t.id
+             LEFT JOIN `%1$selo_current_ratings` ecr ON ecr.season_id=t.season_id AND ecr.player_id=tp.player_id
+             WHERE t.id=? AND t.elo_enabled=1 AND t.season_id IS NOT NULL
+               AND tp.status="checked_in"',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $stmt->close();
     }
 
     /** @param array<int,string> $statuses */
