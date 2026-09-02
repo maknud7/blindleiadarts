@@ -129,7 +129,7 @@
 
       // live-v2 owns table and ELO pagination. Do not load the legacy
       // profile-runtime ELO rotator; polling would restart its timer every 3s.
-      await loadScript("./live-v2.js?v=20260902-elo-rank-movement-01");
+      await loadScript("./live-v2.js?v=20260902-elo-rank-full-club-01");
       keepProfileInSync();
     } catch (error) {
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
