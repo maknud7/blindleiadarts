@@ -1,6 +1,6 @@
 const stylesheet = document.createElement("link");
 stylesheet.rel = "stylesheet";
-stylesheet.href = new URL("./home-dashboard-ux.css?v=20260827-1535", import.meta.url).href;
+stylesheet.href = new URL("./home-dashboard-ux.css?v=20260902-elo-chart-ux-01", import.meta.url).href;
 document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
@@ -161,37 +161,124 @@ function sparkline(tournaments) {
     return `<div class="home-elo-empty"><span>Ingen ferdige turneringer ennå</span><small>Første punkt kommer når en turnering ferdigstilles.</small></div>`;
   }
 
+  const firstBefore = Number(completed[0]?.rating_before);
+  const baseline = Number.isFinite(firstBefore) ? firstBefore : 1000;
+  const chartItems = [
+    {
+      is_baseline: true,
+      tournament_name: "Sesongstart",
+      rating_before: baseline,
+      rating_after: baseline,
+      delta: 0,
+    },
+    ...completed,
+  ];
+
   const width = 460;
   const height = 118;
   const pad = 8;
-  const values = completed.map((item) => number(item.rating_after, NaN)).filter(Number.isFinite);
+  const values = chartItems.map((item) => number(item.rating_after, NaN)).filter(Number.isFinite);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(1, max - min);
-  const points = completed.map((item, index) => {
+  const points = chartItems.map((item, index) => {
     const value = number(item.rating_after);
-    const x = completed.length === 1
+    const x = chartItems.length === 1
       ? width / 2
-      : pad + (index / (completed.length - 1)) * (width - pad * 2);
+      : pad + (index / (chartItems.length - 1)) * (width - pad * 2);
     const y = height - pad - ((value - min) / range) * (height - pad * 2);
     return { item, value, x, y };
   });
   const pointString = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
   const area = points.length > 1 ? `${pad},${height - pad} ${pointString} ${width - pad},${height - pad}` : "";
 
-  return `<div class="home-elo-chart-wrap" data-tournament-point-count="${completed.length}">
+  return `<div class="home-elo-chart-wrap" data-tournament-point-count="${completed.length}" data-chart-point-count="${chartItems.length}">
     <div class="home-elo-range"><span>${formatNumber(max, 1)}</span><span>${formatNumber(min, 1)}</span></div>
-    <svg class="home-elo-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="ELO etter hver ferdige turnering">
+    <svg class="home-elo-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="ELO ved sesongstart og etter hver ferdige turnering">
       ${area ? `<polygon points="${area}" class="home-elo-area"></polygon>` : ""}
       ${points.length > 1 ? `<polyline points="${pointString}" class="home-elo-line"></polyline>` : ""}
       ${points.map((point, index) => {
         const delta = number(point.item.delta, 0);
-        const title = `${point.item.tournament_name || "Turnering"}: ${formatNumber(point.value, 1)} (${delta > 0 ? "+" : ""}${formatNumber(delta, 1)})`;
-        const latest = index === points.length - 1;
-        return `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4" fill="${latest ? "#2f6fed" : "#ffffff"}" stroke="#2f6fed" stroke-width="3" vector-effect="non-scaling-stroke"><title>${esc(title)}</title></circle>`;
+        const before = number(point.item.rating_before, point.value);
+        const baselinePoint = point.item.is_baseline === true;
+        const title = baselinePoint
+          ? `Sesongstart: ${formatNumber(point.value, 1)} ELO`
+          : `${point.item.tournament_name || "Turnering"}: ${formatNumber(before, 1)} → ${formatNumber(point.value, 1)} (${delta > 0 ? "+" : ""}${formatNumber(delta, 1)})`;
+        const latest = index === points.length - 1 && !baselinePoint;
+        return `<circle class="home-elo-point${baselinePoint ? " baseline" : ""}${latest ? " latest" : ""}" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4.3" tabindex="0" role="button" aria-label="${esc(title)}" data-baseline="${baselinePoint ? "1" : "0"}" data-title="${esc(point.item.tournament_name || "Turnering")}" data-before="${before.toFixed(1)}" data-after="${point.value.toFixed(1)}" data-delta="${delta.toFixed(1)}"><title>${esc(title)}</title></circle>`;
       }).join("")}
     </svg>
+    <div class="home-elo-tooltip hidden" role="status" aria-live="polite"></div>
   </div>`;
+}
+
+function bindEloChartInteractions(root = rankingList) {
+  const wrap = root?.querySelector(".home-elo-chart-wrap");
+  const tooltip = wrap?.querySelector(".home-elo-tooltip");
+  const points = wrap ? [...wrap.querySelectorAll(".home-elo-point")] : [];
+  if (!wrap || !tooltip || !points.length) return;
+
+  let pinnedPoint = null;
+
+  const hide = (force = false) => {
+    if (pinnedPoint && !force) return;
+    pinnedPoint = null;
+    tooltip.classList.add("hidden");
+    tooltip.classList.remove("below");
+    points.forEach((point) => point.classList.remove("active"));
+  };
+
+  const show = (point, pin = false) => {
+    if (!point) return;
+    if (pin) pinnedPoint = point;
+    points.forEach((candidate) => candidate.classList.toggle("active", candidate === point));
+
+    const baselinePoint = point.dataset.baseline === "1";
+    const before = number(point.dataset.before, 1000);
+    const after = number(point.dataset.after, before);
+    const delta = number(point.dataset.delta, 0);
+    const tone = delta > 0.05 ? "positive" : delta < -0.05 ? "negative" : "neutral";
+    tooltip.innerHTML = baselinePoint
+      ? `<strong>Sesongstart</strong><span>Utgangspunkt</span><b>${formatNumber(after, 1)} ELO</b>`
+      : `<strong>${esc(point.dataset.title || "Turnering")}</strong><span>${formatNumber(before, 1)} → ${formatNumber(after, 1)}</span><b class="${tone}">${delta > 0 ? "+" : ""}${formatNumber(delta, 1)} ELO</b>`;
+    tooltip.classList.remove("hidden", "below");
+
+    window.requestAnimationFrame(() => {
+      const wrapRect = wrap.getBoundingClientRect();
+      const pointRect = point.getBoundingClientRect();
+      const tooltipWidth = Math.max(170, tooltip.offsetWidth || 0);
+      const tooltipHeight = Math.max(52, tooltip.offsetHeight || 0);
+      const pointCenter = pointRect.left - wrapRect.left + pointRect.width / 2;
+      const minLeft = tooltipWidth / 2 + 6;
+      const maxLeft = Math.max(minLeft, wrapRect.width - tooltipWidth / 2 - 6);
+      tooltip.style.left = `${Math.min(maxLeft, Math.max(minLeft, pointCenter))}px`;
+
+      const pointTop = pointRect.top - wrapRect.top;
+      if (pointTop < tooltipHeight + 14) {
+        tooltip.classList.add("below");
+        tooltip.style.top = `${pointRect.bottom - wrapRect.top}px`;
+      } else {
+        tooltip.style.top = `${pointTop}px`;
+      }
+    });
+  };
+
+  points.forEach((point) => {
+    point.addEventListener("mouseenter", () => show(point));
+    point.addEventListener("mouseleave", () => hide());
+    point.addEventListener("focus", () => show(point));
+    point.addEventListener("blur", () => hide());
+    point.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (pinnedPoint === point) hide(true);
+      else show(point, true);
+    });
+  });
+
+  wrap.addEventListener("click", (event) => {
+    if (event.target.closest?.(".home-elo-point")) return;
+    hide(true);
+  });
 }
 
 async function loadModel() {
@@ -302,11 +389,12 @@ function renderSeasonOverview(model) {
         <article><span>Sesongpoeng</span><strong>${formatNumber(points, points % 1 ? 1 : 0)}</strong><small>Totalt opptjent</small></article>
       </div>
       <section class="home-elo-panel">
-        <div class="home-elo-panel-head"><div><span>ELO-utvikling</span><small>Én måling per ferdig turnering</small></div><strong>${formatNumber(currentElo, 1)}</strong></div>
+        <div class="home-elo-panel-head"><div><span>ELO-utvikling</span><small>Start + én måling per ferdig turnering</small></div><strong>${formatNumber(currentElo, 1)}</strong></div>
         ${sparkline(tournaments)}
       </section>
     </div>
-    <div class="home-season-note">ELO beregnes etter hver kamp. Grafen viser sluttverdien etter hver ferdige turnering.</div>`;
+    <div class="home-season-note">Grafen starter på sesongens ELO-utgangspunkt og viser sluttverdien etter hver ferdige turnering. Hold over eller trykk på et punkt for detaljer.</div>`;
+  bindEloChartInteractions(rankingList);
 }
 
 function resultTone(label) {
