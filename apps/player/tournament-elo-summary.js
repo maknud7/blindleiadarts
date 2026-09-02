@@ -1,5 +1,3 @@
-import "./home-elo-tournament-overview.js?v=20260902-01";
-
 const tournamentSelect = document.getElementById("tableTournamentSelect");
 const tournamentPanel = document.querySelector('[data-statistics-panel="tournament"]');
 let tournamentEloRequest = 0;
