@@ -30,6 +30,75 @@
     display:none;
   }
 
+  /* Current rank and movement are one compact, fixed-width unit. */
+  body.phase-live #elo .elo-rank-cell {
+    flex:0 0 4.35rem;
+    min-width:4.35rem;
+    display:grid;
+    grid-template-columns:1.9rem 2.05rem;
+    align-items:center;
+    column-gap:.18rem;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+
+  body.phase-live #elo .elo-rank-cell .rank {
+    min-width:0;
+    width:auto;
+  }
+
+  body.phase-live #elo .elo-rank-move {
+    display:inline-flex;
+    align-items:center;
+    justify-content:flex-start;
+    min-width:0;
+    font-size:.63rem;
+    line-height:1;
+    font-style:normal;
+    font-weight:950;
+    letter-spacing:-.01em;
+  }
+
+  body.phase-live #elo .elo-rank-move.positive {
+    color:#087348 !important;
+  }
+
+  body.phase-live #elo .elo-rank-move.negative {
+    color:#b3263b !important;
+  }
+
+  body.phase-live #elo .elo-rank-move.neutral {
+    color:#7a8a9c !important;
+    opacity:.72;
+  }
+
+  body.phase-live #elo .elo-rank-move.new {
+    width:max-content;
+    padding:.18rem .3rem;
+    border-radius:.35rem;
+    color:#0a4da0 !important;
+    background:#e7f0fb !important;
+    font-size:.56rem;
+    letter-spacing:.035em;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.positive {
+    color:#62e6a2 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.negative {
+    color:#ff8795 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.neutral {
+    color:#8ea3ba !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.new {
+    color:#c9e3ff !important;
+    background:#173d65 !important;
+  }
+
   /* Keep the rating in one fixed right-hand column on every row.
      Tournament movement gets its own reserved column immediately to the left. */
   body.phase-live #elo .elo-live-score {
