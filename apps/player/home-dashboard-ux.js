@@ -44,6 +44,19 @@ async function api(path, { auth = false } = {}) {
   }
 }
 
+async function directApi(path) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(path, { cache: "no-store", signal: controller.signal });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    return payload.data;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function resolveClubId() {
   let id = Number(localStorage.getItem("bd:playerClubId") || document.getElementById("clubSelect")?.value || 0);
   if (id) return id;
@@ -129,24 +142,56 @@ function eloMovements(profile) {
   return { history, movements, byMatch };
 }
 
-function sparkline(history) {
-  const values = [...history].reverse().map((item) => number(item.rating, NaN)).filter(Number.isFinite);
-  if (values.length < 2) {
-    return `<div class="home-elo-empty"><span>Ingen kampvis ELO-historikk ennå</span><small>Kurven kommer når ELO-oppdateringer er registrert.</small></div>`;
+function completedTournamentElo(model) {
+  return (model?.tournamentElo || [])
+    .filter((item) => item?.completed && Number.isFinite(Number(item.rating_after)))
+    .sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")) || number(a.tournament_id) - number(b.tournament_id));
+}
+
+function latestTournamentElo(model) {
+  return completedTournamentElo(model).at(-1) || null;
+}
+
+function sparkline(tournaments) {
+  const completed = (tournaments || [])
+    .filter((item) => item?.completed && Number.isFinite(Number(item.rating_after)))
+    .sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")) || number(a.tournament_id) - number(b.tournament_id));
+
+  if (!completed.length) {
+    return `<div class="home-elo-empty"><span>Ingen ferdige turneringer ennå</span><small>Første punkt kommer når en turnering ferdigstilles.</small></div>`;
   }
+
   const width = 460;
   const height = 118;
   const pad = 8;
+  const values = completed.map((item) => number(item.rating_after, NaN)).filter(Number.isFinite);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(1, max - min);
-  const points = values.map((value, index) => {
-    const x = pad + (index / Math.max(1, values.length - 1)) * (width - pad * 2);
+  const points = completed.map((item, index) => {
+    const value = number(item.rating_after);
+    const x = completed.length === 1
+      ? width / 2
+      : pad + (index / (completed.length - 1)) * (width - pad * 2);
     const y = height - pad - ((value - min) / range) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  const area = `${pad},${height - pad} ${points} ${width - pad},${height - pad}`;
-  return `<div class="home-elo-chart-wrap"><div class="home-elo-range"><span>${formatNumber(max, 1)}</span><span>${formatNumber(min, 1)}</span></div><svg class="home-elo-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="ELO-utvikling"><polygon points="${area}" class="home-elo-area"></polygon><polyline points="${points}" class="home-elo-line"></polyline></svg></div>`;
+    return { item, value, x, y };
+  });
+  const pointString = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const area = points.length > 1 ? `${pad},${height - pad} ${pointString} ${width - pad},${height - pad}` : "";
+
+  return `<div class="home-elo-chart-wrap" data-tournament-point-count="${completed.length}">
+    <div class="home-elo-range"><span>${formatNumber(max, 1)}</span><span>${formatNumber(min, 1)}</span></div>
+    <svg class="home-elo-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="ELO etter hver ferdige turnering">
+      ${area ? `<polygon points="${area}" class="home-elo-area"></polygon>` : ""}
+      ${points.length > 1 ? `<polyline points="${pointString}" class="home-elo-line"></polyline>` : ""}
+      ${points.map((point, index) => {
+        const delta = number(point.item.delta, 0);
+        const title = `${point.item.tournament_name || "Turnering"}: ${formatNumber(point.value, 1)} (${delta > 0 ? "+" : ""}${formatNumber(delta, 1)})`;
+        const latest = index === points.length - 1;
+        return `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4" fill="${latest ? "#2f6fed" : "#ffffff"}" stroke="#2f6fed" stroke-width="3" vector-effect="non-scaling-stroke"><title>${esc(title)}</title></circle>`;
+      }).join("")}
+    </svg>
+  </div>`;
 }
 
 async function loadModel() {
@@ -159,14 +204,16 @@ async function loadModel() {
   const me = meData.user || null;
   const dashboard = dashboardData.dashboard || {};
   const playerId = number(me?.player?.id);
-  if (!playerId) return { clubId, me, dashboard, profile: null, season: null, seasonRow: null, totalPlayers: 0 };
+  if (!playerId) return { clubId, me, dashboard, profile: null, season: null, seasonRow: null, totalPlayers: 0, tournamentElo: [] };
 
-  const [profile, seasonsData] = await Promise.all([
+  const [profile, seasonsData, tournamentEloData] = await Promise.all([
     api(`/players/${playerId}/profile`).catch(() => null),
     api(`/clubs/${clubId}/seasons`).catch(() => ({ items: [] })),
+    directApi(`../api/player-elo-tournaments.php?player_id=${encodeURIComponent(playerId)}`).catch(() => ({ items: [] })),
   ]);
   const seasons = seasonsData?.items || [];
-  const season = seasons.find((item) => item.is_active) || seasons[0] || null;
+  const season = seasons.find((item) => item.is_active || item.status === "active") || seasons[0] || null;
+  const tournamentElo = (tournamentEloData?.items || []).filter((item) => !season?.id || number(item.season_id) === number(season.id));
   let seasonRow = null;
   let totalPlayers = 0;
   if (season?.id) {
@@ -178,7 +225,7 @@ async function loadModel() {
       || rows.find((row) => normalizeName(row.display_name) === normalizeName(profile?.player?.display_name || me?.player?.display_name))
       || null;
   }
-  return { clubId, me, dashboard, profile, season, seasonRow, totalPlayers };
+  return { clubId, me, dashboard, profile, season, seasonRow, totalPlayers, tournamentElo };
 }
 
 function statCard(icon, label, value, note, extra = "") {
@@ -196,8 +243,7 @@ function renderStats(model) {
   const recent = model.profile?.recent_matches || [];
   const best = bestAverage(recent);
   const streak = currentStreak(recent);
-  const movements = eloMovements(model.profile);
-  const latestMove = movements.movements.find((item) => item.before !== null) || null;
+  const latestTournament = latestTournamentElo(model);
 
   const matches = row.matches_played ?? stats.matches_played ?? 0;
   const wins = row.wins ?? stats.matches_won ?? 0;
@@ -205,10 +251,10 @@ function renderStats(model) {
   const threeDa = number(row.three_dart_average || profileStats.three_dart_average, 0);
   const elo = number(row.elo_rating || model.profile?.elo?.rating, 1000);
   const position = number(row.position, 0);
-  const eloDelta = latestMove?.delta;
+  const eloDelta = latestTournament?.delta;
   const eloExtra = eloDelta === null || eloDelta === undefined
     ? ""
-    : `<b class="home-stat-trend ${eloDelta > 0 ? "positive" : eloDelta < 0 ? "negative" : "neutral"}">${eloDelta > 0 ? "↑" : eloDelta < 0 ? "↓" : "•"} ${eloDelta > 0 ? "+" : ""}${formatNumber(eloDelta, 1)}</b>`;
+    : `<b class="home-stat-trend ${number(eloDelta) > 0 ? "positive" : number(eloDelta) < 0 ? "negative" : "neutral"}">${number(eloDelta) > 0 ? "↑" : number(eloDelta) < 0 ? "↓" : "•"} ${number(eloDelta) > 0 ? "+" : ""}${formatNumber(eloDelta, 1)}</b>`;
 
   statsGrid.className = "stats-grid home-dashboard-grid";
   statsGrid.innerHTML = [
@@ -216,7 +262,7 @@ function renderStats(model) {
     statCard("V", "Seire", formatNumber(wins), number(matches) ? `${formatNumber(winPct, 1)}% seiersprosent` : "Ingen kamper ennå"),
     statCard("L", "Legs vunnet", formatNumber(stats.legs_won || profileStats.legs_won || 0), "Registrert totalt"),
     statCard("3D", "3DA snitt", threeDa > 0 ? formatNumber(threeDa, 2) : "—", model.season ? `I ${model.season.name}` : "Registrert snitt"),
-    statCard("E", "ELO nå", formatNumber(elo, 1), "Gjeldende rating", eloExtra),
+    statCard("E", "ELO nå", formatNumber(elo, 1), latestTournament ? "Endring i siste turnering" : "Gjeldende rating", eloExtra),
     statCard("#", "Sesongranking", position ? `#${position}` : "—", model.totalPlayers ? `Av ${model.totalPlayers} spillere` : "Ingen plassering ennå"),
     statCard("↗", "Seire på rad", formatNumber(streak), "Nåværende streak"),
     statCard("★", "Beste 3DA", best && number(best.average) > 0 ? formatNumber(best.average, 2) : "—", best?.opponent_name ? `Mot ${best.opponent_name}` : "Siste registrerte kamper"),
@@ -227,15 +273,15 @@ function renderSeasonOverview(model) {
   if (!rankingList || !model) return;
   const row = model.seasonRow || {};
   const profile = model.profile || {};
-  const movements = eloMovements(profile);
+  const tournaments = completedTournamentElo(model);
+  const latestTournament = tournaments.at(-1) || null;
   const currentElo = number(row.elo_rating || profile.elo?.rating, 1000);
-  const latestMove = movements.movements.find((item) => item.before !== null) || null;
   const points = number(row.points, 0);
   const position = number(row.position, 0);
   const total = number(model.totalPlayers, 0);
   const percentile = position && total ? Math.max(0, Math.min(100, ((total - position + 1) / total) * 100)) : 0;
-  const delta = latestMove?.delta;
-  const deltaText = delta === null || delta === undefined ? "" : `${delta > 0 ? "+" : ""}${formatNumber(delta, 1)}`;
+  const delta = latestTournament?.delta;
+  const deltaText = delta === null || delta === undefined ? "" : `${number(delta) > 0 ? "+" : ""}${formatNumber(delta, 1)}`;
 
   rankingList.className = "home-season-overview";
   rankingList.innerHTML = `
@@ -252,15 +298,15 @@ function renderSeasonOverview(model) {
         <b>${position && total ? `Topp ${formatNumber((position / total) * 100, 1)}%` : ""}</b>
       </section>
       <div class="home-season-mini-grid">
-        <article><span>ELO nå</span><strong>${formatNumber(currentElo, 1)}</strong>${deltaText ? `<small class="${number(delta) > 0 ? "positive" : number(delta) < 0 ? "negative" : ""}">${number(delta) > 0 ? "↑" : number(delta) < 0 ? "↓" : ""} ${esc(deltaText)}</small>` : `<small>Gjeldende rating</small>`}</article>
+        <article><span>ELO nå</span><strong>${formatNumber(currentElo, 1)}</strong>${deltaText ? `<small class="${number(delta) > 0 ? "positive" : number(delta) < 0 ? "negative" : ""}">${number(delta) > 0 ? "↑" : number(delta) < 0 ? "↓" : ""} ${esc(deltaText)} siste turnering</small>` : `<small>Gjeldende rating</small>`}</article>
         <article><span>Sesongpoeng</span><strong>${formatNumber(points, points % 1 ? 1 : 0)}</strong><small>Totalt opptjent</small></article>
       </div>
       <section class="home-elo-panel">
-        <div class="home-elo-panel-head"><div><span>ELO-utvikling</span><small>Siste registrerte oppdateringer</small></div><strong>${formatNumber(currentElo, 1)}</strong></div>
-        ${sparkline(movements.history)}
+        <div class="home-elo-panel-head"><div><span>ELO-utvikling</span><small>Én måling per ferdig turnering</small></div><strong>${formatNumber(currentElo, 1)}</strong></div>
+        ${sparkline(tournaments)}
       </section>
     </div>
-    <div class="home-season-note">Tallene oppdateres fortløpende etter registrerte kamper.</div>`;
+    <div class="home-season-note">ELO beregnes etter hver kamp. Grafen viser sluttverdien etter hver ferdige turnering.</div>`;
 }
 
 function resultTone(label) {
