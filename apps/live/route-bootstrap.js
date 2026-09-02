@@ -127,8 +127,9 @@
 
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
 
+      // live-v2 owns table and ELO pagination. Do not load the legacy
+      // profile-runtime ELO rotator; polling would restart its timer every 3s.
       await loadScript("./live-v2.js?v=20260901-1540");
-      await loadScript("./profile-runtime.js?v=20260901-1245");
       keepProfileInSync();
     } catch (error) {
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
