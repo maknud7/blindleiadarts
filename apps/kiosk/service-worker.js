@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v32";
+const SHELL_CACHE = "bd-kiosk-shell-v33";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL = [
   "./tablet-portrait.css",
   "./kiosk-ux-v2.css",
   "./kiosk-brand-v3.css",
+  "./kiosk-fine-polish.css",
   "./operations-runtime.css",
   "./mobile.css",
   "./club-tablet-ux.css",
@@ -31,6 +32,7 @@ const SHELL = [
   "./prod-test-entry.js",
   "./kiosk-ux-v2.js",
   "./kiosk-brand-v3.js",
+  "./kiosk-fine-polish.js",
   "./terminal-refresh.js",
   "./install.js",
   "./manifest.webmanifest",
