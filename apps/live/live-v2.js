@@ -190,7 +190,7 @@
       const places = Math.abs(delta);
       return `<em class="elo-rank-move negative" title="Falt ${places} ELO-plass${places === 1 ? "" : "er"} i denne turneringen">▼${places}</em>`;
     }
-    return `<em class="elo-rank-move neutral" title="Uendret ELO-plassering i denne turneringen">—</em>`;
+    return "";
   }
 
   function paintElo() {
@@ -270,7 +270,7 @@
   const originalRender = render;
   render = function renderPublicLiveV2(payload) {
     originalRender(payload);
-    document.body.dataset.publicLiveV2 = "3da-top3-elo-rotation-tournament-delta-rank-movement";
+    document.body.dataset.publicLiveV2 = "3da-top3-elo-rotation-full-club-rank-movement";
     loadHighlightsForCurrentTournament().catch(() => undefined);
   };
 })();
