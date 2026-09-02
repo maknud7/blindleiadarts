@@ -1,0 +1,35 @@
+.elo-tournament-overview{display:grid;gap:12px;margin-top:10px}
+.elo-tournament-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.elo-summary-stat{display:grid;gap:3px;padding:11px 12px;border:1px solid #dce6f0;border-radius:12px;background:#f8fbff}
+.elo-summary-stat small{font-size:9px;font-weight:850;letter-spacing:.07em;text-transform:uppercase;color:#71849a}
+.elo-summary-stat strong{font-size:1.08rem;color:#143e6d;font-variant-numeric:tabular-nums}
+.elo-summary-stat strong.positive{color:#087348}.elo-summary-stat strong.negative{color:#a51f32}
+.elo-tournament-chart{position:relative;min-height:210px;padding:12px 8px 4px;border:1px solid #dce6f0;border-radius:14px;background:linear-gradient(180deg,#f8fbff 0%,#fff 100%);overflow:hidden}
+.elo-tournament-chart svg{display:block;width:100%;height:190px;overflow:visible}
+.elo-chart-grid{stroke:#dce6f0;stroke-width:1;vector-effect:non-scaling-stroke}
+.elo-chart-line{fill:none;stroke:#2f6fed;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.elo-chart-point{fill:#fff;stroke:#2f6fed;stroke-width:3;vector-effect:non-scaling-stroke}
+.elo-chart-value{fill:#193d66;font-size:10px;font-weight:850;text-anchor:middle}
+.elo-chart-axis{fill:#74879d;font-size:9px;font-weight:700}
+.elo-chart-label{fill:#667b94;font-size:8px;font-weight:750;text-anchor:middle}
+.elo-tournament-list{display:grid;gap:8px}
+.elo-tournament-card{border:1px solid #dce6f0;border-radius:12px;background:#fff;overflow:hidden}
+.elo-tournament-card>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 12px;cursor:pointer;list-style:none}
+.elo-tournament-card>summary::-webkit-details-marker{display:none}
+.elo-tournament-card>summary:hover{background:#f8fbff}
+.elo-tournament-title{min-width:0;display:grid;gap:2px}.elo-tournament-title strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.elo-tournament-title small{font-size:10px;color:#71849a}
+.elo-tournament-result{display:flex;align-items:center;gap:7px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.elo-tournament-result .before{font-size:10px;color:#71849a}.elo-tournament-result .arrow{font-size:10px;color:#98a7b7}.elo-tournament-result .after{font-size:12px;color:#173e6a}.elo-tournament-result .delta{min-width:42px;padding:4px 6px;border-radius:7px;font-size:10px;font-weight:900;text-align:center;background:#edf1f5;color:#586b82}
+.elo-tournament-result .delta.positive{background:#e3f6eb;color:#087348}.elo-tournament-result .delta.negative{background:#fbe6e9;color:#a51f32}
+.elo-tournament-matches{display:grid;gap:6px;padding:8px 10px 10px;border-top:1px solid #e5ecf3;background:#fbfcfe}
+.elo-tournament-match{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 9px;border:1px solid #e3eaf2;border-radius:9px;background:#fff}
+.elo-tournament-match>div{min-width:0;display:grid;gap:2px}.elo-tournament-match strong{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.elo-tournament-match small{font-size:9px;color:#71849a}
+.elo-tournament-empty{padding:9px;color:#71849a;font-size:11px}
+
+@media(max-width:680px){
+  .elo-tournament-summary{grid-template-columns:1fr 1fr}.elo-summary-stat:last-child{grid-column:1/-1}
+  .elo-tournament-chart{min-height:190px;padding-left:2px;padding-right:2px}.elo-tournament-chart svg{height:170px}
+  .elo-chart-label{display:none}
+  .elo-tournament-card>summary{grid-template-columns:1fr;gap:7px}.elo-tournament-result{justify-content:flex-start}
+  .elo-tournament-match{grid-template-columns:1fr}.elo-tournament-match .elo-movement{justify-self:start}
+}
