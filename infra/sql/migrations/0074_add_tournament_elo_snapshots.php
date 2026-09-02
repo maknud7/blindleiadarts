@@ -101,17 +101,18 @@ return static function (mysqli $mysqli, string $prefix): void {
                captured_start_at=VALUES(captured_start_at),captured_end_at=VALUES(captured_end_at)"
         );
         foreach ($history as $item) {
-            $tournamentId = $item['tournament_id'];
-            $seasonId = $item['season_id'];
-            $clubId = $item['club_id'];
-            $playerId = $item['player_id'];
-            $before = $item['elo_before'];
-            $after = $item['status'] === 'completed' ? $item['elo_after'] : null;
-            $matchesBefore = $item['matches_before'];
-            $matchesAfter = $item['status'] === 'completed' ? $item['matches_after'] : null;
-            $startAt = $item['start_at'] ?: date('Y-m-d H:i:s');
-            $endAt = $item['status'] === 'completed' ? ($item['end_at'] ?: $startAt) : null;
-            $insert->bind_param('iiiiddii ss', $tournamentId, $seasonId, $clubId, $playerId, $before, $after, $matchesBefore, $matchesAfter, $startAt, $endAt);
+            $tournamentId = (int) $item['tournament_id'];
+            $seasonId = (int) $item['season_id'];
+            $clubId = (int) $item['club_id'];
+            $playerId = (int) $item['player_id'];
+            $before = (float) $item['elo_before'];
+            $after = $item['status'] === 'completed' ? (float) $item['elo_after'] : null;
+            $matchesBefore = (int) $item['matches_before'];
+            $matchesAfter = $item['status'] === 'completed' ? (int) $item['matches_after'] : null;
+            $startAt = (string) ($item['start_at'] ?: date('Y-m-d H:i:s'));
+            $endAt = $item['status'] === 'completed' ? (string) ($item['end_at'] ?: $startAt) : null;
+            $insert->bind_param('iiiiddiiss', $tournamentId, $seasonId, $clubId, $playerId, $before, $after, $matchesBefore, $matchesAfter, $startAt, $endAt);
+            $insert->execute();
         }
         $insert->close();
     }
