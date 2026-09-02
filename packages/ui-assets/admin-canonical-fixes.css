@@ -1,0 +1,37 @@
+/* Canonical admin shell corrections.
+ * Keep dark-rail text readable and give Klubboversikt one consistent card rhythm.
+ */
+@media (min-width:981px) {
+  body[data-bd-surface="admin"] .unified-sidebar-brand strong,
+  body[data-bd-surface="admin"] .unified-sidebar-account strong,
+  body[data-bd-surface="admin"] .admin-sidebar-account strong {
+    color:#fff !important;
+  }
+
+  body[data-bd-surface="admin"] .unified-sidebar-brand::before {
+    background-color:#fff !important;
+    filter:none !important;
+  }
+
+  body[data-bd-surface="admin"] .unified-sidebar-avatar,
+  body[data-bd-surface="admin"] .admin-sidebar-avatar {
+    color:#fff !important;
+  }
+
+  /* The legacy metrics block had 22px bottom margin while portal shortcuts
+     added another 18px top margin, then the next panel had no top gap at all.
+     Normalize the overview to a steady 14–18px vertical rhythm. */
+  body[data-bd-surface="admin"] #overview > .metrics {
+    margin:0 0 14px !important;
+    gap:12px !important;
+  }
+
+  body[data-bd-surface="admin"] #overview > .portal-shortcuts {
+    margin:0 0 18px !important;
+    gap:12px !important;
+  }
+
+  body[data-bd-surface="admin"] #overview > .health-tracker {
+    margin:0 0 20px !important;
+  }
+}
