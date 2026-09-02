@@ -1,5 +1,5 @@
 const SURFACE = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview" ? "admin" : "player";
-const GUIDE_VERSION = "31.08.2026";
+const GUIDE_VERSION = "02.09.2026";
 
 const ELO_EXPLANATION = Object.freeze([
   "Alle starter på 1000 ELO i sesongen når den første tellende ELO-kampen registreres.",
@@ -245,6 +245,41 @@ const GUIDES = Object.freeze({
         note: "Påmelding reserverer plass; innsjekk bekrefter oppmøte. Bare de sjekket inn spillerne tas med når turneringen starter.",
       },
       {
+        id: "tournament-boards",
+        group: "Turnering",
+        title: "Velg og endre skiver for en turnering",
+        summary: "Bestem hvilke fysiske skiver turneringen kan bruke før start, og legg til eller ta ut skiver mens den pågår.",
+        steps: [
+          "Åpne den aktuelle turneringen og gå til Admin.",
+          "Før start finner du Skiver for denne turneringen i formatsteget. Velg skivene enkeltvis, eller bruk Velg alle aktive.",
+          "Trykk Bekreft skiver. Hvis du går rett videre til Start, lagres det samme skivevalget som en del av startflyten.",
+          "Minst én aktiv skive må være valgt. En deaktivert skive kan ikke brukes, og skivevalget kan ikke endres etter at turneringen er avsluttet.",
+          "Mens turneringen pågår bruker du Admin → Turneringsdrift → Skiver for denne turneringen. Huk av en ny skive for å ta den i bruk, eller fjern haken for å ta den ut, og trykk Lagre skiver.",
+          "Endringen gjelder nye kampfordelinger. Kamper som allerede er kalt opp eller pågår flyttes ikke automatisk når skivevalget endres.",
+          "Hvis skiva bare er reservert for en ventende kamp, frigjøres reservasjonen automatisk når skiva tas ut.",
+          "En skive med en kamp som er Kalt opp eller Pågår kan ikke fjernes. Flytt først kampen til en annen valgt og ledig skive, og fjern deretter skiva.",
+        ],
+        note: "Dette styrer bare hvilke av klubbens eksisterende fysiske skiver turneringen kan bruke. Du skal ikke slette eller opprette skiva på nytt for å ta den midlertidig inn eller ut av en turnering.",
+      },
+      {
+        id: "move-tournament-match",
+        group: "Turnering",
+        title: "Plasser eller flytt en åpen kamp",
+        summary: "Flytt en ventende, oppkalt eller pågående kamp når en skive må byttes eller frigjøres.",
+        steps: [
+          "Åpne Admin → Turneringsdrift og kontroller at riktig turnering er valgt.",
+          "Finn kampen under Åpne kamper. Listen viser statusene Venter, Kalt opp og Pågår.",
+          "Målskiva må allerede være valgt for turneringen, være aktiv, ledig og ikke reservert for en annen kamp. Hvis ingen skive oppfyller dette, vises Ingen annen valgt og ledig skive akkurat nå.",
+          "For en ventende kamp velger du Ny skive og trykker Plasser kamp. Kampen blir da Kalt opp på den valgte skiva.",
+          "For en kamp som allerede er Kalt opp velger du Ny skive og trykker Flytt kamp. Flyttingen skjer direkte.",
+          "For en kamp som Pågår velger du Ny skive og trykker Flytt kamp, og bekrefter deretter advarselen. Bekreftelsen kreves også av systemet og kan ikke omgås ved en feil i nettleseren.",
+          "Ved flytting av en pågående kamp beholdes ferdige legs og registrert scoring. Den nye skiva blir canonical umiddelbart, og den gamle kiosken kan ikke fortsette å score kampen.",
+          "Hvis Scolia brukes, beholdes ferdige kast. En eventuell uferdig visit eller takeout-lås på gammel eller ny skive nullstilles og må registreres på nytt.",
+          "Kontroller etterpå skivekortet og kiosken på den nye skiva før spillet fortsetter.",
+        ],
+        note: "Bare åpne kamper kan flyttes. En ferdig kamp skal rettes i canonical kampdata, ikke flyttes til en annen skive.",
+      },
+      {
         id: "run-tournament",
         group: "Turnering",
         title: "Drift en pågående turnering",
@@ -252,7 +287,7 @@ const GUIDES = Object.freeze({
         steps: [
           "Åpne turneringen og bruk Oversikt, Deltakere, Grupper og Kamper for å følge status.",
           "Bruk Admin-fanen for handlingene som er gjort tilgjengelige i den vanlige turneringsvisningen.",
-          "Følg skivene og kampkøen slik at neste kamp kan gå i gang uten unødig venting.",
+          "I Turneringsdrift følger du skivene og Åpne kamper. Der kan du endre hvilke skiver turneringen bruker og flytte ventende, oppkalte eller pågående kamper etter reglene i de egne guideemnene.",
           "Trykk på kamper for canonical kampkort når du må kontrollere resultat, ELO, statistikk, legs eller kast.",
           "Rett feil i canonical kamp-/spillerdata i stedet for å lage en alternativ fasit i en enkelt visning.",
           "Kontroller grupper og sluttspill før turneringen ferdigstilles.",
