@@ -15,6 +15,7 @@ final class TournamentLiveRepository
     private PlayerPortalRepository $portal;
     private EloReadRepository $elo;
     private TournamentPlayoffRepository $playoffs;
+    private TournamentEloSnapshotRepository $tournamentElo;
 
     public function __construct(Database $database)
     {
@@ -24,6 +25,7 @@ final class TournamentLiveRepository
         $this->portal = new PlayerPortalRepository($database);
         $this->elo = new EloReadRepository($database);
         $this->playoffs = new TournamentPlayoffRepository($database, null, $this->portal);
+        $this->tournamentElo = new TournamentEloSnapshotRepository($database);
     }
 
     /** @return array<string,mixed>|null */
@@ -71,6 +73,13 @@ final class TournamentLiveRepository
             static fn (array $match): bool => (string) ($match['status'] ?? '') === 'pending'
         ));
 
+        $eloRows = $this->elo->listClubElo((int) $tournament['club_id']);
+        $eloRows = $this->tournamentElo->decorateLiveRows(
+            $tournamentId,
+            $eloRows,
+            (string) ($tournament['status'] ?? '') === 'completed'
+        );
+
         return [
             'club' => [
                 'id' => (int) $tournament['club_id'],
@@ -85,7 +94,7 @@ final class TournamentLiveRepository
             'qualifiers_per_group' => $this->qualifiersPerGroup($tournamentId),
             'tables' => $this->portal->getTournamentTables($tournamentId),
             'playoff' => $this->playoffs->getBracket($tournamentId),
-            'elo' => $this->elo->listClubElo((int) $tournament['club_id']),
+            'elo' => $eloRows,
             'highlights' => $this->highlights($tournamentId),
             'updated_at' => date('c'),
         ];
