@@ -37,11 +37,24 @@
 .home-elo-panel-head span{display:block;font-size:12px;font-weight:800;color:#173b63}
 .home-elo-panel-head small{display:block;color:#7c8da4;font-size:10px;margin-top:2px}
 .home-elo-panel-head strong{font-size:20px;letter-spacing:-.03em}
-.home-elo-chart-wrap{position:relative;min-height:120px;flex:1;padding-left:46px}
+.home-elo-chart-wrap{position:relative;min-height:120px;flex:1;padding-left:46px;isolation:isolate}
 .home-elo-chart{width:100%;height:120px;display:block;overflow:visible}
 .home-elo-line{fill:none;stroke:#2f6fed;stroke-width:3.2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
 .home-elo-area{fill:#dfeaff;opacity:.72}
 .home-elo-range{position:absolute;left:0;top:4px;bottom:4px;display:flex;flex-direction:column;justify-content:space-between;color:#8190a4;font-size:9px}
+.home-elo-point{fill:#fff;stroke:#2f6fed;stroke-width:3;vector-effect:non-scaling-stroke;cursor:pointer;transform-box:fill-box;transform-origin:center;transition:transform .13s ease,fill .13s ease,stroke-width .13s ease;outline:none}
+.home-elo-point.baseline{fill:#0b2f63}
+.home-elo-point.latest{fill:#2f6fed}
+.home-elo-point:hover,.home-elo-point:focus,.home-elo-point.active{transform:scale(1.35);stroke-width:4}
+.home-elo-tooltip{position:absolute;z-index:10;min-width:178px;max-width:230px;padding:9px 11px;border-radius:10px;background:#0b2f50;color:#fff;box-shadow:0 8px 24px rgba(7,31,69,.24);transform:translate(-50%,calc(-100% - 10px));pointer-events:none;text-align:left}
+.home-elo-tooltip.hidden{display:none}
+.home-elo-tooltip.below{transform:translate(-50%,10px)}
+.home-elo-tooltip strong{display:block;font-size:11px;line-height:1.25;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-elo-tooltip span{display:block;margin-top:3px;color:#c9d8ec;font-size:10px;font-variant-numeric:tabular-nums}
+.home-elo-tooltip b{display:block;margin-top:4px;font-size:11px;color:#fff;font-variant-numeric:tabular-nums}
+.home-elo-tooltip b.positive{color:#8ff0ba}
+.home-elo-tooltip b.negative{color:#ff9fac}
+.home-elo-tooltip b.neutral{color:#d7e1ee}
 .home-elo-empty{min-height:120px;display:grid;place-content:center;text-align:center;color:#73849b}
 .home-elo-empty span{font-size:12px;font-weight:750}
 .home-elo-empty small{font-size:10px;margin-top:3px}
@@ -97,6 +110,7 @@ body .home-match-row:hover{background:#f8fbff!important}
   .home-ranking-hero{min-height:160px}
   .home-season-mini-grid{grid-template-columns:1fr 1fr;grid-template-rows:none}
   .home-elo-panel{grid-column:auto}
+  .home-elo-tooltip{min-width:160px;max-width:200px}
   .home-matches-section{padding:13px!important}
   #myMatchList{border-radius:12px}
   body .home-match-row{grid-template-columns:54px minmax(0,1fr) 48px 14px;gap:8px;min-height:64px;padding:10px!important}
