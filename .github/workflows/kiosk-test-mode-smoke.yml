@@ -1,0 +1,55 @@
+name: Kiosk Test Mode Smoke
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://test.blindleiadarts.ingenting.org
+      EXPECTED_SHA: ${{ github.sha }}
+    steps:
+      - name: Wait for matching test release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in $(seq 1 40); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Kiosk smoke failed: expected release did not become live." >&2
+          exit 1
+
+      - name: Verify physical board chooser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          payload="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/api/kiosk-test-mode.php?cb=$RANDOM")"
+
+          jq -e '.ok == true' <<<"$payload" >/dev/null
+          echo "$payload" | jq -r '.data.items[] | [.club_slug, .board_number, .source, .scoring_mode] | @tsv'
+
+          for board in 1 2 3 4; do
+            jq -e --argjson board "$board" '
+              any(.data.items[];
+                .club_slug == "blindleia-dartklubb"
+                and .board_number == $board
+                and .source == "physical")
+            ' <<<"$payload" >/dev/null || {
+              echo "Missing canonical physical Blindleia board $board in kiosk test mode." >&2
+              exit 1
+            }
+          done
+
+          echo "KIOSK_TEST_MODE_BOARDS_OK=yes"
