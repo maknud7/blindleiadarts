@@ -1,0 +1,177 @@
+/*
+ * Kiosk fine polish.
+ *
+ * Presentation-only overrides on top of the established kiosk UX. Keep scoring,
+ * input modes, recent-visit editing and tablet flow untouched.
+ */
+
+body.kiosk-fine-polish #matchBoard,
+body.kiosk-fine-polish #matchLegsLabel,
+body.kiosk-fine-polish #currentLeg,
+body.kiosk-fine-polish #matchRound {
+  display: none !important;
+}
+
+body.kiosk-fine-polish .match-center {
+  align-content: center;
+  justify-items: center;
+  gap: 7px !important;
+  padding-inline: 2px;
+}
+
+body.kiosk-fine-polish .match-context-line {
+  display: block;
+  max-width: 100%;
+  color: #64748b;
+  font-size: clamp(9px, 1.45vw, 11px);
+  line-height: 1.18;
+  font-weight: 700;
+  text-align: center;
+  text-wrap: balance;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .match-center .match-legs-score {
+  margin: 0;
+  font-size: clamp(28px, 5.2vw, 39px);
+}
+
+/* Make the current thrower unmistakable without adding motion or moving scores. */
+body.kiosk-fine-polish.kiosk-ux-v2 .player-card.active::after {
+  display: none !important;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .player-card.active {
+  border-color: #16a34a !important;
+  background: #f3fcf6 !important;
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, .22), 0 0 0 2px rgba(22, 163, 74, .10) !important;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .player-card .throw-marker {
+  display: none !important;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .player-card.active .throw-marker:not(.hidden) {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  z-index: 2;
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border: 1px solid rgba(22, 163, 74, .34);
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: clamp(9px, 1.55vw, 11px);
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .player-card h2 {
+  font-size: clamp(22px, 4.15vw, 31px);
+  line-height: 1.03;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .player-card .remaining {
+  font-size: clamp(62px, 10.4vw, 84px);
+  line-height: .92;
+}
+
+/* One remaining-score preview only. The typed score stays in the entry field. */
+body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview {
+  min-width: 112px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-left: 10px;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview span {
+  font-size: clamp(8px, 1.45vw, 10px);
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview strong {
+  font-size: clamp(20px, 3.7vw, 27px);
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview small,
+body.kiosk-fine-polish.kiosk-ux-v2 #sumHint {
+  display: none !important;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .entry-display {
+  justify-content: flex-start;
+}
+
+/* Undo belongs with scoring actions, not in the match identity column. */
+body.kiosk-fine-polish .scoring-head {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
+body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
+  width: auto;
+  min-width: 0;
+  min-height: 32px;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: clamp(9px, 1.65vw, 11px);
+  line-height: 1;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+body.kiosk-fine-polish .mode-switch {
+  margin-left: 0 !important;
+}
+
+/* Recent four throws remain exactly where they are and stay editable. */
+body.kiosk-fine-polish.kiosk-ux-v2 .visit-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (orientation: portrait) and (min-width: 420px) {
+  body.kiosk-fine-polish .scoring-head {
+    gap: clamp(4px, 1vw, 8px) !important;
+  }
+
+  body.kiosk-fine-polish .mode-switch {
+    width: min(39vw, 218px) !important;
+  }
+}
+
+@media (orientation: portrait) and (min-width: 700px) {
+  body.kiosk-fine-polish.kiosk-ux-v2 .player-card {
+    padding-inline: 12px !important;
+  }
+
+  body.kiosk-fine-polish.kiosk-ux-v2 .player-card h2 {
+    font-size: clamp(27px, 4vw, 32px);
+  }
+
+  body.kiosk-fine-polish.kiosk-ux-v2 .player-card .remaining {
+    font-size: clamp(74px, 10vw, 88px);
+  }
+}
+
+@media (max-width: 520px) {
+  body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
+    padding-inline: 7px;
+  }
+
+  body.kiosk-fine-polish .mode-switch {
+    width: min(38vw, 176px) !important;
+  }
+
+  body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview {
+    min-width: 88px;
+    gap: 4px;
+    padding-left: 7px;
+  }
+}
