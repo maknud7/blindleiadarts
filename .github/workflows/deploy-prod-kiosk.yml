@@ -1,0 +1,182 @@
+name: Deploy Production Kiosk
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/prod-kiosk-release-request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production-kiosk
+  cancel-in-progress: false
+
+jobs:
+  deploy-kiosk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate kiosk release request
+        id: request
+        run: |
+          set -Eeuo pipefail
+          test -f .github/prod-kiosk-release-request
+          release_sha="$(awk -F= '$1=="release_sha" {print $2}' .github/prod-kiosk-release-request | tail -1 | tr -d '[:space:]')"
+          backup_confirmed="$(awk -F= '$1=="backup_confirmed" {print $2}' .github/prod-kiosk-release-request | tail -1 | tr -d '[:space:]')"
+          scope="$(awk -F= '$1=="scope" {print $2}' .github/prod-kiosk-release-request | tail -1 | tr -d '[:space:]')"
+
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Kiosk production release requires an exact 40-character tested SHA."
+            exit 1
+          fi
+          if [[ "$backup_confirmed" != "YES" ]]; then
+            echo "::error::Kiosk production release requires a fresh production snapshot confirmation."
+            exit 1
+          fi
+          if [[ "$scope" != "kiosk-static-only" ]]; then
+            echo "::error::Only kiosk-static-only scope is allowed in this workflow."
+            exit 1
+          fi
+
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "Kiosk-only release request accepted for $release_sha."
+
+      - name: Checkout exact tested kiosk release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.release_sha }}
+          fetch-depth: 1
+
+      - name: Verify exact checkout and allowed files
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          for file in \
+            apps/kiosk/index.html \
+            apps/kiosk/kiosk-fine-polish.css \
+            apps/kiosk/kiosk-fine-polish.js \
+            apps/kiosk/service-worker.js \
+            apps/kiosk/test-mode.js; do
+            test -f "$file"
+          done
+          grep -Fq 'kiosk-fine-polish.css?v=20260902-02' apps/kiosk/index.html
+          grep -Fq 'kiosk-fine-polish.js?v=20260902-02' apps/kiosk/index.html
+          grep -Fq 'bd-kiosk-shell-v34' apps/kiosk/service-worker.js
+          echo "KIOSK_RELEASE_SCOPE_OK=yes"
+
+      - name: Verify exact kiosk assets are currently on TEST
+        env:
+          TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          declare -a files=(
+            index.html
+            kiosk-fine-polish.css
+            kiosk-fine-polish.js
+            service-worker.js
+            test-mode.js
+          )
+          for file in "${files[@]}"; do
+            curl --fail --silent --show-error --location --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
+              "$TEST_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/test-$file"
+            expected="$(sha256sum "apps/kiosk/$file" | awk '{print $1}')"
+            actual="$(sha256sum "/tmp/test-$file" | awk '{print $1}')"
+            if [[ "$expected" != "$actual" ]]; then
+              echo "::error::TEST kiosk asset does not match the requested tested SHA: $file"
+              exit 1
+            fi
+          done
+          echo "TEST_KIOSK_ASSETS_MATCH=yes"
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Verify fresh production snapshot read-only
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: |
+          set +e
+          php infra/sql/prod_preflight.php | tee /tmp/prod-kiosk-preflight.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 && "$status" -ne 2 ]]; then
+            echo "::error::Production snapshot/preflight is not safe for kiosk deployment."
+            exit "$status"
+          fi
+          grep -Fq 'PROD_BACKUP_PREFIX=' /tmp/prod-kiosk-preflight.txt
+          echo "KIOSK_PROD_PREFLIGHT_OK=yes"
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Deploy only kiosk static assets to production
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_KIOSK: /www/blindleiadarts/prod/kiosk
+        run: |
+          set -Eeuo pipefail
+          for name in SFTP_HOST SFTP_USERNAME SFTP_PASSWORD REMOTE_KIOSK; do
+            test -n "${!name:-}"
+          done
+          cat > /tmp/kiosk-sftp.txt <<EOF
+          put apps/kiosk/index.html ${REMOTE_KIOSK}/index.html
+          put apps/kiosk/kiosk-fine-polish.css ${REMOTE_KIOSK}/kiosk-fine-polish.css
+          put apps/kiosk/kiosk-fine-polish.js ${REMOTE_KIOSK}/kiosk-fine-polish.js
+          put apps/kiosk/service-worker.js ${REMOTE_KIOSK}/service-worker.js
+          put apps/kiosk/test-mode.js ${REMOTE_KIOSK}/test-mode.js
+          quit
+          EOF
+          sed -i 's/^          //' /tmp/kiosk-sftp.txt
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no \
+            -oStrictHostKeyChecking=no \
+            -oUserKnownHostsFile=/dev/null \
+            -b /tmp/kiosk-sftp.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+      - name: Verify exact kiosk assets on production
+        env:
+          PROD_BASE_URL: https://blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          declare -a files=(
+            index.html
+            kiosk-fine-polish.css
+            kiosk-fine-polish.js
+            service-worker.js
+            test-mode.js
+          )
+          for file in "${files[@]}"; do
+            curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
+              "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/prod-$file"
+            expected="$(sha256sum "apps/kiosk/$file" | awk '{print $1}')"
+            actual="$(sha256sum "/tmp/prod-$file" | awk '{print $1}')"
+            if [[ "$expected" != "$actual" ]]; then
+              echo "::error::Production kiosk verification failed for $file"
+              exit 1
+            fi
+          done
+          grep -Fq 'kiosk-fine-polish.css?v=20260902-02' /tmp/prod-index.html
+          grep -Fq 'kiosk-fine-polish.js?v=20260902-02' /tmp/prod-index.html
+          grep -Fq 'bd-kiosk-shell-v34' /tmp/prod-service-worker.js
+          echo "KIOSK_PROD_DEPLOY_OK=yes"
