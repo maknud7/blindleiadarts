@@ -175,6 +175,24 @@
     return `<em class="elo-live-delta ${tone}" title="ELO-endring i denne turneringen">${text}</em>`;
   }
 
+  function eloRankMovementHtml(row) {
+    const isNew = row?.tournament_rank_is_new === true || row?.tournament_rank_is_new === 1;
+    if (isNew) {
+      return `<em class="elo-rank-move new" title="Ny i ELO-rankingen eller lagt til etter turneringsstart">NY</em>`;
+    }
+    if (row?.tournament_rank_delta === null || row?.tournament_rank_delta === undefined) return "";
+    const delta = Number(row.tournament_rank_delta);
+    if (!Number.isFinite(delta)) return "";
+    if (delta > 0) {
+      return `<em class="elo-rank-move positive" title="Klatret ${delta} ELO-plass${delta === 1 ? "" : "er"} i denne turneringen">▲${delta}</em>`;
+    }
+    if (delta < 0) {
+      const places = Math.abs(delta);
+      return `<em class="elo-rank-move negative" title="Falt ${places} ELO-plass${places === 1 ? "" : "er"} i denne turneringen">▼${places}</em>`;
+    }
+    return `<em class="elo-rank-move neutral" title="Uendret ELO-plassering i denne turneringen">—</em>`;
+  }
+
   function paintElo() {
     if (!el?.elo) return;
     const rows = Array.isArray(liveV2State.eloRows) ? liveV2State.eloRows : [];
@@ -186,7 +204,7 @@
 
     el.elo.dataset.eloPage = String(liveV2State.eloPage + 1);
     el.elo.dataset.eloPages = String(totalPages);
-    el.elo.innerHTML = visibleRows.length ? visibleRows.map((row) => `<div class="list-row"><span class="rank">#${Number(row.position)}</span><div><strong>${esc(row.display_name)}</strong><small>${Number(row.elo_matches_played || 0)} ELO-kamper</small></div><span class="elo-live-score"><span class="rating">${Number(row.elo_rating || 1000).toFixed(1)}</span>${eloDeltaHtml(row)}</span></div>`).join("") : `<div class="empty">Ingen ELO-data.</div>`;
+    el.elo.innerHTML = visibleRows.length ? visibleRows.map((row) => `<div class="list-row"><span class="elo-rank-cell"><span class="rank">#${Number(row.position)}</span>${eloRankMovementHtml(row)}</span><div><strong>${esc(row.display_name)}</strong><small>${Number(row.elo_matches_played || 0)} ELO-kamper</small></div><span class="elo-live-score"><span class="rating">${Number(row.elo_rating || 1000).toFixed(1)}</span>${eloDeltaHtml(row)}</span></div>`).join("") : `<div class="empty">Ingen ELO-data.</div>`;
 
     const meta = eloPageMetaElement();
     if (!meta) return;
@@ -252,7 +270,7 @@
   const originalRender = render;
   render = function renderPublicLiveV2(payload) {
     originalRender(payload);
-    document.body.dataset.publicLiveV2 = "3da-top3-elo-rotation-tournament-delta";
+    document.body.dataset.publicLiveV2 = "3da-top3-elo-rotation-tournament-delta-rank-movement";
     loadHighlightsForCurrentTournament().catch(() => undefined);
   };
 })();
