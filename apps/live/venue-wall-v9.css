@@ -30,14 +30,23 @@
     display:none;
   }
 
+  /* The base ranking list reserves only 42px for column one. Rank movement
+     needs more room, otherwise the digit after the arrow gets clipped by the
+     following name column / panel overflow. Keep this column explicit. */
+  body.phase-live #elo .list-row {
+    grid-template-columns:4.8rem minmax(0,1fr) auto !important;
+    column-gap:.45rem !important;
+  }
+
   /* Current rank and movement are one compact, fixed-width unit. */
   body.phase-live #elo .elo-rank-cell {
-    flex:0 0 4.35rem;
-    min-width:4.35rem;
+    width:4.8rem;
+    min-width:4.8rem;
     display:grid;
-    grid-template-columns:1.9rem 2.05rem;
+    grid-template-columns:2rem minmax(2.45rem,auto);
     align-items:center;
-    column-gap:.18rem;
+    column-gap:.2rem;
+    overflow:visible !important;
     white-space:nowrap;
     font-variant-numeric:tabular-nums;
   }
@@ -51,12 +60,15 @@
     display:inline-flex;
     align-items:center;
     justify-content:flex-start;
-    min-width:0;
-    font-size:.63rem;
+    width:max-content;
+    min-width:2.25rem;
+    overflow:visible !important;
+    white-space:nowrap;
+    font-size:.66rem;
     line-height:1;
     font-style:normal;
     font-weight:950;
-    letter-spacing:-.01em;
+    letter-spacing:0;
   }
 
   body.phase-live #elo .elo-rank-move.positive {
