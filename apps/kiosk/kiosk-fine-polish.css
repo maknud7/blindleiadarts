@@ -98,9 +98,24 @@ body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview strong {
   font-size: clamp(20px, 3.7vw, 27px);
 }
 
-body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview small,
-body.kiosk-fine-polish.kiosk-ux-v2 #sumHint {
+body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview small {
   display: none !important;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview small.is-important {
+  display: inline !important;
+  color: inherit;
+  font-size: clamp(8px, 1.35vw, 10px);
+  font-weight: 950;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 #sumHint.is-redundant {
+  display: none !important;
+}
+
+body.kiosk-fine-polish.kiosk-ux-v2 #sumHint:not(.is-redundant) {
+  display: inline !important;
+  font-weight: 850;
 }
 
 body.kiosk-fine-polish.kiosk-ux-v2 .entry-display {
