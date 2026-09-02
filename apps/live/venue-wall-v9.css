@@ -1,5 +1,5 @@
 /* Venue Wall v9
- * Format-aware qualification marker + ELO pagination polish.
+ * Format-aware qualification marker + ELO pagination / movement polish.
  */
 
 @media (min-width:1180px) and (min-height:650px) {
@@ -28,5 +28,64 @@
 
   body.phase-live .elo-page-meta.hidden {
     display:none;
+  }
+
+  body.phase-live #elo .elo-live-score {
+    margin-left:auto;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:.48rem;
+    min-width:0;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+
+  body.phase-live #elo .elo-live-score .rating {
+    margin:0;
+  }
+
+  body.phase-live #elo .elo-live-delta {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:3.15rem;
+    padding:.22rem .38rem;
+    border-radius:.45rem;
+    font-size:.72rem;
+    line-height:1;
+    font-style:normal;
+    font-weight:950;
+    letter-spacing:.01em;
+  }
+
+  body.phase-live #elo .elo-live-delta.positive {
+    color:#087348 !important;
+    background:#e3f6eb !important;
+  }
+
+  body.phase-live #elo .elo-live-delta.negative {
+    color:#a51f32 !important;
+    background:#fbe6e9 !important;
+  }
+
+  body.phase-live #elo .elo-live-delta.neutral {
+    color:#586b82 !important;
+    background:#edf1f5 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-live-delta.positive {
+    color:#b9f7d4 !important;
+    background:#124c36 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-live-delta.negative {
+    color:#ffd0d5 !important;
+    background:#642532 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-live-delta.neutral {
+    color:#d3deea !important;
+    background:#33465b !important;
   }
 }
