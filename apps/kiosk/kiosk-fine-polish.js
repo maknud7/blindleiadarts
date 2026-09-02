@@ -26,7 +26,8 @@
 
     const leg = String(document.getElementById("currentLeg")?.textContent || "").trim();
     const round = String(document.getElementById("matchRound")?.textContent || "").trim();
-    context.textContent = [leg, round].filter(Boolean).join(" · ");
+    const next = [leg, round].filter(Boolean).join(" · ");
+    if (context.textContent !== next) context.textContent = next;
   }
 
   function moveUndoToScoring() {
@@ -37,15 +38,14 @@
 
     if (undo.parentElement !== head) head.insertBefore(undo, mode);
     undo.classList.add("kiosk-undo-inline");
-    undo.textContent = "↶ Angre";
+    if (undo.textContent !== "↶ Angre") undo.textContent = "↶ Angre";
     undo.setAttribute("aria-label", "Angre siste kast");
     undo.title = "Angre siste kast";
   }
 
   function strengthenTurnMarker() {
     [document.getElementById("playerATurn"), document.getElementById("playerBTurn")].forEach((node) => {
-      if (!node) return;
-      node.textContent = "Kaster nå";
+      if (node && node.textContent !== "Kaster nå") node.textContent = "Kaster nå";
     });
   }
 
