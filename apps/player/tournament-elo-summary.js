@@ -1,3 +1,5 @@
+import "./home-elo-tournament-overview.js?v=20260902-01";
+
 const tournamentSelect = document.getElementById("tableTournamentSelect");
 const tournamentPanel = document.querySelector('[data-statistics-panel="tournament"]');
 let tournamentEloRequest = 0;
@@ -37,7 +39,7 @@ function playerHtml(player) {
   return `<details class="tournament-elo-player">
     <summary>
       <span class="tournament-elo-player-name"><strong>${escElo(player.display_name || "Spiller")}</strong><small>${matches.length} ELO-kamper</small></span>
-      <span class="elo-tournament-result"><span class="before">${before.toFixed(1)}</span><span class="arrow">→</span><strong class="after">${current.toFixed(1)}</strong><b class="delta ${deltaTone(delta)}">${deltaLabel(delta)}</b></span>
+      <span class="elo-tournament-result"><span class="before">${before.toFixed(1)}</span><span class="elo-arrow">→</span><strong class="after">${current.toFixed(1)}</strong><b class="delta ${deltaTone(delta)}">${deltaLabel(delta)}</b></span>
     </summary>
     <div class="elo-tournament-matches">${matches.length ? matches.map((match) => `<div class="elo-tournament-match"><div><strong>${escElo(resultLabel(match.result))} mot ${escElo(match.opponent_name || "motstander")}</strong><small>${escElo(match.round_label || match.bracket_label || "Kamp")}</small></div>${movementHtml(match)}</div>`).join("") : `<div class="elo-tournament-empty">Ingen kampvise ELO-endringer.</div>`}</div>
   </details>`;
