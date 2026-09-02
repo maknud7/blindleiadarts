@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Blindleia\Dartkiosk\Api\Service;
 
 use Blindleia\Dartkiosk\Api\Repository\MatchScoringRepository;
+use Blindleia\Dartkiosk\Api\Repository\TournamentEloSnapshotRepository;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use mysqli;
@@ -25,6 +26,7 @@ final class CanonicalScoringService
     private EloLedgerService $elo;
     private PlayoffReconciliationService $playoffs;
     private LinearRankingService $linearRanking;
+    private TournamentEloSnapshotRepository $tournamentElo;
 
     public function __construct(
         Database $database,
@@ -36,6 +38,7 @@ final class CanonicalScoringService
         $this->elo = new EloLedgerService($database);
         $this->playoffs = new PlayoffReconciliationService($database);
         $this->linearRanking = new LinearRankingService($database);
+        $this->tournamentElo = new TournamentEloSnapshotRepository($database);
     }
 
     public function startMatch(int $kioskId, string $source = 'manual'): void
@@ -70,6 +73,7 @@ final class CanonicalScoringService
         // Playoff reconciliation can complete the whole tournament. Linear season
         // points are therefore reconciled only after the bracket lifecycle is current.
         $this->playoffs->afterMutation($matchId, false);
+        $this->tournamentElo->syncByMatchId($matchId);
         $this->linearRanking->reconcileByMatchId($matchId);
         $this->publishRefresh($kioskId, $matchId, $source, 'visit_recorded');
     }
@@ -86,6 +90,7 @@ final class CanonicalScoringService
         }
 
         $this->playoffs->afterMutation($matchId, true);
+        $this->tournamentElo->syncByMatchId($matchId);
         $this->linearRanking->reconcileByMatchId($matchId);
         $this->publishRefresh($kioskId, $matchId, $source, 'visit_undone');
     }
