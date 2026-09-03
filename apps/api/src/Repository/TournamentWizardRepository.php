@@ -24,7 +24,7 @@ final class TournamentWizardRepository
         $sql = sprintf(
             'SELECT id,club_id,name,status,start_at,
                     planned_group_count,planned_group_draw_mode,planned_group_best_of_legs,
-                    planned_qualifiers_per_group,planned_playoff_best_of_legs,
+                    planned_qualifiers_per_group,planned_playoff_best_of_legs,planned_auto_create_playoff,
                     planned_tournament_format,planned_starting_score,
                     group_count,group_draw_mode,group_drawn_at
              FROM `%1$stournaments` WHERE id=? LIMIT 1',
@@ -52,6 +52,7 @@ final class TournamentWizardRepository
             'group_best_of_legs' => $row['planned_group_best_of_legs'] !== null ? (int) $row['planned_group_best_of_legs'] : 3,
             'qualifiers_per_group' => $row['planned_qualifiers_per_group'] !== null ? (int) $row['planned_qualifiers_per_group'] : 2,
             'playoff_best_of_legs' => $row['planned_playoff_best_of_legs'] !== null ? (int) $row['planned_playoff_best_of_legs'] : 3,
+            'auto_create_playoff' => (int) ($row['planned_auto_create_playoff'] ?? 1) === 1,
             'groups_already_drawn' => $row['group_drawn_at'] !== null,
         ];
     }
@@ -78,17 +79,21 @@ final class TournamentWizardRepository
         $groupBestOf = $this->oddBestOf($payload['group_best_of_legs'] ?? $current['group_best_of_legs'], 'gruppespill');
         $qualifiers = min(16, max(1, (int) ($payload['qualifiers_per_group'] ?? $current['qualifiers_per_group'])));
         $playoffBestOf = $this->oddBestOf($payload['playoff_best_of_legs'] ?? $current['playoff_best_of_legs'], 'sluttspill');
+        $autoCreatePlayoff = array_key_exists('auto_create_playoff', $payload)
+            ? (bool) $payload['auto_create_playoff']
+            : (bool) $current['auto_create_playoff'];
+        $autoCreatePlayoffInt = $autoCreatePlayoff ? 1 : 0;
 
         $sql = sprintf(
             'UPDATE `%1$stournaments`
              SET planned_group_count=?,planned_group_draw_mode=?,planned_group_best_of_legs=?,
-                 planned_qualifiers_per_group=?,planned_playoff_best_of_legs=?,
+                 planned_qualifiers_per_group=?,planned_playoff_best_of_legs=?,planned_auto_create_playoff=?,
                  planned_tournament_format=?,planned_starting_score=?
              WHERE id=?',
             $this->tablePrefix
         );
         $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('isiiisii', $groupCount, $drawMode, $groupBestOf, $qualifiers, $playoffBestOf, $format, $startingScore, $tournamentId);
+        $stmt->bind_param('isiiiisii', $groupCount, $drawMode, $groupBestOf, $qualifiers, $playoffBestOf, $autoCreatePlayoffInt, $format, $startingScore, $tournamentId);
         $stmt->execute();
         $stmt->close();
         return $this->getPlan($tournamentId) ?? [];
