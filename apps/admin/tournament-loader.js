@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260903-auto-playoff-01";
+const MODULE_VERSION = "20260903-auto-playoff-02";
 let requested = false;
 let loading = null;
 let waitTimer = null;
