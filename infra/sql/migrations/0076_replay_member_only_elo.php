@@ -2,22 +2,13 @@
 
 declare(strict_types=1);
 
-use Blindleia\Dartkiosk\Api\Service\EloCanonicalReplayService;
-use Blindleia\Dartkiosk\Api\Support\Database;
-
+/**
+ * Superseded by 0077_replay_member_only_elo_final.php.
+ *
+ * An early TEST verification started the original row-by-row replay before the
+ * optimized implementation landed. Keep this migration name as a harmless marker
+ * so environments that have not seen it yet can advance directly to 0077.
+ */
 return static function (mysqli $mysqli, string $prefix): void {
-    $root = dirname(__DIR__, 3);
-    require_once $root . '/apps/api/bootstrap.php';
-
-    $database = Database::fromConnection($mysqli, $prefix);
-    $result = (new EloCanonicalReplayService($database))->replay();
-
-    fwrite(STDOUT, sprintf(
-        "0076: canonical ELO replay completed for %s: completed_matches=%d eligible_matches=%d guest_neutral_matches=%d seasons_rebuilt=%d\n",
-        $prefix,
-        (int) $result['completed_matches'],
-        (int) $result['eligible_matches'],
-        (int) $result['guest_neutral_matches'],
-        (int) $result['seasons_rebuilt']
-    ));
+    fwrite(STDOUT, "0076: superseded; final member-only ELO replay runs in 0077 for {$prefix}." . PHP_EOL);
 };
