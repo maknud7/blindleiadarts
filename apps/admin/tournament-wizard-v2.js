@@ -26,7 +26,7 @@ if (host) {
   }
 
   const style = document.createElement("style");
-  style.textContent = `.tw-backdrop{position:fixed;inset:0;background:rgba(5,8,12,.62);backdrop-filter:blur(8px);display:grid;place-items:center;padding:16px;z-index:1200}.tw-backdrop.hidden{display:none}.tw-dialog{width:min(680px,100%);overflow:hidden;background:linear-gradient(180deg,var(--panel-2),var(--panel));color:#f4f7fb;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 90px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.02);transition:transform .18s ease,box-shadow .18s ease}.tw-dialog.is-success{transform:scale(.99);box-shadow:0 18px 60px rgba(0,0,0,.35),0 0 0 2px rgba(77,212,166,.18)}.tw-head,.tw-body,.tw-actions{padding:20px}.tw-head{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;background:rgba(255,255,255,.012)}.tw-head h2{margin:3px 0 7px;color:#f4f7fb}.tw-head .muted{max-width:540px}.tw-close{width:40px;height:40px;flex:0 0 40px;padding:0;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--muted);font-size:25px;line-height:1;cursor:pointer}.tw-close:hover{transform:none;color:#f4f7fb;background:#202a38;border-color:var(--line)}.tw-body{background:var(--panel)}.tw-form{display:grid;gap:14px}.tw-form label{display:grid;gap:7px;color:#cbd5e1}.tw-form input,.tw-form select{background:#0f151e;color:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 11px}.tw-form input:focus,.tw-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,185,73,.12);outline:none}.tw-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tw-auto{padding:14px 15px;border:1px solid rgba(233,185,73,.25);background:rgba(233,185,73,.055);border-radius:14px}.tw-auto strong{display:block;margin-bottom:5px;color:#f4f7fb}.tw-format{padding:14px 15px;border:1px solid rgba(94,168,255,.25);background:rgba(94,168,255,.055);border-radius:14px}.tw-format>strong{display:block;margin-bottom:9px;color:#f4f7fb}.tw-actions{border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:#111821}.tw-actions .button.quiet{color:#c7d0dc;border-color:var(--line);background:#161e29}.tw-actions .button.quiet:hover{background:#202a38;color:#f4f7fb}.tw-message{margin:0;padding:11px 20px;border-top:1px solid var(--line);border-radius:0;background:#111821}.tw-message.bad{border-top-color:rgba(255,107,107,.45);color:#ffc4c4;background:rgba(255,107,107,.07)}.tw-message.good{border-top-color:rgba(77,212,166,.4);color:#aaf1d9;background:rgba(77,212,166,.09);font-weight:800}.tw-create-busy{position:relative;padding-left:42px!important}.tw-create-busy::before{content:"";position:absolute;left:17px;top:50%;width:15px;height:15px;margin-top:-8px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:twspin .7s linear infinite}@keyframes twspin{to{transform:rotate(360deg)}}@media(max-width:640px){.tw-backdrop{padding:10px;place-items:end center}.tw-dialog{width:100%;max-height:calc(100dvh - 20px);overflow:auto;border-radius:20px}.tw-head,.tw-body,.tw-actions{padding:17px}.tw-actions{position:sticky;bottom:0}.tw-grid{grid-template-columns:1fr}}`;
+  style.textContent = `.tw-backdrop{position:fixed;inset:0;background:rgba(5,8,12,.62);backdrop-filter:blur(8px);display:grid;place-items:center;padding:16px;z-index:1200}.tw-backdrop.hidden{display:none}.tw-dialog{width:min(680px,100%);overflow:hidden;background:linear-gradient(180deg,var(--panel-2),var(--panel));color:#f4f7fb;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 90px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.02);transition:transform .18s ease,box-shadow .18s ease}.tw-dialog.is-success{transform:scale(.99);box-shadow:0 18px 60px rgba(0,0,0,.35),0 0 0 2px rgba(77,212,166,.18)}.tw-head,.tw-body,.tw-actions{padding:20px}.tw-head{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;background:rgba(255,255,255,.012)}.tw-head h2{margin:3px 0 7px;color:#f4f7fb}.tw-head .muted{max-width:540px}.tw-close{width:40px;height:40px;flex:0 0 40px;padding:0;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--muted);font-size:25px;line-height:1;cursor:pointer}.tw-close:hover{transform:none;color:#f4f7fb;background:#202a38;border-color:var(--line)}.tw-body{background:var(--panel)}.tw-form{display:grid;gap:14px}.tw-form label{display:grid;gap:7px;color:#cbd5e1}.tw-form input,.tw-form select{background:#0f151e;color:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 11px}.tw-form input:focus,.tw-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,185,73,.12);outline:none}.tw-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tw-auto{padding:14px 15px;border:1px solid rgba(233,185,73,.25);background:rgba(233,185,73,.055);border-radius:14px}.tw-auto strong{display:block;margin-bottom:5px;color:#f4f7fb}.tw-format{padding:14px 15px;border:1px solid rgba(94,168,255,.25);background:rgba(94,168,255,.055);border-radius:14px}.tw-format>strong{display:block;margin-bottom:9px;color:#f4f7fb}.tw-check{grid-column:1/-1!important;display:grid!important;grid-template-columns:auto 1fr!important;align-items:start;gap:10px!important;padding:11px 12px;border:1px solid rgba(77,212,166,.25);background:rgba(77,212,166,.055);border-radius:11px}.tw-check input{width:18px;height:18px;margin:2px 0 0;padding:0;accent-color:var(--accent)}.tw-check span{display:grid;gap:3px}.tw-check strong{color:#f4f7fb}.tw-check small{color:var(--muted);line-height:1.3}.tw-actions{border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:#111821}.tw-actions .button.quiet{color:#c7d0dc;border-color:var(--line);background:#161e29}.tw-actions .button.quiet:hover{background:#202a38;color:#f4f7fb}.tw-message{margin:0;padding:11px 20px;border-top:1px solid var(--line);border-radius:0;background:#111821}.tw-message.bad{border-top-color:rgba(255,107,107,.45);color:#ffc4c4;background:rgba(255,107,107,.07)}.tw-message.good{border-top-color:rgba(77,212,166,.4);color:#aaf1d9;background:rgba(77,212,166,.09);font-weight:800}.tw-create-busy{position:relative;padding-left:42px!important}.tw-create-busy::before{content:"";position:absolute;left:17px;top:50%;width:15px;height:15px;margin-top:-8px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:twspin .7s linear infinite}@keyframes twspin{to{transform:rotate(360deg)}}@media(max-width:640px){.tw-backdrop{padding:10px;place-items:end center}.tw-dialog{width:100%;max-height:calc(100dvh - 20px);overflow:auto;border-radius:20px}.tw-head,.tw-body,.tw-actions{padding:17px}.tw-actions{position:sticky;bottom:0}.tw-grid{grid-template-columns:1fr}}`;
   document.head.appendChild(style);
 
   const openButton = document.createElement("button");
@@ -54,6 +54,7 @@ if (host) {
           <label id="twGroupBestOfWrap"><span>Gruppespill · best av</span><select id="twGroupBestOf"><option value="1" selected>1</option><option value="3">3</option><option value="5">5</option></select></label>
           <label id="twQualifiersWrap"><span>Videre per gruppe</span><select id="twQualifiers"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label>
           <label id="twPlayoffBestOfWrap"><span>Sluttspill / cup · best av</span><select id="twPlayoffBestOf"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="7">7</option></select></label>
+          <label id="twAutoPlayoffWrap" class="tw-check"><input id="twAutoPlayoff" type="checkbox" checked><span><strong>Opprett sluttspill automatisk</strong><small>Bruker «Videre per gruppe» og «Best av» over når siste gruppekamp er ferdig.</small></span></label>
         </div></div>
         <div class="tw-auto"><strong>Påmelding ordnes automatisk</strong><p id="twAutoText" class="muted"></p></div>
       </div>
@@ -82,6 +83,7 @@ if (host) {
     document.getElementById("twGroupBestOfWrap").style.display = ["groups_playoff", "groups_only", "swiss"].includes(structure) ? "grid" : "none";
     document.getElementById("twQualifiersWrap").style.display = structure === "groups_playoff" ? "grid" : "none";
     document.getElementById("twPlayoffBestOfWrap").style.display = ["groups_playoff", "single_elimination"].includes(structure) ? "grid" : "none";
+    document.getElementById("twAutoPlayoffWrap").style.display = structure === "groups_playoff" ? "grid" : "none";
   }
   async function loadCheckinDefault() {
     checkinLeadMinutes = 60;
@@ -107,6 +109,7 @@ if (host) {
     document.getElementById("twGroupBestOf").value = "1";
     document.getElementById("twQualifiers").value = "2";
     document.getElementById("twPlayoffBestOf").value = "3";
+    document.getElementById("twAutoPlayoff").checked = true;
     renderFormatFields();
     renderAutoText();
     await loadCheckinDefault();
@@ -149,6 +152,7 @@ if (host) {
     const groupBestOf = Number(document.getElementById("twGroupBestOf").value || 1);
     const qualifiers = Number(document.getElementById("twQualifiers").value || 2);
     const playoffBestOf = Number(document.getElementById("twPlayoffBestOf").value || 3);
+    const autoCreatePlayoff = tournamentFormat === "groups_playoff" && document.getElementById("twAutoPlayoff").checked;
 
     creating = true;
     hideMessage();
@@ -190,6 +194,7 @@ if (host) {
         group_best_of_legs: groupBestOf,
         qualifiers_per_group: qualifiers,
         playoff_best_of_legs: playoffBestOf,
+        auto_create_playoff: autoCreatePlayoff,
       }});
 
       button.classList.remove("tw-create-busy");
