@@ -62,20 +62,23 @@
       ? `🏆 ${data.playoff.champion_name}`
       : `${Number(data.entries?.length || 0)} kvalifiserte · Best av ${Number(data.playoff.best_of_legs || 3)}`;
 
-    el.playoff.innerHTML = rounds.map((round, roundIndex) => `
-      <section class="live-bracket-round" data-round="${roundIndex + 1}">
+    el.playoff.innerHTML = rounds.map((round, roundIndex) => {
+      const nodes = Array.isArray(round.nodes) ? round.nodes : [];
+      return `
+      <section class="live-bracket-round" data-round="${roundIndex + 1}" style="--match-count:${Math.max(1, nodes.length)}">
         <div class="live-bracket-round-head"><span>Runde ${roundIndex + 1}</span><h3>${esc(round.label)}</h3></div>
-        <div class="live-bracket-matches">${(round.nodes || []).map((node) => `
+        <div class="live-bracket-matches">${nodes.map((node) => `
           <article class="live-bracket-match ${nodeStatusClass(node)}${node.winner_player_id ? " decided" : ""}">
             <div class="live-bracket-match-top">
-              <span class="playoff-match-number">${esc(round.label)}${(round.nodes || []).length > 1 ? ` ${Number(node.position)}` : ""}</span>
+              <span class="playoff-match-number">${esc(round.label)}${nodes.length > 1 ? ` ${Number(node.position)}` : ""}</span>
               <span class="playoff-status-badge">${esc(playoffStatus(node))}</span>
             </div>
             ${playerRow(rounds, roundIndex, node, "a")}
             ${playerRow(rounds, roundIndex, node, "b")}
             <footer>${matchFooter(node)}</footer>
           </article>`).join("")}</div>
-      </section>`).join("");
+      </section>`;
+    }).join("");
   };
 
   renderBoards = function renderPlayoffBoards(boards = []) {
