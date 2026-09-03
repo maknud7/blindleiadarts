@@ -1,0 +1,120 @@
+/* Venue Wall v10
+ * Live-board density handling.
+ *
+ * The main wall gives the live-board panel a fixed broadcast row. With three
+ * boards the old 2x2 reservation squeezed every card to half height while v8
+ * kept the large single-board typography, causing names/scores to overlap.
+ * Use the available row based on actual board count and compact only when we
+ * genuinely need two board rows.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  /* Two boards should use the full live row instead of leaving a blank row. */
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(2):last-child) {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+  }
+
+  /* Three boards stay 2x2 on narrower wall displays. The compact treatment
+     below keeps both player rows and the match footer inside each card. */
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* Three/four-card 2-row mode: reduce only the live-card typography and
+     chrome. Tables, queue, ELO and the rest of the wall keep their sizing. */
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .board-card {
+    padding:4px 7px !important;
+    grid-template-rows:19px minmax(0,1fr) 14px !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .board-number {
+    font-size:.66rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .board-card .badge {
+    padding:2px 5px !important;
+    font-size:.52rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .player-line {
+    grid-template-columns:minmax(0,1fr) 60px 22px !important;
+    gap:5px !important;
+    padding:1px 0 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .player-line strong {
+    font-size:clamp(.72rem,.82vw,.92rem) !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .remaining {
+    font-size:clamp(1.42rem,1.68vw,1.78rem) !important;
+    line-height:.9 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .legs {
+    height:21px !important;
+    font-size:.74rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .round {
+    font-size:.48rem !important;
+    line-height:1 !important;
+  }
+
+  /* In dense cards the active-row tint is enough. The KASTER tag competes
+     with the player name and score for the same horizontal space. */
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .player-line.active::after {
+    display:none !important;
+  }
+}
+
+/* On a wide TV three boards fit cleanly side by side. This removes the empty
+   fourth slot and gives every match the full live-row height. */
+@media (min-width:1500px) and (min-height:650px) {
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) {
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .board-card {
+    padding:7px 9px !important;
+    grid-template-rows:24px minmax(0,1fr) 18px !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .board-number {
+    font-size:.8rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .board-card .badge {
+    padding:3px 7px !important;
+    font-size:.6rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .player-line {
+    grid-template-columns:minmax(0,1fr) 70px 26px !important;
+    gap:7px !important;
+    padding:2px 0 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .player-line strong {
+    font-size:clamp(.82rem,.92vw,1.04rem) !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .remaining {
+    font-size:clamp(1.8rem,2.05vw,2.35rem) !important;
+    line-height:.86 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .legs {
+    height:28px !important;
+    font-size:.86rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .round {
+    font-size:.54rem !important;
+  }
+}
