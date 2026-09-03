@@ -13,10 +13,11 @@ return static function (mysqli $mysqli, string $prefix): void {
     $result = (new EloCanonicalReplayService($database))->replay();
 
     fwrite(STDOUT, sprintf(
-        "0076: canonical ELO replay completed for %s: completed_matches=%d guest_events_reverted=%d seasons_rebuilt=%d\n",
+        "0076: canonical ELO replay completed for %s: completed_matches=%d eligible_matches=%d guest_neutral_matches=%d seasons_rebuilt=%d\n",
         $prefix,
         (int) $result['completed_matches'],
-        (int) $result['guest_events_reverted'],
+        (int) $result['eligible_matches'],
+        (int) $result['guest_neutral_matches'],
         (int) $result['seasons_rebuilt']
     ));
 };
