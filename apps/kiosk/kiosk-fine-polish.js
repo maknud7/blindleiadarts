@@ -1,5 +1,5 @@
 (() => {
-  const POLISH_VERSION = "1.0";
+  const POLISH_VERSION = "1.1";
 
   function compactLiveStatus() {
     const node = document.getElementById("connectionText");
@@ -30,6 +30,25 @@
     if (context.textContent !== next) context.textContent = next;
   }
 
+  function keepUndoUsable(undo) {
+    if (!undo) return;
+
+    // app.js renders the match while state.mutating is still true after a visit,
+    // which leaves this button disabled even after the request has completed.
+    // Keep the control available and guard the actual click while a mutation is
+    // genuinely in flight, so we neither lose undo nor allow concurrent writes.
+    undo.disabled = false;
+
+    if (undo.dataset.kioskUndoGuardBound === "1") return;
+    undo.dataset.kioskUndoGuardBound = "1";
+    undo.addEventListener("click", (event) => {
+      if (typeof state !== "undefined" && state.mutating) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, { capture: true });
+  }
+
   function moveUndoToScoring() {
     const undo = document.getElementById("undoButton");
     const head = document.querySelector("#manualScoring .scoring-head");
@@ -41,6 +60,7 @@
     if (undo.textContent !== "↶ Angre") undo.textContent = "↶ Angre";
     undo.setAttribute("aria-label", "Angre siste kast");
     undo.title = "Angre siste kast";
+    keepUndoUsable(undo);
   }
 
   function strengthenTurnMarker() {
