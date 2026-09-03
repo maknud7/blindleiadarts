@@ -146,6 +146,23 @@ if [[ -f "$OUT_DIR/admin/index.html" ]]; then
   ' "$OUT_DIR/admin/index.html"
 fi
 
+# TEST may use physical boards but must never mutate their canonical PROD
+# masterdata. Inject a TEST-only UI guard; the API independently enforces the
+# same boundary so this is UX, not the security/control boundary.
+if [[ "$ENVIRONMENT" == "test" && -f "$OUT_DIR/admin/index.html" ]]; then
+  php -r '
+    $path = $argv[1];
+    $html = file_get_contents($path);
+    if ($html === false) { exit(1); }
+    if (strpos($html, "test-hardware-readonly.js") === false) {
+      $tag = "  <script type=\"module\" src=\"/admin/test-hardware-readonly.js?v=20260903-0715\"></script>\n";
+      $html = str_replace("</body>", $tag . "</body>", $html, $count);
+      if ($count !== 1) { fwrite(STDERR, "Could not inject TEST hardware read-only guard.\n"); exit(1); }
+    }
+    file_put_contents($path, $html);
+  ' "$OUT_DIR/admin/index.html"
+fi
+
 # First-party activity telemetry is injected into every browser surface in the
 # release. It does not create an analytics cookie or persistent anonymous ID.
 for html in \
