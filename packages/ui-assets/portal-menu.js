@@ -46,6 +46,8 @@ if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
   import(new URL("./admin-shell-v2.js?v=20260827-1238", import.meta.url).href)
     .catch((error) => console.warn("Admin shell unavailable", error));
+  import(new URL("../../admin/player-member-link-admin.js?v=20260903-01", import.meta.url).href)
+    .catch((error) => console.warn("Player/member link admin unavailable", error));
 }
 
 import(new URL("./unified-portal-shell.js?v=20260827-1900", import.meta.url).href)
