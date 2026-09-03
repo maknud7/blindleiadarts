@@ -225,20 +225,15 @@
 
   body.phase-live.playoff-mode .live-bracket-matches {
     display:grid !important;
-    grid-template-rows:repeat(var(--match-count,1),minmax(0,1fr));
+    grid-template-rows:repeat(var(--match-count,1),minmax(0,1fr)) !important;
     align-items:center !important;
     align-content:stretch !important;
     gap:18px !important;
     min-height:0 !important;
   }
 
-  body.phase-live.playoff-mode .live-bracket-round:first-child .live-bracket-matches {
-    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
-  }
-
   body.phase-live.playoff-mode .live-bracket-round:not(:first-child) .live-bracket-matches {
     align-content:center !important;
-    grid-template-rows:minmax(150px,auto) !important;
   }
 
   body.phase-live.playoff-mode .live-bracket-match {
