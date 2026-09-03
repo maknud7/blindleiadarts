@@ -52,8 +52,10 @@ jobs:
               if ($value === false || trim($value) === '') throw new RuntimeException('Missing env: ' . $key);
               return trim($value);
           };
+          $safe = static fn(mixed $value): string => str_replace(["\r", "\n", "|"], [' ', ' ', '/'], (string)($value ?? ''));
           $db = new mysqli($required('DB_HOST'), $required('DB_USERNAME'), $required('DB_PASSWORD'), $required('DB_NAME'), (int)$required('DB_PORT'));
           $db->set_charset('utf8mb4');
+
           $sql = "SELECT
                     p.id,
                     p.display_name,
@@ -79,18 +81,107 @@ jobs:
           $rows = $db->query($sql)->fetch_all(MYSQLI_ASSOC);
           echo 'PROD_UNLINKED_PLAYER_COUNT=' . count($rows) . PHP_EOL;
           foreach ($rows as $row) {
-              $name = str_replace(["\r","\n","|"], [' ',' ','/'], (string)$row['display_name']);
-              $tournaments = str_replace(["\r","\n"], [' ',' '], (string)($row['tournaments'] ?? ''));
               echo 'UNLINKED_PLAYER'
                   . '|id=' . (int)$row['id']
-                  . '|name=' . $name
+                  . '|name=' . $safe($row['display_name'])
                   . '|active=' . (int)$row['is_active']
                   . '|dartsatlas=' . (($row['atlas_external_ids'] ?? null) !== null ? 'yes' : 'no')
-                  . '|atlas_ids=' . (string)($row['atlas_external_ids'] ?? '')
+                  . '|atlas_ids=' . $safe($row['atlas_external_ids'])
                   . '|completed_matches=' . (int)$row['completed_matches']
-                  . '|tournaments=' . $tournaments
+                  . '|tournaments=' . $safe($row['tournaments'])
                   . PHP_EOL;
           }
+
+          $tracked = $db->query("SELECT id,display_name,member_id,member_link_source,member_linked_at,is_active,merged_into_player_id
+                                   FROM bd_prod_players
+                                  WHERE display_name IN ('Dan Christian Birkeland','Leif Atle Franksson','Sven Einar Davidsen')
+                                  ORDER BY display_name,id")->fetch_all(MYSQLI_ASSOC);
+          foreach ($tracked as $row) {
+              echo 'PLAYER_STATE'
+                  . '|id=' . (int)$row['id']
+                  . '|name=' . $safe($row['display_name'])
+                  . '|member_id=' . ($row['member_id'] === null ? 'NULL' : (int)$row['member_id'])
+                  . '|link_source=' . $safe($row['member_link_source'])
+                  . '|linked_at=' . $safe($row['member_linked_at'])
+                  . '|active=' . (int)$row['is_active']
+                  . '|merged_into=' . ($row['merged_into_player_id'] === null ? 'NULL' : (int)$row['merged_into_player_id'])
+                  . PHP_EOL;
+          }
+
+          $members = $db->query("SELECT id,medlemsnummer,navn,status
+                                   FROM medlemmer
+                                  WHERE LOWER(navn) LIKE '%leif%frank%'
+                                     OR medlemsnummer=103
+                                  ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+          foreach ($members as $member) {
+              $memberId = (int)$member['id'];
+              echo 'MEMBER_CANDIDATE'
+                  . '|id=' . $memberId
+                  . '|member_number=' . $safe($member['medlemsnummer'])
+                  . '|name=' . $safe($member['navn'])
+                  . '|status=' . $safe($member['status'])
+                  . PHP_EOL;
+
+              $stmt = $db->prepare("SELECT id,display_name,member_id,merged_into_player_id FROM bd_prod_players WHERE member_id=? ORDER BY id");
+              $stmt->bind_param('i', $memberId);
+              $stmt->execute();
+              foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $linked) {
+                  echo 'MEMBER_PLAYER_LINK'
+                      . '|member_id=' . $memberId
+                      . '|player_id=' . (int)$linked['id']
+                      . '|player_name=' . $safe($linked['display_name'])
+                      . '|merged_into=' . ($linked['merged_into_player_id'] === null ? 'NULL' : (int)$linked['merged_into_player_id'])
+                      . PHP_EOL;
+              }
+              $stmt->close();
+
+              $stmt = $db->prepare("SELECT id,player_id,role FROM bd_prod_user_accounts WHERE member_id=? ORDER BY id");
+              $stmt->bind_param('i', $memberId);
+              $stmt->execute();
+              foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $account) {
+                  echo 'MEMBER_USER_ACCOUNT'
+                      . '|member_id=' . $memberId
+                      . '|account_id=' . (int)$account['id']
+                      . '|player_id=' . ($account['player_id'] === null ? 'NULL' : (int)$account['player_id'])
+                      . '|role=' . $safe($account['role'])
+                      . PHP_EOL;
+              }
+              $stmt->close();
+          }
+
+          $audit = $db->query("SELECT id,player_id,player_display_name,member_id,member_name,actor_user_account_id,link_source,created_at
+                                FROM bd_prod_player_member_link_audit
+                               ORDER BY id DESC
+                               LIMIT 10")->fetch_all(MYSQLI_ASSOC);
+          foreach ($audit as $row) {
+              echo 'LINK_AUDIT'
+                  . '|id=' . (int)$row['id']
+                  . '|player_id=' . (int)$row['player_id']
+                  . '|player_name=' . $safe($row['player_display_name'])
+                  . '|member_id=' . (int)$row['member_id']
+                  . '|member_name=' . $safe($row['member_name'])
+                  . '|actor=' . ($row['actor_user_account_id'] === null ? 'NULL' : (int)$row['actor_user_account_id'])
+                  . '|source=' . $safe($row['link_source'])
+                  . '|at=' . $safe($row['created_at'])
+                  . PHP_EOL;
+          }
+
+          $columns = $db->query("SELECT table_name,column_name,column_type,is_nullable
+                                   FROM information_schema.columns
+                                  WHERE table_schema=DATABASE()
+                                    AND ((table_name='bd_prod_players' AND column_name IN ('member_id','member_link_source','member_linked_at'))
+                                      OR (table_name='bd_prod_player_member_link_audit' AND column_name IN ('member_id','member_name','actor_user_account_id','link_source'))
+                                      OR (table_name='bd_prod_user_accounts' AND column_name IN ('member_id','player_id')))
+                                  ORDER BY table_name,column_name")->fetch_all(MYSQLI_ASSOC);
+          foreach ($columns as $column) {
+              echo 'SCHEMA_CHECK'
+                  . '|table=' . $safe($column['table_name'])
+                  . '|column=' . $safe($column['column_name'])
+                  . '|type=' . $safe($column['column_type'])
+                  . '|nullable=' . $safe($column['is_nullable'])
+                  . PHP_EOL;
+          }
+
           $db->close();
           PHP
           php /tmp/prod-player-link-audit.php
