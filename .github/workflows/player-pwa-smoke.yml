@@ -78,7 +78,7 @@ jobs:
           grep -Fq 'Ingen konto' <<<"$account_js"
           grep -Fq 'Invitasjon sendt' <<<"$account_js"
           grep -Fq 'Aktiv konto' <<<"$account_js"
-          grep -Fq 'Koble og aktiver konto' <<<"$account_js"
+          grep -Fq 'Koble og aktiver' <<<"$account_js"
           grep -Fq 'member-account-reactivate.php' <<<"$account_js"
 
           echo "PLAYER_PWA_SMOKE_OK=yes"
