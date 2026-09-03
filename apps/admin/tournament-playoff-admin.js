@@ -114,9 +114,9 @@ if (host) {
   function render() {
     const data = state.bracket;
     const plan = state.plan;
-    const auto = plan?.tournament_format === "groups_playoff" && plan?.auto_create_playoff !== false;
+    const auto = plan?.tournament_format === "groups_playoff" && plan?.auto_create_playoff === true;
     el.poAutoStatus.innerHTML = auto
-      ? `<strong>Automatisk sluttspill er på</strong><p class="muted">${Number(plan?.qualifiers_per_group || 2)} videre per gruppe · Best av ${Number(plan?.playoff_best_of_legs || 3)}. Opprettes når gruppespillet er ferdig.</p>`
+      ? `<strong>Automatisk sluttspill er på</strong><p class="muted">${Number(plan.qualifiers_per_group)} videre per gruppe · Best av ${Number(plan.playoff_best_of_legs)}. Opprettes når gruppespillet er ferdig.</p>`
       : `<strong>Automatisk sluttspill er av</strong><p class="muted">Dette styres i turneringsoppsettet.</p>`;
 
     if (!data?.playoff) {
