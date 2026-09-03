@@ -1,6 +1,6 @@
-release_sha=c1493c5fbfbd2d7ea79d1816942b534ed9b145ed
+release_sha=c70a8faa3fe2af24820606936ba88ffd2260d968
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-09-03T12:22:00Z
-purpose=clubadmin_player_member_link
-backup_prefix=bd_backup_20260903_122033_
+requested_at=2026-09-03T14:50:00Z
+purpose=leif_player_member_link_identity_consolidation
+backup_prefix=bd_backup_20260903_144911_
