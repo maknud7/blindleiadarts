@@ -1,0 +1,96 @@
+name: PROD Player Link Audit
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/prod-player-link-audit-request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-player-link-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        run: |
+          set -Eeuo pipefail
+          test -f .github/prod-player-link-audit-request
+          grep -Fxq 'audit_prod_unlinked_players=YES' .github/prod-player-link-audit-request
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Read-only PROD player link audit
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          cat > /tmp/prod-player-link-audit.php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $required = static function (string $key): string {
+              $value = getenv($key);
+              if ($value === false || trim($value) === '') throw new RuntimeException('Missing env: ' . $key);
+              return trim($value);
+          };
+          $db = new mysqli($required('DB_HOST'), $required('DB_USERNAME'), $required('DB_PASSWORD'), $required('DB_NAME'), (int)$required('DB_PORT'));
+          $db->set_charset('utf8mb4');
+          $sql = "SELECT
+                    p.id,
+                    p.display_name,
+                    p.is_active,
+                    p.member_id,
+                    p.member_link_source,
+                    GROUP_CONCAT(DISTINCT er.external_id ORDER BY er.external_id SEPARATOR ',') AS atlas_external_ids,
+                    COUNT(DISTINCT CASE WHEN m.status='completed' THEN m.id END) AS completed_matches,
+                    GROUP_CONCAT(DISTINCT CASE WHEN m.status='completed' THEN t.name END ORDER BY t.start_at,t.id SEPARATOR ' | ') AS tournaments
+                  FROM bd_prod_players p
+                  LEFT JOIN bd_prod_external_references er
+                    ON er.external_system='dartsatlas'
+                   AND er.external_entity_type='player'
+                   AND er.internal_entity_type='player'
+                   AND er.internal_id=p.id
+                  LEFT JOIN bd_prod_matches m
+                    ON m.player_a_id=p.id OR m.player_b_id=p.id
+                  LEFT JOIN bd_prod_tournaments t ON t.id=m.tournament_id
+                  WHERE p.member_id IS NULL
+                    AND p.merged_into_player_id IS NULL
+                  GROUP BY p.id,p.display_name,p.is_active,p.member_id,p.member_link_source
+                  ORDER BY p.display_name,p.id";
+          $rows = $db->query($sql)->fetch_all(MYSQLI_ASSOC);
+          echo 'PROD_UNLINKED_PLAYER_COUNT=' . count($rows) . PHP_EOL;
+          foreach ($rows as $row) {
+              $name = str_replace(["\r","\n","|"], [' ',' ','/'], (string)$row['display_name']);
+              $tournaments = str_replace(["\r","\n"], [' ',' '], (string)($row['tournaments'] ?? ''));
+              echo 'UNLINKED_PLAYER'
+                  . '|id=' . (int)$row['id']
+                  . '|name=' . $name
+                  . '|active=' . (int)$row['is_active']
+                  . '|dartsatlas=' . (($row['atlas_external_ids'] ?? null) !== null ? 'yes' : 'no')
+                  . '|atlas_ids=' . (string)($row['atlas_external_ids'] ?? '')
+                  . '|completed_matches=' . (int)$row['completed_matches']
+                  . '|tournaments=' . $tournaments
+                  . PHP_EOL;
+          }
+          $db->close();
+          PHP
+          php /tmp/prod-player-link-audit.php
