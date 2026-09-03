@@ -108,7 +108,7 @@ jobs:
                   . PHP_EOL;
           }
 
-          $members = $db->query("SELECT id,medlemsnummer,navn,status
+          $members = $db->query("SELECT id,medlemsnummer,navn
                                    FROM medlemmer
                                   WHERE LOWER(navn) LIKE '%leif%frank%'
                                      OR medlemsnummer=103
@@ -119,7 +119,6 @@ jobs:
                   . '|id=' . $memberId
                   . '|member_number=' . $safe($member['medlemsnummer'])
                   . '|name=' . $safe($member['navn'])
-                  . '|status=' . $safe($member['status'])
                   . PHP_EOL;
 
               $stmt = $db->prepare("SELECT id,display_name,member_id,merged_into_player_id FROM bd_prod_players WHERE member_id=? ORDER BY id");
