@@ -93,11 +93,40 @@ final class TournamentLiveRepository
             'recent_results' => $ops['recent_results'],
             'qualifiers_per_group' => $this->qualifiersPerGroup($tournamentId),
             'tables' => $this->portal->getTournamentTables($tournamentId),
-            'playoff' => $this->playoffs->getBracket($tournamentId),
+            'playoff' => $this->playoffWithScores($tournamentId),
             'elo' => $eloRows,
             'highlights' => $this->highlights($tournamentId),
             'updated_at' => date('c'),
         ];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function playoffWithScores(int $tournamentId): ?array
+    {
+        $bracket = $this->playoffs->getBracket($tournamentId);
+        if ($bracket === null) {
+            return null;
+        }
+
+        foreach ($bracket['rounds'] as &$round) {
+            foreach ($round['nodes'] as &$node) {
+                $node['legs_a'] = 0;
+                $node['legs_b'] = 0;
+                $matchId = (int) ($node['match_id'] ?? 0);
+                $playerA = (int) ($node['player_a_id'] ?? 0);
+                $playerB = (int) ($node['player_b_id'] ?? 0);
+                if ($matchId <= 0 || $playerA <= 0 || $playerB <= 0) {
+                    continue;
+                }
+                $wins = $this->legWins($matchId, $playerA, $playerB);
+                $node['legs_a'] = (int) ($wins[$playerA] ?? 0);
+                $node['legs_b'] = (int) ($wins[$playerB] ?? 0);
+            }
+            unset($node);
+        }
+        unset($round);
+
+        return $bracket;
     }
 
     /** @return array<string,mixed>|null */
