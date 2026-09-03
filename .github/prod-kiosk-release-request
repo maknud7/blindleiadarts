@@ -1,0 +1,4 @@
+release_sha=032c4e7ed418481328d0c64f5135989c74c9570a
+scope=kiosk-static-only
+requested_at=2026-09-03T06:36:00+02:00
+purpose=kiosk_undo_button_fix
