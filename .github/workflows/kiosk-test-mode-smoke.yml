@@ -79,3 +79,40 @@ jobs:
           echo "CLUBADMIN_BOARDS=$equipment_boards"
           echo "KIOSK_TEST_MODE_CANONICAL_BOARDS_OK=yes"
           echo "CLUBADMIN_KIOSK_BOARD_PARITY_OK=yes"
+
+      - name: Verify TEST hardware mutations are blocked
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          clubs="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/api/v1/clubs?cb=$RANDOM")"
+          club_id="$(jq -r '.data.items[] | select(.slug == "blindleia-dartklubb") | .id' <<<"$clubs" | head -n1)"
+
+          create_status="$(curl -sS -o /tmp/hardware-create.json -w '%{http_code}' \
+            -X POST "$base/api/v1/clubs/$club_id/kiosks" \
+            -H 'Content-Type: application/json' \
+            --data '{"board_number":9999,"name":"SHOULD-NOT-CREATE","scoring_mode":"manual"}')"
+          test "$create_status" = "403"
+          jq -e '.error.code == "production_hardware_read_only"' /tmp/hardware-create.json >/dev/null
+
+          board_id="$(jq -r '.data.items[0].id' <<<"$(curl -fsS "$base/api/v1/clubs/$club_id/kiosks?cb=$RANDOM")")"
+          patch_status="$(curl -sS -o /tmp/hardware-patch.json -w '%{http_code}' \
+            -X PATCH "$base/api/v1/clubs/$club_id/kiosks/$board_id" \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"SHOULD-NOT-CHANGE"}')"
+          test "$patch_status" = "403"
+          jq -e '.error.code == "production_hardware_read_only"' /tmp/hardware-patch.json >/dev/null
+
+          scolia_status="$(curl -sS -o /tmp/hardware-scolia.json -w '%{http_code}' \
+            -X PATCH "$base/api/v1/clubs/$club_id/scolia/settings" \
+            -H 'Content-Type: application/json' \
+            --data '{"enabled":false}')"
+          test "$scolia_status" = "403"
+          jq -e '.error.code == "production_hardware_read_only"' /tmp/hardware-scolia.json >/dev/null
+
+          admin_html="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/admin/?cb=$RANDOM")"
+          grep -Fq 'test-hardware-readonly.js' <<<"$admin_html"
+          readonly_js="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/admin/test-hardware-readonly.js?cb=$RANDOM")"
+          grep -Fq 'Fysiske skiver administreres kun i PROD' <<<"$readonly_js"
+
+          echo "TEST_HARDWARE_READ_ONLY_OK=yes"
