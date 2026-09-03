@@ -44,7 +44,7 @@ try {
 
     $role = (string) ($user['role'] ?? 'player');
     if ($role !== 'super_admin') {
-        $adminIds = array_values(array_filter(array_map('intval', explode(',', (string) ($user['admin_club_ids'] ?? ''))));
+        $adminIds = array_values(array_filter(array_map('intval', explode(',', (string) ($user['admin_club_ids'] ?? '')))));
         if ($role !== 'club_admin' || !in_array($clubId, $adminIds, true)) {
             $respond(['ok' => false, 'error' => ['code' => 'club_admin_required', 'message' => 'Klubbadmin-tilgang kreves.']], 403);
         }
