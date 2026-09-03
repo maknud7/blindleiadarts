@@ -30,7 +30,7 @@ jobs:
           echo "Kiosk smoke failed: expected release did not become live." >&2
           exit 1
 
-      - name: Verify physical board chooser
+      - name: Verify canonical physical board chooser
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -38,18 +38,20 @@ jobs:
           payload="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/api/kiosk-test-mode.php?cb=$RANDOM")"
 
           jq -e '.ok == true' <<<"$payload" >/dev/null
+          jq -e '.data.source == "canonical_physical_board_registry"' <<<"$payload" >/dev/null
+          jq -e 'all(.data.items[]; .source == "physical")' <<<"$payload" >/dev/null
+          jq -e 'any(.data.items[]; .club_slug == "blindleia-dartklubb")' <<<"$payload" >/dev/null
+
+          duplicates="$(jq -r '
+            [.data.items[] | "\(.club_slug):\(.board_number)"]
+            | group_by(.)
+            | map(select(length > 1) | .[0])
+            | join(",")
+          ' <<<"$payload")"
+          if [[ -n "$duplicates" ]]; then
+            echo "Duplicate canonical physical boards in kiosk chooser: $duplicates" >&2
+            exit 1
+          fi
+
           echo "$payload" | jq -r '.data.items[] | [.club_slug, .board_number, .source, .scoring_mode] | @tsv'
-
-          for board in 1 2 3 4; do
-            jq -e --argjson board "$board" '
-              any(.data.items[];
-                .club_slug == "blindleia-dartklubb"
-                and .board_number == $board
-                and .source == "physical")
-            ' <<<"$payload" >/dev/null || {
-              echo "Missing canonical physical Blindleia board $board in kiosk test mode." >&2
-              exit 1
-            }
-          done
-
-          echo "KIOSK_TEST_MODE_BOARDS_OK=yes"
+          echo "KIOSK_TEST_MODE_CANONICAL_BOARDS_OK=yes"
