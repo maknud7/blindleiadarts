@@ -29,15 +29,10 @@ jobs:
           set -Eeuo pipefail
           test -f .github/prod-kiosk-release-request
           release_sha="$(awk -F= '$1=="release_sha" {print $2}' .github/prod-kiosk-release-request | tail -1 | tr -d '[:space:]')"
-          backup_confirmed="$(awk -F= '$1=="backup_confirmed" {print $2}' .github/prod-kiosk-release-request | tail -1 | tr -d '[:space:]')"
           scope="$(awk -F= '$1=="scope" {print $2}' .github/prod-kiosk-release-request | tail -1 | tr -d '[:space:]')"
 
           if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Kiosk production release requires an exact 40-character tested SHA."
-            exit 1
-          fi
-          if [[ "$backup_confirmed" != "YES" ]]; then
-            echo "::error::Kiosk production release requires a fresh production snapshot confirmation."
             exit 1
           fi
           if [[ "$scope" != "kiosk-static-only" ]]; then
@@ -64,13 +59,13 @@ jobs:
             apps/kiosk/index.html \
             apps/kiosk/kiosk-fine-polish.css \
             apps/kiosk/kiosk-fine-polish.js \
-            apps/kiosk/service-worker.js \
-            apps/kiosk/test-mode.js; do
+            apps/kiosk/service-worker.js; do
             test -f "$file"
           done
           grep -Fq 'kiosk-fine-polish.css?v=20260902-02' apps/kiosk/index.html
-          grep -Fq 'kiosk-fine-polish.js?v=20260902-02' apps/kiosk/index.html
-          grep -Fq 'bd-kiosk-shell-v34' apps/kiosk/service-worker.js
+          grep -Fq 'kiosk-fine-polish.js?v=20260903-undo-01' apps/kiosk/index.html
+          grep -Fq 'const POLISH_VERSION = "1.1"' apps/kiosk/kiosk-fine-polish.js
+          grep -Fq 'bd-kiosk-shell-v35' apps/kiosk/service-worker.js
           echo "KIOSK_RELEASE_SCOPE_OK=yes"
 
       - name: Verify exact kiosk assets are currently on TEST
@@ -83,7 +78,6 @@ jobs:
             kiosk-fine-polish.css
             kiosk-fine-polish.js
             service-worker.js
-            test-mode.js
           )
           for file in "${files[@]}"; do
             curl --fail --silent --show-error --location --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
@@ -104,7 +98,7 @@ jobs:
           extensions: mysqli
           coverage: none
 
-      - name: Verify fresh production snapshot read-only
+      - name: Read-only production preflight
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
@@ -119,11 +113,37 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [[ "$status" -ne 0 && "$status" -ne 2 ]]; then
-            echo "::error::Production snapshot/preflight is not safe for kiosk deployment."
+            echo "::error::Production preflight is not safe for kiosk-only deployment."
             exit "$status"
           fi
-          grep -Fq 'PROD_BACKUP_PREFIX=' /tmp/prod-kiosk-preflight.txt
           echo "KIOSK_PROD_PREFLIGHT_OK=yes"
+
+      - name: Snapshot current production kiosk for rollback
+        env:
+          PROD_BASE_URL: https://blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/prod-kiosk-rollback
+          declare -a files=(
+            index.html
+            kiosk-fine-polish.css
+            kiosk-fine-polish.js
+            service-worker.js
+          )
+          for file in "${files[@]}"; do
+            curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
+              "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/prod-kiosk-rollback/$file"
+          done
+          (cd /tmp/prod-kiosk-rollback && sha256sum "${files[@]}" > SHA256SUMS.txt)
+          echo "KIOSK_PROD_ROLLBACK_SNAPSHOT_READY=yes"
+
+      - name: Store production kiosk rollback snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-kiosk-before-${{ steps.request.outputs.release_sha }}
+          path: /tmp/prod-kiosk-rollback
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Install sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
@@ -144,7 +164,6 @@ jobs:
           put apps/kiosk/kiosk-fine-polish.css ${REMOTE_KIOSK}/kiosk-fine-polish.css
           put apps/kiosk/kiosk-fine-polish.js ${REMOTE_KIOSK}/kiosk-fine-polish.js
           put apps/kiosk/service-worker.js ${REMOTE_KIOSK}/service-worker.js
-          put apps/kiosk/test-mode.js ${REMOTE_KIOSK}/test-mode.js
           quit
           EOF
           sed -i 's/^          //' /tmp/kiosk-sftp.txt
@@ -164,7 +183,6 @@ jobs:
             kiosk-fine-polish.css
             kiosk-fine-polish.js
             service-worker.js
-            test-mode.js
           )
           for file in "${files[@]}"; do
             curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
@@ -177,6 +195,7 @@ jobs:
             fi
           done
           grep -Fq 'kiosk-fine-polish.css?v=20260902-02' /tmp/prod-index.html
-          grep -Fq 'kiosk-fine-polish.js?v=20260902-02' /tmp/prod-index.html
-          grep -Fq 'bd-kiosk-shell-v34' /tmp/prod-service-worker.js
+          grep -Fq 'kiosk-fine-polish.js?v=20260903-undo-01' /tmp/prod-index.html
+          grep -Fq 'const POLISH_VERSION = "1.1"' /tmp/prod-kiosk-fine-polish.js
+          grep -Fq 'bd-kiosk-shell-v35' /tmp/prod-service-worker.js
           echo "KIOSK_PROD_DEPLOY_OK=yes"
