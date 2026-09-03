@@ -286,6 +286,65 @@ body.scolia-live-active #undoButton {
     padding: 6px 12px !important;
     font-size: 11px !important;
   }
+
+  /* Manual fallback lives inside the scoring card. Reserve its height explicitly
+     so it never pushes the keypad below the fixed tablet viewport. */
+  #scoliaFallbackNotice:not(.hidden) {
+    min-width: 0;
+    min-height: 52px !important;
+    max-height: 52px !important;
+    margin: 0 0 5px !important;
+    padding: 6px 8px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 6px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) .eyebrow {
+    display: none !important;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) > div {
+    gap: 1px !important;
+    overflow: hidden;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) strong {
+    overflow: hidden;
+    font-size: 13px !important;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) .muted {
+    overflow: hidden;
+    font-size: 10px !important;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) .confirm-button {
+    min-width: 0;
+    max-width: 190px;
+    min-height: 38px !important;
+    max-height: 38px;
+    padding: 5px 10px !important;
+    font-size: 11px !important;
+    line-height: 1.05;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) ~ .sum-mode,
+  #scoliaFallbackNotice:not(.hidden) ~ .dart-mode {
+    height: calc(100% - 107px) !important;
+    min-height: 0 !important;
+  }
+
+  #scoliaFallbackNotice:not(.hidden) ~ .sum-mode .keypad {
+    grid-template-rows: repeat(4, minmax(36px, 1fr));
+  }
 }
 
 @media (max-width: 540px) {
