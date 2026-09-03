@@ -1,5 +1,5 @@
-release_sha=57badd05650443dcbfb2b9c4bfee6d050ad5c091
+release_sha=dbe401915023a8ca8c91621e095d891a6b859774
 scope=kiosk-static-only
-requested_at=2026-09-03T09:15:00+02:00
-purpose=scolia_offline_auto_fallback
+requested_at=2026-09-03T10:10:00+02:00
+purpose=scolia_fallback_tablet_layout
 retry=1
