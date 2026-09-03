@@ -9,13 +9,11 @@ use RuntimeException;
 
 final class Database
 {
-    private ?Config $config;
     private ?mysqli $connection = null;
     private ?string $tablePrefixOverride = null;
 
-    public function __construct(Config $config)
+    public function __construct(private ?Config $config = null)
     {
-        $this->config = $config;
     }
 
     /**
@@ -28,20 +26,9 @@ final class Database
             throw new RuntimeException('Invalid database table prefix.');
         }
 
-        $database = self::newWithoutConfig();
+        $database = new self();
         $database->connection = $connection;
         $database->tablePrefixOverride = $tablePrefix;
-        return $database;
-    }
-
-    private static function newWithoutConfig(): self
-    {
-        $reflection = new \ReflectionClass(self::class);
-        /** @var self $database */
-        $database = $reflection->newInstanceWithoutConstructor();
-        $database->config = null;
-        $database->connection = null;
-        $database->tablePrefixOverride = null;
         return $database;
     }
 
