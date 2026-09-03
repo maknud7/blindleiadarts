@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v37";
+const SHELL_CACHE = "bd-kiosk-shell-v38";
 const SHELL = [
   "./",
   "./index.html",
