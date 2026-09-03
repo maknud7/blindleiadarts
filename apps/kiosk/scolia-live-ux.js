@@ -55,12 +55,17 @@
     return value;
   }
 
+  function isBoardOffline(board) {
+    return String(board?.board_status || "").trim().toLowerCase() === "offline";
+  }
+
   function isLiveAutomatic(board) {
     return board?.mode === "live"
       && board?.effective_scoring_mode === "scolia"
       && Number(board?.fallback_active || 0) !== 1
       && Number(board?.needs_reconciliation || 0) !== 1
-      && board?.connection_state === "connected";
+      && board?.connection_state === "connected"
+      && !isBoardOffline(board);
   }
 
   function activePlayerName() {
