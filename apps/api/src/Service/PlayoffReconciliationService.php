@@ -61,8 +61,61 @@ final class PlayoffReconciliationService
         if ($wasUndo) {
             $this->playoffs->rewindAfterUndo($matchId);
             $this->restoreReopenedMatchParticipants($matchId);
+        } else {
+            $this->autoCreatePlannedPlayoff($matchId);
         }
         $this->playoffs->reconcileByMatchId($matchId);
+    }
+
+    private function autoCreatePlannedPlayoff(int $matchId): void
+    {
+        $sql = sprintf(
+            'SELECT m.tournament_id, m.tournament_group_id, m.status,
+                    t.planned_tournament_format, t.planned_auto_create_playoff,
+                    t.planned_qualifiers_per_group, t.planned_playoff_best_of_legs
+             FROM `%1$smatches` m
+             INNER JOIN `%1$stournaments` t ON t.id=m.tournament_id
+             WHERE m.id=? LIMIT 1',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $matchId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+
+        if ($row === null
+            || $row['tournament_group_id'] === null
+            || (string) ($row['status'] ?? '') !== 'completed'
+            || (string) ($row['planned_tournament_format'] ?? '') !== 'groups_playoff'
+            || (int) ($row['planned_auto_create_playoff'] ?? 1) !== 1) {
+            return;
+        }
+
+        $tournamentId = (int) $row['tournament_id'];
+        if ($this->playoffs->findByTournamentId($tournamentId) !== null) {
+            return;
+        }
+
+        $countsSql = sprintf(
+            'SELECT COUNT(*) AS total,
+                    SUM(CASE WHEN status<>"completed" THEN 1 ELSE 0 END) AS open_count
+             FROM `%1$smatches`
+             WHERE tournament_id=? AND tournament_group_id IS NOT NULL',
+            $this->tablePrefix
+        );
+        $counts = $this->connection->prepare($countsSql);
+        $counts->bind_param('i', $tournamentId);
+        $counts->execute();
+        $matchCounts = $counts->get_result()->fetch_assoc() ?: [];
+        $counts->close();
+        if ((int) ($matchCounts['total'] ?? 0) < 1 || (int) ($matchCounts['open_count'] ?? 0) > 0) {
+            return;
+        }
+
+        $qualifiers = max(1, (int) ($row['planned_qualifiers_per_group'] ?? 2));
+        $bestOf = max(1, (int) ($row['planned_playoff_best_of_legs'] ?? 3));
+        $this->playoffs->generateFromGroups($tournamentId, $qualifiers, $bestOf);
     }
 
     private function restoreReopenedMatchParticipants(int $matchId): void
