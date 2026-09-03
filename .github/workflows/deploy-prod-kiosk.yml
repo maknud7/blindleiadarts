@@ -68,7 +68,27 @@ jobs:
           grep -Fq 'bd-kiosk-shell-v35' apps/kiosk/service-worker.js
           echo "KIOSK_RELEASE_SCOPE_OK=yes"
 
-      - name: Verify exact kiosk assets are currently on TEST
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Build exact TEST and PROD kiosk packages
+        run: |
+          set -Eeuo pipefail
+          bash infra/deploy/build-release.sh test
+          bash infra/deploy/build-release.sh prod
+
+          grep -Fq 'data-bd-surface="kiosk"' dist/test/kiosk/index.html
+          grep -Fq 'data-app-env="test"' dist/test/kiosk/index.html
+          grep -Fq 'data-bd-surface="kiosk"' dist/prod/kiosk/index.html
+          grep -Fq 'data-app-env="prod"' dist/prod/kiosk/index.html
+          grep -Fq 'kiosk-fine-polish.js?v=20260903-undo-01' dist/test/kiosk/index.html
+          grep -Fq 'kiosk-fine-polish.js?v=20260903-undo-01' dist/prod/kiosk/index.html
+
+      - name: Verify exact built kiosk assets are currently on TEST
         env:
           TEST_BASE_URL: https://test.blindleiadart.ingenting.org
         run: |
@@ -82,21 +102,14 @@ jobs:
           for file in "${files[@]}"; do
             curl --fail --silent --show-error --location --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 \
               "$TEST_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/test-$file"
-            expected="$(sha256sum "apps/kiosk/$file" | awk '{print $1}')"
+            expected="$(sha256sum "dist/test/kiosk/$file" | awk '{print $1}')"
             actual="$(sha256sum "/tmp/test-$file" | awk '{print $1}')"
             if [[ "$expected" != "$actual" ]]; then
-              echo "::error::TEST kiosk asset does not match the requested tested SHA: $file"
+              echo "::error::TEST kiosk asset does not match the built kiosk release: $file"
               exit 1
             fi
           done
           echo "TEST_KIOSK_ASSETS_MATCH=yes"
-
-      - name: Setup PHP 8.3
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mysqli
-          coverage: none
 
       - name: Read-only production preflight
         env:
@@ -160,7 +173,7 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
 
-      - name: Deploy only kiosk static assets to production
+      - name: Deploy only built kiosk static assets to production
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
@@ -172,10 +185,10 @@ jobs:
             test -n "${!name:-}"
           done
           cat > /tmp/kiosk-sftp.txt <<EOF
-          put apps/kiosk/index.html ${REMOTE_KIOSK}/index.html
-          put apps/kiosk/kiosk-fine-polish.css ${REMOTE_KIOSK}/kiosk-fine-polish.css
-          put apps/kiosk/kiosk-fine-polish.js ${REMOTE_KIOSK}/kiosk-fine-polish.js
-          put apps/kiosk/service-worker.js ${REMOTE_KIOSK}/service-worker.js
+          put dist/prod/kiosk/index.html ${REMOTE_KIOSK}/index.html
+          put dist/prod/kiosk/kiosk-fine-polish.css ${REMOTE_KIOSK}/kiosk-fine-polish.css
+          put dist/prod/kiosk/kiosk-fine-polish.js ${REMOTE_KIOSK}/kiosk-fine-polish.js
+          put dist/prod/kiosk/service-worker.js ${REMOTE_KIOSK}/service-worker.js
           quit
           EOF
           sed -i 's/^          //' /tmp/kiosk-sftp.txt
@@ -185,7 +198,7 @@ jobs:
             -oUserKnownHostsFile=/dev/null \
             -b /tmp/kiosk-sftp.txt "${SFTP_USERNAME}@${SFTP_HOST}"
 
-      - name: Verify exact kiosk assets on production
+      - name: Verify exact built kiosk assets on production
         env:
           PROD_BASE_URL: https://blindleiadart.ingenting.org
         run: |
@@ -199,13 +212,15 @@ jobs:
           for file in "${files[@]}"; do
             curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
               "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/prod-$file"
-            expected="$(sha256sum "apps/kiosk/$file" | awk '{print $1}')"
+            expected="$(sha256sum "dist/prod/kiosk/$file" | awk '{print $1}')"
             actual="$(sha256sum "/tmp/prod-$file" | awk '{print $1}')"
             if [[ "$expected" != "$actual" ]]; then
               echo "::error::Production kiosk verification failed for $file"
               exit 1
             fi
           done
+          grep -Fq 'data-bd-surface="kiosk"' /tmp/prod-index.html
+          grep -Fq 'data-app-env="prod"' /tmp/prod-index.html
           grep -Fq 'kiosk-fine-polish.css?v=20260902-02' /tmp/prod-index.html
           grep -Fq 'kiosk-fine-polish.js?v=20260903-undo-01' /tmp/prod-index.html
           grep -Fq 'const POLISH_VERSION = "1.1"' /tmp/prod-kiosk-fine-polish.js
