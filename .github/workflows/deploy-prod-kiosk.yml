@@ -124,17 +124,29 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p /tmp/prod-kiosk-rollback
-          declare -a files=(
-            index.html
-            kiosk-fine-polish.css
-            kiosk-fine-polish.js
-            service-worker.js
-          )
-          for file in "${files[@]}"; do
+
+          for file in index.html service-worker.js; do
             curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
               "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/prod-kiosk-rollback/$file"
           done
-          (cd /tmp/prod-kiosk-rollback && sha256sum "${files[@]}" > SHA256SUMS.txt)
+
+          for file in kiosk-fine-polish.css kiosk-fine-polish.js; do
+            if curl --fail --silent --show-error --location --retry 2 --retry-all-errors --retry-delay 1 --max-time 30 \
+              "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/prod-kiosk-rollback/$file"; then
+              echo "$file present on production before release."
+            else
+              rm -f "/tmp/prod-kiosk-rollback/$file"
+              printf '%s\n' "ABSENT_BEFORE_RELEASE" > "/tmp/prod-kiosk-rollback/$file.absent"
+              echo "$file is new in this release; absence recorded in rollback snapshot."
+            fi
+          done
+
+          (
+            cd /tmp/prod-kiosk-rollback
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS.txt
+          )
           echo "KIOSK_PROD_ROLLBACK_SNAPSHOT_READY=yes"
 
       - name: Store production kiosk rollback snapshot
