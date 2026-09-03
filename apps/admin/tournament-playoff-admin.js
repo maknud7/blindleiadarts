@@ -4,7 +4,7 @@ const host = document.getElementById("tournaments");
 if (host) {
   const css = document.createElement("link");
   css.rel = "stylesheet";
-  css.href = "./tournament-playoff-admin.css";
+  css.href = "./tournament-playoff-admin.css?v=20260903-auto-playoff-01";
   document.head.appendChild(css);
 
   const shell = document.createElement("div");
@@ -13,7 +13,7 @@ if (host) {
     <div class="subsection-head tournament-control-head">
       <div>
         <h3>Sluttspill</h3>
-        <p class="muted">Kvalifiser spillere fra ferdige gruppetabeller og opprett et seedet single-elimination-sluttspill.</p>
+        <p class="muted">Sluttspillet opprettes automatisk fra turneringsoppsettet når siste gruppekamp er ferdig.</p>
       </div>
       <button id="poRefresh" type="button" class="button secondary">Oppdater</button>
     </div>
@@ -21,17 +21,11 @@ if (host) {
     <div class="tournament-control-grid">
       <div class="create-card stack">
         <label><span>Turnering</span><select id="poTournament"></select></label>
-        <div class="tc-two">
-          <label><span>Videre per gruppe</span><input id="poQualifiers" type="number" min="1" max="16" value="2"></label>
-          <label><span>Best of legs</span><input id="poBestOf" type="number" min="1" max="21" step="2" value="3"></label>
-        </div>
-        <button id="poGenerate" type="button" class="button">Opprett sluttspill</button>
-        <p class="muted">Alle gruppekamper må være ferdige. Ved f.eks. 6 kvalifiserte opprettes en 8-slot bracket med byes.</p>
+        <div id="poAutoStatus" class="mini-card"></div>
       </div>
       <div class="create-card stack">
         <h3>Status</h3>
         <div id="poStatus" class="playoff-status"></div>
-        <button id="poReconcile" type="button" class="button secondary">Reparer / oppdater bracket</button>
       </div>
     </div>
     <div class="tc-panel">
@@ -43,10 +37,9 @@ if (host) {
   host.appendChild(shell);
 
   const el = Object.fromEntries([
-    "poRefresh", "poMessage", "poTournament", "poQualifiers", "poBestOf", "poGenerate",
-    "poReconcile", "poStatus", "poMeta", "poEntries", "poBracket",
+    "poRefresh", "poMessage", "poTournament", "poAutoStatus", "poStatus", "poMeta", "poEntries", "poBracket",
   ].map((id) => [id, document.getElementById(id)]));
-  const state = { tournaments: [], bracket: null };
+  const state = { tournaments: [], bracket: null, plan: null };
 
   function token() { return localStorage.getItem("bd:token") || ""; }
   function clubId() { return Number(localStorage.getItem("bd:selectedClubId") || 0); }
@@ -92,11 +85,16 @@ if (host) {
     const tournamentId = Number(el.poTournament.value || 0);
     if (!tournamentId) {
       state.bracket = null;
+      state.plan = null;
       render();
       return;
     }
-    const data = await api(`/tournaments/${tournamentId}/playoffs`);
-    state.bracket = data.bracket || null;
+    const [playoffData, planData] = await Promise.all([
+      api(`/tournaments/${tournamentId}/playoffs`),
+      api(`/tournaments/${tournamentId}/wizard-plan`).catch(() => ({ plan: null })),
+    ]);
+    state.bracket = playoffData.bracket || null;
+    state.plan = planData.plan || null;
     render();
   }
 
@@ -106,8 +104,8 @@ if (host) {
       waiting: "Venter på vinnere",
       ready: "Klar",
       pending: "I kø",
-      assigned: node.board_number ? `Board ${Number(node.board_number)}` : "Kalt opp",
-      in_progress: node.board_number ? `LIVE · Board ${Number(node.board_number)}` : "LIVE",
+      assigned: node.board_number ? `Skive ${Number(node.board_number)}` : "Kalt opp",
+      in_progress: node.board_number ? `LIVE · Skive ${Number(node.board_number)}` : "LIVE",
       completed: "Ferdig",
       bye: "Bye",
     }[status] || status;
@@ -115,25 +113,27 @@ if (host) {
 
   function render() {
     const data = state.bracket;
+    const plan = state.plan;
+    const auto = plan?.tournament_format === "groups_playoff" && plan?.auto_create_playoff !== false;
+    el.poAutoStatus.innerHTML = auto
+      ? `<strong>Automatisk sluttspill er på</strong><p class="muted">${Number(plan?.qualifiers_per_group || 2)} videre per gruppe · Best av ${Number(plan?.playoff_best_of_legs || 3)}. Opprettes når gruppespillet er ferdig.</p>`
+      : `<strong>Automatisk sluttspill er av</strong><p class="muted">Dette styres i turneringsoppsettet.</p>`;
+
     if (!data?.playoff) {
-      el.poStatus.innerHTML = `<p class="muted">Sluttspillet er ikke opprettet ennå.</p>`;
-      el.poMeta.textContent = "Ikke opprettet";
+      el.poStatus.innerHTML = auto
+        ? `<strong>Venter på ferdig gruppespill</strong><p class="muted">Ingen handling er nødvendig.</p>`
+        : `<p class="muted">Sluttspill er ikke aktivert for denne turneringen.</p>`;
+      el.poMeta.textContent = "Venter";
       el.poEntries.innerHTML = "";
-      el.poBracket.innerHTML = `<div class="empty">Når gruppespillet er ferdig, oppretter du sluttspillet her.</div>`;
-      el.poGenerate.disabled = false;
-      el.poReconcile.disabled = true;
+      el.poBracket.innerHTML = `<div class="empty">Bracketen vises automatisk når kvalifiseringen er avgjort.</div>`;
       return;
     }
 
     const playoff = data.playoff;
-    el.poQualifiers.value = String(playoff.qualifiers_per_group || 2);
-    el.poBestOf.value = String(playoff.best_of_legs || 3);
-    el.poGenerate.disabled = true;
-    el.poReconcile.disabled = false;
     el.poMeta.textContent = `${Number(playoff.bracket_size)}-slot · ${esc(playoff.status)}`;
     el.poStatus.innerHTML = playoff.champion_name
       ? `<strong>🏆 ${esc(playoff.champion_name)}</strong><p class="muted">Turneringsvinner</p>`
-      : `<strong>${esc(playoff.status === "completed" ? "Ferdig" : "Sluttspillet pågår")}</strong><p class="muted">${Number(data.entries?.length || 0)} kvalifiserte · Best of ${Number(playoff.best_of_legs)}</p>`;
+      : `<strong>${esc(playoff.status === "completed" ? "Ferdig" : "Sluttspillet pågår")}</strong><p class="muted">${Number(data.entries?.length || 0)} kvalifiserte · Best av ${Number(playoff.best_of_legs)}</p>`;
 
     el.poEntries.innerHTML = (data.entries || []).map((entry) => `
       <span class="playoff-entry"><b>#${Number(entry.seed_number)}</b> ${esc(entry.display_name)} <small>${esc(entry.source_group_name)} #${Number(entry.source_group_position)}</small></span>`
@@ -153,41 +153,6 @@ if (host) {
 
   el.poRefresh.addEventListener("click", () => loadBase().catch((error) => show(error.message, "error")));
   el.poTournament.addEventListener("change", () => loadBracket().catch((error) => show(error.message, "error")));
-  el.poGenerate.addEventListener("click", async () => {
-    const tournamentId = Number(el.poTournament.value || 0);
-    if (!tournamentId) return;
-    el.poGenerate.disabled = true;
-    try {
-      const result = await api(`/tournaments/${tournamentId}/playoffs/generate`, {
-        method: "POST", auth: true,
-        body: {
-          qualifiers_per_group: Number(el.poQualifiers.value || 0),
-          best_of_legs: Number(el.poBestOf.value || 0),
-        },
-      });
-      state.bracket = result.bracket || null;
-      show("Sluttspillet er opprettet og første kamp(er) ligger i den vanlige kampkøen.", "success");
-      render();
-    } catch (error) {
-      show(error.message, "error");
-      el.poGenerate.disabled = false;
-    }
-  });
-  el.poReconcile.addEventListener("click", async () => {
-    const tournamentId = Number(el.poTournament.value || 0);
-    if (!tournamentId) return;
-    el.poReconcile.disabled = true;
-    try {
-      const result = await api(`/tournaments/${tournamentId}/playoffs/reconcile`, { method: "POST", auth: true });
-      state.bracket = result.bracket || null;
-      show("Bracketen er oppdatert fra canonical kampresultater.", "success");
-      render();
-    } catch (error) {
-      show(error.message, "error");
-    } finally {
-      el.poReconcile.disabled = false;
-    }
-  });
   document.getElementById("clubSelect")?.addEventListener("change", () => {
     setTimeout(() => loadBase().catch((error) => show(error.message, "error")), 0);
   });
