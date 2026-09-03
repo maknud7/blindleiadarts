@@ -30,6 +30,20 @@ final class EloLedgerService
         $this->transaction(fn () => $this->ledger->revertMatch($matchId));
     }
 
+    /** @return array{reverted_events:int,rebuilt_seasons:int} */
+    public function reconcileGuestMatches(): array
+    {
+        $this->connection->begin_transaction();
+        try {
+            $result = $this->ledger->reconcileGuestMatches();
+            $this->connection->commit();
+            return $result;
+        } catch (Throwable $error) {
+            $this->connection->rollback();
+            throw $error;
+        }
+    }
+
     /** @param callable():void $callback */
     private function transaction(callable $callback): void
     {
