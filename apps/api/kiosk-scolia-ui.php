@@ -107,12 +107,108 @@ try {
         ];
     };
 
+    $physicalStatus = static function (int $targetKioskId) use ($db, $prefix): array {
+        $sql = "SELECT event_type,payload_json,received_at,"
+             . "       GREATEST(0,TIMESTAMPDIFF(SECOND,received_at,NOW(3))) AS age_seconds "
+             . "FROM `{$prefix}scolia_events` "
+             . "WHERE kiosk_id=? AND (event_type='HELLO_CLIENT' OR event_type LIKE '%STATUS%' OR event_type LIKE '%AVAILABILITY%') "
+             . "ORDER BY id DESC LIMIT 1";
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param('i', $targetKioskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row === null) {
+            return ['status' => null, 'age_seconds' => null, 'event_type' => null, 'received_at' => null];
+        }
+
+        $message = json_decode((string) ($row['payload_json'] ?? '{}'), true);
+        $payload = is_array($message['payload'] ?? null) ? $message['payload'] : [];
+        $status = null;
+        foreach (['boardStatus', 'board_status', 'status'] as $key) {
+            $candidate = trim((string) ($payload[$key] ?? ''));
+            if ($candidate !== '') {
+                $status = $candidate;
+                break;
+            }
+        }
+        return [
+            'status' => $status,
+            'age_seconds' => isset($row['age_seconds']) ? (int) $row['age_seconds'] : null,
+            'event_type' => (string) ($row['event_type'] ?? ''),
+            'received_at' => $row['received_at'] ?? null,
+        ];
+    };
+
+    $bridgeHeartbeatAge = static function (int $targetKioskId) use ($db, $prefix): ?int {
+        $sql = "SELECT GREATEST(0,TIMESTAMPDIFF(SECOND,last_bridge_heartbeat_at,NOW(3))) AS age_seconds "
+             . "FROM `{$prefix}scolia_board_runtime` WHERE kiosk_id=? AND last_bridge_heartbeat_at IS NOT NULL LIMIT 1";
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param('i', $targetKioskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        return $row === null ? null : (int) $row['age_seconds'];
+    };
+
+    $lastStatusProbeAge = static function (int $targetKioskId) use ($db, $prefix): ?int {
+        $sql = "SELECT GREATEST(0,TIMESTAMPDIFF(SECOND,created_at,NOW(3))) AS age_seconds "
+             . "FROM `{$prefix}scolia_commands` WHERE kiosk_id=? AND command_type='GET_SBC_STATUS' ORDER BY id DESC LIMIT 1";
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param('i', $targetKioskId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        return $row === null ? null : (int) $row['age_seconds'];
+    };
+
     $repo = new ScoliaRepository($database);
     $canonical = new CanonicalScoringService($database, $config);
     $scolia = new ScoliaScoringService($repo, $canonical, new Dart501Rules());
 
     if ($method === 'GET' && $action === 'status') {
         $board = $repo->getBoardRuntimeStatus($clubId, $kioskId);
+        $physical = $physicalStatus($kioskId);
+        $bridgeAge = $bridgeHeartbeatAge($kioskId);
+        $bridgeFresh = ($board['connection_state'] ?? '') === 'connected' && $bridgeAge !== null && $bridgeAge <= 45;
+        $statusAge = $physical['age_seconds'];
+        $statusFresh = is_int($statusAge) && $statusAge <= 12 && trim((string) ($physical['status'] ?? '')) !== '';
+        $normalizedStatus = strtolower(trim((string) ($physical['status'] ?? '')));
+        $unavailableStatuses = ['offline', 'unavailable', 'disconnected', 'error', 'camera error', 'calibration error'];
+        $physicalAvailable = $bridgeFresh && $statusFresh && !in_array($normalizedStatus, $unavailableStatuses, true);
+
+        $board['reported_board_status'] = $board['board_status'] ?? null;
+        $board['physical_board_status'] = $physical['status'];
+        $board['physical_status_event_type'] = $physical['event_type'];
+        $board['physical_status_received_at'] = $physical['received_at'];
+        $board['physical_status_age_seconds'] = $statusAge;
+        $board['physical_status_fresh'] = $statusFresh;
+        $board['bridge_heartbeat_age_seconds'] = $bridgeAge;
+        $board['bridge_heartbeat_fresh'] = $bridgeFresh;
+        $board['physical_available'] = $physicalAvailable;
+
+        $isLiveScolia = ($board['mode'] ?? '') === 'live' && ($board['effective_scoring_mode'] ?? '') === 'scolia';
+        if ($isLiveScolia && !$physicalAvailable) {
+            // Fail closed: a connected cloud bridge is not proof that the physical board is online.
+            $board['board_status'] = 'Offline';
+        } elseif ($physicalAvailable && trim((string) ($physical['status'] ?? '')) !== '') {
+            $board['board_status'] = (string) $physical['status'];
+        }
+
+        // Keep the physical status fresh while the kiosk is active. The bridge already supports
+        // queued GET_SBC_STATUS commands; rate-limit probes so normal 750 ms UI polling does not
+        // create a command storm.
+        if ($isLiveScolia && $bridgeFresh) {
+            $probeAge = $lastStatusProbeAge($kioskId);
+            if ($probeAge === null || $probeAge >= 5) {
+                try {
+                    $repo->queueCommand($clubId, $kioskId, 'GET_SBC_STATUS');
+                } catch (Throwable) {
+                    // Status display must remain available even if an individual probe cannot be queued.
+                }
+            }
+        }
+
         $respond([
             'ok' => true,
             'data' => [
