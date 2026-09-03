@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Blindleia\Dartkiosk\Api\Repository\EloLedgerRepository;
 use Blindleia\Dartkiosk\Api\Service\EloLedgerService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
@@ -29,14 +28,17 @@ $close = static function (float $actual, float $expected, string $message) use (
 };
 
 $suffix = strtolower(substr(bin2hex(random_bytes(6)), 0, 12));
+$memberSeed = random_int(10000000, 90000000);
 $ids = [
     'club' => 0,
     'season' => 0,
     'tournament' => 0,
     'player_a' => 0,
     'player_b' => 0,
+    'guest' => 0,
     'match_1' => 0,
     'match_2' => 0,
+    'match_guest' => 0,
 ];
 
 try {
@@ -61,14 +63,26 @@ try {
     $ids['season'] = (int) $stmt->insert_id;
     $stmt->close();
 
-    $playerSql = sprintf('INSERT INTO `%1$splayers` (club_id, display_name) VALUES (?, ?)', $prefix);
-    foreach (['ELO Smoke A ' . $suffix, 'ELO Smoke B ' . $suffix] as $index => $name) {
+    $playerSql = sprintf('INSERT INTO `%1$splayers` (club_id, member_id, display_name) VALUES (?, ?, ?)', $prefix);
+    foreach ([
+        ['key' => 'player_a', 'member_id' => $memberSeed + 1, 'name' => 'ELO Smoke A ' . $suffix],
+        ['key' => 'player_b', 'member_id' => $memberSeed + 2, 'name' => 'ELO Smoke B ' . $suffix],
+    ] as $player) {
         $stmt = $db->prepare($playerSql);
-        $stmt->bind_param('is', $ids['club'], $name);
+        $memberId = (int) $player['member_id'];
+        $name = (string) $player['name'];
+        $stmt->bind_param('iis', $ids['club'], $memberId, $name);
         $stmt->execute();
-        $ids[$index === 0 ? 'player_a' : 'player_b'] = (int) $stmt->insert_id;
+        $ids[(string) $player['key']] = (int) $stmt->insert_id;
         $stmt->close();
     }
+
+    $guestName = 'ELO Smoke Guest ' . $suffix;
+    $stmt = $db->prepare(sprintf('INSERT INTO `%1$splayers` (club_id, member_id, display_name) VALUES (?, NULL, ?)', $prefix));
+    $stmt->bind_param('is', $ids['club'], $guestName);
+    $stmt->execute();
+    $ids['guest'] = (int) $stmt->insert_id;
+    $stmt->close();
 
     $tournamentName = 'ELO Smoke Tournament ' . $suffix;
     $tournamentSlug = 'elo-smoke-tournament-' . $suffix;
@@ -120,7 +134,6 @@ try {
     $close((float) ($event1['k_a'] ?? 0), 25.0, 'First match A K is wrong.');
     $close((float) ($event1['k_b'] ?? 0), 25.0, 'First match B K is wrong.');
 
-    // Applying the same canonical match twice must not create or apply another event.
     $ledger->applyCompletedMatch($ids['match_1']);
     $stmt = $db->prepare(sprintf('SELECT COUNT(*) AS c FROM `%1$selo_match_events` WHERE match_id=?', $prefix));
     $stmt->bind_param('i', $ids['match_1']);
@@ -149,8 +162,6 @@ try {
     $assert((int) ($event2BeforeReplay['matches_before_a'] ?? -1) === 1, 'Second match A count before is wrong.');
     $assert((int) ($event2BeforeReplay['matches_before_b'] ?? -1) === 1, 'Second match B count before is wrong.');
 
-    // Revert the earlier match while the later match remains completed/applied.
-    // The later event must be replayed as the first event in the season.
     $ledger->revertMatch($ids['match_1']);
 
     $stmt = $db->prepare($eventSql);
@@ -172,6 +183,58 @@ try {
     $assert((int) ($event2AfterReplay['matches_before_a'] ?? -1) === 0, 'Replay did not reset A match count.');
     $assert((int) ($event2AfterReplay['matches_before_b'] ?? -1) === 0, 'Replay did not reset B match count.');
 
+    // A guest has no member_id. The entire match must therefore be invisible to ELO,
+    // including for the established member on the other side.
+    $guestStart = '2026-08-25 18:41:00';
+    $guestFinish = '2026-08-25 18:45:00';
+    $guestWinner = $ids['player_a'];
+    $stmt = $db->prepare($matchSql);
+    $stmt->bind_param('iiiiss', $ids['tournament'], $ids['player_a'], $ids['guest'], $guestWinner, $guestStart, $guestFinish);
+    $stmt->execute();
+    $ids['match_guest'] = (int) $stmt->insert_id;
+    $stmt->close();
+
+    $ledger->applyCompletedMatch($ids['match_guest']);
+    $stmt = $db->prepare(sprintf('SELECT COUNT(*) AS c FROM `%1$selo_match_events` WHERE match_id=?', $prefix));
+    $stmt->bind_param('i', $ids['match_guest']);
+    $stmt->execute();
+    $assert((int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0) === 0, 'Guest match created an ELO event.');
+    $stmt->close();
+
+    // Simulate a stale event created by an older release, then prove deployment reconciliation
+    // reverts it and replays the season without changing the member ratings.
+    $legacySql = sprintf(
+        'INSERT INTO `%1$selo_match_events`
+         (match_id, tournament_id, season_id, club_id, player_a_id, player_b_id, winner_player_id,
+          score_a, score_b, status, applied_at, reverted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 0.0, "applied", CURRENT_TIMESTAMP(6), NULL)',
+        $prefix
+    );
+    $stmt = $db->prepare($legacySql);
+    $stmt->bind_param(
+        'iiiiiii',
+        $ids['match_guest'],
+        $ids['tournament'],
+        $ids['season'],
+        $ids['club'],
+        $ids['player_a'],
+        $ids['guest'],
+        $guestWinner
+    );
+    $stmt->execute();
+    $stmt->close();
+
+    $reconcile = $ledger->reconcileGuestMatches();
+    $assert((int) $reconcile['reverted_events'] >= 1, 'Legacy guest ELO event was not reconciled.');
+    $assert((int) $reconcile['rebuilt_seasons'] >= 1, 'Guest ELO reconciliation did not rebuild the season.');
+
+    $stmt = $db->prepare($eventSql);
+    $stmt->bind_param('i', $ids['match_guest']);
+    $stmt->execute();
+    $guestEvent = $stmt->get_result()->fetch_assoc() ?: [];
+    $stmt->close();
+    $assert(($guestEvent['status'] ?? null) === 'reverted', 'Legacy guest event was not marked reverted.');
+
     $currentSql = sprintf(
         'SELECT player_id, rating, matches_played FROM `%1$selo_current_ratings` WHERE season_id=? ORDER BY player_id',
         $prefix
@@ -181,15 +244,16 @@ try {
     $stmt->execute();
     $currentRows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
-    $assert(count($currentRows) === 2, 'Current ELO table should contain two players.');
+    $assert(count($currentRows) === 2, 'Current ELO table should contain only the two member players.');
     $byPlayer = [];
     foreach ($currentRows as $row) {
         $byPlayer[(int) $row['player_id']] = $row;
     }
-    $close((float) ($byPlayer[$ids['player_a']]['rating'] ?? 0), 987.5, 'Current A rating after replay is wrong.');
-    $close((float) ($byPlayer[$ids['player_b']]['rating'] ?? 0), 1012.5, 'Current B rating after replay is wrong.');
-    $assert((int) ($byPlayer[$ids['player_a']]['matches_played'] ?? -1) === 1, 'Current A ELO match count is wrong.');
+    $close((float) ($byPlayer[$ids['player_a']]['rating'] ?? 0), 987.5, 'Current A rating after guest reconciliation is wrong.');
+    $close((float) ($byPlayer[$ids['player_b']]['rating'] ?? 0), 1012.5, 'Current B rating after guest reconciliation is wrong.');
+    $assert((int) ($byPlayer[$ids['player_a']]['matches_played'] ?? -1) === 1, 'Current A ELO match count includes a guest match.');
     $assert((int) ($byPlayer[$ids['player_b']]['matches_played'] ?? -1) === 1, 'Current B ELO match count is wrong.');
+    $assert(!isset($byPlayer[$ids['guest']]), 'Guest player appeared in current ELO ratings.');
 
     $snapshotSql = sprintf(
         'SELECT COUNT(*) AS c FROM `%1$sranking_snapshots`
@@ -200,7 +264,7 @@ try {
     $stmt = $db->prepare($snapshotSql);
     $stmt->bind_param('i', $ids['season']);
     $stmt->execute();
-    $assert((int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0) === 2, 'Replay should leave one ELO snapshot per player for the active event.');
+    $assert((int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0) === 2, 'Guest reconciliation should leave one ELO snapshot per member for the active event.');
     $stmt->close();
 
     echo "ELO ledger smoke OK\n";
@@ -215,7 +279,7 @@ try {
         $db->query(sprintf('DELETE FROM `%1$stournament_summaries` WHERE tournament_id=' . (int) $ids['tournament'], $prefix));
         $db->query(sprintf('DELETE FROM `%1$stournaments` WHERE id=' . (int) $ids['tournament'], $prefix));
     }
-    foreach (['player_a', 'player_b'] as $key) {
+    foreach (['player_a', 'player_b', 'guest'] as $key) {
         if ($ids[$key] > 0) {
             $db->query(sprintf('DELETE FROM `%1$splayers` WHERE id=' . (int) $ids[$key], $prefix));
         }

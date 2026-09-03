@@ -1,0 +1,92 @@
+name: Reconcile Guest ELO
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/elo-guest-reconcile-request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: elo-guest-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout request
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: request
+        run: |
+          set -Eeuo pipefail
+          test -f .github/elo-guest-reconcile-request
+          target="$(awk -F= '$1=="target" {print $2}' .github/elo-guest-reconcile-request | tail -1 | tr -d '[:space:]')"
+          backup_confirmed="$(awk -F= '$1=="backup_confirmed" {print $2}' .github/elo-guest-reconcile-request | tail -1 | tr -d '[:space:]')"
+          backup_prefix="$(awk -F= '$1=="backup_prefix" {print $2}' .github/elo-guest-reconcile-request | tail -1 | tr -d '[:space:]')"
+          if [[ "$target" != "test" && "$target" != "prod" ]]; then
+            echo "::error::target must be test or prod"
+            exit 1
+          fi
+          if [[ "$target" == "prod" ]]; then
+            if [[ "$backup_confirmed" != "YES" || ! "$backup_prefix" =~ ^bd_backup_[0-9]{8}_[0-9]{6}_$ ]]; then
+              echo "::error::PROD guest ELO reconciliation requires an explicit verified backup prefix."
+              exit 1
+            fi
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "backup_prefix=$backup_prefix" >> "$GITHUB_OUTPUT"
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Read-only PROD preflight
+        if: steps.request.outputs.target == 'prod'
+        run: php infra/sql/prod_preflight.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+
+      - name: Generate reconciliation config
+        run: |
+          set -Eeuo pipefail
+          target='${{ steps.request.outputs.target }}'
+          if [[ "$target" == "prod" ]]; then
+            prefix='bd_prod_'
+            base_url='https://blindleiadart.ingenting.org'
+            app_env='prod'
+          else
+            prefix='bd_test_'
+            base_url='https://test.blindleiadart.ingenting.org'
+            app_env='test'
+          fi
+          mkdir -p /tmp/elo-reconcile-api
+          APP_ENV="$app_env" \
+          BASE_URL="$base_url" \
+          STATIC_BASE_URL="$base_url" \
+          DB_HOST='${{ secrets.DB_HOST }}' \
+          DB_PORT='${{ secrets.DB_PORT }}' \
+          DB_NAME='${{ secrets.DB_NAME }}' \
+          DB_USERNAME='${{ secrets.DB_USERNAME }}' \
+          DB_PASSWORD='${{ secrets.DB_PASSWORD }}' \
+          DB_TABLE_PREFIX="$prefix" \
+          IDENTITY_TABLE_PREFIX='bd_prod_' \
+          HARDWARE_TABLE_PREFIX='bd_prod_' \
+          php infra/deploy/generate_api_config.php --output=/tmp/elo-reconcile-api/config.php
+
+      - name: Reconcile guest ELO events and replay affected seasons
+        run: php infra/sql/elo_guest_reconcile.php /tmp/elo-reconcile-api
