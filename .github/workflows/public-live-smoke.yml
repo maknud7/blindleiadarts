@@ -32,7 +32,7 @@ jobs:
           echo "Public Live smoke failed: expected release did not become live." >&2
           exit 1
 
-      - name: Verify public Live 3DA and top 3 UX
+      - name: Verify public Live 3DA, playoff and top 3 UX
         env:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
         run: |
@@ -41,7 +41,16 @@ jobs:
 
           live_html="$(curl -fsS "$base/live/?cb=$RANDOM")"
           grep -Fq 'live-v2.css' <<<"$live_html"
-          grep -Fq 'live-v2.js' <<<"$live_html"
+          grep -Fq 'route-bootstrap.js' <<<"$live_html"
+          grep -Fq 'venue-playoff-v5.css' <<<"$live_html"
+
+          bootstrap_js="$(curl -fsS "$base/live/route-bootstrap.js?cb=$RANDOM")"
+          grep -Fq 'live-v2.js' <<<"$bootstrap_js"
+          grep -Fq 'playoff-live-v5.js' <<<"$bootstrap_js"
+
+          playoff_js="$(curl -fsS "$base/live/playoff-live-v5.js?cb=$RANDOM")"
+          grep -Fq 'Sluttresultat' <<<"$playoff_js"
+          grep -Fq 'sourceWinner' <<<"$playoff_js"
 
           live_js="$(curl -fsS "$base/live/live-v2.js?cb=$RANDOM")"
           grep -Fq 'Topp 3 visits' <<<"$live_js"
