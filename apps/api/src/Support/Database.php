@@ -28,7 +28,7 @@ final class Database
             throw new RuntimeException('Invalid database table prefix.');
         }
 
-        $database = new selfWithoutConfig();
+        $database = self::newWithoutConfig();
         $database->connection = $connection;
         $database->tablePrefixOverride = $tablePrefix;
         return $database;
