@@ -59,6 +59,7 @@ jobs:
             apps/kiosk/index.html \
             apps/kiosk/kiosk-fine-polish.css \
             apps/kiosk/kiosk-fine-polish.js \
+            apps/kiosk/scolia-live-ux.css \
             apps/kiosk/scolia-live-ux.js \
             apps/kiosk/service-worker.js; do
             test -f "$file"
@@ -70,7 +71,9 @@ jobs:
           grep -Fq 'OFFLINE_FALLBACK_GRACE_MS = 5000' apps/kiosk/scolia-live-ux.js
           grep -Fq 'runtimeAction("fallback")' apps/kiosk/scolia-live-ux.js
           grep -Fq 'data-scolia-resume' apps/kiosk/scolia-live-ux.js
-          grep -Fq 'bd-kiosk-shell-v37' apps/kiosk/service-worker.js
+          grep -Fq '#scoliaFallbackNotice:not(.hidden)' apps/kiosk/scolia-live-ux.css
+          grep -Fq 'height: calc(100% - 107px)' apps/kiosk/scolia-live-ux.css
+          grep -Fq 'bd-kiosk-shell-v38' apps/kiosk/service-worker.js
           node --check apps/kiosk/scolia-live-ux.js
           echo "KIOSK_RELEASE_SCOPE_OK=yes"
 
@@ -95,8 +98,10 @@ jobs:
           grep -Fq 'kiosk-fine-polish.js?v=20260903-undo-01' dist/prod/kiosk/index.html
           grep -Fq 'OFFLINE_FALLBACK_GRACE_MS = 5000' dist/test/kiosk/scolia-live-ux.js
           grep -Fq 'OFFLINE_FALLBACK_GRACE_MS = 5000' dist/prod/kiosk/scolia-live-ux.js
-          grep -Fq 'bd-kiosk-shell-v37' dist/test/kiosk/service-worker.js
-          grep -Fq 'bd-kiosk-shell-v37' dist/prod/kiosk/service-worker.js
+          grep -Fq 'height: calc(100% - 107px)' dist/test/kiosk/scolia-live-ux.css
+          grep -Fq 'height: calc(100% - 107px)' dist/prod/kiosk/scolia-live-ux.css
+          grep -Fq 'bd-kiosk-shell-v38' dist/test/kiosk/service-worker.js
+          grep -Fq 'bd-kiosk-shell-v38' dist/prod/kiosk/service-worker.js
 
       - name: Verify exact built kiosk assets are currently on TEST
         env:
@@ -107,6 +112,7 @@ jobs:
             index.html
             kiosk-fine-polish.css
             kiosk-fine-polish.js
+            scolia-live-ux.css
             scolia-live-ux.js
             service-worker.js
           )
@@ -149,7 +155,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p /tmp/prod-kiosk-rollback
 
-          for file in index.html scolia-live-ux.js service-worker.js; do
+          for file in index.html scolia-live-ux.css scolia-live-ux.js service-worker.js; do
             curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
               "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM" -o "/tmp/prod-kiosk-rollback/$file"
           done
@@ -199,6 +205,7 @@ jobs:
           put dist/prod/kiosk/index.html ${REMOTE_KIOSK}/index.html
           put dist/prod/kiosk/kiosk-fine-polish.css ${REMOTE_KIOSK}/kiosk-fine-polish.css
           put dist/prod/kiosk/kiosk-fine-polish.js ${REMOTE_KIOSK}/kiosk-fine-polish.js
+          put dist/prod/kiosk/scolia-live-ux.css ${REMOTE_KIOSK}/scolia-live-ux.css
           put dist/prod/kiosk/scolia-live-ux.js ${REMOTE_KIOSK}/scolia-live-ux.js
           put dist/prod/kiosk/service-worker.js ${REMOTE_KIOSK}/service-worker.js
           quit
@@ -223,6 +230,7 @@ jobs:
           get ${REMOTE_KIOSK}/index.html /tmp/prod-kiosk-remote/index.html
           get ${REMOTE_KIOSK}/kiosk-fine-polish.css /tmp/prod-kiosk-remote/kiosk-fine-polish.css
           get ${REMOTE_KIOSK}/kiosk-fine-polish.js /tmp/prod-kiosk-remote/kiosk-fine-polish.js
+          get ${REMOTE_KIOSK}/scolia-live-ux.css /tmp/prod-kiosk-remote/scolia-live-ux.css
           get ${REMOTE_KIOSK}/scolia-live-ux.js /tmp/prod-kiosk-remote/scolia-live-ux.js
           get ${REMOTE_KIOSK}/service-worker.js /tmp/prod-kiosk-remote/service-worker.js
           quit
@@ -234,7 +242,7 @@ jobs:
             -oUserKnownHostsFile=/dev/null \
             -b /tmp/kiosk-sftp-get.txt "${SFTP_USERNAME}@${SFTP_HOST}"
 
-          for file in index.html kiosk-fine-polish.css kiosk-fine-polish.js scolia-live-ux.js service-worker.js; do
+          for file in index.html kiosk-fine-polish.css kiosk-fine-polish.js scolia-live-ux.css scolia-live-ux.js service-worker.js; do
             expected="$(sha256sum "dist/prod/kiosk/$file" | awk '{print $1}')"
             actual="$(sha256sum "/tmp/prod-kiosk-remote/$file" | awk '{print $1}')"
             if [[ "$expected" != "$actual" ]]; then
@@ -278,10 +286,12 @@ jobs:
           fetch_until_marker kiosk-fine-polish.js 'const POLISH_VERSION = "1.1"' /tmp/prod-http-polish.js
           grep -Fq 'kioskUndoGuardBound' /tmp/prod-http-polish.js
           fetch_until_marker kiosk-fine-polish.css '.kiosk-undo-inline' /tmp/prod-http-polish.css
+          fetch_until_marker scolia-live-ux.css 'height: calc(100% - 107px)' /tmp/prod-http-scolia-live.css
+          grep -Fq '#scoliaFallbackNotice:not(.hidden)' /tmp/prod-http-scolia-live.css
           fetch_until_marker scolia-live-ux.js 'OFFLINE_FALLBACK_GRACE_MS = 5000' /tmp/prod-http-scolia-live.js
           grep -Fq 'runtimeAction("fallback")' /tmp/prod-http-scolia-live.js
           grep -Fq 'data-scolia-resume' /tmp/prod-http-scolia-live.js
-          fetch_until_marker service-worker.js 'bd-kiosk-shell-v37' /tmp/prod-http-service-worker.js
+          fetch_until_marker service-worker.js 'bd-kiosk-shell-v38' /tmp/prod-http-service-worker.js
 
           echo "KIOSK_PROD_HTTP_OK=yes"
           echo "KIOSK_PROD_DEPLOY_OK=yes"
