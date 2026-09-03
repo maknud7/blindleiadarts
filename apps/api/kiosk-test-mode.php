@@ -37,16 +37,13 @@ try {
     $physicalClubs = $hardwarePrefix . 'clubs';
     $request = Request::fromGlobals();
 
-    // The original demo seed also exists in isolated TEST data. Those local fixture
-    // rows must not be offered as standalone TEST boards. The canonical hardware
-    // namespace is different: every active row there is physical board masterdata,
-    // even if the row originally came from the early BOARD-1..4 seed.
-    $notLegacyTestFixture = "NOT (k.code IN ('BOARD-1','BOARD-2','BOARD-3','BOARD-4') AND COALESCE(k.sponsor_logo_url,'') LIKE '/static/sponsors/demo-%')";
-
     if ($request->method() === 'GET') {
         $items = [];
-        $seenBoards = [];
 
+        // Physical club equipment has one canonical registry. In deployed TEST the
+        // hardware prefix points at PROD, so the chooser must mirror the active PROD
+        // board list exactly. TEST runtime aliases are implementation details only and
+        // must never appear as additional physical boards in this chooser.
         $result = $db->query(
             "SELECT k.id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,k.sponsor_label,c.name AS club_name,c.slug AS club_slug
              FROM `{$physicalKiosks}` k
@@ -55,8 +52,6 @@ try {
              ORDER BY c.name,k.board_number,k.id"
         );
         while ($row = $result->fetch_assoc()) {
-            $key = strtolower((string) ($row['club_slug'] ?? '')) . ':' . (int) $row['board_number'];
-            $seenBoards[$key] = true;
             $items[] = [
                 'id' => (int) $row['id'],
                 'code' => (string) $row['code'],
@@ -70,44 +65,10 @@ try {
             ];
         }
 
-        // Boards created deliberately in the test admin live in the isolated test
-        // namespace. They are valid test targets too. Runtime aliases created from a
-        // production board have source_kiosk_id set and are intentionally excluded.
-        $result = $db->query(
-            "SELECT k.id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,k.sponsor_label,c.name AS club_name,c.slug AS club_slug
-             FROM `{$testKiosks}` k
-             INNER JOIN `{$testClubs}` c ON c.id=k.club_id
-             WHERE k.is_active=1 AND k.source_kiosk_id IS NULL AND {$notLegacyTestFixture}
-             ORDER BY c.name,k.board_number,k.id"
-        );
-        while ($row = $result->fetch_assoc()) {
-            $key = strtolower((string) ($row['club_slug'] ?? '')) . ':' . (int) $row['board_number'];
-            if (isset($seenBoards[$key])) {
-                continue;
-            }
-            $seenBoards[$key] = true;
-            $items[] = [
-                'id' => (int) $row['id'],
-                'code' => (string) $row['code'],
-                'name' => (string) ($row['name'] ?: ('Board ' . (int) $row['board_number'])),
-                'board_number' => (int) $row['board_number'],
-                'scoring_mode' => (string) $row['scoring_mode'],
-                'sponsor_label' => $row['sponsor_label'] !== null ? (string) $row['sponsor_label'] : null,
-                'club_name' => (string) $row['club_name'],
-                'club_slug' => (string) ($row['club_slug'] ?? ''),
-                'source' => 'test',
-            ];
-        }
-
-        usort($items, static function (array $a, array $b): int {
-            return [strtolower((string) $a['club_name']), (int) $a['board_number'], (int) $a['id']]
-                <=> [strtolower((string) $b['club_name']), (int) $b['board_number'], (int) $b['id']];
-        });
-
         $respond(['ok' => true, 'data' => [
             'items' => $items,
             'environment' => 'test',
-            'source' => 'physical_and_test_board_registry',
+            'source' => 'canonical_physical_board_registry',
             'hardware_table_prefix' => $hardwarePrefix,
         ]]);
     }
@@ -127,67 +88,12 @@ try {
     if ($selectedId <= 0) {
         $respond(['ok' => false, 'error' => ['code' => 'kiosk_required', 'message' => 'Velg et board.']], 422);
     }
+    if ($source !== 'physical') {
+        $respond(['ok' => false, 'error' => ['code' => 'invalid_board_source', 'message' => 'Kun fysiske PROD-skiver kan velges i testmodus.']], 422);
+    }
 
     $deviceName = 'Testmodus · ' . substr(hash('sha256', $token), 0, 12);
     $tokenHash = password_hash($token, PASSWORD_DEFAULT);
-
-    if ($source === 'test') {
-        $stmt = $db->prepare(
-            "SELECT k.id,k.code,k.name,k.board_number,k.sponsor_label,k.sponsor_logo_url,k.scoring_mode,c.slug AS club_slug,c.name AS club_name
-             FROM `{$testKiosks}` k
-             INNER JOIN `{$testClubs}` c ON c.id=k.club_id
-             WHERE k.id=? AND k.is_active=1 AND k.source_kiosk_id IS NULL AND {$notLegacyTestFixture} LIMIT 1"
-        );
-        $stmt->bind_param('i', $selectedId);
-        $stmt->execute();
-        $board = $stmt->get_result()->fetch_assoc() ?: null;
-        $stmt->close();
-        if ($board === null) {
-            $respond(['ok' => false, 'error' => ['code' => 'kiosk_not_found', 'message' => 'Testboardet finnes ikke.']], 404);
-        }
-
-        $db->begin_transaction();
-        try {
-            $clear = $db->prepare(
-                "UPDATE `{$testKiosks}` SET pairing_token_hash=NULL,paired_device_name=NULL,paired_at=NULL,last_seen_at=NULL
-                 WHERE paired_device_name=? AND id<>?"
-            );
-            $clear->bind_param('si', $deviceName, $selectedId);
-            $clear->execute();
-            $clear->close();
-
-            $pair = $db->prepare(
-                "UPDATE `{$testKiosks}` SET pairing_token_hash=?,paired_device_name=?,paired_at=NOW(),last_seen_at=NOW()
-                 WHERE id=?"
-            );
-            $pair->bind_param('ssi', $tokenHash, $deviceName, $selectedId);
-            $pair->execute();
-            $pair->close();
-            $db->commit();
-        } catch (Throwable $error) {
-            $db->rollback();
-            throw $error;
-        }
-
-        $respond(['ok' => true, 'data' => [
-            'kiosk' => [
-                'id' => $selectedId,
-                'code' => (string) $board['code'],
-                'name' => (string) $board['name'],
-                'board_number' => (int) $board['board_number'],
-                'scoring_mode' => (string) $board['scoring_mode'],
-            ],
-            'source_board' => [
-                'id' => $selectedId,
-                'source' => 'test',
-            ],
-            'mode' => 'direct_test_board',
-        ]]);
-    }
-
-    if ($source !== 'physical') {
-        $respond(['ok' => false, 'error' => ['code' => 'invalid_board_source', 'message' => 'Ugyldig boardkilde.']], 422);
-    }
 
     $physicalId = $selectedId;
     $stmt = $db->prepare(
