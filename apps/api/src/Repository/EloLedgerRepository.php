@@ -35,6 +35,18 @@ final class EloLedgerRepository
         $this->lockSeason($seasonId);
 
         $existing = $this->findEventByMatchId($matchId);
+
+        // ELO belongs to canonical club members only. A guest (or any player row that is
+        // not linked to a member_id) makes the whole match ELO-neutral for both sides.
+        // If an older version already applied such a match, undo it and replay the season.
+        if (!$this->matchHasEligibleMembers($match)) {
+            if ($existing !== null && (string) $existing['status'] === 'applied') {
+                $this->markMatchReverted($matchId);
+                $this->rebuildSeason($seasonId);
+            }
+            return;
+        }
+
         $winnerId = $match['winner_player_id'] !== null ? (int) $match['winner_player_id'] : null;
         if ($existing !== null
             && (string) $existing['status'] === 'applied'
@@ -89,18 +101,66 @@ final class EloLedgerRepository
 
         $seasonId = (int) $event['season_id'];
         $this->lockSeason($seasonId);
+        $this->markMatchReverted($matchId);
+        $this->rebuildSeason($seasonId);
+    }
+
+    /**
+     * Revert any legacy ELO event where at least one side is not linked to a club member,
+     * then replay only the affected seasons. Safe to run on every deployment.
+     *
+     * @return array{reverted_events:int,rebuilt_seasons:int}
+     */
+    public function reconcileGuestMatches(): array
+    {
         $sql = sprintf(
-            'UPDATE `%1$selo_match_events`
-             SET status="reverted", reverted_at=CURRENT_TIMESTAMP(6), updated_at=NOW()
-             WHERE match_id=? AND status="applied"',
+            'SELECT e.match_id, e.season_id
+             FROM `%1$selo_match_events` e
+             INNER JOIN `%1$splayers` pa ON pa.id=e.player_a_id
+             INNER JOIN `%1$splayers` pb ON pb.id=e.player_b_id
+             WHERE e.status="applied"
+               AND (COALESCE(pa.member_id, 0)=0 OR COALESCE(pb.member_id, 0)=0)
+             ORDER BY e.season_id ASC, e.id ASC',
             $this->tablePrefix
         );
-        $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('i', $matchId);
-        $stmt->execute();
-        $stmt->close();
+        $result = $this->connection->query($sql);
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        if ($rows === []) {
+            return ['reverted_events' => 0, 'rebuilt_seasons' => 0];
+        }
 
-        $this->rebuildSeason($seasonId);
+        $seasonIds = [];
+        foreach ($rows as $row) {
+            $seasonId = (int) ($row['season_id'] ?? 0);
+            if ($seasonId > 0) {
+                $seasonIds[$seasonId] = true;
+            }
+        }
+
+        foreach (array_keys($seasonIds) as $seasonId) {
+            $this->lockSeason((int) $seasonId);
+        }
+
+        $updateSql = sprintf(
+            'UPDATE `%1$selo_match_events` e
+             INNER JOIN `%1$splayers` pa ON pa.id=e.player_a_id
+             INNER JOIN `%1$splayers` pb ON pb.id=e.player_b_id
+             SET e.status="reverted", e.reverted_at=CURRENT_TIMESTAMP(6), e.updated_at=NOW()
+             WHERE e.status="applied"
+               AND (COALESCE(pa.member_id, 0)=0 OR COALESCE(pb.member_id, 0)=0)',
+            $this->tablePrefix
+        );
+        $this->connection->query($updateSql);
+        $reverted = (int) $this->connection->affected_rows;
+
+        foreach (array_keys($seasonIds) as $seasonId) {
+            $this->rebuildSeason((int) $seasonId);
+        }
+
+        return [
+            'reverted_events' => $reverted,
+            'rebuilt_seasons' => count($seasonIds),
+        ];
     }
 
     /** @return array<string, mixed>|null */
@@ -214,6 +274,7 @@ final class EloLedgerRepository
              LEFT JOIN `%1$stournament_groups` tg ON tg.id=m.tournament_group_id
              LEFT JOIN `%1$stournament_playoff_nodes` pn ON pn.match_id=m.id
              WHERE e.season_id=? AND e.status="applied"
+               AND COALESCE(pa.member_id, 0)>0 AND COALESCE(pb.member_id, 0)>0
              ORDER BY COALESCE(t.start_at, m.created_at, e.applied_at) ASC,
                       t.id ASC,
                       phase_order ASC,
@@ -235,8 +296,7 @@ final class EloLedgerRepository
 
     /**
      * Resolve duplicate player rows into one ELO identity without merging two known members
-     * who happen to share a display name. A null-member alias is attached to a name group only
-     * when that group has zero or exactly one known member id.
+     * who happen to share a display name.
      *
      * @param array<int,array<string,mixed>> $events
      * @return array<int,string>
@@ -422,9 +482,12 @@ final class EloLedgerRepository
     {
         $sql = sprintf(
             'SELECT m.id, m.tournament_id, m.status, m.player_a_id, m.player_b_id, m.winner_player_id,
-                    t.club_id, t.season_id, t.start_at, t.elo_enabled
+                    t.club_id, t.season_id, t.start_at, t.elo_enabled,
+                    pa.member_id AS player_a_member_id, pb.member_id AS player_b_member_id
              FROM `%1$smatches` m
              INNER JOIN `%1$stournaments` t ON t.id=m.tournament_id
+             INNER JOIN `%1$splayers` pa ON pa.id=m.player_a_id
+             INNER JOIN `%1$splayers` pb ON pb.id=m.player_b_id
              WHERE m.id=? LIMIT 1',
             $this->tablePrefix
         );
@@ -434,6 +497,27 @@ final class EloLedgerRepository
         $row = $stmt->get_result()->fetch_assoc() ?: null;
         $stmt->close();
         return $row;
+    }
+
+    /** @param array<string,mixed> $match */
+    private function matchHasEligibleMembers(array $match): bool
+    {
+        return (int) ($match['player_a_member_id'] ?? 0) > 0
+            && (int) ($match['player_b_member_id'] ?? 0) > 0;
+    }
+
+    private function markMatchReverted(int $matchId): void
+    {
+        $sql = sprintf(
+            'UPDATE `%1$selo_match_events`
+             SET status="reverted", reverted_at=CURRENT_TIMESTAMP(6), updated_at=NOW()
+             WHERE match_id=? AND status="applied"',
+            $this->tablePrefix
+        );
+        $stmt = $this->connection->prepare($sql);
+        $stmt->bind_param('i', $matchId);
+        $stmt->execute();
+        $stmt->close();
     }
 
     private function lockSeason(int $seasonId): void
