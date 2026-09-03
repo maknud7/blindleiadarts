@@ -88,7 +88,9 @@ final class PlayoffReconciliationService
             || $row['tournament_group_id'] === null
             || (string) ($row['status'] ?? '') !== 'completed'
             || (string) ($row['planned_tournament_format'] ?? '') !== 'groups_playoff'
-            || (int) ($row['planned_auto_create_playoff'] ?? 1) !== 1) {
+            || (int) ($row['planned_auto_create_playoff'] ?? 0) !== 1
+            || $row['planned_qualifiers_per_group'] === null
+            || $row['planned_playoff_best_of_legs'] === null) {
             return;
         }
 
@@ -113,8 +115,11 @@ final class PlayoffReconciliationService
             return;
         }
 
-        $qualifiers = max(1, (int) ($row['planned_qualifiers_per_group'] ?? 2));
-        $bestOf = max(1, (int) ($row['planned_playoff_best_of_legs'] ?? 3));
+        $qualifiers = (int) $row['planned_qualifiers_per_group'];
+        $bestOf = (int) $row['planned_playoff_best_of_legs'];
+        if ($qualifiers < 1 || $qualifiers > 16 || $bestOf < 1 || $bestOf > 21 || $bestOf % 2 === 0) {
+            return;
+        }
         $this->playoffs->generateFromGroups($tournamentId, $qualifiers, $bestOf);
     }
 
