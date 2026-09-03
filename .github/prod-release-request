@@ -1,6 +1,6 @@
-release_sha=9788d7f14a71af8acb6dce03b9c74fef11addab9
+release_sha=acf7c4911cfbb8b8b396cf3255f41ec5f9aa5236
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-09-03T09:12:00Z
-purpose=scolia_physical_status_truth
-backup_prefix=bd_backup_20260903_090857_
+requested_at=2026-09-03T10:28:00Z
+purpose=kiosk_fallback_layout_viewport_fix
+backup_prefix=bd_backup_20260903_102606_
