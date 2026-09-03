@@ -1,120 +1,212 @@
 /* Venue Wall v10
- * Live-board density handling.
- *
- * The main wall gives the live-board panel a fixed broadcast row. With three
- * boards the old 2x2 reservation squeezed every card to half height while v8
- * kept the large single-board typography, causing names/scores to overlap.
- * Use the available row based on actual board count and compact only when we
- * genuinely need two board rows.
+ * Adaptive live-board density for 1-8 simultaneous matches.
+ * More than eight boards are paged by venue-wall-boards.js in groups of eight.
  */
 
 @media (min-width:1180px) and (min-height:650px) {
-  /* Two boards should use the full live row instead of leaving a blank row. */
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(2):last-child) {
+  body.phase-live .priority-section .boards-grid {
+    height:calc(100% - 34px) !important;
+    min-height:0 !important;
+    gap:7px !important;
+  }
+
+  body.phase-live .priority-section .board-card.wall-page-hidden {
+    display:none !important;
+  }
+
+  body.phase-live .board-page-meta {
+    margin-left:auto;
+    margin-right:8px;
+    color:var(--wall-muted, #536b82);
+    font-size:.58rem;
+    font-weight:900;
+    letter-spacing:.025em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  /* 1-2 boards: use the full height of the live row. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="1"] {
+    grid-template-columns:1fr !important;
+    grid-template-rows:minmax(0,1fr) !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="2"] {
     grid-template-columns:repeat(2,minmax(0,1fr)) !important;
     grid-template-rows:minmax(0,1fr) !important;
   }
 
-  /* Three boards stay 2x2 on narrower wall displays. The compact treatment
-     below keeps both player rows and the match footer inside each card. */
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) {
+  /* Three boards remain 2x2 on narrower wall displays. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"],
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] {
     grid-template-columns:repeat(2,minmax(0,1fr)) !important;
     grid-template-rows:repeat(2,minmax(0,1fr)) !important;
   }
 
-  /* Three/four-card 2-row mode: reduce only the live-card typography and
-     chrome. Tables, queue, ELO and the rest of the wall keep their sizing. */
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .board-card {
+  /* Five or more live boards own the complete top information row. Queue and
+     recent results return automatically as soon as the count drops below 5. */
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="5"]) > .priority-section,
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="6"]) > .priority-section,
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="7"]) > .priority-section,
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="8"]) > .priority-section {
+    grid-column:1 / -1 !important;
+  }
+
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="5"]) > .two-column:has(#queue),
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="6"]) > .two-column:has(#queue),
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="7"]) > .two-column:has(#queue),
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="8"]) > .two-column:has(#queue) {
+    display:none !important;
+  }
+
+  /* 5-6 boards: 3 x 2 across the full wall width. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"],
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] {
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* 7-8 boards, and every rotation page above 8: fixed 4 x 2 geometry. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"],
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] {
+    grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* Compact card treatment from three boards and up. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .board-card {
     padding:4px 7px !important;
     grid-template-rows:19px minmax(0,1fr) 14px !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .board-number {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .board-number {
     font-size:.66rem !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .board-card .badge {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .board-card .badge {
     padding:2px 5px !important;
     font-size:.52rem !important;
     line-height:1 !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .player-line {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .player-line {
     grid-template-columns:minmax(0,1fr) 60px 22px !important;
     gap:5px !important;
     padding:1px 0 !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .player-line strong {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .player-line strong {
     font-size:clamp(.72rem,.82vw,.92rem) !important;
     line-height:1 !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .remaining {
-    font-size:clamp(1.42rem,1.68vw,1.78rem) !important;
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .remaining {
+    font-size:clamp(1.34rem,1.55vw,1.72rem) !important;
     line-height:.9 !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .legs {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .legs {
     height:21px !important;
     font-size:.74rem !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .round {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .round {
     font-size:.48rem !important;
     line-height:1 !important;
   }
 
-  /* In dense cards the active-row tint is enough. The KASTER tag competes
-     with the player name and score for the same horizontal space. */
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3)) .player-line.active::after {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .player-line.active::after {
     display:none !important;
   }
 }
 
-/* On a wide TV three boards fit cleanly side by side. This removes the empty
-   fourth slot and gives every match the full live-row height. */
+/* A 1500px+ wall has enough width for three full-height cards side by side. */
 @media (min-width:1500px) and (min-height:650px) {
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] {
     grid-template-columns:repeat(3,minmax(0,1fr)) !important;
     grid-template-rows:minmax(0,1fr) !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .board-card {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card {
     padding:7px 9px !important;
     grid-template-rows:24px minmax(0,1fr) 18px !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .board-number {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-number {
     font-size:.8rem !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .board-card .badge {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card .badge {
     padding:3px 7px !important;
     font-size:.6rem !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .player-line {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line {
     grid-template-columns:minmax(0,1fr) 70px 26px !important;
     gap:7px !important;
     padding:2px 0 !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .player-line strong {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line strong {
     font-size:clamp(.82rem,.92vw,1.04rem) !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .remaining {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .remaining {
     font-size:clamp(1.8rem,2.05vw,2.35rem) !important;
     line-height:.86 !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .legs {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .legs {
     height:28px !important;
     font-size:.86rem !important;
   }
 
-  body.phase-live .priority-section .boards-grid:has(> .board-card:nth-child(3):last-child) .round {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .round {
     font-size:.54rem !important;
   }
 }
