@@ -1,6 +1,6 @@
-release_sha=acf7c4911cfbb8b8b396cf3255f41ec5f9aa5236
+release_sha=e00bb7a7b9fa905c0478c9c0f6b1f7ae596f1584
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-09-03T10:28:00Z
-purpose=kiosk_fallback_layout_viewport_fix
-backup_prefix=bd_backup_20260903_102606_
+requested_at=2026-09-03T11:35:00Z
+purpose=guest_neutral_elo_and_scolia_fallback_submit
+backup_prefix=bd_backup_20260903_113334_
