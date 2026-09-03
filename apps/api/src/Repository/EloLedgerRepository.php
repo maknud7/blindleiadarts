@@ -36,9 +36,9 @@ final class EloLedgerRepository
 
         $existing = $this->findEventByMatchId($matchId);
 
-        // ELO belongs to canonical club members only. A guest (or any player row that is
-        // not linked to a member_id) makes the whole match ELO-neutral for both sides.
-        // If an older version already applied such a match, undo it and replay the season.
+        // ELO belongs to canonical club members only. A true guest makes the whole
+        // match ELO-neutral. Historical duplicate player rows without member_id are
+        // still eligible when their name resolves unambiguously to exactly one member.
         if (!$this->matchHasEligibleMembers($match)) {
             if ($existing !== null && (string) $existing['status'] === 'applied') {
                 $this->markMatchReverted($matchId);
@@ -106,52 +106,51 @@ final class EloLedgerRepository
     }
 
     /**
-     * Revert any legacy ELO event where at least one side is not linked to a club member,
-     * then replay only the affected seasons. Safe to run on every deployment.
+     * Revert legacy ELO events where at least one side cannot resolve to a canonical
+     * club member, then replay only the affected seasons. Safe and idempotent.
      *
      * @return array{reverted_events:int,rebuilt_seasons:int}
      */
     public function reconcileGuestMatches(): array
     {
-        $sql = sprintf(
-            'SELECT e.match_id, e.season_id
-             FROM `%1$selo_match_events` e
-             INNER JOIN `%1$splayers` pa ON pa.id=e.player_a_id
-             INNER JOIN `%1$splayers` pb ON pb.id=e.player_b_id
-             WHERE e.status="applied"
-               AND (COALESCE(pa.member_id, 0)=0 OR COALESCE(pb.member_id, 0)=0)
-             ORDER BY e.season_id ASC, e.id ASC',
-            $this->tablePrefix
-        );
-        $result = $this->connection->query($sql);
-        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $rows = $this->listAppliedEventsForGuestReconciliation();
         if ($rows === []) {
             return ['reverted_events' => 0, 'rebuilt_seasons' => 0];
         }
 
+        $matchIds = [];
         $seasonIds = [];
         foreach ($rows as $row) {
+            if ($this->matchHasEligibleMembers($row)) {
+                continue;
+            }
+            $matchId = (int) ($row['match_id'] ?? 0);
             $seasonId = (int) ($row['season_id'] ?? 0);
+            if ($matchId > 0) {
+                $matchIds[$matchId] = true;
+            }
             if ($seasonId > 0) {
                 $seasonIds[$seasonId] = true;
             }
+        }
+
+        if ($matchIds === []) {
+            return ['reverted_events' => 0, 'rebuilt_seasons' => 0];
         }
 
         foreach (array_keys($seasonIds) as $seasonId) {
             $this->lockSeason((int) $seasonId);
         }
 
-        $updateSql = sprintf(
-            'UPDATE `%1$selo_match_events` e
-             INNER JOIN `%1$splayers` pa ON pa.id=e.player_a_id
-             INNER JOIN `%1$splayers` pb ON pb.id=e.player_b_id
-             SET e.status="reverted", e.reverted_at=CURRENT_TIMESTAMP(6), e.updated_at=NOW()
-             WHERE e.status="applied"
-               AND (COALESCE(pa.member_id, 0)=0 OR COALESCE(pb.member_id, 0)=0)',
-            $this->tablePrefix
-        );
-        $this->connection->query($updateSql);
-        $reverted = (int) $this->connection->affected_rows;
+        $reverted = 0;
+        foreach (array_keys($matchIds) as $matchId) {
+            $before = $this->connection->affected_rows;
+            $this->markMatchReverted((int) $matchId);
+            $after = $this->connection->affected_rows;
+            if ($after > 0 || $after !== $before) {
+                $reverted += max(0, $after);
+            }
+        }
 
         foreach (array_keys($seasonIds) as $seasonId) {
             $this->rebuildSeason((int) $seasonId);
@@ -177,7 +176,10 @@ final class EloLedgerRepository
 
     private function rebuildSeason(int $seasonId): void
     {
-        $events = $this->listAppliedEvents($seasonId);
+        $events = array_values(array_filter(
+            $this->listAppliedEvents($seasonId),
+            fn (array $event): bool => $this->matchHasEligibleMembers($event)
+        ));
         $identityByPlayer = $this->buildIdentityMap($events);
 
         /** @var array<string, array{rating:float,played:int,last_event_id:?int}> $state */
@@ -250,8 +252,20 @@ final class EloLedgerRepository
                     t.start_at AS tournament_start_at,
                     m.round_label, m.round_number, m.bracket_label, m.tournament_group_id,
                     COALESCE(m.finished_at, m.starts_at, t.start_at, m.created_at, e.applied_at) AS occurred_at,
-                    pa.display_name AS player_a_name, pa.member_id AS player_a_member_id,
-                    pb.display_name AS player_b_name, pb.member_id AS player_b_member_id,
+                    pa.display_name AS player_a_name,
+                    COALESCE(pa.member_id, (
+                        SELECT CASE WHEN COUNT(DISTINCT pa2.member_id)=1 THEN MIN(pa2.member_id) ELSE NULL END
+                        FROM `%1$splayers` pa2
+                        WHERE pa2.club_id=e.club_id AND COALESCE(pa2.member_id,0)>0
+                          AND LOWER(TRIM(pa2.display_name))=LOWER(TRIM(pa.display_name))
+                    )) AS player_a_member_id,
+                    pb.display_name AS player_b_name,
+                    COALESCE(pb.member_id, (
+                        SELECT CASE WHEN COUNT(DISTINCT pb2.member_id)=1 THEN MIN(pb2.member_id) ELSE NULL END
+                        FROM `%1$splayers` pb2
+                        WHERE pb2.club_id=e.club_id AND COALESCE(pb2.member_id,0)>0
+                          AND LOWER(TRIM(pb2.display_name))=LOWER(TRIM(pb.display_name))
+                    )) AS player_b_member_id,
                     CASE
                         WHEN m.tournament_group_id IS NOT NULL OR LOWER(COALESCE(m.bracket_label, ""))="group" THEN 0
                         WHEN pn.id IS NOT NULL OR LOWER(COALESCE(m.bracket_label, "")) IN ("single_elimination","playoff","knockout") THEN 2
@@ -274,7 +288,6 @@ final class EloLedgerRepository
              LEFT JOIN `%1$stournament_groups` tg ON tg.id=m.tournament_group_id
              LEFT JOIN `%1$stournament_playoff_nodes` pn ON pn.match_id=m.id
              WHERE e.season_id=? AND e.status="applied"
-               AND COALESCE(pa.member_id, 0)>0 AND COALESCE(pb.member_id, 0)>0
              ORDER BY COALESCE(t.start_at, m.created_at, e.applied_at) ASC,
                       t.id ASC,
                       phase_order ASC,
@@ -292,6 +305,36 @@ final class EloLedgerRepository
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
         return $rows;
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function listAppliedEventsForGuestReconciliation(): array
+    {
+        $sql = sprintf(
+            'SELECT e.match_id, e.season_id, e.club_id,
+                    pa.display_name AS player_a_name,
+                    COALESCE(pa.member_id, (
+                        SELECT CASE WHEN COUNT(DISTINCT pa2.member_id)=1 THEN MIN(pa2.member_id) ELSE NULL END
+                        FROM `%1$splayers` pa2
+                        WHERE pa2.club_id=e.club_id AND COALESCE(pa2.member_id,0)>0
+                          AND LOWER(TRIM(pa2.display_name))=LOWER(TRIM(pa.display_name))
+                    )) AS player_a_member_id,
+                    pb.display_name AS player_b_name,
+                    COALESCE(pb.member_id, (
+                        SELECT CASE WHEN COUNT(DISTINCT pb2.member_id)=1 THEN MIN(pb2.member_id) ELSE NULL END
+                        FROM `%1$splayers` pb2
+                        WHERE pb2.club_id=e.club_id AND COALESCE(pb2.member_id,0)>0
+                          AND LOWER(TRIM(pb2.display_name))=LOWER(TRIM(pb.display_name))
+                    )) AS player_b_member_id
+             FROM `%1$selo_match_events` e
+             INNER JOIN `%1$splayers` pa ON pa.id=e.player_a_id
+             INNER JOIN `%1$splayers` pb ON pb.id=e.player_b_id
+             WHERE e.status="applied"
+             ORDER BY e.season_id ASC, e.id ASC',
+            $this->tablePrefix
+        );
+        $result = $this->connection->query($sql);
+        return $result->fetch_all(MYSQLI_ASSOC);
     }
 
     /**
@@ -483,7 +526,20 @@ final class EloLedgerRepository
         $sql = sprintf(
             'SELECT m.id, m.tournament_id, m.status, m.player_a_id, m.player_b_id, m.winner_player_id,
                     t.club_id, t.season_id, t.start_at, t.elo_enabled,
-                    pa.member_id AS player_a_member_id, pb.member_id AS player_b_member_id
+                    pa.display_name AS player_a_name,
+                    COALESCE(pa.member_id, (
+                        SELECT CASE WHEN COUNT(DISTINCT pa2.member_id)=1 THEN MIN(pa2.member_id) ELSE NULL END
+                        FROM `%1$splayers` pa2
+                        WHERE pa2.club_id=t.club_id AND COALESCE(pa2.member_id,0)>0
+                          AND LOWER(TRIM(pa2.display_name))=LOWER(TRIM(pa.display_name))
+                    )) AS player_a_member_id,
+                    pb.display_name AS player_b_name,
+                    COALESCE(pb.member_id, (
+                        SELECT CASE WHEN COUNT(DISTINCT pb2.member_id)=1 THEN MIN(pb2.member_id) ELSE NULL END
+                        FROM `%1$splayers` pb2
+                        WHERE pb2.club_id=t.club_id AND COALESCE(pb2.member_id,0)>0
+                          AND LOWER(TRIM(pb2.display_name))=LOWER(TRIM(pb.display_name))
+                    )) AS player_b_member_id
              FROM `%1$smatches` m
              INNER JOIN `%1$stournaments` t ON t.id=m.tournament_id
              INNER JOIN `%1$splayers` pa ON pa.id=m.player_a_id
