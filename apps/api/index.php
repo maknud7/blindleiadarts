@@ -8,6 +8,8 @@ use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
+use Blindleia\Dartkiosk\Api\Http\JsonResponse;
+use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\LiveHighlightsApplication;
 use Blindleia\Dartkiosk\Api\MatchScoringApplication;
 use Blindleia\Dartkiosk\Api\MembershipEligibilityApplication;
@@ -18,6 +20,7 @@ use Blindleia\Dartkiosk\Api\PlayerIdentityApplication;
 use Blindleia\Dartkiosk\Api\PlayerPortalApplication;
 use Blindleia\Dartkiosk\Api\ScoliaApplication;
 use Blindleia\Dartkiosk\Api\SeasonApplication;
+use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\TournamentAttendanceApplication;
 use Blindleia\Dartkiosk\Api\TournamentCheckinApplication;
 use Blindleia\Dartkiosk\Api\TournamentFeatureApplication;
@@ -38,6 +41,36 @@ if ($origin === 'https://dart.ingenting.org') {
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
         http_response_code(204);
+        return;
+    }
+}
+
+// Physical club equipment has one canonical PROD master registry. TEST may read
+// that registry and create/use local runtime aliases for pairing and matches, but
+// it must never mutate board identity, activation, scoring type or Scolia master
+// settings. Runtime-only actions such as pairing/reset-pairing remain available.
+$config = Config::load(__DIR__);
+if ($config->appEnv() === 'test') {
+    $guardRequest = Request::fromGlobals();
+    $guardMethod = $guardRequest->method();
+    $guardPath = trim($guardRequest->path(), '/');
+
+    $isBoardCreate = $guardMethod === 'POST'
+        && preg_match('#^v1/clubs/\d+/kiosks$#', $guardPath) === 1;
+    $isBoardMasterMutation = in_array($guardMethod, ['PUT', 'PATCH', 'DELETE'], true)
+        && preg_match('#^v1/clubs/\d+/kiosks/\d+$#', $guardPath) === 1;
+    $isBoardScoliaMasterMutation = in_array($guardMethod, ['PUT', 'PATCH'], true)
+        && preg_match('#^v1/clubs/\d+/kiosks/\d+/scolia$#', $guardPath) === 1;
+    $isClubScoliaMasterMutation = in_array($guardMethod, ['PUT', 'PATCH'], true)
+        && preg_match('#^v1/clubs/\d+/scolia/settings$#', $guardPath) === 1;
+
+    if ($isBoardCreate || $isBoardMasterMutation || $isBoardScoliaMasterMutation || $isClubScoliaMasterMutation) {
+        header('X-BD-Hardware-Read-Only: 1');
+        JsonResponse::error(
+            403,
+            'production_hardware_read_only',
+            'Fysisk utstyr kan bare endres i PROD. TEST er skrivebeskyttet for skive- og Scolia-masterdata.'
+        )->send();
         return;
     }
 }
