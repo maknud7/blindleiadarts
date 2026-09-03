@@ -8,12 +8,17 @@ const TEST_BOARD_ID_KEY = "bd:kioskTestPhysicalBoardId";
 const TEST_LEASE_ACTIVE_KEY = "bd:kioskScoliaLeaseActive";
 const TEST_LEASE_CODE_KEY = "bd:kioskScoliaLeaseKioskCode";
 const TEST_LEASE_PHYSICAL_KEY = "bd:kioskScoliaLeasePhysicalId";
+const OFFLINE_FALLBACK_GRACE_MS = 5000;
+const OFFLINE_FALLBACK_RETRY_MS = 5000;
 
 let status = null;
 let busy = false;
 let lastError = "";
 let leaseBusy = false;
 let leaseHeartbeatTimer = null;
+let offlineSince = 0;
+let autoFallbackBusy = false;
+let autoFallbackRetryAt = 0;
 
 function kioskCode() { return localStorage.getItem("bd:kioskCode") || ""; }
 function pairingToken() { return localStorage.getItem("bd:kioskPairingToken") || ""; }
@@ -21,6 +26,61 @@ function isTestEnvironment() { return document.body?.dataset?.appEnv === "test";
 function testModeActive() { return localStorage.getItem(TEST_MODE_KEY) === "1"; }
 function selectedPhysicalBoardId() { return Number(localStorage.getItem(TEST_BOARD_ID_KEY) || 0); }
 function testLeaseActive() { return localStorage.getItem(TEST_LEASE_ACTIVE_KEY) === "1"; }
+
+function isBoardOffline(board) {
+  return String(board?.board_status || "").trim().toLowerCase() === "offline";
+}
+
+function isBoardAvailable(board) {
+  return board?.connection_state === "connected" && !isBoardOffline(board);
+}
+
+function shouldAutoFallback(board) {
+  if (!board || board.mode !== "live") return false;
+  if (board.effective_scoring_mode !== "scolia") return false;
+  if (Number(board.fallback_active || 0) === 1 || Number(board.needs_reconciliation || 0) === 1) return false;
+  if (Number(board.auto_fallback_to_manual ?? 1) !== 1) return false;
+  return isBoardOffline(board) || board.connection_state === "disconnected" || board.connection_state === "error";
+}
+
+async function maybeAutoFallback(board) {
+  if (!shouldAutoFallback(board)) {
+    offlineSince = 0;
+    autoFallbackRetryAt = 0;
+    return board;
+  }
+
+  const now = Date.now();
+  if (!offlineSince) {
+    offlineSince = now;
+    return board;
+  }
+  if ((now - offlineSince) < OFFLINE_FALLBACK_GRACE_MS || now < autoFallbackRetryAt || autoFallbackBusy) return board;
+
+  const code = kioskCode();
+  if (!code) return board;
+
+  autoFallbackBusy = true;
+  try {
+    const data = await request(`/kiosks/${encodeURIComponent(code)}/scolia/fallback`, { method: "POST" });
+    const nextBoard = data?.board || board;
+    if (Number(nextBoard.fallback_active || 0) === 1 || Number(nextBoard.needs_reconciliation || 0) === 1) {
+      offlineSince = 0;
+      autoFallbackRetryAt = 0;
+      lastError = "";
+    } else {
+      // No active match can legitimately leave fallback inactive. Avoid hammering the endpoint.
+      autoFallbackRetryAt = Date.now() + 30000;
+    }
+    return nextBoard;
+  } catch (error) {
+    lastError = `Automatisk Scolia-fallback feilet: ${error.message}`;
+    autoFallbackRetryAt = Date.now() + OFFLINE_FALLBACK_RETRY_MS;
+    return board;
+  } finally {
+    autoFallbackBusy = false;
+  }
+}
 
 async function request(path, { method = "GET", body } = {}) {
   const headers = {};
@@ -169,6 +229,9 @@ function queueWarning(queue) {
 
 function connectionText(board) {
   if (board.mode === "off") return "Scolia er av for denne skiven.";
+  const fallback = Number(board.fallback_active || 0) === 1 || Number(board.needs_reconciliation || 0) === 1;
+  if (fallback && isBoardAvailable(board)) return "Scolia er online igjen. Avstem score før automatisk scoring gjenopptas.";
+  if (fallback && (isBoardOffline(board) || board.connection_state !== "connected")) return "Scolia er offline. Manuell fallback er aktiv og kampen kan fortsette.";
   if (Number(board.needs_reconciliation) === 1) return "Score må avstemmes før Scolia kan gjenopptas.";
   if (Number(board.fallback_active) === 1) return "Manuell fallback er aktiv. Kampen kan fortsette på nettbrettet.";
   if (board.connection_state === "connected") return `Scolia tilkoblet${board.board_status ? ` · ${board.board_status}` : ""}${board.board_phase ? ` · ${board.board_phase}` : ""}.`;
@@ -196,7 +259,7 @@ function render() {
   const warning = queueWarning(board.queue);
   const modeLabel = board.mode === "shadow" ? "Shadow – manuell score er fortsatt fasit" : board.mode === "live" ? "Live scoring" : "Av";
   const canResume = Number(board.needs_reconciliation) === 1 || Number(board.fallback_active) === 1;
-  const connected = board.connection_state === "connected";
+  const available = isBoardAvailable(board);
   const testLeaseLabel = isTestEnvironment() && testLeaseActive()
     ? `<p class="muted" style="font-weight:800">TEST · fysisk Scolia er midlertidig routet til isolert test-runtime.</p>`
     : "";
@@ -212,9 +275,10 @@ function render() {
         ${darts.length ? `<button type="button" class="ghost-button" data-scolia-action="delete">Slett siste Scolia-pil</button><button type="button" class="ghost-button" data-scolia-action="correct">Korriger siste pil</button>` : ""}
         <button type="button" class="ghost-button" data-scolia-action="reset">Reset Scolia-fase</button>
         ${board.mode === "live" && !canResume ? `<button type="button" class="ghost-button" data-scolia-action="fallback">Fortsett manuelt</button>` : ""}
-        ${canResume ? `<button type="button" class="confirm-button" data-scolia-action="resume" ${connected ? "" : "disabled"}>Score er avstemt – bruk Scolia igjen</button>` : ""}
+        ${canResume ? `<button type="button" class="confirm-button" data-scolia-action="resume" ${available ? "" : "disabled"}>Score er avstemt – bruk Scolia igjen</button>` : ""}
       </div>
-      ${canResume && !connected ? `<p class="muted">Scolia må være tilkoblet igjen før automatisk scoring kan gjenopptas.</p>` : ""}
+      ${canResume && !available ? `<p class="muted">Scolia må være online igjen før automatisk scoring kan gjenopptas.</p>` : ""}
+      ${canResume && available ? `<p class="muted">Scolia er tilbake, men manuell fallback fortsetter til scoren er kontrollert og Scolia gjenopptas eksplisitt.</p>` : ""}
     </div>`;
   card.querySelectorAll("[data-scolia-action]").forEach((button) => button.addEventListener("click", () => action(button.dataset.scoliaAction).catch((error) => {
     lastError = error.message;
@@ -233,6 +297,10 @@ async function action(name) {
       if (!window.confirm("Fortsette kampen manuelt? Scolia-eventer blir ignorert til score er avstemt og Scolia eksplisitt gjenopptas.")) return;
       await request(`/kiosks/${encodeURIComponent(code)}/scolia/fallback`, { method: "POST" });
     } else if (name === "resume") {
+      if (!isBoardAvailable(status)) {
+        lastError = "Scolia er fortsatt offline. Vent til skiva er online før du gjenopptar automatisk scoring.";
+        return;
+      }
       if (!window.confirm("Har du kontrollert at scoren på skjermen er riktig?")) return;
       await request(`/kiosks/${encodeURIComponent(code)}/scolia/resume`, { method: "POST", body: { reconciled: true } });
     } else if (name === "reset") {
@@ -261,6 +329,7 @@ async function refresh() {
     const data = await request(`/kiosks/${encodeURIComponent(code)}/scolia/status`);
     status = data.board;
     lastError = "";
+    status = await maybeAutoFallback(status);
     render();
   } catch (error) {
     // A manual-only board has no Scolia setup yet; leave the normal kiosk UI untouched.
