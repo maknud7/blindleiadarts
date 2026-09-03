@@ -1,3 +1,3 @@
 audit_prod_unlinked_players=YES
-requested_at=2026-09-03T16:17:00+02:00
-purpose=audit_leif_duplicate_account_activity
+requested_at=2026-09-03T16:54:00+02:00
+purpose=post_deploy_leif_link_readiness_audit
