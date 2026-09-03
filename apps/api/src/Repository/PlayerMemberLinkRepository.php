@@ -147,21 +147,10 @@ final class PlayerMemberLinkRepository
                 );
             }
 
-            // In PROD, identity and domain share the same prefix. Do not touch canonical
-            // PROD user accounts when this repository is running against isolated TEST data.
+            // In PROD, identity and domain share the same prefix. TEST may read canonical
+            // identity, but must never mutate it from an isolated tournament environment.
             if ($this->identityPrefix === $this->dataPrefix) {
-                $stmt = $this->connection->prepare(
-                    "SELECT id,player_id FROM `{$users}` WHERE member_id=? ORDER BY id"
-                );
-                $stmt->bind_param('i', $memberId);
-                $stmt->execute();
-                $accounts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-                $stmt->close();
-                foreach ($accounts as $account) {
-                    if ($account['player_id'] !== null && (int) $account['player_id'] !== $playerId) {
-                        throw new InvalidArgumentException('Medlemmet har allerede en brukerkonto koblet til en annen spiller-ID. Rydd identiteten før kobling.');
-                    }
-                }
+                $this->reconcileCanonicalAccount($clubId, $playerId, $memberId, $users);
             }
 
             $source = 'club_admin_manual';
@@ -177,15 +166,6 @@ final class PlayerMemberLinkRepository
                 throw new RuntimeException('Spillerkoblingen ble ikke lagret.');
             }
             $stmt->close();
-
-            if ($this->identityPrefix === $this->dataPrefix) {
-                $stmt = $this->connection->prepare(
-                    "UPDATE `{$users}` SET player_id=? WHERE member_id=? AND player_id IS NULL"
-                );
-                $stmt->bind_param('ii', $playerId, $memberId);
-                $stmt->execute();
-                $stmt->close();
-            }
 
             $playerName = (string) $player['display_name'];
             $memberName = (string) $member['navn'];
@@ -211,6 +191,154 @@ final class PlayerMemberLinkRepository
             $this->connection->rollback();
             throw $error;
         }
+    }
+
+    private function reconcileCanonicalAccount(int $clubId, int $playerId, int $memberId, string $users): void
+    {
+        $clubRoles = $this->identityPrefix . 'club_user_roles';
+        $globalRoles = $this->identityPrefix . 'global_user_roles';
+        $sessions = $this->identityPrefix . 'auth_sessions';
+
+        $stmt = $this->connection->prepare(
+            "SELECT id,member_id,player_id,is_active,account_status,last_login_at
+               FROM `{$users}`
+              WHERE member_id=?
+              ORDER BY id
+              FOR UPDATE"
+        );
+        $stmt->bind_param('i', $memberId);
+        $stmt->execute();
+        $targetAccounts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        if (count($targetAccounts) > 1) {
+            throw new InvalidArgumentException('Medlemmet har flere brukerkontoer. Rydd kontoidentiteten før spillerkobling.');
+        }
+        $targetAccount = $targetAccounts[0] ?? null;
+
+        $stmt = $this->connection->prepare(
+            "SELECT id,member_id,player_id,is_active,account_status,last_login_at
+               FROM `{$users}`
+              WHERE player_id=?
+              ORDER BY id
+              FOR UPDATE"
+        );
+        $stmt->bind_param('i', $playerId);
+        $stmt->execute();
+        $ownerAccounts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        if (count($ownerAccounts) > 1) {
+            throw new InvalidArgumentException('Spiller-ID-en er koblet til flere brukerkontoer. Rydd kontoidentiteten før spillerkobling.');
+        }
+        $ownerAccount = $ownerAccounts[0] ?? null;
+
+        if ($targetAccount !== null && $targetAccount['player_id'] !== null && (int) $targetAccount['player_id'] !== $playerId) {
+            throw new InvalidArgumentException('Medlemmet har allerede en brukerkonto koblet til en annen spiller-ID. Rydd identiteten før kobling.');
+        }
+
+        if ($ownerAccount !== null && $ownerAccount['member_id'] !== null && (int) $ownerAccount['member_id'] !== $memberId) {
+            throw new InvalidArgumentException('Spiller-ID-en tilhører allerede en brukerkonto for et annet medlem. Rydd identiteten før kobling.');
+        }
+
+        // If there is no separate member account, enrich the existing player account
+        // instead of creating another identity island. This preserves an active player login.
+        if ($targetAccount === null) {
+            if ($ownerAccount !== null && $ownerAccount['member_id'] === null) {
+                $ownerId = (int) $ownerAccount['id'];
+                $stmt = $this->connection->prepare(
+                    "UPDATE `{$users}` SET member_id=? WHERE id=? AND member_id IS NULL"
+                );
+                $stmt->bind_param('ii', $memberId, $ownerId);
+                $stmt->execute();
+                if ($stmt->affected_rows !== 1) {
+                    $stmt->close();
+                    throw new RuntimeException('Brukerkontoen kunne ikke kobles til medlemmet.');
+                }
+                $stmt->close();
+            }
+            return;
+        }
+
+        $targetId = (int) $targetAccount['id'];
+        if ($ownerAccount !== null && (int) $ownerAccount['id'] !== $targetId) {
+            if (!$this->isSafeLegacyPlaceholder($ownerAccount)) {
+                throw new InvalidArgumentException('Spiller-ID-en brukes av en annen aktiv eller registrert brukerkonto. Rydd kontoidentiteten før kobling.');
+            }
+
+            $ownerId = (int) $ownerAccount['id'];
+            $stmt = $this->connection->prepare("SELECT COUNT(*) AS cnt FROM `{$sessions}` WHERE user_account_id=?");
+            $stmt->bind_param('i', $ownerId);
+            $stmt->execute();
+            $sessionCount = (int) (($stmt->get_result()->fetch_assoc()['cnt'] ?? 0));
+            $stmt->close();
+            if ($sessionCount > 0) {
+                throw new InvalidArgumentException('Den gamle spillerkontoen har innloggingshistorikk og må ryddes manuelt før kobling.');
+            }
+
+            // Preserve all explicit permissions on the canonical member account before
+            // stripping the inactive placeholder. INSERT IGNORE handles already shared roles.
+            $stmt = $this->connection->prepare(
+                "INSERT IGNORE INTO `{$clubRoles}` (club_id,user_account_id,role)
+                 SELECT club_id,?,role FROM `{$clubRoles}` WHERE user_account_id=?"
+            );
+            $stmt->bind_param('ii', $targetId, $ownerId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $this->connection->prepare(
+                "INSERT IGNORE INTO `{$globalRoles}` (user_account_id,role)
+                 SELECT ?,role FROM `{$globalRoles}` WHERE user_account_id=?"
+            );
+            $stmt->bind_param('ii', $targetId, $ownerId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $this->connection->prepare("DELETE FROM `{$clubRoles}` WHERE user_account_id=?");
+            $stmt->bind_param('i', $ownerId);
+            $stmt->execute();
+            $stmt->close();
+
+            $stmt = $this->connection->prepare("DELETE FROM `{$globalRoles}` WHERE user_account_id=?");
+            $stmt->bind_param('i', $ownerId);
+            $stmt->execute();
+            $stmt->close();
+
+            // Keep the old row for foreign-key/history integrity, but remove all domain
+            // identity and privileges. It stays inactive + unclaimed and cannot own player data.
+            $stmt = $this->connection->prepare(
+                "UPDATE `{$users}`
+                    SET player_id=NULL,is_active=0
+                  WHERE id=? AND member_id IS NULL AND player_id=? AND is_active=0 AND account_status='unclaimed'"
+            );
+            $stmt->bind_param('ii', $ownerId, $playerId);
+            $stmt->execute();
+            if ($stmt->affected_rows !== 1) {
+                $stmt->close();
+                throw new RuntimeException('Den gamle spillerkontoen kunne ikke frikobles trygt.');
+            }
+            $stmt->close();
+        }
+
+        if ($targetAccount['player_id'] === null) {
+            $stmt = $this->connection->prepare(
+                "UPDATE `{$users}` SET player_id=? WHERE id=? AND member_id=? AND player_id IS NULL"
+            );
+            $stmt->bind_param('iii', $playerId, $targetId, $memberId);
+            $stmt->execute();
+            if ($stmt->affected_rows !== 1) {
+                $stmt->close();
+                throw new RuntimeException('Medlemmets brukerkonto kunne ikke kobles til spiller-ID-en.');
+            }
+            $stmt->close();
+        }
+    }
+
+    /** @param array<string,mixed> $account */
+    private function isSafeLegacyPlaceholder(array $account): bool
+    {
+        return $account['member_id'] === null
+            && (int) ($account['is_active'] ?? 1) === 0
+            && (string) ($account['account_status'] ?? '') === 'unclaimed'
+            && ($account['last_login_at'] === null || trim((string) $account['last_login_at']) === '');
     }
 
     private function safePrefix(string $prefix): string
