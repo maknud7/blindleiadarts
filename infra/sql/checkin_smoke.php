@@ -33,7 +33,7 @@ try {
     $s=$db->prepare(sprintf('INSERT INTO `%1$stournaments` (club_id,name,slug,status,start_at) VALUES (?,?,?,"draft",?)',$p)); $s->bind_param('isss',$ids['club'],$tn1,$ts1,$start1); $s->execute(); $ids['t1']=(int)$s->insert_id; $s->close();
     $start2=(string)$clock['start2']; $tn2='Early '.$suffix; $ts2='early-'.$suffix;
     $s=$db->prepare(sprintf('INSERT INTO `%1$stournaments` (club_id,name,slug,status,start_at) VALUES (?,?,?,"draft",?)',$p)); $s->bind_param('isss',$ids['club'],$tn2,$ts2,$start2); $s->execute(); $ids['t2']=(int)$s->insert_id; $s->close();
-    foreach ([[$ids['t1'],$ids['a']],[$ids['t1'],$ids['b']],[$ids['t2'],$ids['c']],[$ids['t1'],$ids['d']]] as [$t,$player]) {
+    foreach ([[$ids['t1'],$ids['a']],[$ids['t1'],$ids['b']],[$ids['t1'],$ids['c']],[$ids['t2'],$ids['c']],[$ids['t1'],$ids['d']]] as [$t,$player]) {
         $status='registered'; $s=$db->prepare(sprintf('INSERT INTO `%1$stournament_players` (tournament_id,player_id,status) VALUES (?,?,?)',$p)); $s->bind_param('iis',$t,$player,$status); $s->execute(); $s->close();
     }
     $db->query(sprintf('INSERT INTO `%1$sclub_checkin_settings` (club_id,default_method,opens_minutes_before_start,closes_minutes_after_start) VALUES (%2$d,"admin_or_code",60,10)',$p,$ids['club']));
@@ -75,15 +75,31 @@ try {
     $admin=$repo->checkInPlayer($ids['t1'],$ids['d'],true,null,false);
     $assert(($admin['checkin_source']??'')==='admin_override','Tournament leader check-in failed inside window.');
 
+    // Complete attendance for the wizard fixture only after the negative check-in
+    // cases above have been exercised. Group planning requires at least four
+    // checked-in players and at least four players per group.
+    $byCodeB=$repo->checkInPlayer($ids['t1'],$ids['b'],false,$code,false);
+    $assert(($byCodeB['status']??'')==='checked_in','Wizard fixture player B was not checked in.');
+    $byCodeC=$repo->checkInPlayer($ids['t1'],$ids['c'],false,$code,false);
+    $assert(($byCodeC['status']??'')==='checked_in','Wizard fixture player C was not checked in.');
+
     $display=$repo->publicDisplayForClub($ids['club']);
     $assert((int)($display['tournament_id']??0)===$ids['t1'],'Live display selected wrong tournament.');
     $assert(($display['code']??'')===$code,'Live display did not expose current venue code.');
 
     $wizard=new TournamentWizardRepository($database);
-    $plan=$wizard->updatePlan($ids['t1'],['group_count'=>4,'group_draw_mode'=>'elo_pots','group_best_of_legs'=>3,'qualifiers_per_group'=>2,'playoff_best_of_legs'=>5]);
-    $assert((int)$plan['group_count']===4,'Wizard group plan not persisted.');
+    $plan=$wizard->updatePlan($ids['t1'],['group_count'=>1,'group_draw_mode'=>'elo_pots','group_best_of_legs'=>3,'qualifiers_per_group'=>2,'playoff_best_of_legs'=>5]);
+    $assert((int)$plan['group_count']===1,'Wizard group plan not persisted.');
     $assert($plan['group_draw_mode']==='elo_pots','Wizard draw mode not persisted.');
     $assert((int)$plan['playoff_best_of_legs']===5,'Wizard playoff plan not persisted.');
+
+    $tooManyGroups=false;
+    try {
+        $wizard->updatePlan($ids['t1'],['group_count'=>4,'group_draw_mode'=>'elo_pots','group_best_of_legs'=>3,'qualifiers_per_group'=>2,'playoff_best_of_legs'=>5]);
+    } catch (ValidationException $e) {
+        $tooManyGroups=$e->errorCode()==='groups_too_small';
+    }
+    $assert($tooManyGroups,'Wizard accepted four groups with only four checked-in players.');
 
     echo "Code/admin check-in and tournament wizard smoke OK\n";
 } finally {
