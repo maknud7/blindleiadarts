@@ -84,6 +84,8 @@ final class TournamentWizardRepository
             : (bool) $current['auto_create_playoff'];
         $autoCreatePlayoffInt = $autoCreatePlayoff ? 1 : 0;
 
+        $this->validateGroupPlan($tournamentId, $format, $groupCount, $qualifiers);
+
         $sql = sprintf(
             'UPDATE `%1$stournaments`
              SET planned_group_count=?,planned_group_draw_mode=?,planned_group_best_of_legs=?,
@@ -155,6 +157,70 @@ final class TournamentWizardRepository
         }
 
         return ['deleted' => true, 'tournament_id' => $tournamentId, 'name' => (string) $plan['name']];
+    }
+
+    private function validateGroupPlan(int $tournamentId, string $format, int $groupCount, int $qualifiers): void
+    {
+        if (!in_array($format, ['groups_playoff', 'groups_only'], true)) {
+            return;
+        }
+
+        $checkedIn = $this->checkedInCount($tournamentId);
+        if ($checkedIn === 0) {
+            return; // The format may be planned before check-in starts.
+        }
+        if ($checkedIn < 4) {
+            throw new ValidationException('not_enough_players_for_groups', 'Gruppespill krever minst 4 innsjekkede spillere.');
+        }
+
+        $maxGroups = intdiv($checkedIn, 4);
+        if ($groupCount > $maxGroups) {
+            throw new ValidationException(
+                'groups_too_small',
+                sprintf(
+                    'Med %d innsjekkede kan du ha maks %d %s slik at alle grupper får minst 4 spillere.',
+                    $checkedIn,
+                    $maxGroups,
+                    $maxGroups === 1 ? 'gruppe' : 'grupper'
+                )
+            );
+        }
+
+        $smallestGroup = intdiv($checkedIn, $groupCount);
+        if ($smallestGroup < 4) {
+            throw new ValidationException('groups_too_small', 'Alle grupper må ha minst 4 spillere.');
+        }
+
+        if ($format !== 'groups_playoff') {
+            return;
+        }
+        if ($qualifiers > $smallestGroup) {
+            throw new ValidationException(
+                'too_many_qualifiers_per_group',
+                sprintf('Den minste gruppen har %d spillere og kan ikke sende %d videre.', $smallestGroup, $qualifiers)
+            );
+        }
+
+        $qualified = $groupCount * $qualifiers;
+        if ($qualified < 2) {
+            throw new ValidationException('not_enough_playoff_qualifiers', 'Sluttspillet må få minst 2 kvalifiserte spillere.');
+        }
+        if ($qualified > 32) {
+            throw new ValidationException('too_many_playoff_qualifiers', 'Sluttspillet støtter maksimalt 32 kvalifiserte spillere.');
+        }
+    }
+
+    private function checkedInCount(int $tournamentId): int
+    {
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT COUNT(*) AS c FROM `%1$stournament_players` WHERE tournament_id=? AND status="checked_in"',
+            $this->tablePrefix
+        ));
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $count = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
+        $stmt->close();
+        return $count;
     }
 
     private function oddBestOf(mixed $value, string $label): int
