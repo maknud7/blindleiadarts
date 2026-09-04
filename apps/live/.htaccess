@@ -1,5 +1,12 @@
 RewriteEngine On
 
+# Live is a continuously running display. Revalidate its shell/assets instead of
+# letting TV/browser caches keep an old runtime after a deployment. ETags still
+# make unchanged responses cheap.
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-cache, must-revalidate"
+</IfModule>
+
 # Keep the canonical public address without a trailing slash so relative Live
 # assets continue to resolve from /live/ rather than /live/NNNN/.
 # Use an absolute URL path in per-directory context; a relative redirect can
