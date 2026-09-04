@@ -124,7 +124,7 @@
       }
 
       await loadScript("./app.js?v=20260903-playoff-wall-01");
-      await loadScript("./playoff-live-v5.js?v=20260903-playoff-wall-02");
+      await loadScript("./playoff-live-v6.js?v=20260904-bracket-live-01");
 
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
 
