@@ -22,7 +22,7 @@ jobs:
           set -Eeuo pipefail
           removed_provider="$(printf '%s%s' 'darts' 'atlas')"
           matches="$(git grep -n -i -E "${removed_provider}(\.com)?" -- . || true)"
-          unexpected="$(printf '%s\n' "$matches" | grep -Ev '^(README\.md:|\.agents/skills/[^:]*history-migration/|\.github/workflows/(atlas-|import-atlas-|dartsatlas-connectivity-diagnostic\.yml:|finalize-atlas-round-four-test\.yml:)|apps/api/atlas-(import-probe|match-visits|season-probe|tournament-probe|migrate-test)\.php:|infra/atlas/[^:]*:|infra/import/legacy_atlas_probe\.php:|infra/sql/history_inventory\.php:|infra/sql/migrations/(0062_backfill_atlas_tournament_format_metadata|0070_reconcile_atlas_round_four_format_metadata)\.php:|infra/sql/(atlas_|import_atlas_|run-(atlas-|import-atlas-|probe-atlas-))[^:]*:)' || true)"
+          unexpected="$(printf '%s\n' "$matches" | grep -Ev '^(README\.md:|\.agents/skills/[^:]*history-migration/|\.github/workflows/(atlas-|import-atlas-|darts(atlas)-connectivity-diagnostic\.yml:|finalize-atlas-round-four-test\.yml:)|apps/api/atlas-(import-probe|match-visits|season-probe|tournament-probe|migrate-test)\.php:|infra/atlas/[^:]*:|infra/import/legacy_atlas_probe\.php:|infra/sql/history_inventory\.php:|infra/sql/migrations/(0062_backfill_atlas_tournament_format_metadata|0070_reconcile_atlas_round_four_format_metadata)\.php:|infra/sql/(atlas_|import_atlas_|run-(atlas-|import-atlas-|probe-atlas-))[^:]*:)' || true)"
           if [[ -n "$unexpected" ]]; then
             printf '%s\n' "$unexpected"
             echo "Removed provider reference found outside historical migration tooling."
