@@ -43,6 +43,10 @@ if (attendanceHost) {
     return Number.isFinite(value) ? value : 0;
   }
 
+  function setText(node, value) {
+    if (node && String(node.textContent || "") !== value) node.textContent = value;
+  }
+
   function localAttendanceSignature() {
     return `${numberText("tcAllCount")}:${numberText("tcCheckedCount")}:${numberText("tcPendingCount")}`;
   }
@@ -112,7 +116,7 @@ if (attendanceHost) {
       ensureLiveButton();
 
       const stageCountLabel = document.querySelector("#tcStageCheckin .tc-stage-count span");
-      if (stageCountLabel) stageCountLabel.textContent = "sjekket inn";
+      setText(stageCountLabel, "sjekket inn");
 
       const next = document.getElementById("tcLeaderNext");
       if (!next) return;
@@ -123,8 +127,8 @@ if (attendanceHost) {
       if (checkinButton) {
         const title = next.querySelector(".tc-leader-next-copy strong");
         const text = next.querySelector(".tc-leader-next-copy p");
-        if (title) title.textContent = total > 0 ? `${checked} av ${total} sjekket inn` : `${checked} sjekket inn`;
-        if (text && pending > 0) text.textContent = `${pending} påmeldte mangler innsjekk.`;
+        setText(title, total > 0 ? `${checked} av ${total} sjekket inn` : `${checked} sjekket inn`);
+        if (pending > 0) setText(text, `${pending} påmeldte mangler innsjekk.`);
       }
 
       [...next.querySelectorAll("*")].forEach((node) => {
@@ -132,27 +136,27 @@ if (attendanceHost) {
         if (!text || node.children.length) return;
 
         if (text === "Oppmøtet ser klart ut") {
-          node.textContent = "Klar til å låse startfelt";
+          setText(node, "Klar til å låse startfelt");
           return;
         }
         const readyMatch = text.match(/^(\d+) spillere blir med$/);
         if (readyMatch) {
-          node.textContent = `${readyMatch[1]} spillere er sjekket inn`;
+          setText(node, `${readyMatch[1]} spillere er sjekket inn`);
           return;
         }
         const pendingMatch = text.match(/^(\d+) påmeldte er ikke sjekket inn og blir markert som ikke møtt\.$/);
         if (pendingMatch) {
-          node.textContent = `${pendingMatch[1]} påmeldte er ikke sjekket inn og blir markert som ikke møtt. Kun sjekket inn går videre til trekning og puljer.`;
+          setText(node, `${pendingMatch[1]} påmeldte er ikke sjekket inn og blir markert som ikke møtt. Kun sjekket inn går videre til trekning og puljer.`);
           return;
         }
         if (text === "Alle med bekreftet plass er sjekket inn.") {
-          node.textContent = "Alle med bekreftet plass er sjekket inn. Når startfeltet låses, er dette spillerne som går videre til trekning og puljer.";
+          setText(node, "Alle med bekreftet plass er sjekket inn. Når startfeltet låses, er dette spillerne som går videre til trekning og puljer.");
         }
       });
 
       const lockButton = next.querySelector('[data-leader-action="finish-checkin"]');
       if (lockButton) {
-        lockButton.textContent = "Lås startfelt";
+        setText(lockButton, "Lås startfelt");
         lockButton.title = "Lås oppmøtet. Bare sjekket inn tas med i trekning og puljer.";
       }
     } finally {
