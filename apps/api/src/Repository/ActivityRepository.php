@@ -127,7 +127,7 @@ final class ActivityRepository
         $pathsStmt->close();
 
         $recentStmt = $this->connection->prepare(
-            "SELECT ae.id,ae.occurred_at,ae.user_account_id,ae.surface,ae.event_name,ae.path,ae.tournament_id,
+            "SELECT ae.id,ae.occurred_at,ae.user_account_id,ae.auth_session_id,ae.surface,ae.event_name,ae.path,ae.tournament_id,ae.metadata_json,
                     ua.display_name,ua.email
              FROM `{$table}` ae
              LEFT JOIN `{$users}` ua ON ua.id=ae.user_account_id
@@ -173,7 +173,7 @@ final class ActivityRepository
         )->fetch_all(MYSQLI_ASSOC);
 
         $recent = $this->connection->query(
-            "SELECT ae.id,ae.occurred_at,ae.user_account_id,ae.club_id,ae.surface,ae.event_name,ae.path,ae.tournament_id,
+            "SELECT ae.id,ae.occurred_at,ae.user_account_id,ae.auth_session_id,ae.club_id,ae.surface,ae.event_name,ae.path,ae.tournament_id,ae.metadata_json,
                     ua.display_name,ua.email,c.name AS club_name
              FROM `{$table}` ae
              LEFT JOIN `{$users}` ua ON ua.id=ae.user_account_id
@@ -212,8 +212,13 @@ final class ActivityRepository
         foreach ($recent as &$row) {
             $row['id'] = (int) $row['id'];
             $row['user_account_id'] = $row['user_account_id'] !== null ? (int) $row['user_account_id'] : null;
+            $row['auth_session_id'] = isset($row['auth_session_id']) && $row['auth_session_id'] !== null ? (int) $row['auth_session_id'] : null;
             $row['club_id'] = isset($row['club_id']) && $row['club_id'] !== null ? (int) $row['club_id'] : null;
             $row['tournament_id'] = $row['tournament_id'] !== null ? (int) $row['tournament_id'] : null;
+            $metadataJson = isset($row['metadata_json']) ? (string) $row['metadata_json'] : '';
+            $metadata = $metadataJson !== '' ? json_decode($metadataJson, true) : null;
+            $row['metadata'] = is_array($metadata) ? $metadata : [];
+            unset($row['metadata_json']);
         }
         unset($row);
 
@@ -278,7 +283,10 @@ final class ActivityRepository
     /** @param array<string,mixed> $metadata @return array<string,mixed> */
     private function sanitizeMetadata(array $metadata): array
     {
-        $allowed = ['element_id','element_tag','action','href_path','portal_view','status','source'];
+        $allowed = [
+            'element_id','element_tag','action','href_path','portal_view','status','source',
+            'endpoint','method','http_status','error_code','elapsed_ms','timeout','phase','module',
+        ];
         $clean = [];
         foreach ($allowed as $key) {
             if (!array_key_exists($key, $metadata)) continue;
