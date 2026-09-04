@@ -1,6 +1,7 @@
+const KIOSK_RUNTIME_VERSION = "20260904-runtime-sync-01";
 const kioskBrandStyles = document.createElement("link");
 kioskBrandStyles.rel = "stylesheet";
-kioskBrandStyles.href = "./brand-light.css";
+kioskBrandStyles.href = `./brand-light.css?v=${KIOSK_RUNTIME_VERSION}`;
 document.head.appendChild(kioskBrandStyles);
 
 document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#0b3145");
@@ -11,7 +12,7 @@ function ensureExtendedKioskRuntime() {
     const css = document.createElement("link");
     css.id = "prodTestEntryStyles";
     css.rel = "stylesheet";
-    css.href = "./prod-test-entry.css?v=20260831-1715";
+    css.href = `./prod-test-entry.css?v=${KIOSK_RUNTIME_VERSION}`;
     document.head.appendChild(css);
   }
 
@@ -29,8 +30,8 @@ function ensureExtendedKioskRuntime() {
     document.body.appendChild(script);
   });
 
-  load("prodTestEntryRuntime", "./prod-test-entry.js?v=20260831-1715")
-    .then(() => load("scoliaRuntime", "./scolia-runtime.js?v=20260831-1715"));
+  load("prodTestEntryRuntime", `./prod-test-entry.js?v=${KIOSK_RUNTIME_VERSION}`)
+    .then(() => load("scoliaRuntime", `./scolia-runtime.js?v=${KIOSK_RUNTIME_VERSION}`));
 }
 
 ensureExtendedKioskRuntime();
@@ -81,7 +82,17 @@ window.addEventListener("appinstalled", () => {
 });
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js", { scope: "./" }).catch((error) => console.warn("Kiosk service worker kunne ikke registreres:", error)));
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("./service-worker.js", {
+        scope: "./",
+        updateViaCache: "none",
+      });
+      await registration.update().catch(() => undefined);
+    } catch (error) {
+      console.warn("Kiosk service worker kunne ikke registreres:", error);
+    }
+  });
 }
 
 const observer = new MutationObserver(() => installButton());

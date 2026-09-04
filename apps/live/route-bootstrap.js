@@ -1,4 +1,5 @@
 (() => {
+  const RUNTIME_VERSION = "20260904-live-runtime-sync-01";
   const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const match = window.location.pathname.match(/\/live\/(\d{4})\/?$/i);
   const liveCode = match?.[1] || "";
@@ -91,6 +92,30 @@
     return payload.data.club;
   }
 
+  async function currentReleaseSha() {
+    try {
+      const endpoint = `${siteBasePath()}release.json?cb=${Date.now()}`;
+      const response = await fetch(endpoint, { cache: "no-store" });
+      if (!response.ok) return "";
+      const release = await response.json().catch(() => null);
+      return String(release?.sha || release?.commit || "");
+    } catch {
+      return "";
+    }
+  }
+
+  async function keepRuntimeInSync() {
+    const initialSha = await currentReleaseSha();
+    if (!initialSha) return;
+    window.setInterval(async () => {
+      const latestSha = await currentReleaseSha();
+      if (!latestSha || latestSha === initialSha) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set("runtime_refresh", latestSha.slice(0, 12));
+      window.location.replace(url.toString());
+    }, 60000);
+  }
+
   function keepProfileInSync() {
     if (!liveCode) return;
     window.setInterval(async () => {
@@ -123,15 +148,16 @@
         applyClubProfile(null);
       }
 
-      await loadScript("./app.js?v=20260903-playoff-wall-01");
-      await loadScript("./playoff-live-v6.js?v=20260904-bracket-live-01");
+      await loadScript(`./app.js?v=${RUNTIME_VERSION}`);
+      await loadScript(`./playoff-live-v6.js?v=${RUNTIME_VERSION}`);
 
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
 
       // live-v2 owns table and ELO pagination. Do not load the legacy
       // profile-runtime ELO rotator; polling would restart its timer every 3s.
-      await loadScript("./live-v2.js?v=20260903-playoff-wall-01");
+      await loadScript(`./live-v2.js?v=${RUNTIME_VERSION}`);
       keepProfileInSync();
+      keepRuntimeInSync().catch(() => undefined);
     } catch (error) {
       if (cleanRoute) window.history.replaceState(null, "", originalUrl);
       showInvalidLink(error?.message || "Kunne ikke åpne Live-lenken.");

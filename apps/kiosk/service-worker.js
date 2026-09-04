@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v41";
+const SHELL_CACHE = "bd-kiosk-shell-v42";
 const SHELL = [
   "./",
   "./index.html",
@@ -52,6 +52,22 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+async function networkFirst(request, fallbackUrl = "") {
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (fallbackUrl) return (await caches.match(fallbackUrl)) || Response.error();
+    return Response.error();
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -62,14 +78,21 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.includes("/api/") || url.pathname.endsWith(".php")) return;
   if (url.origin !== self.location.origin) return;
 
+  // The kiosk is operational software, not a static brochure. HTML, JavaScript
+  // and CSS must prefer the deployed version whenever the terminal is online.
+  // Cache remains an offline fallback only.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("./index.html")));
+    event.respondWith(networkFirst(request, "./index.html"));
+    return;
+  }
+  if (["script", "style"].includes(request.destination)) {
+    event.respondWith(networkFirst(request));
     return;
   }
 
   event.respondWith(
     caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok && ["style", "script", "image", "manifest"].includes(request.destination)) {
+      if (response.ok && ["image", "manifest"].includes(request.destination)) {
         const copy = response.clone();
         caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
       }
