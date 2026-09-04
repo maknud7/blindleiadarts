@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260904-checkin-live-ux-01";
+const MODULE_VERSION = "20260904-menu-hotfix-01";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -121,7 +121,6 @@ async function loadModules() {
     ]);
 
     await import(moduleUrl("./tournament-leader-v2-board-state.js"));
-    await import(moduleUrl("./tournament-attendance-polish.js"));
 
     host.dataset.tournamentModules = "ready";
     hideLoading();
