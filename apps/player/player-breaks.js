@@ -1,6 +1,7 @@
 const API_ROOT = "../api/v1";
 const TOKEN_KEY = "bd:token";
 const card = document.getElementById("playerBreakCard");
+const section = document.getElementById("playerBreakSection");
 
 let context = null;
 let fetchedAt = 0;
@@ -59,6 +60,7 @@ function ensureStyles() {
   const style = document.createElement("style");
   style.id = "playerBreakStyles";
   style.textContent = `
+    #playerBreakSection.player-break-available{display:block!important}
     .break-countdown{font-size:clamp(2.7rem,12vw,5rem);line-height:1;font-weight:900;letter-spacing:-.05em;margin:.25rem 0}
     .break-state{display:grid;gap:.65rem}
     .break-state button{width:100%}
@@ -105,6 +107,7 @@ function patchPortalRendering() {
 
 function render() {
   ensureStyles();
+  section?.classList.toggle("player-break-available", Boolean(token() && context));
   if (!card) return;
   if (!token()) {
     card.innerHTML = `<p class="muted">Logg inn for å bruke spillerpause.</p>`;
