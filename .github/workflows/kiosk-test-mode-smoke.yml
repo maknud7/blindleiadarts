@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+# Deploy Test cancels superseded develop commits. Mirror that behaviour here so
+# a smoke run never keeps waiting for a release SHA that the deploy workflow has
+# intentionally skipped in favour of a newer develop commit.
+concurrency:
+  group: kiosk-test-mode-smoke
+  cancel-in-progress: true
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
