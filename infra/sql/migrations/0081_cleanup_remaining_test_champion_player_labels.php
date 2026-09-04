@@ -27,9 +27,9 @@ return static function (mysqli $mysqli, string $prefix): void {
         }
     }
 
-    // 0068 only handled one specific Atlas import shape. Some older TEST actors
-    // have the same erroneous presentation prefix without that exact metadata.
-    // Treat "Champion " as DartsAtlas presentation chrome, not player identity.
+    // 0068 only handled one specific historical import shape. Some older TEST
+    // actors have the same erroneous presentation prefix without that metadata.
+    // Treat "Champion " as presentation chrome, not player identity.
     $sources = $mysqli->query(
         "SELECT id,club_id,display_name,member_id
          FROM `{$players}`
@@ -119,7 +119,7 @@ return static function (mysqli $mysqli, string $prefix): void {
                 'broadened_after_0068' => true,
                 'historical_actor_references_preserved' => true,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $reason = 'DartsAtlas Champion presentation label stored as TEST player name';
+            $reason = 'Historical Champion presentation label stored as TEST player name';
             $audit = $mysqli->prepare(
                 "INSERT INTO `{$merges}`
                  (club_id,source_player_id,target_player_id,source_display_name,target_display_name,merged_by_user_account_id,reason,summary_json)
