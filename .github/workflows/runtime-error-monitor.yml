@@ -1,0 +1,85 @@
+name: Runtime Error Monitor
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/runtime-error-monitor.yml'
+      - 'infra/monitor/runtime_errors.php'
+      - 'packages/ui-assets/activity.js'
+      - 'packages/ui-assets/runtime-diagnostics.js'
+      - 'apps/api/src/Repository/ActivityRepository.php'
+      - 'apps/admin/tournament-diagnostics.js'
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-error-monitor
+  cancel-in-progress: false
+
+jobs:
+  runtime-errors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate monitor configuration
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          for name in DB_HOST DB_NAME DB_USERNAME DB_PASSWORD; do
+            test -n "${!name:-}" || { echo "::error::Missing ${name}"; exit 2; }
+          done
+
+      - name: Inspect captured TEST and PROD runtime errors
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MONITOR_WINDOW_MINUTES: '65'
+        run: |
+          set +e
+
+          echo "### Runtime Error Monitor" >> "$GITHUB_STEP_SUMMARY"
+          echo "Every captured browser/API/resource error is retained in activity_events. This hourly check groups identical occurrences only for the report." >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+          MONITOR_ENV=TEST DB_TABLE_PREFIX=bd_test_ php infra/monitor/runtime_errors.php
+          test_status=$?
+
+          MONITOR_ENV=PROD DB_TABLE_PREFIX=bd_prod_ php infra/monitor/runtime_errors.php
+          prod_status=$?
+
+          if [ "$test_status" -eq 2 ] || [ "$prod_status" -eq 2 ]; then
+            echo "::error::Runtime monitor itself failed to query one or more environments."
+            exit 2
+          fi
+
+          if [ "$test_status" -ne 0 ] || [ "$prod_status" -ne 0 ]; then
+            echo "::error::User-facing runtime errors were captured in the last 65 minutes. See the step summary for grouped evidence."
+            exit 1
+          fi
+
+          echo "No captured runtime errors in TEST or PROD during the monitoring window."
