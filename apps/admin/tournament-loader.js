@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260904-admin-load-01";
+const MODULE_VERSION = "20260904-admin-load-03";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -18,6 +18,14 @@ function clubReady() {
 
 function adminVisible() {
   return !document.getElementById("adminApp")?.classList.contains("hidden");
+}
+
+function tournamentRouteRequested() {
+  const hash = String(window.location.hash || "");
+  return hash === "#tournaments"
+    || hash === "#tournament-admin"
+    || hash.endsWith("/tournament-admin")
+    || document.body.dataset.portalActive === "tournaments";
 }
 
 function moduleUrl(path) {
@@ -78,6 +86,41 @@ function waitForInitialContext(timeoutMs = 5000) {
     window.addEventListener("bd:tournament-context", done);
     timer = window.setTimeout(done, timeoutMs);
   });
+}
+
+async function primeTournamentPicker() {
+  const select = document.getElementById("tcTournament");
+  const id = Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:selectedClubId") || 0);
+  if (!select || !id || select.options.length > 0) return;
+
+  const url = new URL(`../api/v1/clubs/${id}/registration-tournaments`, import.meta.url);
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) return;
+
+  const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+  if (!items.length || select.options.length > 0) return;
+
+  const selected = Number(select.value || 0);
+  const statusLabel = (status) => ({
+    draft: "Planlagt",
+    ready: "Klar",
+    in_progress: "Pågår",
+    completed: "Ferdig",
+  })[String(status || "")] || String(status || "");
+
+  select.replaceChildren(...items.map((tournament) => {
+    const option = document.createElement("option");
+    option.value = String(Number(tournament.id));
+    option.textContent = `${String(tournament.name || "Turnering")} · ${statusLabel(tournament.status)}`;
+    return option;
+  }));
+
+  if (items.some((tournament) => Number(tournament.id) === selected)) {
+    select.value = String(selected);
+  }
+
+  select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 async function loadLiveTools() {
@@ -183,6 +226,12 @@ async function loadModules() {
     await import(moduleUrl("./tournament-admin.js"));
     updateLoading("Henter turnering …");
 
+    // tournament-admin historically waits for both the tournament catalogue and
+    // the complete player list. The latter is not required to open an existing
+    // tournament, so prime the picker independently if that combined request is
+    // still waiting. Its own load will reconcile the same selection afterwards.
+    primeTournamentPicker().catch(() => undefined);
+
     await Promise.all([
       import(moduleUrl("./tournament-checkin-admin.js")),
       import(moduleUrl("./tournament-wizard-v2.js")),
@@ -253,11 +302,11 @@ window.addEventListener("bd:tournament-context", (event) => {
 });
 
 window.addEventListener("hashchange", () => {
-  if (location.hash === "#tournaments" || location.hash.endsWith("/tournament-admin")) requestTournamentRoom();
+  if (tournamentRouteRequested()) requestTournamentRoom();
 });
 
 document.getElementById("clubSelect")?.addEventListener("change", tryLoad);
 
-if (location.hash === "#tournaments" || location.hash.endsWith("/tournament-admin") || document.body.dataset.portalActive === "tournaments") {
+if (tournamentRouteRequested()) {
   requestTournamentRoom();
 }
