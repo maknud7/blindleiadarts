@@ -122,25 +122,37 @@ body.kiosk-fine-polish.kiosk-ux-v2 .entry-display {
   justify-content: flex-start;
 }
 
-/* Undo belongs with scoring actions, not in the match identity column.
-   The mode selector has its own explicit column so moving Undo here can never
-   displace or overlap Sum / Per pil on portrait tablets. */
+/* Keep scoring context, Sum / Per pil and Undo on one physical row.
+   Explicit row placement avoids CSS-grid auto-placement putting the selector
+   on a second row on the 500–600px Android tablet viewport. */
 body.kiosk-fine-polish .scoring-head {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) clamp(148px, 36vw, 218px) auto !important;
-  align-items: center;
+  grid-template-rows: 40px !important;
+  grid-auto-rows: 0 !important;
+  align-items: center !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  max-height: 40px !important;
+  overflow: visible !important;
 }
 
 body.kiosk-fine-polish .scoring-head > div:first-child {
   grid-column: 1 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
   min-width: 0 !important;
+  height: 40px !important;
 }
 
 body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
   grid-column: 3 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
   width: auto;
   min-width: 0;
   min-height: 32px;
+  height: 32px !important;
   margin: 0;
   padding: 5px 10px;
   border-radius: 10px;
@@ -152,13 +164,20 @@ body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
 
 body.kiosk-fine-polish .mode-switch {
   grid-column: 2 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   width: 100% !important;
   min-width: 0 !important;
-  margin-left: 0 !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  margin: 0 !important;
+  padding: 3px !important;
   visibility: visible !important;
   opacity: 1 !important;
+  overflow: visible !important;
 }
 
 body.kiosk-fine-polish .mode-switch button {
@@ -166,6 +185,11 @@ body.kiosk-fine-polish .mode-switch button {
   align-items: center !important;
   justify-content: center !important;
   min-width: 0 !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  padding-block: 0 !important;
+  line-height: 1 !important;
+  overflow: visible !important;
 }
 
 /* Recent four throws remain exactly where they are and stay editable. */
