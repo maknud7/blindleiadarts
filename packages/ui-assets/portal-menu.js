@@ -1,4 +1,4 @@
-import(new URL("./session-badge.js?v=20260904-session-badge-01", import.meta.url).href)
+import(new URL("./session-badge.js?v=20260904-session-badge-02", import.meta.url).href)
   .catch((error) => console.warn("Session badge unavailable", error));
 
 import(new URL("./user-guide.js?v=20260831-1453", import.meta.url).href)
