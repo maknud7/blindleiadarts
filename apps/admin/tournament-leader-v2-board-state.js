@@ -9,6 +9,14 @@ if (host) {
     return document.querySelectorAll('#tcBoardSelection input[data-board-id]:checked').length;
   }
 
+  function setHtmlIfChanged(node, html) {
+    if (node && node.innerHTML !== html) node.innerHTML = html;
+  }
+
+  function setTextIfChanged(node, text) {
+    if (node && node.textContent !== text) node.textContent = text;
+  }
+
   function syncDraftMinimum(leader, state) {
     if (String(state.status || "") !== "draft") return;
     const next = leader.querySelector("#tcLeaderNext");
@@ -19,23 +27,23 @@ if (host) {
     const pending = Math.max(0, active - checked);
 
     if (checked < MIN_PLAYERS) {
-      next.innerHTML = `
+      setHtmlIfChanged(next, `
         <div class="tc-leader-next-copy">
           <span>Innsjekk</span>
           <strong>${checked} av minst ${MIN_PLAYERS} spillere klare</strong>
           <p>${pending ? `${pending} påmeldte mangler innsjekk.` : "Flere spillere må sjekkes inn før oppmøtet kan låses."}</p>
         </div>
-        <button type="button" class="button" data-leader-action="checkin">Sjekk inn spillere</button>`;
+        <button type="button" class="button" data-leader-action="checkin">Sjekk inn spillere</button>`);
       return;
     }
 
-    next.innerHTML = `
+    setHtmlIfChanged(next, `
       <div class="tc-leader-next-copy">
         <span>Oppmøtet ser klart ut</span>
         <strong>${checked} spillere blir med</strong>
         <p>${pending ? `${pending} påmeldte er ikke sjekket inn og blir markert som ikke møtt.` : "Alle med bekreftet plass er sjekket inn."}</p>
       </div>
-      <button type="button" class="button" data-leader-action="finish-checkin">Avslutt innsjekk</button>`;
+      <button type="button" class="button" data-leader-action="finish-checkin">Avslutt innsjekk</button>`);
   }
 
   function syncBoardState(leader, state) {
@@ -53,35 +61,35 @@ if (host) {
     if (count > 0) {
       boardsStep.dataset.state = "done";
       boardsStep.removeAttribute("aria-current");
-      if (boardsNumber) boardsNumber.textContent = "✓";
+      setTextIfChanged(boardsNumber, "✓");
 
       startStep.dataset.state = "current";
       startStep.setAttribute("aria-current", "step");
-      if (startNumber) startNumber.textContent = "5";
+      setTextIfChanged(startNumber, "5");
 
-      next.innerHTML = `
+      setHtmlIfChanged(next, `
         <div class="tc-leader-next-copy">
           <span>Klar til start</span>
           <strong>${Number(state.checked || 0)} spillere · ${count} ${count === 1 ? "skive" : "skiver"}</strong>
           <p>Disse skivene lagres før start. Nye kamper sendes bare til skivene som er valgt for turneringen.</p>
         </div>
-        <button type="button" class="button" data-leader-action="start">Start turnering</button>`;
+        <button type="button" class="button" data-leader-action="start">Start turnering</button>`);
     } else {
       boardsStep.dataset.state = "current";
       boardsStep.setAttribute("aria-current", "step");
-      if (boardsNumber) boardsNumber.textContent = "4";
+      setTextIfChanged(boardsNumber, "4");
 
       startStep.dataset.state = "available";
       startStep.removeAttribute("aria-current");
-      if (startNumber) startNumber.textContent = "5";
+      setTextIfChanged(startNumber, "5");
 
-      next.innerHTML = `
+      setHtmlIfChanged(next, `
         <div class="tc-leader-next-copy">
           <span>Skiver</span>
           <strong>Velg skivene turneringen skal bruke</strong>
           <p>Ingen skiver er bekreftet. Minst én aktiv skive må velges før start.</p>
         </div>
-        <button type="button" class="button" data-leader-action="boards">Velg skiver</button>`;
+        <button type="button" class="button" data-leader-action="boards">Velg skiver</button>`);
     }
 
     state.selectedBoardCount = count;
@@ -105,7 +113,7 @@ if (host) {
     const leader = document.getElementById("tcLeaderV2");
     if (!leader || observer) return;
     observer = new MutationObserver(() => window.requestAnimationFrame(syncLeaderState));
-    observer.observe(leader, { childList: true, subtree: true, characterData: true });
+    observer.observe(leader, { childList: true, subtree: true });
   }
 
   host.addEventListener("change", (event) => {
