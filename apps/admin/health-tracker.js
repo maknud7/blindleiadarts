@@ -27,6 +27,19 @@ function healthTime(value) {
   }).format(date);
 }
 
+function healthDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(String(value).replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("nb-NO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function detailText(detail) {
   if (!detail || typeof detail !== "object") return "";
   return Object.entries(detail)
@@ -172,6 +185,55 @@ async function authenticatedProbe(name, label, relativeUrl) {
   }
 }
 
+async function sessionProbe() {
+  const token = localStorage.getItem("bd:token") || "";
+  if (!token) return { name: "auth_session_id", label: "Din aktive sesjon", status: "fail", ms: 0, detail: { error: "ingen innlogget sesjon" } };
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const started = performance.now();
+  try {
+    const response = await fetch("../api/v1/activity/session", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    const elapsed = Math.round(performance.now() - started);
+    if (!response.ok || !payload?.ok) {
+      return {
+        name: "auth_session_id",
+        label: "Din aktive sesjon",
+        status: "fail",
+        ms: elapsed,
+        detail: { http: response.status, error: payload?.error?.code || payload?.error?.message || "ugyldig svar" },
+      };
+    }
+    const session = payload.data?.session || {};
+    const user = payload.data?.user || {};
+    return {
+      name: "auth_session_id",
+      label: "Din aktive sesjon",
+      status: Number(session.id || 0) > 0 ? "ok" : "warn",
+      ms: elapsed,
+      detail: {
+        sesjon: Number(session.id || 0) > 0 ? `#${Number(session.id)}` : "ukjent",
+        bruker: user.display_name || `#${Number(user.id || 0)}`,
+        utløper: healthDateTime(session.expires_at),
+      },
+    };
+  } catch (error) {
+    return {
+      name: "auth_session_id",
+      label: "Din aktive sesjon",
+      status: "fail",
+      ms: Math.round(performance.now() - started),
+      detail: { error: error?.name === "AbortError" ? "timeout etter 12 sekunder" : error?.message || "nettverksfeil" },
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function identityHealthProbe() {
   const token = localStorage.getItem("bd:token") || "";
   if (!token) return null;
@@ -208,6 +270,7 @@ async function identityHealthProbe() {
 async function authenticatedDiagnostics() {
   if (!localStorage.getItem("bd:token")) return [];
   const probes = await Promise.all([
+    sessionProbe(),
     authenticatedProbe("auth_me", "Innlogget sesjon", "../api/v1/auth/me"),
     authenticatedProbe("me_dashboard", "Min side-dashboard med din sesjon", "../api/v1/me/dashboard"),
     authenticatedProbe("member_self", "Ditt medlemskap og kontingent", "../api/member-onboarding.php?action=self"),
