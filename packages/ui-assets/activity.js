@@ -90,6 +90,10 @@
   function selectedTournamentId() {
     const direct = Number(context.tournament_id || 0);
     if (direct > 0) return direct;
+    const runtime = Number(window.__bdTournamentContext?.tournamentId || window.__bdTournamentContext?.id || 0);
+    if (runtime > 0) return runtime;
+    const visible = Number(document.getElementById("tcTournament")?.value || 0);
+    if (visible > 0) return visible;
     const selected = Number(localStorage.getItem("bd:adminTournamentId") || 0);
     return selected > 0 ? selected : null;
   }
@@ -99,17 +103,32 @@
   }
 
   function eventKey(eventName, metadata) {
-    return `${eventName}|${cleanPath()}|${metadata?.portal_view || metadata?.action || metadata?.element_id || ""}`;
+    return [
+      eventName,
+      cleanPath(),
+      metadata?.portal_view || metadata?.action || metadata?.element_id || "",
+      metadata?.endpoint || "",
+      metadata?.error_code || "",
+      metadata?.source_file || "",
+      metadata?.line || "",
+    ].join("|");
+  }
+
+  function diagnosticEvent(eventName) {
+    const name = String(eventName || "").toLowerCase();
+    return name.includes("error") || name === "js_unhandled_rejection" || name === "resource_error";
   }
 
   function push(eventName, metadata = {}) {
     const now = Date.now();
     if (now < pausedUntil) return;
 
-    const key = eventKey(eventName, metadata);
-    const previousAt = recent.get(key) || 0;
-    if (now - previousAt < DEDUPE_MS) return;
-    recent.set(key, now);
+    if (!diagnosticEvent(eventName)) {
+      const key = eventKey(eventName, metadata);
+      const previousAt = recent.get(key) || 0;
+      if (now - previousAt < DEDUPE_MS) return;
+      recent.set(key, now);
+    }
 
     if (queue.length >= MAX_QUEUE) queue.shift();
     queue.push({
@@ -125,7 +144,13 @@
       tournament_id: selectedTournamentId(),
       metadata,
     });
-    schedule();
+
+    if (diagnosticEvent(eventName)) {
+      clearTimer();
+      schedule(1000);
+    } else {
+      schedule();
+    }
   }
 
   function clearTimer() {
@@ -226,3 +251,6 @@
     push("page_view");
   }
 })();
+
+import(new URL("./runtime-diagnostics.js?v=20260904-runtime-errors-01", import.meta.url).href)
+  .catch((error) => console.warn("Runtime diagnostics unavailable", error));
