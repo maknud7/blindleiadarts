@@ -3,16 +3,11 @@ const BADGE_ID = "bd-session-badge";
 const REFRESH_MS = 5 * 60 * 1000;
 let refreshTimer = null;
 let lastToken = null;
+let lastSession = null;
+let accountObserver = null;
 
 function token() {
   return window.BlindleiaApp?.session?.token?.() || localStorage.getItem("bd:token") || "";
-}
-
-function isTestEnvironment() {
-  return document.documentElement.dataset.appEnv === "test"
-    || /(^|[.-])test([.-]|$)/i.test(window.location.hostname)
-    || /\/test(?:\/|$)/i.test(window.location.pathname)
-    || new URLSearchParams(window.location.search).get("pwa") === "test";
 }
 
 function ensureStyle() {
@@ -20,29 +15,58 @@ function ensureStyle() {
   const style = document.createElement("style");
   style.id = "bd-session-badge-style";
   style.textContent = `
-#${BADGE_ID}{position:fixed;left:10px;bottom:10px;z-index:118;display:inline-flex;align-items:center;gap:5px;max-width:calc(100vw - 20px);padding:5px 8px;border:1px solid rgba(12,35,64,.16);border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 2px 10px rgba(12,35,64,.10);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#52667e;font:700 10px/1.15 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.01em;cursor:pointer;user-select:none;-webkit-user-select:none}
-#${BADGE_ID}:hover{background:#fff;color:#0c2340}
-#${BADGE_ID}[data-test="1"]{border-color:#d8aa18;background:rgba(255,248,216,.96);color:#6b5000}
-#${BADGE_ID} .bd-session-label{font-weight:600;opacity:.82}
-#${BADGE_ID} .bd-session-value{font-weight:850;font-variant-numeric:tabular-nums}
-#${BADGE_ID}.bd-session-copied::after{content:"Kopiert";position:absolute;left:0;bottom:calc(100% + 5px);padding:4px 7px;border-radius:7px;background:#0c2340;color:#fff;font-size:9px;white-space:nowrap;box-shadow:0 2px 8px rgba(12,35,64,.16)}
-@media(max-width:760px){#${BADGE_ID}{bottom:calc(var(--unified-mobile-bar,72px) + env(safe-area-inset-bottom) + 7px);left:8px;z-index:119;padding:4px 7px;font-size:9px}}
+#${BADGE_ID}{display:block;width:max-content;max-width:100%;margin:2px 0 0;padding:0;border:0;background:transparent!important;box-shadow:none!important;color:rgba(184,203,224,.46);font:600 9px/1.2 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.015em;text-align:left;cursor:pointer;user-select:none;-webkit-user-select:none}
+#${BADGE_ID}:hover,#${BADGE_ID}:focus-visible{color:rgba(220,232,244,.78);outline:none}
+#${BADGE_ID} .bd-session-label{font-weight:500;opacity:.82}
+#${BADGE_ID} .bd-session-value{font-weight:650;font-variant-numeric:tabular-nums}
+#${BADGE_ID}.bd-session-copied{color:rgba(220,232,244,.9)}
+#${BADGE_ID}.bd-session-copied::after{content:" · kopiert";font-weight:500;opacity:.8}
+.unified-sidebar-account #${BADGE_ID},#adminSidebarAccount #${BADGE_ID}{position:static!important;inset:auto!important;z-index:auto!important}
+@media(max-width:760px){#${BADGE_ID}{font-size:8px;margin-top:1px}}
 `;
   document.head.appendChild(style);
+}
+
+function accountHost() {
+  return document.querySelector(".unified-sidebar-account > div")
+    || document.querySelector("#adminSidebarAccount > div");
 }
 
 function removeBadge() {
   document.getElementById(BADGE_ID)?.remove();
 }
 
+function installAccountObserver() {
+  if (accountObserver) return;
+  const root = document.querySelector(".portal-menu") || document.body;
+  if (!root) return;
+  accountObserver = new MutationObserver(() => {
+    if (!lastSession || document.getElementById(BADGE_ID)) return;
+    renderSession(lastSession);
+  });
+  accountObserver.observe(root, { childList: true, subtree: true });
+}
+
 function renderSession(session) {
   const id = Number(session?.id || 0);
   if (!id) {
+    lastSession = null;
     removeBadge();
     return;
   }
 
+  lastSession = session;
   ensureStyle();
+  installAccountObserver();
+
+  const host = accountHost();
+  if (!host) {
+    window.setTimeout(() => {
+      if (lastSession && !document.getElementById(BADGE_ID)) renderSession(lastSession);
+    }, 180);
+    return;
+  }
+
   let badge = document.getElementById(BADGE_ID);
   if (!badge) {
     badge = document.createElement("button");
@@ -58,21 +82,21 @@ function renderSession(session) {
         badge.classList.add("bd-session-copied");
         window.setTimeout(() => badge.classList.remove("bd-session-copied"), 1200);
       } catch {
-        // Badge still remains useful for screenshots/manual copy.
+        // The reference remains visible for screenshots and manual copy.
       }
     });
-    (document.body || document.documentElement).appendChild(badge);
   }
 
   badge.dataset.sessionId = String(id);
-  badge.dataset.test = isTestEnvironment() ? "1" : "0";
-  badge.innerHTML = `<span class="bd-session-label">Sesjon</span><span class="bd-session-value">#${id}</span>`;
+  badge.innerHTML = `<span class="bd-session-label">sesjon</span> <span class="bd-session-value">#${id}</span>`;
+  if (badge.parentElement !== host) host.appendChild(badge);
 }
 
 async function refreshSession({ force = false } = {}) {
   const auth = token();
   if (!auth) {
     lastToken = null;
+    lastSession = null;
     removeBadge();
     return;
   }
@@ -87,6 +111,7 @@ async function refreshSession({ force = false } = {}) {
     });
     const payload = await response.json().catch(() => null);
     if (response.status === 401) {
+      lastSession = null;
       removeBadge();
       return;
     }
@@ -103,6 +128,9 @@ function scheduleRefresh() {
 }
 
 window.addEventListener("bd:session", () => refreshSession({ force: true }));
+window.addEventListener("bd:portal-view", () => {
+  if (lastSession) window.setTimeout(() => renderSession(lastSession), 0);
+});
 window.addEventListener("storage", (event) => {
   if (event.key === "bd:token") refreshSession({ force: true });
 });
