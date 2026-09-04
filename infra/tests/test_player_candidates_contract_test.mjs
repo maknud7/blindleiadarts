@@ -13,7 +13,9 @@ const cleanupV2 = readFileSync("infra/sql/migrations/0081_cleanup_remaining_test
 assert.match(endpoint, /tp\.is_active=1/);
 assert.match(endpoint, /tp\.merged_into_player_id IS NULL/);
 assert.match(endpoint, /CASE WHEN ip\.id IS NULL THEN 'test_player' ELSE 'prod_identity' END/);
-assert.match(endpoint, /NOT LIKE 'champion %'/);
+// Runtime candidate queries must expose canonical data as-is. Historical label
+// artifacts belong in migration cleanup, not in UI/API special-case filters.
+assert.doesNotMatch(endpoint, /champion/i);
 assert.doesNotMatch(endpoint, /account_status='active'/);
 assert.doesNotMatch(client, /Number\(player\.member_id\) > 0/);
 assert.doesNotMatch(client, /identity_source \|\| ""\) === "prod_identity"/);
