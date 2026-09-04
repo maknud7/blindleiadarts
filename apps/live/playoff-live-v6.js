@@ -81,7 +81,7 @@
     const active = Boolean(liveInfo?.match?.current_player_id && player && Number(liveInfo.match.current_player_id) === Number(player.id));
     const score = slot === "a" ? Number(node.legs_a || 0) : Number(node.legs_b || 0);
     const showLiveScore = Boolean(live && (status === "in_progress" || status === "assigned"));
-    const showMatchScore = Boolean(node.match_id) && player;
+    const showMatchScore = Boolean(node.match_id) && Boolean(player) && ["assigned", "in_progress", "completed"].includes(status);
 
     if (!player) {
       return `<div class="live-bracket-player pending-player">
