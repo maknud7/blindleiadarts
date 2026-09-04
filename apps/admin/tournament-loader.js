@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260904-admin-load-04";
+const MODULE_VERSION = "20260904-admin-load-05";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -219,6 +219,10 @@ async function loadModules() {
 
   loading = (async () => {
     const contextReady = waitForInitialContext();
+
+    // Install the lightweight request observer first so any failed or unusually
+    // slow tournament API call is persisted with the authenticated session id.
+    await import(moduleUrl("./tournament-diagnostics.js"));
 
     // tournament-admin creates the canonical workspace DOM and begins its data
     // fetch immediately. Only the modules required to safely operate the room
