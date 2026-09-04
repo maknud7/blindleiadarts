@@ -1,5 +1,5 @@
 const SURFACE = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview" ? "admin" : "player";
-const GUIDE_VERSION = "02.09.2026";
+const GUIDE_VERSION = "04.09.2026";
 
 const ELO_EXPLANATION = Object.freeze([
   "Alle starter på 1000 ELO i sesongen når den første tellende ELO-kampen registreres.",
@@ -222,7 +222,8 @@ const GUIDES = Object.freeze({
           "Åpne Turneringer og velg å opprette ny turnering.",
           "Angi navn, startdato og starttid.",
           "Sett påmeldingsreglene og når innsjekk skal åpne.",
-          "Velg kampformat, startscore, antall grupper, trekning, Best av og hvor mange som går videre når disse valgene er relevante.",
+          "Velg turneringsformat, startscore, Best av, hvor mange som går videre per gruppe og om sluttspillet skal opprettes automatisk når disse valgene er relevante. Antall grupper bestemmes senere ut fra de som faktisk sjekker inn.",
+          "For Gruppespill + sluttspill er Opprett sluttspill automatisk normalt på. Da bruker systemet valget Videre per gruppe og Sluttspill · best av når siste gruppekamp er ferdig.",
           "Kontroller ELO-innstillingen før kampene starter. Slå av ELO for trening, generalprøve eller andre urangerte turneringer.",
           "Lagre turneringen og kontroller den i den vanlige turneringsvisningen.",
         ],
@@ -232,17 +233,19 @@ const GUIDES = Object.freeze({
         id: "checkin-start",
         group: "Turnering",
         title: "Sjekk inn spillere og start turneringen",
-        summary: "Fra påmeldingsliste til grupper og kamper.",
+        summary: "Fra påmeldingsliste til grupper, kamper og automatisk sluttspill.",
         steps: [
           "Åpne den aktuelle turneringen som admin.",
           "Vent til innsjekkvinduet har åpnet. Admin kan heller ikke sjekke inn spillere før dette tidspunktet.",
           "Sjekk inn spillerne som faktisk har møtt. En feilinnsjekket spiller kan sjekkes ut igjen før start.",
-          "Kontroller formatet en siste gang: score, grupper, trekning, Best av og sluttspillregler.",
-          "Kontroller at alle som skal delta står som sjekket inn.",
-          "Start turneringen.",
+          "Gå til Format & start. For gruppespill beregnes gyldige gruppevalg fra de innsjekkede spillerne, og hver gruppe må ha minst 4 spillere. Antall grupper trenger ikke være et partall; 1, 2, 3, 4 og videre er tillatt så lenge minste gruppe fortsatt har minst 4.",
+          "Ved Gruppespill + sluttspill velger du hvor mange som går videre per gruppe. Ingen gruppe kan sende videre flere enn den har spillere, og samlet antall kvalifiserte må være mellom 2 og 32.",
+          "Les formatkontrollen før start. Den viser minste gruppestørrelse og, for sluttspill, hvor stor bracketen blir og om noen får friplass fordi antall kvalifiserte ikke er 2, 4, 8, 16 eller 32.",
+          "La Opprett sluttspill automatisk stå på når systemet skal gjøre overgangen selv. Når siste gruppekamp er ferdig, opprettes sluttspillet fra de ferdige gruppetabellene med valgt antall videre og valgt Best av.",
+          "Kontroller at alle som skal delta står som sjekket inn, og start turneringen.",
           "Kontroller gruppetrekning og opprettede kamper før første kamp settes i gang.",
         ],
-        note: "Påmelding reserverer plass; innsjekk bekrefter oppmøte. Bare de sjekket inn spillerne tas med når turneringen starter.",
+        note: "Påmelding reserverer plass; innsjekk bekrefter oppmøte. Bare de sjekket inn spillerne tas med når turneringen starter, og det er dette antallet som bestemmer hvilke gruppevalg som er gyldige.",
       },
       {
         id: "tournament-boards",
