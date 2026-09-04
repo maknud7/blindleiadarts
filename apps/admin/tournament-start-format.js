@@ -83,7 +83,17 @@ window.addEventListener("bd:tournament-context",event=>{
   }
 });
 
-const observer=new MutationObserver(()=>{
-  if(ensureControls()&&window.__bdTournamentContext?.view==="format") load(window.__bdTournamentContext.id).catch(()=>{});
-});
-observer.observe(document.body,{subtree:true,childList:true});
+/* Controls normally exist before this module is loaded. If module ordering changes,
+   observe only Tournament Admin until the controls appear, then disconnect. A
+   document.body observer made unrelated portal/menu DOM updates trigger format work. */
+if(!ensureControls()){
+  const observerRoot=document.getElementById("tournaments");
+  if(observerRoot){
+    const observer=new MutationObserver(()=>{
+      if(!ensureControls()) return;
+      observer.disconnect();
+      if(window.__bdTournamentContext?.view==="format") load(window.__bdTournamentContext.id).catch(()=>{});
+    });
+    observer.observe(observerRoot,{subtree:true,childList:true});
+  }
+}
