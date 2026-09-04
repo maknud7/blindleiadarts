@@ -1,6 +1,6 @@
-release_sha=25eca68700d60e0500fe520cb9f794b08688a68c
+release_sha=71cb0eb0289d1798c77668fbd114c9bb8184e0a6
 backup_confirmed=YES
 migration_review_confirmed=YES
-requested_at=2026-09-03T15:52:00Z
-purpose=full_environment_sync
-backup_prefix=bd_backup_20260903_154358_
+requested_at=2026-09-04T10:10:00Z
+purpose=full_prod_release_20260904
+backup_prefix=bd_backup_20260904_100822_
