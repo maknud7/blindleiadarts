@@ -71,7 +71,9 @@
         .replace(/((?:href|src)=["'])\.\/([^"']+)/g, (_, start, rest) => `${start}${childPrefix}${rest}`)
         .replace(/((?:href|src)=["'])\.\.\/([^"']+)/g, (_, start, rest) => `${start}${rootPrefix}${rest}`)
         .replace(/portal-menu\.js(?:\?v=[^"']*)?(?=["'])/g, `portal-menu.js?v=${VERSION}`)
-        .replace(/tournament-loader\.js(?:\?v=[^"']*)?(?=["'])/g, `tournament-loader.js?v=${VERSION}`);
+        .replace(/tournament-loader\.js(?:\?v=[^"']*)?(?=["'])/g, `tournament-loader.js?v=${VERSION}`)
+        .replace(/health-tracker\.js(?:\?v=[^"']*)?(?=["'])/g, `health-tracker.js?v=${VERSION}`)
+        .replace(/activity-admin\.js(?:\?v=[^"']*)?(?=["'])/g, `activity-admin.js?v=${VERSION}`);
 
       if (surface === "admin") {
         output = output
