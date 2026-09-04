@@ -41,7 +41,7 @@
   </main>
 
   <script type="module">
-    const VERSION = "20260904-canonical-cache-menu-02";
+    const VERSION = "20260904-stale-attendance-hotfix-03";
     const app = (await import(`./packages/ui-assets/app-core.js?v=${VERSION}`)).default;
     const bootText = document.getElementById("portalBootText");
     const rootPath = window.location.pathname.endsWith("/")
@@ -95,7 +95,7 @@
       output = output.replace(/<\/head>/i, `${sharedStyles}</head>`);
       output = output.replace(
         /<body([^>]*)>/i,
-        `<body$1 data-bd-surface="${surface}" data-canonical-root="1" data-canonical-surface="${surface}">`
+        `<body$1 data-bd-surface="${surface}" data-canonical-root="1" data-canonical-surface="${surface}" data-runtime-version="${VERSION}">`
       );
       return output;
     }
