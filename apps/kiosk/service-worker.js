@@ -52,7 +52,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-async function networkFirst(request) {
+async function networkFirst(request, fallbackUrl = "") {
   try {
     const response = await fetch(request, { cache: "no-store" });
     if (response.ok) {
@@ -61,7 +61,10 @@ async function networkFirst(request) {
     }
     return response;
   } catch {
-    return (await caches.match(request)) || Response.error();
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (fallbackUrl) return (await caches.match(fallbackUrl)) || Response.error();
+    return Response.error();
   }
 }
 
@@ -78,7 +81,11 @@ self.addEventListener("fetch", (event) => {
   // The kiosk is operational software, not a static brochure. HTML, JavaScript
   // and CSS must prefer the deployed version whenever the terminal is online.
   // Cache remains an offline fallback only.
-  if (request.mode === "navigate" || ["script", "style"].includes(request.destination)) {
+  if (request.mode === "navigate") {
+    event.respondWith(networkFirst(request, "./index.html"));
+    return;
+  }
+  if (["script", "style"].includes(request.destination)) {
     event.respondWith(networkFirst(request));
     return;
   }
