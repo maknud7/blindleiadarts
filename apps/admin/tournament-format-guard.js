@@ -53,6 +53,12 @@ function formatValue() {
   return document.getElementById("tcTournamentFormat")?.value || "groups_playoff";
 }
 
+function setHint(hint, className, html) {
+  const nextClassName = `tc-format-guard${className ? ` ${className}` : ""}`;
+  if (hint.className !== nextClassName) hint.className = nextClassName;
+  if (hint.innerHTML !== html) hint.innerHTML = html;
+}
+
 function evaluate() {
   const hint = ensureHint();
   const groupInput = document.getElementById("tcGroupCount");
@@ -63,8 +69,7 @@ function evaluate() {
   const format = formatValue();
   const groupFormat = format === "groups_playoff" || format === "groups_only";
   if (!groupFormat) {
-    hint.className = "tc-format-guard";
-    hint.innerHTML = `<strong>Format uten gruppespill</strong>Gruppestørrelse og antall videre gjelder ikke for dette formatet.`;
+    setHint(hint, "", `<strong>Format uten gruppespill</strong>Gruppestørrelse og antall videre gjelder ikke for dette formatet.`);
     startButton.dataset.formatInvalid = "0";
     return { valid: true, message: "" };
   }
@@ -112,10 +117,13 @@ function evaluate() {
     detail = `${groupCount} ${groupCount === 1 ? "gruppe" : "grupper"} · minste gruppe ${smallestGroup}.`;
   }
 
-  hint.className = `tc-format-guard ${valid ? "good" : "error"}`;
-  hint.innerHTML = valid
-    ? `<strong>Formatet er gyldig</strong>${detail}`
-    : `<strong>Formatet må justeres før start</strong>${message}`;
+  setHint(
+    hint,
+    valid ? "good" : "error",
+    valid
+      ? `<strong>Formatet er gyldig</strong>${detail}`
+      : `<strong>Formatet må justeres før start</strong>${message}`,
+  );
 
   /* tournament-admin owns the real disabled state (started/completed/etc.).
      The guard only marks invalid format and blocks the click, so correcting a
@@ -175,7 +183,10 @@ document.addEventListener("click", (event) => {
   showError(result.message || "Formatet må justeres før turneringen kan startes.");
 }, true);
 
-const observer = new MutationObserver(() => evaluate());
-observer.observe(document.body, { childList: true, subtree: true });
-
+/* The tournament workspace already exists before this module is imported and
+   all later state changes are announced through bd:tournament-context/tools-ready.
+   A broad MutationObserver here used to call evaluate() after every DOM change;
+   evaluate() itself updates the hint DOM, which could immediately trigger the
+   observer again and create a self-sustaining render loop. Keep the guard event-
+   driven instead so it cannot starve the rest of Tournament Admin. */
 queueRefresh();
