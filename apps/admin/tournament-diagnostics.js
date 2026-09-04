@@ -74,7 +74,10 @@ async function recordDiagnostic(eventName, url, method, detail = {}) {
   }
 }
 
-if (!window.__bdTournamentFetchDiagnosticsInstalled) {
+// Global runtime diagnostics now covers every app surface. Keep this older,
+// tournament-specific observer only as a fallback if the global monitor failed
+// to initialize, so the same API error is never persisted twice.
+if (!window.__bdTournamentFetchDiagnosticsInstalled && !window.__blindleiaRuntimeDiagnosticsInstalled) {
   window.__bdTournamentFetchDiagnosticsInstalled = true;
 
   window.fetch = async function tournamentDiagnosticFetch(input, init = {}) {
