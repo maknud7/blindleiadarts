@@ -11,11 +11,13 @@ final class TournamentRepository
 {
     private mysqli $connection;
     private string $tablePrefix;
+    private string $identityTablePrefix;
 
     public function __construct(Database $database)
     {
         $this->connection = $database->connection();
         $this->tablePrefix = $database->tablePrefix();
+        $this->identityTablePrefix = $database->identityTablePrefix();
     }
 
     /**
@@ -458,6 +460,7 @@ final class TournamentRepository
                 k.name AS kiosk_name,
                 k.board_number
              FROM `%1$smatches` m
+             INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
              INNER JOIN `%1$splayers` pa ON pa.id = m.player_a_id
              INNER JOIN `%1$splayers` pb ON pb.id = m.player_b_id
              LEFT JOIN `%1$skiosks` k ON k.id = m.kiosk_id
@@ -938,22 +941,46 @@ final class TournamentRepository
      */
     public function getMemberDashboard(int $userId): ?array
     {
-        $sql = sprintf(
-            'SELECT
-                ua.id,
-                ua.username,
-                ua.display_name,
-                ua.role,
-                mp.player_id,
-                p.display_name AS player_display_name,
-                p.club_id
-             FROM `%1$suser_accounts` ua
-             LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
-             LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
-             WHERE ua.id = ?
-             LIMIT 1',
-            $this->tablePrefix
-        );
+        if ($this->identityTablePrefix === $this->tablePrefix) {
+            $sql = sprintf(
+                'SELECT
+                    ua.id,
+                    ua.username,
+                    ua.display_name,
+                    ua.role,
+                    mp.player_id,
+                    p.display_name AS player_display_name,
+                    p.club_id
+                 FROM `%1$suser_accounts` ua
+                 LEFT JOIN `%1$smember_profiles` mp ON mp.user_account_id = ua.id
+                 LEFT JOIN `%1$splayers` p ON p.id = mp.player_id
+                 WHERE ua.id = ?
+                 LIMIT 1',
+                $this->tablePrefix
+            );
+        } else {
+            $identityUsers = $this->identityTablePrefix . 'user_accounts';
+            $identityPlayers = $this->identityTablePrefix . 'players';
+            $localPlayers = $this->tablePrefix . 'players';
+
+            $sql = "SELECT
+                        ua.id,
+                        ua.username,
+                        ua.display_name,
+                        ua.role,
+                        p.id AS player_id,
+                        p.display_name AS player_display_name,
+                        p.club_id
+                    FROM `{$identityUsers}` ua
+                    LEFT JOIN `{$identityPlayers}` ip ON ip.id = ua.player_id
+                    LEFT JOIN `{$localPlayers}` p ON p.id = (
+                        SELECT MIN(p2.id)
+                        FROM `{$localPlayers}` p2
+                        WHERE p2.member_id = COALESCE(ua.member_id, ip.member_id)
+                    )
+                    WHERE ua.id = ?
+                    LIMIT 1";
+        }
 
         $statement = $this->connection->prepare($sql);
         $statement->bind_param('i', $userId);
