@@ -1,6 +1,16 @@
 name: Runtime Error Monitor
 
 on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/runtime-error-monitor.yml'
+      - 'infra/monitor/runtime_errors.php'
+      - 'packages/ui-assets/activity.js'
+      - 'packages/ui-assets/runtime-diagnostics.js'
+      - 'apps/api/src/Repository/ActivityRepository.php'
+      - 'apps/admin/tournament-diagnostics.js'
   schedule:
     - cron: '7 * * * *'
   workflow_dispatch:
