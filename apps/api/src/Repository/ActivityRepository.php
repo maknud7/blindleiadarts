@@ -285,7 +285,8 @@ final class ActivityRepository
     {
         $allowed = [
             'element_id','element_tag','action','href_path','portal_view','status','source',
-            'endpoint','method','http_status','error_code','elapsed_ms','timeout','phase','module',
+            'endpoint','method','http_status','error_code','error_message','elapsed_ms','timeout','phase','module',
+            'source_file','line','column','stack','resource_type','severity','fingerprint',
         ];
         $clean = [];
         foreach ($allowed as $key) {
@@ -294,7 +295,8 @@ final class ActivityRepository
             if (is_bool($value) || is_int($value) || is_float($value)) {
                 $clean[$key] = $value;
             } elseif (is_string($value)) {
-                $clean[$key] = mb_substr($value, 0, 180, 'UTF-8');
+                $limit = $key === 'stack' ? 1400 : 300;
+                $clean[$key] = mb_substr($value, 0, $limit, 'UTF-8');
             }
         }
         return $clean;
