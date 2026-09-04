@@ -1,0 +1,291 @@
+/* Venue playoff v6
+ * Visual polish for the playoff wall only.
+ * Every selector is explicitly scoped to .playoff-mode so the group-stage
+ * wall keeps the venue-wall layout and multi-board rules unchanged.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  body.phase-live.playoff-mode #liveDashboard {
+    grid-template-columns:repeat(3,minmax(0,1fr)) minmax(330px,.9fr) !important;
+    grid-template-rows:54px 226px 205px minmax(0,1fr) !important;
+    gap:8px !important;
+  }
+
+  body.phase-live.playoff-mode #playoffSection {
+    padding:9px 10px 11px !important;
+    grid-template-rows:38px minmax(0,1fr) !important;
+  }
+
+  body.phase-live.playoff-mode #playoffSection .section-head {
+    min-height:34px !important;
+    padding:0 2px !important;
+  }
+
+  body.phase-live.playoff-mode #playoffSection .section-head h2 {
+    font-size:1.08rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live.playoff-mode #playoffChampion {
+    font-size:.64rem !important;
+    padding:4px 8px !important;
+  }
+
+  /* Keep the side-rail title simple. The previous generated "AKKURAT NÅ"
+     prefix competed with the normal På skivene / Kamper live heading. */
+  body.phase-live.playoff-mode #liveDashboard > .priority-section .section-head h2::before {
+    content:none !important;
+    display:none !important;
+  }
+
+  body.phase-live.playoff-mode #liveDashboard > .priority-section {
+    grid-template-rows:37px minmax(0,1fr) !important;
+    padding:8px 9px 9px !important;
+  }
+
+  body.phase-live.playoff-mode #liveDashboard > .priority-section .section-head {
+    min-height:34px !important;
+    align-items:start !important;
+  }
+
+  body.phase-live.playoff-mode #liveDashboard > .priority-section .section-head .eyebrow {
+    display:block !important;
+    margin:0 0 1px !important;
+    font-size:.52rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live.playoff-mode #liveDashboard > .priority-section .section-head h2 {
+    font-size:.92rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live.playoff-mode #updatedAt {
+    font-size:.48rem !important;
+    line-height:1 !important;
+    white-space:nowrap !important;
+  }
+
+  /* Featured match is information-dense rather than score-dominant. */
+  body.phase-live.playoff-mode .priority-section .boards-grid[data-layout-count="1"] .board-card {
+    padding:7px 9px !important;
+    grid-template-rows:22px minmax(0,1fr) 16px !important;
+  }
+
+  body.phase-live.playoff-mode .priority-section .boards-grid[data-layout-count="1"] .player-line {
+    grid-template-columns:minmax(0,1fr) 60px 24px !important;
+    gap:6px !important;
+    padding:4px 3px !important;
+  }
+
+  body.phase-live.playoff-mode .priority-section .boards-grid[data-layout-count="1"] .player-line strong {
+    font-size:clamp(.86rem,.96vw,1.04rem) !important;
+  }
+
+  body.phase-live.playoff-mode .priority-section .boards-grid[data-layout-count="1"] .remaining {
+    font-size:clamp(1.42rem,1.65vw,1.78rem) !important;
+    line-height:.92 !important;
+  }
+
+  body.phase-live.playoff-mode .priority-section .boards-grid[data-layout-count="1"] .legs {
+    height:24px !important;
+    min-width:24px !important;
+    font-size:.78rem !important;
+  }
+
+  /* Bracket: more compact columns, clearer visual flow and less empty canvas. */
+  body.phase-live.playoff-mode #playoff.live-bracket {
+    grid-auto-columns:minmax(245px,1fr) !important;
+    gap:26px !important;
+    padding:4px 8px 5px !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-round {
+    grid-template-rows:38px minmax(0,1fr) !important;
+    gap:4px !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-round-head {
+    padding:0 7px !important;
+    border-bottom:2px solid rgba(10,77,160,.14) !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-round-head span {
+    font-size:.5rem !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-round-head h3 {
+    margin-top:1px !important;
+    font-size:.88rem !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-matches {
+    position:relative !important;
+    gap:12px !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-match {
+    min-height:112px !important;
+    grid-template-rows:23px 1fr 1fr 20px !important;
+    padding:5px 7px !important;
+    border-radius:10px !important;
+    box-shadow:0 4px 12px rgba(7,27,49,.06) !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-match::after {
+    right:-27px !important;
+    width:27px !important;
+    border-top:2px solid #afc4d8 !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-round:not(:first-child) .live-bracket-match::before {
+    content:"";
+    position:absolute;
+    left:-27px;
+    top:50%;
+    width:27px;
+    border-top:2px solid #afc4d8;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-match-top {
+    padding:0 2px 3px !important;
+  }
+
+  body.phase-live.playoff-mode .playoff-match-number {
+    font-size:.5rem !important;
+  }
+
+  body.phase-live.playoff-mode .playoff-status-badge {
+    padding:2px 5px !important;
+    font-size:.5rem !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-player {
+    grid-template-columns:minmax(0,1fr) 30px !important;
+    gap:6px !important;
+    padding:5px 7px !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-player-name {
+    font-size:clamp(.74rem,.82vw,.9rem) !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-score {
+    font-size:.94rem !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-match footer {
+    padding:3px 2px 0 !important;
+    font-size:.5rem !important;
+  }
+
+  /* Four-player playoff: two semifinals read as one bracket branch instead of
+     two cards floating independently in a large column. */
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(2):last-child) > .live-bracket-round:first-child .live-bracket-matches {
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    gap:84px !important;
+    padding:18px 0 !important;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(2):last-child) > .live-bracket-round:first-child .live-bracket-matches::after {
+    content:"";
+    position:absolute;
+    right:-27px;
+    top:calc(50% - 98px);
+    height:196px;
+    border-right:2px solid #afc4d8;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(2):last-child) > .live-bracket-round:last-child .live-bracket-matches {
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    padding:18px 0 !important;
+  }
+
+  /* Eight-player playoff: keep quarters compact, then visually converge the
+     two semifinals toward the final. */
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(3):last-child) > .live-bracket-round:first-child .live-bracket-matches {
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    gap:14px !important;
+    padding:8px 0 !important;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(3):last-child) > .live-bracket-round:nth-child(2) .live-bracket-matches {
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    gap:84px !important;
+    padding:18px 0 !important;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(3):last-child) > .live-bracket-round:nth-child(2) .live-bracket-matches::after {
+    content:"";
+    position:absolute;
+    right:-27px;
+    top:calc(50% - 98px);
+    height:196px;
+    border-right:2px solid #afc4d8;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(3):last-child) > .live-bracket-round:last-child .live-bracket-matches {
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    padding:18px 0 !important;
+  }
+
+  /* Side rail secondary panels should support the bracket, not compete with it. */
+  body.phase-live.playoff-mode #liveDashboard .panel:has(#results),
+  body.phase-live.playoff-mode #liveDashboard .panel:has(#highlights) {
+    padding:8px 9px !important;
+  }
+
+  body.phase-live.playoff-mode #liveDashboard .panel:has(#results) .section-head,
+  body.phase-live.playoff-mode #liveDashboard .panel:has(#highlights) .section-head {
+    min-height:25px !important;
+    margin-bottom:3px !important;
+  }
+
+  body.phase-live.playoff-mode #results .list-row {
+    min-height:43px !important;
+    padding-top:5px !important;
+    padding-bottom:5px !important;
+  }
+
+  body.phase-live.playoff-mode #highlights .live-top3-block {
+    padding:5px 7px !important;
+    grid-template-rows:18px minmax(0,1fr) !important;
+  }
+
+  body.phase-live.playoff-mode #highlights .live-top3-row {
+    padding:1px 0 !important;
+    font-size:.6rem !important;
+  }
+}
+
+@media (min-width:1180px) and (max-height:800px) {
+  body.phase-live.playoff-mode #liveDashboard {
+    grid-template-rows:50px 198px 164px minmax(0,1fr) !important;
+  }
+
+  body.phase-live.playoff-mode .live-bracket-match {
+    min-height:96px !important;
+    grid-template-rows:20px 1fr 1fr 17px !important;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(2):last-child) > .live-bracket-round:first-child .live-bracket-matches,
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(3):last-child) > .live-bracket-round:nth-child(2) .live-bracket-matches {
+    gap:58px !important;
+  }
+
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(2):last-child) > .live-bracket-round:first-child .live-bracket-matches::after,
+  body.phase-live.playoff-mode #playoff:has(> .live-bracket-round:nth-child(3):last-child) > .live-bracket-round:nth-child(2) .live-bracket-matches::after {
+    top:calc(50% - 77px) !important;
+    height:154px !important;
+  }
+}
