@@ -22,6 +22,58 @@
     padding: 12px;
   }
 
+  /* Attendance is a working list, not a stack of large cards. Keep each player on
+     one compact row so a tournament leader can scan and check in many people fast. */
+  #tcStageCheckin .tc-registration-list {
+    gap: 4px;
+  }
+
+  #tcStageCheckin .tc-registration {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 54px;
+    padding: 8px 8px 8px 10px;
+  }
+
+  #tcStageCheckin .tc-player-main strong {
+    display: block;
+    margin: 0 0 2px;
+    font-size: 15px;
+    line-height: 1.15;
+  }
+
+  #tcStageCheckin .tc-player-main .row-meta {
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  #tcStageCheckin .tc-registration .tc-row-actions {
+    width: auto !important;
+    margin-left: 0 !important;
+    flex-wrap: nowrap !important;
+    gap: 4px;
+  }
+
+  #tcStageCheckin .tc-registration .tc-row-actions .button {
+    flex: 0 0 auto !important;
+    min-height: 34px;
+    padding: 6px 8px;
+    font-size: 10.5px;
+    line-height: 1;
+  }
+
+  #tcStageCheckin .tc-registration .tc-row-actions .tc-checkin {
+    min-width: 76px;
+  }
+
+  #tcStageCheckin .tc-registration .tc-row-actions .tc-remove {
+    min-width: 0;
+    padding-inline: 6px;
+  }
+
   /* Keep the +/- control inside the disclosure row. The previous grid placed the
      pseudo element in a non-existent third column on narrow screens. */
   #tcStageCheckin .tc-checkin-settings summary {
@@ -63,5 +115,24 @@
 
   #tcStageCheckin .tc-code-box .button {
     background: #fff;
+  }
+}
+
+@media (max-width: 420px) {
+  #tcStageCheckin .tc-registration {
+    gap: 6px;
+    padding-inline: 7px;
+  }
+
+  #tcStageCheckin .tc-player-main strong {
+    font-size: 14px;
+  }
+
+  #tcStageCheckin .tc-registration .tc-row-actions .button {
+    padding-inline: 7px;
+  }
+
+  #tcStageCheckin .tc-registration .tc-row-actions .tc-checkin {
+    min-width: 72px;
   }
 }
