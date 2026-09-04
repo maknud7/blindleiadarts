@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260904-admin-stable-01";
+const MODULE_VERSION = "20260904-format-guard-loop-01";
 let requested = false;
 let loading = null;
 let waitTimer = null;
