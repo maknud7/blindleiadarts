@@ -10,6 +10,24 @@ function formatTime(value) {
   const date = new Date(String(value).replace(" ", "T"));
   return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
+function metadataText(metadata) {
+  if (!metadata || typeof metadata !== "object") return "";
+  const labels = {
+    endpoint: "endpoint",
+    method: "metode",
+    http_status: "HTTP",
+    error_code: "feil",
+    elapsed_ms: "ms",
+    timeout: "timeout",
+    phase: "fase",
+    module: "modul",
+    source: "kilde",
+  };
+  return Object.entries(metadata)
+    .filter(([key, value]) => Object.hasOwn(labels, key) && value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${labels[key]}: ${typeof value === "boolean" ? (value ? "ja" : "nei") : value}`)
+    .join(" · ");
+}
 
 async function api(path) {
   const response = await fetch(`${ACTIVITY_API}${path}`, { headers: authToken() ? { Authorization: `Bearer ${authToken()}` } : {}, cache: "no-store" });
@@ -41,7 +59,7 @@ function ensureActivityPanel() {
   panel.id = "activityAdminPanel";
   panel.className = "claim-admin-card";
   panel.innerHTML = `
-    <div class="panel-head"><div><p class="eyebrow">Plattformlogg</p><h3>Aktivitet og logger</h3><p class="muted">Plattformnivå, ikke klubbinnstilling. Viser førsteparts aktivitet på tvers av flater og klubber.</p></div><button id="activityRefresh" type="button" class="button secondary">Oppdater</button></div>
+    <div class="panel-head"><div><p class="eyebrow">Plattformlogg</p><h3>Aktivitet og logger</h3><p class="muted">Plattformnivå, ikke klubbinnstilling. Feil i turneringsadmin logges med endpoint, responstid og sesjonsnummer – aldri selve sesjonstokenet.</p></div><button id="activityRefresh" type="button" class="button secondary">Oppdater</button></div>
     <div id="activityMetrics" class="metrics"></div>
     <div class="kiosk-layout">
       <div><div class="subsection-head"><h3>Flater · 30 dager</h3></div><div id="activitySurfaces" class="list"></div></div>
@@ -84,7 +102,9 @@ function render(data) {
     ? recent.map((row) => {
         const actor = row.display_name || row.email || "Anonym";
         const club = row.club_name ? ` · ${row.club_name}` : "";
-        return `<div class="list-row"><div><strong>${esc(actor)}</strong><small>${esc(row.surface)} · ${esc(row.event_name)} · ${esc(row.path)}${esc(club)}</small></div><span class="pill">${esc(formatTime(row.occurred_at))}</span></div>`;
+        const session = Number(row.auth_session_id || 0) > 0 ? ` · sesjon #${Number(row.auth_session_id)}` : "";
+        const diagnostics = metadataText(row.metadata);
+        return `<div class="list-row"><div><strong>${esc(actor)}</strong><small>${esc(row.surface)} · ${esc(row.event_name)} · ${esc(row.path)}${esc(club)}${esc(session)}</small>${diagnostics ? `<small>${esc(diagnostics)}</small>` : ""}</div><span class="pill">${esc(formatTime(row.occurred_at))}</span></div>`;
       }).join("")
     : `<div class="empty">Ingen aktivitet ennå.</div>`;
 }
