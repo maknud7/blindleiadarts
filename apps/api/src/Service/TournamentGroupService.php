@@ -27,6 +27,9 @@ final class TournamentGroupService
         if ($groupCount < 1 || $groupCount > $playerCount) {
             throw new InvalidArgumentException('Group count must be between 1 and the number of players.');
         }
+        if (intdiv($playerCount, $groupCount) < 4) {
+            throw new InvalidArgumentException('Hver gruppe må ha minst 4 spillere.');
+        }
 
         $drawSeed ??= random_int(1, PHP_INT_MAX);
         $seeded = $this->withSeedNumbers($registrations);
