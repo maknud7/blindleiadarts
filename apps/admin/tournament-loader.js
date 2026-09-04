@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260904-admin-load-03";
+const MODULE_VERSION = "20260904-admin-load-04";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -226,10 +226,8 @@ async function loadModules() {
     await import(moduleUrl("./tournament-admin.js"));
     updateLoading("Henter turnering …");
 
-    // tournament-admin historically waits for both the tournament catalogue and
-    // the complete player list. The latter is not required to open an existing
-    // tournament, so prime the picker independently if that combined request is
-    // still waiting. Its own load will reconcile the same selection afterwards.
+    // Prime the picker only as a fallback. tournament-admin normally fills it
+    // itself now, without waiting for the player registry.
     primeTournamentPicker().catch(() => undefined);
 
     await Promise.all([
