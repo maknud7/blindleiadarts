@@ -56,6 +56,7 @@ if [[ "$ENVIRONMENT" == "prod" ]]; then
   rm -f \
     "$OUT_DIR/api/atlas-import-probe.php" \
     "$OUT_DIR/api/atlas-match-visits.php" \
+    "$OUT_DIR/api/atlas-migrate-test.php" \
     "$OUT_DIR/api/atlas-season-probe.php" \
     "$OUT_DIR/api/atlas-tournament-probe.php"
 fi

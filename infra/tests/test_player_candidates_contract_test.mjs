@@ -8,10 +8,12 @@ const flow = readFileSync("apps/api/src/Repository/TournamentFlowRepository.php"
 const importProbe = readFileSync("apps/api/atlas-import-probe.php", "utf8");
 const tournamentProbe = readFileSync("apps/api/atlas-tournament-probe.php", "utf8");
 const cleanup = readFileSync("infra/sql/migrations/0068_cleanup_test_champion_player_labels.php", "utf8");
+const cleanupV2 = readFileSync("infra/sql/migrations/0081_cleanup_remaining_test_champion_player_labels.php", "utf8");
 
 assert.match(endpoint, /tp\.is_active=1/);
 assert.match(endpoint, /tp\.merged_into_player_id IS NULL/);
 assert.match(endpoint, /CASE WHEN ip\.id IS NULL THEN 'test_player' ELSE 'prod_identity' END/);
+assert.match(endpoint, /NOT LIKE 'champion %'/);
 assert.doesNotMatch(endpoint, /account_status='active'/);
 assert.doesNotMatch(client, /Number\(player\.member_id\) > 0/);
 assert.doesNotMatch(client, /identity_source \|\| ""\) === "prod_identity"/);
@@ -33,5 +35,7 @@ assert.match(attendance, /\$this->finishCheckin\(\$connection, \$prefix, \$tourn
 assert.match(importProbe, /preg_replace\('\/\^Champion\\s\+\/iu'/);
 assert.match(tournamentProbe, /preg_replace\('\/\^Champion\\s\+\/iu'/);
 assert.match(cleanup, /Historical import label accidentally stored as TEST player name/);
+assert.match(cleanupV2, /broadened_after_0068/);
+assert.match(cleanupV2, /Selectable TEST players with Champion labels remain after cleanup/);
 
 console.log("TEST player and tournament admin contract checks passed.");

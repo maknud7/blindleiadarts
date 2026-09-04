@@ -95,6 +95,7 @@ try {
             WHERE tp.club_id=?
               AND tp.is_active=1
               AND tp.merged_into_player_id IS NULL
+              AND LOWER(TRIM(COALESCE(ip.display_name,tp.display_name))) NOT LIKE 'champion %'
             ORDER BY COALESCE(ip.display_name,tp.display_name) ASC";
 
     $statement = $database->connection()->prepare($sql);
