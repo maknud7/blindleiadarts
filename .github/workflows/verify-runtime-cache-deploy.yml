@@ -1,0 +1,73 @@
+name: Verify Runtime Cache Deploy
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed release and runtime markers
+        run: |
+          set -Eeuo pipefail
+          base="https://test.blindleiadarts.ingenting.org"
+          expected="b00698d8d731530e41bc33628d5baee1a8bf1021"
+
+          echo "--- release ---"
+          release="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/release.json?cb=$RANDOM")"
+          echo "$release"
+          RELEASE="$release" EXPECTED="$expected" python3 - <<'PY'
+          import json, os
+          data=json.loads(os.environ['RELEASE'])
+          sha=str(data.get('sha') or data.get('commit') or '')
+          assert sha == os.environ['EXPECTED'], (sha, os.environ['EXPECTED'])
+          PY
+
+          echo "--- live headers ---"
+          headers="$(curl -fsSIL --connect-timeout 5 --max-time 20 "$base/live/5266?cb=$RANDOM")"
+          printf '%s\n' "$headers"
+          printf '%s\n' "$headers" | grep -Eiq '^cache-control:.*no-cache.*must-revalidate'
+
+          echo "--- live shell marker ---"
+          curl -fsS --connect-timeout 5 --max-time 20 "$base/live/5266?cb=$RANDOM" | grep -Fq '20260904-live-runtime-sync-01'
+          curl -fsS --connect-timeout 5 --max-time 20 "$base/live/route-bootstrap.js?cb=$RANDOM" | grep -Fq 'RUNTIME_VERSION = "20260904-live-runtime-sync-01"'
+
+          echo "--- kiosk shell/service worker markers ---"
+          curl -fsS --connect-timeout 5 --max-time 20 "$base/kiosk/?cb=$RANDOM" | grep -Fq '20260904-runtime-sync-01'
+          sw="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/kiosk/service-worker.js?cb=$RANDOM")"
+          printf '%s\n' "$sw" | grep -Fq 'bd-kiosk-shell-v42'
+          printf '%s\n' "$sw" | grep -Fq 'async function networkFirst'
+          printf '%s\n' "$sw" | grep -Fq '["script", "style"].includes(request.destination)'
+          printf '%s\n' "$sw" | grep -Fq 'if (url.pathname.includes("/api/") || url.pathname.endsWith(".php")) return;'
+
+      - name: Verify Live renders in a clean browser
+        run: |
+          set -Eeuo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome"
+          dom="$(mktemp)"
+          "$chrome" --headless --no-sandbox --disable-gpu --virtual-time-budget=12000 --dump-dom "https://test.blindleiadarts.ingenting.org/live/5266?cb=$RANDOM" > "$dom"
+          grep -Fq 'class="phase-live"' "$dom"
+          grep -Fq 'SeptemberKast' "$dom"
+          grep -Fq 'id="liveDashboard" class="live-dashboard"' "$dom"
+          grep -Eq 'id="boards" class="boards-grid"[^>]*data-visible-board-count="[1-9]' "$dom"
+
+      - name: Verify Live API still has active tournament state
+        run: |
+          set -Eeuo pipefail
+          json="$(curl -fsS --connect-timeout 5 --max-time 20 "https://test.blindleiadarts.ingenting.org/api/v1/public/clubs/blindleia-dartklubb/live?cb=$RANDOM")"
+          DATA="$json" python3 - <<'PY'
+          import json, os
+          payload=json.loads(os.environ['DATA'])
+          data=payload.get('data') or {}
+          tournament=data.get('tournament') or {}
+          assert tournament.get('id') == 1140, tournament
+          assert tournament.get('status') == 'in_progress', tournament
+          assert len(data.get('boards') or []) >= 1
+          print(json.dumps({'tournament': tournament, 'progress': data.get('progress'), 'boards': len(data.get('boards') or [])}, ensure_ascii=False))
+          PY
