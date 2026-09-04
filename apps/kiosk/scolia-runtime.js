@@ -1,4 +1,4 @@
-const API_ROOT = "../api/v1";
+const SCOLIA_API_ROOT = "../api/v1";
 const TEST_LEASE_API = "../api/kiosk-scolia-test-lease.php";
 const card = document.getElementById("scoliaScoring");
 const manual = document.getElementById("manualScoring");
@@ -10,6 +10,7 @@ const TEST_LEASE_CODE_KEY = "bd:kioskScoliaLeaseKioskCode";
 const TEST_LEASE_PHYSICAL_KEY = "bd:kioskScoliaLeasePhysicalId";
 const OFFLINE_FALLBACK_GRACE_MS = 5000;
 const OFFLINE_FALLBACK_RETRY_MS = 5000;
+const SCOLIA_REQUEST_TIMEOUT_MS = 15000;
 
 let status = null;
 let busy = false;
@@ -26,6 +27,16 @@ function isTestEnvironment() { return document.body?.dataset?.appEnv === "test";
 function testModeActive() { return localStorage.getItem(TEST_MODE_KEY) === "1"; }
 function selectedPhysicalBoardId() { return Number(localStorage.getItem(TEST_BOARD_ID_KEY) || 0); }
 function testLeaseActive() { return localStorage.getItem(TEST_LEASE_ACTIVE_KEY) === "1"; }
+
+async function fetchWithTimeout(url, init = {}, timeoutMs = SCOLIA_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 function isBoardOffline(board) {
   return String(board?.board_status || "").trim().toLowerCase() === "offline";
@@ -87,7 +98,7 @@ async function request(path, { method = "GET", body } = {}) {
   const pairing = pairingToken();
   if (pairing) headers["X-Kiosk-Pairing-Token"] = pairing;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(`${API_ROOT}${path}`, {
+  const response = await fetchWithTimeout(`${SCOLIA_API_ROOT}${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -102,13 +113,15 @@ async function leaseRequest(action, body, { keepalive = false } = {}) {
   const headers = { "Content-Type": "application/json" };
   const pairing = pairingToken();
   if (pairing) headers["X-Kiosk-Pairing-Token"] = pairing;
-  const response = await fetch(`${TEST_LEASE_API}?action=${encodeURIComponent(action)}`, {
+  const init = {
     method: "POST",
     headers,
     body: JSON.stringify(body || {}),
     cache: "no-store",
     keepalive,
-  });
+  };
+  const url = `${TEST_LEASE_API}?action=${encodeURIComponent(action)}`;
+  const response = keepalive ? await fetch(url, init) : await fetchWithTimeout(url, init);
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {
     const error = new Error(payload?.error?.message || `Scolia test-lease feilet (${response.status})`);
