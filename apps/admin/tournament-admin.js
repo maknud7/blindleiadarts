@@ -118,7 +118,7 @@ if (host) {
     "tcStageLive","tcDrawMeta","tcGroups","tcStageAfter",
   ];
   const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
-  const state = { tournaments: [], players: [], tournament: null, groups: [], plan: null, formatTouched: false, view: "checkin", filter: "pending" };
+  const state = { tournaments: [], players: [], tournament: null, groups: [], plan: null, formatTouched: false, view: "checkin", filter: "pending", selectionVersion: 0 };
 
   function token() { return localStorage.getItem("bd:token") || ""; }
   function clubId() { return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:selectedClubId") || 0); }
@@ -129,18 +129,37 @@ if (host) {
   function hideMessage() { el.tcMessage.textContent = ""; el.tcMessage.className = "message hidden"; }
   function odd(value) { const n = Number(value); return Number.isInteger(n) && n >= 1 && n <= 21 && n % 2 === 1; }
 
-  async function api(path, { method = "GET", body, auth = false } = {}) {
+  async function api(path, { method = "GET", body, auth = false, timeoutMs = 0 } = {}) {
     const headers = {};
     if (auth && token()) headers.Authorization = `Bearer ${token()}`;
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    const response = await fetch(`${API_ROOT}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store" });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) {
-      const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
-      error.code = payload?.error?.code || "request_failed";
+    const controller = timeoutMs > 0 ? new AbortController() : null;
+    const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetch(`${API_ROOT}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        cache: "no-store",
+        signal: controller?.signal,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+        error.code = payload?.error?.code || "request_failed";
+        throw error;
+      }
+      return payload.data;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        const timeoutError = new Error("Turneringsdata bruker for lang tid på å svare. Du kan fortsette i turneringsrommet og prøve Oppdater igjen.");
+        timeoutError.code = "request_timeout";
+        throw timeoutError;
+      }
       throw error;
+    } finally {
+      if (timer) window.clearTimeout(timer);
     }
-    return payload.data;
   }
 
   function checkedInRegistrations() { return (state.tournament?.registrations || []).filter((r) => String(r.status) === "checked_in"); }
@@ -172,20 +191,36 @@ if (host) {
     if (focus) shell.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function applyFormatDefaults() {
+    const checked = checkedInRegistrations().length;
+    el.tcGroupCount.value = String(state.groups.length || state.plan?.group_count || recommendedGroups(checked));
+    el.tcDrawMode.value = state.groups[0]?.draw_mode || state.plan?.group_draw_mode || "elo_snake";
+    el.tcBestOf.value = String(state.plan?.group_best_of_legs || 3);
+    el.tcQualifiers.value = String(state.plan?.qualifiers_per_group || 2);
+    el.tcPlayoffBestOf.value = String(state.plan?.playoff_best_of_legs || 3);
+  }
+
   async function loadBase() {
     const id = clubId();
     if (!id) return;
-    const [tournaments, players] = await Promise.all([api(`/clubs/${id}/registration-tournaments`), api(`/clubs/${id}/players`)]);
+    const tournaments = await api(`/clubs/${id}/registration-tournaments`, { timeoutMs: 10000 });
     state.tournaments = tournaments.items || [];
-    state.players = players.items || [];
     const selected = Number(el.tcTournament.value || 0);
     el.tcTournament.innerHTML = state.tournaments.map((t) => `<option value="${Number(t.id)}">${esc(t.name)} · ${esc(statusLabel(t.status))}</option>`).join("");
     if (state.tournaments.some((t) => Number(t.id) === selected)) el.tcTournament.value = String(selected);
-    await loadSelectedTournament();
+
+    const selectedLoad = loadSelectedTournament();
+    api(`/clubs/${id}/players`, { timeoutMs: 10000 }).then((players) => {
+      if (id !== clubId()) return;
+      state.players = players.items || [];
+      renderPlayerOptions();
+    }).catch((error) => console.warn("Spillerlisten kunne ikke lastes sammen med turneringsrommet", error));
+    await selectedLoad;
   }
 
   async function loadSelectedTournament() {
     const tournamentId = Number(el.tcTournament.value || 0);
+    const selectionVersion = ++state.selectionVersion;
     state.formatTouched = false;
     state.filter = "pending";
     if (!tournamentId) {
@@ -196,23 +231,53 @@ if (host) {
       render();
       return;
     }
-    const [detail, groups, plan] = await Promise.all([
-      api(`/tournaments/${tournamentId}`),
-      api(`/tournaments/${tournamentId}/groups`),
-      api(`/tournaments/${tournamentId}/wizard-plan`, { auth: true }).catch(() => ({ plan: null })),
-    ]);
-    state.tournament = detail.tournament || null;
-    state.groups = groups.groups || [];
-    state.plan = plan.plan || null;
+
+    // The list endpoint already knows enough to show the correct tournament phase.
+    // Render that immediately so a slow detail/group query can never leave the room
+    // stuck in the default check-in state or hold the canonical loader open.
+    const summary = state.tournaments.find((item) => Number(item.id) === tournamentId) || null;
+    if (summary) {
+      state.tournament = { ...summary, registrations: [] };
+      state.groups = [];
+      state.plan = null;
+      state.view = defaultView(state.tournament);
+      applyFormatDefaults();
+      renderPlayerOptions();
+      render();
+    }
+
+    let detail;
+    try {
+      detail = await api(`/tournaments/${tournamentId}`, { timeoutMs: 12000 });
+    } catch (error) {
+      if (selectionVersion === state.selectionVersion) show(error.message, "error");
+      return;
+    }
+    if (selectionVersion !== state.selectionVersion) return;
+
+    state.tournament = detail.tournament || summary || null;
+    state.groups = [];
+    state.plan = null;
     state.view = defaultView(state.tournament);
-    const checked = checkedInRegistrations().length;
-    el.tcGroupCount.value = String(state.groups.length || state.plan?.group_count || recommendedGroups(checked));
-    el.tcDrawMode.value = state.groups[0]?.draw_mode || state.plan?.group_draw_mode || "elo_snake";
-    el.tcBestOf.value = String(state.plan?.group_best_of_legs || 3);
-    el.tcQualifiers.value = String(state.plan?.qualifiers_per_group || 2);
-    el.tcPlayoffBestOf.value = String(state.plan?.playoff_best_of_legs || 3);
+    applyFormatDefaults();
     renderPlayerOptions();
     render();
+
+    // Groups and wizard settings improve the room, but they are secondary data.
+    // Never block the selected tournament on them; merge them in when available.
+    Promise.allSettled([
+      api(`/tournaments/${tournamentId}/groups`, { timeoutMs: 7000 }),
+      api(`/tournaments/${tournamentId}/wizard-plan`, { auth: true, timeoutMs: 7000 }),
+    ]).then(([groupsResult, planResult]) => {
+      if (selectionVersion !== state.selectionVersion) return;
+      if (groupsResult.status === "fulfilled") state.groups = groupsResult.value.groups || [];
+      else console.warn("Gruppedata kunne ikke lastes uten å blokkere turneringsrommet", groupsResult.reason);
+      if (planResult.status === "fulfilled") state.plan = planResult.value.plan || null;
+      else console.warn("Turneringsplan kunne ikke lastes uten å blokkere turneringsrommet", planResult.reason);
+      applyFormatDefaults();
+      renderPlayerOptions();
+      render();
+    });
   }
 
   function renderPlayerOptions() {
