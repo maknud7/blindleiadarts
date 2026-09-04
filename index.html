@@ -41,7 +41,7 @@
   </main>
 
   <script type="module">
-    const VERSION = "20260902-0912";
+    const VERSION = "20260904-admin-load-01";
     const app = (await import(`./packages/ui-assets/app-core.js?v=${VERSION}`)).default;
     const bootText = document.getElementById("portalBootText");
     const rootPath = window.location.pathname.endsWith("/")
@@ -78,6 +78,19 @@
           .replaceAll(`href="${rootPrefix}player/"`, `href="${rootPrefix}#home"`)
           .replaceAll(`href='${rootPrefix}player/#statistics'`, `href='${rootPrefix}#statistics'`)
           .replaceAll(`href='${rootPrefix}player/'`, `href='${rootPrefix}#home'`);
+
+        // Heavy section-specific admin modules used to run on every admin route.
+        // Strip them from the canonical shell and let admin-section-loader import
+        // them only when the user actually opens that section. This keeps the
+        // tournament room from competing with member, payment and Scolia queries.
+        output = output.replace(
+          /<script\b[^>]*\bsrc=["'][^"']*(?:member-onboarding-admin|payment-settings|scolia-admin)\.js[^"']*["'][^>]*>\s*<\/script>/gi,
+          ""
+        );
+        output = output.replace(
+          /<\/body>/i,
+          `<script src="${childPrefix}admin-section-loader.js?v=${VERSION}" type="module"></script></body>`
+        );
       } else {
         output = output
           .replaceAll(`href="${rootPrefix}admin/#overview"`, `href="${rootPrefix}#club"`)

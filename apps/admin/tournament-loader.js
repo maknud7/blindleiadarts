@@ -1,10 +1,12 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260904-playoff-format-guard-01";
+const MODULE_VERSION = "20260904-admin-load-01";
 let requested = false;
 let loading = null;
 let waitTimer = null;
 let liveLoading = null;
 let afterLoading = null;
+let enhancementLoading = null;
+let testToolsLoading = null;
 
 function token() {
   return localStorage.getItem("bd:token") || "";
@@ -22,6 +24,13 @@ function moduleUrl(path) {
   const url = new URL(path, import.meta.url);
   url.searchParams.set("v", MODULE_VERSION);
   return url.href;
+}
+
+function isTestEnvironment() {
+  return document.documentElement.dataset.appEnv === "test"
+    || /(^|[.-])test([.-]|$)/i.test(window.location.hostname)
+    || /\/test(?:\/|$)/i.test(window.location.pathname)
+    || new URLSearchParams(window.location.search).get("pwa") === "test";
 }
 
 function ensurePolishCss() {
@@ -42,6 +51,11 @@ function showLoading() {
   host.querySelector(":scope > .panel-head")?.insertAdjacentElement("afterend", node);
 }
 
+function updateLoading(text) {
+  const node = document.getElementById("tournamentModuleLoading");
+  if (node) node.textContent = text;
+}
+
 function hideLoading() {
   document.getElementById("tournamentModuleLoading")?.remove();
 }
@@ -50,6 +64,20 @@ function announceToolsReady() {
   window.dispatchEvent(new CustomEvent("bd:tournament-tools-ready", {
     detail: window.__bdTournamentContext || null,
   }));
+}
+
+function waitForInitialContext(timeoutMs = 5000) {
+  if (window.__bdTournamentContext?.clubId) return Promise.resolve();
+  return new Promise((resolve) => {
+    let timer = null;
+    const done = () => {
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("bd:tournament-context", done);
+      resolve();
+    };
+    window.addEventListener("bd:tournament-context", done);
+    timer = window.setTimeout(done, timeoutMs);
+  });
 }
 
 async function loadLiveTools() {
@@ -74,6 +102,70 @@ function loadToolsForContext(context) {
   if (view === "after") loadAfterTools().catch(() => undefined);
 }
 
+function installTestToolsLazyTrigger() {
+  if (!isTestEnvironment() || document.getElementById("tcTestTools") || document.getElementById("tcTestToolsLazy")) return;
+  const anchor = document.getElementById("tcCheckinSettingsHost") || document.getElementById("tcAddPlayer")?.closest("details");
+  if (!anchor) return;
+
+  const placeholder = document.createElement("details");
+  placeholder.id = "tcTestToolsLazy";
+  placeholder.className = "tc-disclosure";
+  placeholder.innerHTML = `<summary>TEST · legg til ekte spillere</summary><div class="tc-disclosure-body"><p class="muted">Åpne verktøyet når du trenger testspillere. Spillerlisten hentes først da, slik at vanlig turneringsadmin slipper ekstra databasekall ved oppstart.</p></div>`;
+  if (anchor.id === "tcCheckinSettingsHost") anchor.before(placeholder);
+  else anchor.after(placeholder);
+
+  placeholder.addEventListener("toggle", async () => {
+    if (!placeholder.open || testToolsLoading) return;
+    const body = placeholder.querySelector(".tc-disclosure-body");
+    if (body) body.innerHTML = `<p class="muted">Henter TEST-verktøy …</p>`;
+    testToolsLoading = import(moduleUrl("./test-tournament-tools.js"));
+    try {
+      await testToolsLoading;
+      const tools = document.getElementById("tcTestTools");
+      placeholder.remove();
+      if (tools) tools.open = true;
+    } catch (error) {
+      testToolsLoading = null;
+      if (body) body.innerHTML = `<p class="muted">Kunne ikke laste TEST-verktøyet: ${String(error?.message || error)}</p>`;
+    }
+  });
+}
+
+async function loadEnhancements() {
+  if (enhancementLoading) return enhancementLoading;
+  enhancementLoading = (async () => {
+    await Promise.all([
+      import(moduleUrl("./tournament-desktop-rail.js")),
+      import(moduleUrl("./tournament-delete-admin.js")),
+    ]);
+
+    await import(moduleUrl("./tournament-workspace-ux.js"));
+    await Promise.all([
+      import(moduleUrl("./tournament-canonical-ux.js")),
+      import(moduleUrl("./tournament-empty-state.js")),
+      import(moduleUrl("./tournament-leader-v2.js")),
+      import(moduleUrl("./tournament-admin-focus.js")),
+    ]);
+
+    await import(moduleUrl("./tournament-leader-v2-board-state.js"));
+    host.dataset.tournamentEnhancements = "ready";
+    announceToolsReady();
+  })().catch((error) => {
+    host.dataset.tournamentEnhancements = "error";
+    console.warn("Valgfrie turneringsforbedringer kunne ikke lastes", error);
+  });
+  return enhancementLoading;
+}
+
+function deferEnhancements() {
+  const run = () => loadEnhancements();
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 700 });
+  } else {
+    window.setTimeout(run, 120);
+  }
+}
+
 async function loadModules() {
   if (!host) return;
   if (loading) return loading;
@@ -83,38 +175,35 @@ async function loadModules() {
   host.dataset.tournamentModules = "loading";
 
   loading = (async () => {
-    // tournament-admin creates the canonical workspace DOM. Everything below can
-    // start as soon as that shell exists instead of creating a long import waterfall.
+    const contextReady = waitForInitialContext();
+
+    // tournament-admin creates the canonical workspace DOM and begins its data
+    // fetch immediately. Only the modules required to safely operate the room
+    // are allowed to block first paint.
     await import(moduleUrl("./tournament-admin.js"));
+    updateLoading("Henter turnering …");
 
     await Promise.all([
-      import(moduleUrl("./test-tournament-tools.js")),
       import(moduleUrl("./tournament-checkin-admin.js")),
       import(moduleUrl("./tournament-wizard-v2.js")),
       import(moduleUrl("./tournament-flow-ux.js")),
-      import(moduleUrl("./tournament-desktop-rail.js")),
       import(moduleUrl("./tournament-board-selection.js")),
-      import(moduleUrl("./tournament-delete-admin.js")),
       import(moduleUrl("./tournament-start-format.js")),
       import(moduleUrl("./tournament-format-guard.js")),
     ]);
 
-    // Workspace positioning is the only dependency for the visual/canonical layer.
-    await import(moduleUrl("./tournament-workspace-ux.js"));
-    await Promise.all([
-      import(moduleUrl("./tournament-canonical-ux.js")),
-      import(moduleUrl("./tournament-empty-state.js")),
-      import(moduleUrl("./tournament-leader-v2.js")),
-      import(moduleUrl("./tournament-admin-focus.js")),
-    ]);
-
-    // This adapter reads state produced by the leader and board selector, so keep it last.
-    await import(moduleUrl("./tournament-leader-v2-board-state.js"));
+    installTestToolsLazyTrigger();
+    await contextReady;
 
     host.dataset.tournamentModules = "ready";
     hideLoading();
     announceToolsReady();
     loadToolsForContext(window.__bdTournamentContext);
+
+    // Layout polish, delete tools and the leader overview are useful but must
+    // not hold the whole room hostage. Load them after the canonical data is
+    // already visible and the browser gets an idle slot.
+    deferEnhancements();
   })().catch((error) => {
     host.dataset.tournamentModules = "error";
     hideLoading();
@@ -164,11 +253,11 @@ window.addEventListener("bd:tournament-context", (event) => {
 });
 
 window.addEventListener("hashchange", () => {
-  if (location.hash === "#tournaments") requestTournamentRoom();
+  if (location.hash === "#tournaments" || location.hash.endsWith("/tournament-admin")) requestTournamentRoom();
 });
 
 document.getElementById("clubSelect")?.addEventListener("change", tryLoad);
 
-if (location.hash === "#tournaments" || document.body.dataset.portalActive === "tournaments") {
+if (location.hash === "#tournaments" || location.hash.endsWith("/tournament-admin") || document.body.dataset.portalActive === "tournaments") {
   requestTournamentRoom();
 }
