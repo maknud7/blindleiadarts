@@ -46,6 +46,16 @@
     return cleanUrl(value || "");
   }
 
+  function networkContext() {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+    return {
+      browser_online: navigator.onLine !== false,
+      visibility_state: String(document.visibilityState || "unknown").slice(0, 24),
+      connection_type: String(connection?.type || "unknown").slice(0, 24),
+      effective_connection_type: String(connection?.effectiveType || "unknown").slice(0, 24),
+    };
+  }
+
   function record(eventName, metadata = {}) {
     const tracker = activity();
     if (!tracker?.track) return;
@@ -93,6 +103,7 @@
             timeout: false,
             phase: "response",
             module: "global-fetch",
+            ...networkContext(),
           });
         });
       } else if (elapsedMs >= SLOW_API_MS) {
@@ -104,21 +115,27 @@
           timeout: false,
           phase: "response",
           module: "global-fetch",
+          ...networkContext(),
         });
       }
       return response;
     } catch (error) {
       const elapsedMs = Math.max(0, Math.round(performance.now() - started));
+      const timeout = error?.name === "AbortError";
+      const errorCode = timeout
+        ? "request_timeout"
+        : (error instanceof TypeError ? "network_error" : (error?.name || "network_error"));
       record("api_error", {
         endpoint: cleanUrl(url.href),
         method: method.slice(0, 12),
         http_status: 0,
-        error_code: redactText(error?.name === "AbortError" ? "request_timeout" : (error?.name || "network_error"), 120),
+        error_code: redactText(errorCode, 120),
         error_message: redactText(error?.message || "Network request failed", 300),
         elapsed_ms: elapsedMs,
-        timeout: error?.name === "AbortError",
+        timeout,
         phase: "network",
         module: "global-fetch",
+        ...networkContext(),
       });
       throw error;
     }
@@ -135,6 +152,7 @@
         resource_type: String(target.tagName || "resource").toLowerCase().slice(0, 32),
         phase: "resource",
         module: "browser",
+        ...networkContext(),
       });
       return;
     }
@@ -148,6 +166,7 @@
       stack: cleanStack(event.error),
       phase: "client",
       module: "browser",
+      ...networkContext(),
     });
   }, true);
 
@@ -159,6 +178,7 @@
       stack: cleanStack(reason),
       phase: "client",
       module: "promise",
+      ...networkContext(),
     });
   });
 })();
