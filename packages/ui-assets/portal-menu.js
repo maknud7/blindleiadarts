@@ -42,8 +42,8 @@ ensureFavicon();
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260827-1900");
-ensureStylesheet("./mobile-app-nav.css?v=20260827-1430");
+ensureStylesheet("./unified-portal-shell.css?v=20260904-mobile-menu-inert-01");
+ensureStylesheet("./mobile-app-nav.css?v=20260904-mobile-menu-inert-01");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
@@ -53,7 +53,7 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Player/member link admin unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260827-1900", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260904-mobile-menu-inert-01", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
@@ -119,6 +119,16 @@ function defaultTarget() {
   const firstLink = links().find((node) => targets().has(normalizeTarget(node.getAttribute("href"))));
   if (firstLink) return normalizeTarget(firstLink.getAttribute("href"));
   return normalizeTarget(sections()[0]?.dataset.portalSection || "");
+}
+
+function keepOpenMobileDrawerInteractive() {
+  if (!window.matchMedia("(max-width: 760px)").matches) return;
+  if (!document.body.classList.contains("unified-mobile-drawer-open")) return;
+  const menu = document.querySelector(".portal-menu");
+  if (!menu) return;
+  menu.removeAttribute("inert");
+  try { menu.inert = false; } catch { /* Safari fallback: removing the attribute is enough. */ }
+  menu.setAttribute("aria-hidden", "false");
 }
 
 function activate(target, { updateHash = true } = {}) {
@@ -197,6 +207,7 @@ function refresh() {
     return;
   }
   bindLinks();
+  keepOpenMobileDrawerInteractive();
   const requested = normalizeTarget(window.location.hash);
   const current = normalizeTarget(document.body.dataset.portalActive);
   activate(targets().has(requested) ? requested : current || defaultTarget(), { updateHash: false });
@@ -213,7 +224,13 @@ style.textContent = `
 .shortcut-card{display:grid;gap:6px;min-height:104px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel-2,rgba(255,255,255,.78));color:inherit;text-decoration:none}
 .shortcut-card strong{font-size:17px}.shortcut-card span{color:var(--muted);font-size:13px;line-height:1.45}
 [data-portal-section]{animation:portalViewIn .14s ease-out}@keyframes portalViewIn{from{opacity:.45;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media(max-width:760px){.portal-menu{top:0}.portal-shortcuts{grid-template-columns:1fr}}
+@media(max-width:760px){
+  .portal-menu{top:0}
+  .portal-shortcuts{grid-template-columns:1fr}
+  body.unified-mobile-drawer-open .portal-menu,
+  body.unified-mobile-drawer-open .portal-menu a,
+  body.unified-mobile-drawer-open .portal-menu button{pointer-events:auto!important}
+}
 `;
 document.head.appendChild(style);
 
@@ -238,6 +255,12 @@ const observer = new MutationObserver(() => {
   });
 });
 observer.observe(document.documentElement, { childList: true, subtree: true });
+
+const drawerStateObserver = new MutationObserver(() => {
+  if (!document.body.classList.contains("unified-mobile-drawer-open")) return;
+  window.requestAnimationFrame(keepOpenMobileDrawerInteractive);
+});
+drawerStateObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refresh, { once: true });
 else refresh();
