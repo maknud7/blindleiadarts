@@ -117,17 +117,20 @@ if (attendanceHost) {
       const next = document.getElementById("tcLeaderNext");
       if (!next) return;
       const total = numberText("tcAllCount");
+      const checked = numberText("tcCheckedCount");
+      const pending = numberText("tcPendingCount");
+      const checkinButton = next.querySelector('[data-leader-action="checkin"]');
+      if (checkinButton) {
+        const title = next.querySelector(".tc-leader-next-copy strong");
+        const text = next.querySelector(".tc-leader-next-copy p");
+        if (title) title.textContent = total > 0 ? `${checked} av ${total} sjekket inn` : `${checked} sjekket inn`;
+        if (text && pending > 0) text.textContent = `${pending} påmeldte mangler innsjekk.`;
+      }
 
       [...next.querySelectorAll("*")].forEach((node) => {
         const text = String(node.textContent || "").trim();
         if (!text || node.children.length) return;
 
-        const minimumMatch = text.match(/^(\d+) av minst \d+ spillere klare$/);
-        if (minimumMatch) {
-          const checked = Number(minimumMatch[1]);
-          node.textContent = total > 0 ? `${checked} av ${total} sjekket inn` : `${checked} sjekket inn`;
-          return;
-        }
         if (text === "Oppmøtet ser klart ut") {
           node.textContent = "Klar til å låse startfelt";
           return;
