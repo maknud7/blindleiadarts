@@ -36,6 +36,7 @@ function ensureHint() {
       .tc-format-guard.good{border-color:rgba(77,212,166,.28);background:rgba(77,212,166,.06)}
       .tc-format-guard.warning{border-color:rgba(233,185,73,.32);background:rgba(233,185,73,.07)}
       .tc-format-guard.error{border-color:rgba(255,107,107,.38);background:rgba(255,107,107,.07);color:#ffc4c4}
+      .tc-start-button[data-format-invalid="1"]{opacity:.62;cursor:not-allowed}
     `;
     document.head.appendChild(style);
   }
@@ -64,6 +65,7 @@ function evaluate() {
   if (!groupFormat) {
     hint.className = "tc-format-guard";
     hint.innerHTML = `<strong>Format uten gruppespill</strong>Gruppestørrelse og antall videre gjelder ikke for dette formatet.`;
+    startButton.dataset.formatInvalid = "0";
     return { valid: true, message: "" };
   }
 
@@ -115,8 +117,10 @@ function evaluate() {
     ? `<strong>Formatet er gyldig</strong>${detail}`
     : `<strong>Formatet må justeres før start</strong>${message}`;
 
+  /* tournament-admin owns the real disabled state (started/completed/etc.).
+     The guard only marks invalid format and blocks the click, so correcting a
+     value never leaves an otherwise valid Start button permanently disabled. */
   startButton.dataset.formatInvalid = valid ? "0" : "1";
-  if (!valid) startButton.disabled = true;
   return { valid, message };
 }
 
@@ -172,6 +176,6 @@ document.addEventListener("click", (event) => {
 }, true);
 
 const observer = new MutationObserver(() => evaluate());
-observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "value"] });
+observer.observe(document.body, { childList: true, subtree: true });
 
 queueRefresh();
