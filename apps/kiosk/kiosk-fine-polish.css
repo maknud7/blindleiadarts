@@ -122,14 +122,22 @@ body.kiosk-fine-polish.kiosk-ux-v2 .entry-display {
   justify-content: flex-start;
 }
 
-/* Undo belongs with scoring actions, not in the match identity column. */
+/* Undo belongs with scoring actions, not in the match identity column.
+   The mode selector has its own explicit column so moving Undo here can never
+   displace or overlap Sum / Per pil on portrait tablets. */
 body.kiosk-fine-polish .scoring-head {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) clamp(148px, 36vw, 218px) auto !important;
   align-items: center;
 }
 
+body.kiosk-fine-polish .scoring-head > div:first-child {
+  grid-column: 1 !important;
+  min-width: 0 !important;
+}
+
 body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
+  grid-column: 3 !important;
   width: auto;
   min-width: 0;
   min-height: 32px;
@@ -143,7 +151,21 @@ body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
 }
 
 body.kiosk-fine-polish .mode-switch {
+  grid-column: 2 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  width: 100% !important;
+  min-width: 0 !important;
   margin-left: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+body.kiosk-fine-polish .mode-switch button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 0 !important;
 }
 
 /* Recent four throws remain exactly where they are and stay editable. */
@@ -154,10 +176,6 @@ body.kiosk-fine-polish.kiosk-ux-v2 .visit-list {
 @media (orientation: portrait) and (min-width: 420px) {
   body.kiosk-fine-polish .scoring-head {
     gap: clamp(4px, 1vw, 8px) !important;
-  }
-
-  body.kiosk-fine-polish .mode-switch {
-    width: min(39vw, 218px) !important;
   }
 }
 
@@ -176,12 +194,12 @@ body.kiosk-fine-polish.kiosk-ux-v2 .visit-list {
 }
 
 @media (max-width: 520px) {
-  body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
-    padding-inline: 7px;
+  body.kiosk-fine-polish .scoring-head {
+    grid-template-columns: minmax(0, 1fr) clamp(142px, 35vw, 176px) auto !important;
   }
 
-  body.kiosk-fine-polish .mode-switch {
-    width: min(38vw, 176px) !important;
+  body.kiosk-fine-polish #undoButton.kiosk-undo-inline {
+    padding-inline: 7px;
   }
 
   body.kiosk-fine-polish.kiosk-ux-v2 .live-remaining-preview {
