@@ -27,9 +27,10 @@ final class ActivityApplication
         $method = $request->method();
 
         $record = $method === 'POST' && $path === 'v1/activity';
+        $session = $method === 'GET' && $path === 'v1/activity/session';
         $clubSummary = $method === 'GET' && preg_match('#^v1/clubs/\d+/activity$#', $path) === 1;
         $platformSummary = $method === 'GET' && $path === 'v1/platform/activity';
-        if (!$record && !$clubSummary && !$platformSummary) {
+        if (!$record && !$session && !$clubSummary && !$platformSummary) {
             return false;
         }
 
@@ -41,6 +42,8 @@ final class ActivityApplication
             $users = new UserAccountRepository($database);
             if ($record) {
                 $response = $this->record($request, $events, $users);
+            } elseif ($session) {
+                $response = $this->session($request, $users);
             } elseif ($platformSummary) {
                 $response = $this->platformSummary($request, $events, $users);
             } else {
@@ -79,6 +82,24 @@ final class ActivityApplication
 
         $count = $events->recordBatch($batch, $userId, $sessionId);
         return JsonResponse::ok(['recorded' => $count], 201);
+    }
+
+    private function session(Request $request, UserAccountRepository $users): JsonResponse
+    {
+        $user = $this->authenticatedUser($request, $users);
+        if ($user instanceof JsonResponse) return $user;
+
+        return JsonResponse::ok([
+            'session' => [
+                'id' => isset($user['session_id']) ? (int) $user['session_id'] : null,
+                'expires_at' => $user['session_expires_at'] ?? null,
+            ],
+            'user' => [
+                'id' => isset($user['id']) ? (int) $user['id'] : null,
+                'display_name' => $user['display_name'] ?? null,
+                'role' => $user['role'] ?? null,
+            ],
+        ]);
     }
 
     private function summary(Request $request, string $path, ActivityRepository $events, UserAccountRepository $users): JsonResponse
