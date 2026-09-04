@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20260903-auto-playoff-02";
+const MODULE_VERSION = "20260904-playoff-format-guard-01";
 let requested = false;
 let loading = null;
 let waitTimer = null;
@@ -96,6 +96,7 @@ async function loadModules() {
       import(moduleUrl("./tournament-board-selection.js")),
       import(moduleUrl("./tournament-delete-admin.js")),
       import(moduleUrl("./tournament-start-format.js")),
+      import(moduleUrl("./tournament-format-guard.js")),
     ]);
 
     // Workspace positioning is the only dependency for the visual/canonical layer.
