@@ -30,6 +30,7 @@ final class TournamentFeatureApplication
             return false;
         }
 
+        $config = null;
         try {
             $config = Config::load($this->rootPath);
             $database = new Database($config);
@@ -41,9 +42,19 @@ final class TournamentFeatureApplication
         } catch (InvalidArgumentException $error) {
             $response = JsonResponse::error(422, 'invalid_tournament_setup', $error->getMessage());
         } catch (mysqli_sql_exception $error) {
-            $response = JsonResponse::error(500, 'database_error', 'Database query failed.');
+            $response = JsonResponse::error(
+                500,
+                'database_error',
+                'Database query failed.',
+                ['details' => $config instanceof Config && $config->appEnv() !== 'prod' ? $error->getMessage() : null]
+            );
         } catch (Throwable $error) {
-            $response = JsonResponse::error(500, 'internal_server_error', 'Unexpected server error.');
+            $response = JsonResponse::error(
+                500,
+                'internal_server_error',
+                'Unexpected server error.',
+                ['details' => $config instanceof Config && $config->appEnv() !== 'prod' ? $error->getMessage() : null]
+            );
         }
 
         $response->send();
