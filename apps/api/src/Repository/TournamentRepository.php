@@ -460,7 +460,6 @@ final class TournamentRepository
                 k.name AS kiosk_name,
                 k.board_number
              FROM `%1$smatches` m
-             INNER JOIN `%1$stournaments` t ON t.id = m.tournament_id
              INNER JOIN `%1$splayers` pa ON pa.id = m.player_a_id
              INNER JOIN `%1$splayers` pb ON pb.id = m.player_b_id
              LEFT JOIN `%1$skiosks` k ON k.id = m.kiosk_id
