@@ -12,7 +12,13 @@ on:
       - 'apps/api/src/Repository/ActivityRepository.php'
       - 'apps/admin/tournament-diagnostics.js'
   schedule:
-    - cron: '7 * * * *'
+    # GitHub cron runs in UTC. These map roughly to active Norwegian hours:
+    # morning catch-up, then every 2 hours through the afternoon/evening.
+    - cron: '7 7 * * *'
+    - cron: '7 14 * * *'
+    - cron: '7 16,18,20,22 * * *'
+    # Mondays: fill the gaps so Mandagsserien is checked hourly in the evening.
+    - cron: '7 15,17,19,21 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +44,24 @@ jobs:
           extensions: mysqli, mbstring
           coverage: none
 
+      - name: Resolve monitoring window
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # Keep windows just wider than the expected gap between scheduled runs.
+          # Manual/push runs retain the focused 65-minute window.
+          window=65
+          case "${{ github.event.schedule }}" in
+            '7 7 * * *') window=545 ;;
+            '7 14 * * *') window=425 ;;
+            '7 16,18,20,22 * * *') window=125 ;;
+            '7 15,17,19,21 * * 1') window=65 ;;
+          esac
+
+          echo "MONITOR_WINDOW_MINUTES=$window" >> "$GITHUB_ENV"
+          echo "Using a ${window}-minute runtime-error lookback window."
+
       - name: Validate monitor configuration
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
@@ -58,12 +82,12 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          MONITOR_WINDOW_MINUTES: '65'
         run: |
           set +e
 
           echo "### Runtime Error Monitor" >> "$GITHUB_STEP_SUMMARY"
-          echo "Every captured browser/API/resource error is retained in activity_events. This hourly check groups identical occurrences only for the report." >> "$GITHUB_STEP_SUMMARY"
+          echo "Every captured browser/API/resource error is retained in activity_events. This check groups identical occurrences only within the current report." >> "$GITHUB_STEP_SUMMARY"
+          echo "Lookback window: ${MONITOR_WINDOW_MINUTES} minutes." >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
 
           MONITOR_ENV=TEST DB_TABLE_PREFIX=bd_test_ php infra/monitor/runtime_errors.php
@@ -78,7 +102,7 @@ jobs:
           fi
 
           if [ "$test_status" -ne 0 ] || [ "$prod_status" -ne 0 ]; then
-            echo "::error::User-facing runtime errors were captured in the last 65 minutes. See the step summary for grouped evidence."
+            echo "::error::User-facing runtime errors were captured in the current monitoring window. See the step summary for grouped evidence."
             exit 1
           fi
 
