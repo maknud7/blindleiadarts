@@ -174,7 +174,7 @@ try {
             'code' => 'player_input_preference_unavailable',
             'message' => 'Spillerens scoringpreferanse kunne ikke lastes.',
             'request_id' => $details['request_id'],
-            'detail' => $config !== null && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
+            'detail' => $config !== null && $config->appEnv() === 'test' ? $error->getMessage() : null,
         ],
     ], 500);
 }
