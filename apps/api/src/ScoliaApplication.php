@@ -14,6 +14,7 @@ use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Service\CanonicalScoringService;
 use Blindleia\Dartkiosk\Api\Service\Dart501Rules;
+use Blindleia\Dartkiosk\Api\Service\ScoliaQueueService;
 use Blindleia\Dartkiosk\Api\Service\ScoliaScoringService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
@@ -43,9 +44,10 @@ final class ScoliaApplication
                 new CanonicalScoringService($database, $config),
                 new Dart501Rules()
             );
+            $queue = new ScoliaQueueService($database, $repo, $service);
             $users = new UserAccountRepository($database);
             $kiosks = new KioskRepository($database);
-            $response = $this->dispatch($request, $path, $config, $repo, $hardware, $routedEvents, $service, $users, $kiosks);
+            $response = $this->dispatch($request, $path, $config, $repo, $hardware, $routedEvents, $service, $queue, $users, $kiosks);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception $error) {
@@ -73,6 +75,7 @@ final class ScoliaApplication
         ScoliaHardwareSettingsRepository $hardware,
         ScoliaRoutedEventRepository $routedEvents,
         ScoliaScoringService $service,
+        ScoliaQueueService $queue,
         UserAccountRepository $users,
         KioskRepository $kiosks
     ): JsonResponse {
@@ -94,13 +97,15 @@ final class ScoliaApplication
                 if ($serial === '' || $message === []) {
                     return JsonResponse::error(422, 'scolia_event_invalid', 'serial_number and message are required.');
                 }
+                // Ingress is intentionally cheap: persist/dedupe only. The bridge's
+                // queue worker drains asynchronously so Scolia delivery never waits
+                // for canonical scoring work in the same HTTP request.
                 $queued = $routedEvents->enqueueEvent($serial, $message, $routedKioskId);
-                $drain = $service->drain(20);
-                return JsonResponse::ok(['event' => $queued, 'drain' => $drain], $queued['duplicate'] ? 200 : 202);
+                return JsonResponse::ok(['event' => $queued, 'queued' => true], $queued['duplicate'] ? 200 : 202);
             }
             if ($method === 'POST' && $path === 'v1/scolia/bridge/drain') {
                 $limit = max(1, min(100, (int) ($request->jsonBody()['limit'] ?? 50)));
-                return JsonResponse::ok($service->drain($limit));
+                return JsonResponse::ok($queue->drain($limit));
             }
             if ($method === 'POST' && $path === 'v1/scolia/bridge/heartbeat') {
                 $body = $request->jsonBody();
@@ -112,6 +117,14 @@ final class ScoliaApplication
                 }
                 return JsonResponse::ok(['updated' => count($boards)]);
             }
+            if ($method === 'POST' && $path === 'v1/scolia/bridge/commands/poll') {
+                $body = $request->jsonBody();
+                $kioskIds = is_array($body['kiosk_ids'] ?? null) ? $body['kiosk_ids'] : [];
+                $limit = max(1, min(200, (int) ($body['limit'] ?? 100)));
+                return JsonResponse::ok(['items' => $queue->pollCommands($kioskIds, $limit)]);
+            }
+            // Backwards-compatible single-board command polling while older bridge
+            // instances are being replaced by the bulk poller.
             if ($method === 'GET' && preg_match('#^v1/scolia/bridge/commands/(\d+)$#', $path, $m) === 1) {
                 return JsonResponse::ok(['items' => $repo->pollCommands((int) $m[1])]);
             }
@@ -147,10 +160,10 @@ final class ScoliaApplication
             }
             if ($method === 'POST' && preg_match('#^events/(\d+)/retry$#', $tail, $e) === 1) {
                 $retried = $repo->retryDeadLetter($clubId, (int) $e[1]);
-                $drain = $retried ? $service->drain(25) : ['claimed'=>0,'processed'=>0,'failed'=>0];
+                $drain = $retried ? $queue->drain(25) : ['claimed'=>0,'processed'=>0,'failed'=>0];
                 return JsonResponse::ok(['retried' => $retried, 'drain' => $drain]);
             }
-            if ($method === 'POST' && $tail === 'queue/drain') return JsonResponse::ok($service->drain(100));
+            if ($method === 'POST' && $tail === 'queue/drain') return JsonResponse::ok($queue->drain(100));
             if ($method === 'POST' && $tail === 'cleanup') return JsonResponse::ok(['deleted_events' => $repo->cleanupOldEvents($clubId)]);
             return JsonResponse::error(404, 'scolia_admin_route_not_found', 'Unknown Scolia admin route.');
         }
