@@ -41,21 +41,7 @@ final class JsonResponse
     public static function error(int $statusCode, string $code, string $message, array $meta = []): self
     {
         if ($statusCode >= 500) {
-            $requestId = RuntimeFailureDiagnostics::requestId();
-            $meta['request_id'] ??= $requestId;
-
-            $path = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '');
-            $log = json_encode([
-                'event' => 'api_error_response',
-                'request_id' => $requestId,
-                'status' => $statusCode,
-                'code' => $code,
-                'method' => (string) ($_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN'),
-                'path' => $path,
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
-            error_log('runtime_failure ' . ($log !== false
-                ? $log
-                : '{"event":"api_error_response","encoding_error":true}'));
+            $meta['request_id'] ??= RuntimeFailureDiagnostics::requestId();
         }
 
         $error = [
