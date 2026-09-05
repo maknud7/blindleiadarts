@@ -9,6 +9,7 @@ use Throwable;
 final class RuntimeFailureDiagnostics
 {
     private static ?string $requestId = null;
+    private static bool $responseLogged = false;
 
     public static function requestId(): string
     {
@@ -32,6 +33,16 @@ final class RuntimeFailureDiagnostics
         }
 
         return self::$requestId;
+    }
+
+    public static function markResponseLogged(): void
+    {
+        self::$responseLogged = true;
+    }
+
+    public static function responseWasLogged(): bool
+    {
+        return self::$responseLogged;
     }
 
     /** @return array<string, mixed> */
