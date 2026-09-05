@@ -35,7 +35,7 @@ if (PHP_SAPI !== 'cli') {
 
     register_shutdown_function(static function () use ($runtimeRequestId): void {
         $status = http_response_code();
-        if ($status < 500) {
+        if ($status < 500 || \Blindleia\Dartkiosk\Api\Support\RuntimeFailureDiagnostics::responseWasLogged()) {
             return;
         }
 
