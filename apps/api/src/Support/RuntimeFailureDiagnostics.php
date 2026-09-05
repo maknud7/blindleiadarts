@@ -50,7 +50,7 @@ final class RuntimeFailureDiagnostics
     {
         $details = ['request_id' => self::requestId()];
 
-        if ($config !== null && $config->appEnv() !== 'prod') {
+        if ($config !== null && $config->appEnv() === 'test') {
             $details['exception'] = $exception::class;
             $details['exception_code'] = $exception->getCode();
             $details['exception_message'] = $exception->getMessage();
@@ -79,8 +79,8 @@ final class RuntimeFailureDiagnostics
             $payload[$key] = $value;
         }
 
-        // Exception text can contain SQL/schema details. Keep it out of PROD logs.
-        if ($environment !== 'prod') {
+        // Exception text can contain SQL/schema details. Expose it only in TEST.
+        if ($environment === 'test') {
             $payload['exception_message'] = $exception->getMessage();
         }
 
