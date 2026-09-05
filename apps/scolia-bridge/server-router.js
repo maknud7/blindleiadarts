@@ -11,7 +11,7 @@ const ROUTER_URL = String(
 );
 const SCOLIA_WSS_URL = String(process.env.SCOLIA_WSS_URL || "wss://game.scoliadarts.com/api/v1/external");
 const ACTIVE_CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_POLL_MS || 10000));
-const IDLE_CONFIG_POLL_MS = Math.max(1000, Math.min(2000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 2000)));
+const IDLE_CONFIG_POLL_MS = Math.max(60000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 300000));
 const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
 const DRAIN_POLL_MS = Math.max(1000, Number(process.env.SCOLIA_DRAIN_POLL_MS || 5000));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
@@ -443,18 +443,15 @@ function nextConfigDelay(data) {
   if ((data?.bridge_mode || "idle") === "active") return ACTIVE_CONFIG_POLL_MS;
 
   let delay = Math.max(
-    1000,
-    Math.min(
-      IDLE_CONFIG_POLL_MS,
-      Number(data?.idle_poll_seconds || 0) > 0
-        ? Number(data.idle_poll_seconds) * 1000
-        : IDLE_CONFIG_POLL_MS
-    )
+    60000,
+    Number(data?.idle_poll_seconds || 0) > 0
+      ? Number(data.idle_poll_seconds) * 1000
+      : IDLE_CONFIG_POLL_MS
   );
 
   const nextActivationSeconds = Number(data?.next_activation_in_seconds);
   if (Number.isFinite(nextActivationSeconds) && nextActivationSeconds >= 0) {
-    delay = Math.min(delay, Math.max(1000, nextActivationSeconds * 1000));
+    delay = Math.min(delay, Math.max(5000, nextActivationSeconds * 1000));
   }
   return delay;
 }
