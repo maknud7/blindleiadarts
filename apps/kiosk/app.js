@@ -94,6 +94,18 @@ function clearLocalPairing({ newToken = true } = {}) {
     localStorage.setItem("bd:kioskPairingToken", state.pairingToken);
   }
 }
+function isKioskTestMode() {
+  return localStorage.getItem("bd:kioskTestMode") === "1";
+}
+function clearTestBoardSelection() {
+  state.kioskCode = "";
+  state.snapshot = null;
+  state.renderedView = "";
+  localStorage.removeItem("bd:kioskCode");
+  localStorage.removeItem("bd:kioskTestPhysicalBoardId");
+  localStorage.removeItem("bd:kioskTestBoardLabel");
+  persistRequest("");
+}
 
 function currentKiosk() { return state.snapshot?.kiosk || null; }
 function currentMatch() { return state.snapshot?.match || null; }
@@ -152,6 +164,8 @@ function formatExpiry(value) {
   return `Koden utløper ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit" }).format(date)}.`;
 }
 function renderSetup() {
+  document.getElementById("kioskTestRuntimeLoading")?.remove();
+  el.setupState.querySelector(".claim-layout")?.classList.remove("hidden");
   showState("setup", el.setupState);
   applyBranding();
   setConnection(state.pairingRequestCode ? "Venter på admin" : "Ikke satt opp", "neutral");
@@ -167,6 +181,23 @@ function renderSetup() {
     el.pairingQr.classList.add("hidden");
     el.qrLoading.classList.remove("hidden");
   }
+  renderSettings();
+}
+function renderTestRuntimeLoading() {
+  showState("test-runtime-loading", el.setupState);
+  applyBranding();
+  setConnection(state.kioskCode ? "TEST · starter" : "TEST · velg skive", "neutral");
+  el.setupState.querySelector(".claim-layout")?.classList.add("hidden");
+  let node = document.getElementById("kioskTestRuntimeLoading");
+  if (!node) {
+    node = document.createElement("div");
+    node.id = "kioskTestRuntimeLoading";
+    node.className = "board-hero";
+    el.setupState.appendChild(node);
+  }
+  node.innerHTML = state.kioskCode
+    ? `<span class="badge neutral">TEST</span><p class="eyebrow">Testmodus</p><h2>Starter valgt testskive …</h2><p class="muted">Ingen pairing er nødvendig i testmodus.</p><span class="spinner" aria-hidden="true"></span>`
+    : `<span class="badge neutral">TEST</span><p class="eyebrow">Testmodus</p><h2>Velg skiva du vil teste</h2><p class="muted">Ingen pairing er nødvendig. Velg en fysisk skive i testpanelet.</p>`;
   renderSettings();
 }
 function renderIdle() {
@@ -189,7 +220,13 @@ function renderMatch() {
   el.manualScoring.classList.toggle("hidden", !isManual()); el.scoliaScoring.classList.toggle("hidden", isManual()); renderInput(); renderVisits(); renderSettings();
 }
 function render() {
-  if (!state.kioskCode || !state.snapshot) { renderSetup(); return; }
+  if (!state.kioskCode || !state.snapshot) {
+    if (isKioskTestMode()) renderTestRuntimeLoading();
+    else renderSetup();
+    return;
+  }
+  document.getElementById("kioskTestRuntimeLoading")?.remove();
+  el.setupState.querySelector(".claim-layout")?.classList.remove("hidden");
   if (state.snapshot.state === "idle" || !state.snapshot.match) { renderIdle(); return; }
   if (state.snapshot.state === "assigned") { renderAssigned(); return; }
   renderMatch();
@@ -223,6 +260,11 @@ function renderInput() {
 function resetInput() { state.sumValue = ""; state.darts = []; state.multiplier = "S"; renderInput(); }
 
 async function ensurePairingRequest({ forceNew = false } = {}) {
+  if (isKioskTestMode()) {
+    persistRequest("");
+    render();
+    return;
+  }
   if (state.kioskCode) return;
   if (forceNew) {
     state.pairingToken = newDeviceToken();
@@ -240,6 +282,7 @@ async function ensurePairingRequest({ forceNew = false } = {}) {
   render();
 }
 async function checkPairing() {
+  if (isKioskTestMode()) return;
   if (!state.pairingRequestCode) return;
   try {
     const data = await api(`/kiosk-pairing-requests/${encodeURIComponent(state.pairingRequestCode)}`);
@@ -264,7 +307,15 @@ async function loadState() {
   if (!state.kioskCode) return;
   try { state.snapshot = await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/state`); render(); }
   catch (error) {
-    if ([401, 403, 404].includes(Number(error.status))) {
+    const status = Number(error.status);
+    if (isKioskTestMode() && [401, 403, 404, 409].includes(status)) {
+      clearTestBoardSelection();
+      render();
+      showToast("Testtilkoblingen er ikke lenger gyldig. Velg skiva på nytt.");
+      window.setTimeout(() => window.location.reload(), 250);
+      return;
+    }
+    if ([401, 403, 404].includes(status)) {
       clearLocalPairing({ newToken: true });
       await ensurePairingRequest();
       render();
@@ -317,7 +368,7 @@ function startPolling() {
   state.pollHandle = setInterval(() => {
     if (state.mutating) return;
     if (state.kioskCode) loadState().catch(() => undefined);
-    else if (state.pairingRequestCode) checkPairing().catch(() => undefined);
+    else if (!isKioskTestMode() && state.pairingRequestCode) checkPairing().catch(() => undefined);
   }, 1500);
 }
 async function realtimeConfig() {
@@ -390,14 +441,28 @@ async function startLive() {
 
 function renderSettings() {
   const kiosk = currentKiosk();
+  const unpairedStatus = isKioskTestMode()
+    ? "Testmodus · velg skive"
+    : (state.pairingRequestCode ? `Venter på pairingkode ${escapeHtml(state.pairingRequestCode)}` : "Ikke satt opp");
   el.settingsMeta.innerHTML = kiosk
     ? `<div><span>Klubb</span><strong>${escapeHtml(kiosk.club?.name || "—")}</strong></div><div><span>Board</span><strong>${escapeHtml(kiosk.name || kiosk.code)}</strong></div><div><span>Scoring</span><strong>${kiosk.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</strong></div><div><span>Enhet</span><strong>${escapeHtml(kiosk.paired_device_name || "Dette nettbrettet")}</strong></div>`
-    : `<div><span>Status</span><strong>${state.pairingRequestCode ? `Venter på pairingkode ${escapeHtml(state.pairingRequestCode)}` : "Ikke satt opp"}</strong></div>`;
+    : `<div><span>Status</span><strong>${unpairedStatus}</strong></div>`;
   el.unpairButton.classList.toggle("hidden", !state.kioskCode);
 }
 function openSettings() { renderSettings(); el.settingsOverlay.classList.remove("hidden"); el.settingsDialog.classList.remove("hidden"); }
 function closeSettings() { el.settingsOverlay.classList.add("hidden"); el.settingsDialog.classList.add("hidden"); }
 async function resetTerminal() {
+  if (isKioskTestMode()) {
+    if (state.kioskCode) {
+      try { await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/unpair`, { method: "POST" }); } catch {}
+    }
+    closeLive();
+    clearTestBoardSelection();
+    closeSettings();
+    showToast("Testterminalen er nullstilt. Velg skiva på nytt.");
+    window.setTimeout(() => window.location.reload(), 250);
+    return;
+  }
   if (state.kioskCode) {
     try { await api(`/kiosks/${encodeURIComponent(state.kioskCode)}/unpair`, { method: "POST" }); } catch {}
   }
@@ -438,6 +503,11 @@ async function boot() {
 
   if (!state.kioskCode) {
     render();
+    if (isKioskTestMode()) {
+      persistRequest("");
+      startPolling();
+      return;
+    }
     try {
       await ensurePairingRequest();
       await checkPairing();
@@ -449,7 +519,11 @@ async function boot() {
   }
 
   try { await loadState(); await startLive(); }
-  catch (error) { render(); showToast(error.message); }
+  catch (error) {
+    render();
+    showToast(error.message);
+    if (isKioskTestMode()) startPolling();
+  }
 }
 
 boot();
