@@ -1,4 +1,4 @@
-const KIOSK_RUNTIME_VERSION = "20260904-runtime-sync-01";
+const KIOSK_RUNTIME_VERSION = "20260905-test-runtime-01";
 const kioskBrandStyles = document.createElement("link");
 kioskBrandStyles.rel = "stylesheet";
 kioskBrandStyles.href = `./brand-light.css?v=${KIOSK_RUNTIME_VERSION}`;
