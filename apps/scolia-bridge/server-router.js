@@ -11,7 +11,7 @@ const ROUTER_URL = String(
 );
 const SCOLIA_WSS_URL = String(process.env.SCOLIA_WSS_URL || "wss://game.scoliadarts.com/api/v1/external");
 const ACTIVE_CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_POLL_MS || 10000));
-const IDLE_CONFIG_POLL_MS = Math.max(60000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 300000));
+const IDLE_CONFIG_POLL_MS = Math.max(1000, Math.min(2000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 2000)));
 const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
 const DRAIN_POLL_MS = Math.max(1000, Number(process.env.SCOLIA_DRAIN_POLL_MS || 5000));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
@@ -137,10 +137,28 @@ function commandCorrelationId(message) {
     payload.requestId,
     payload.messageId,
     payload.id,
+    message?.id,
   ]) {
     if (typeof value === "string" && value) return value;
   }
   return null;
+}
+
+function normalizedStatusPayload(payload) {
+  const root = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  for (const key of ["sbcStatus", "status", "data", "result"]) {
+    const nested = root[key];
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return { ...root, ...nested };
+    }
+  }
+  return root;
+}
+
+function hasPhysicalStatus(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  return [payload.boardStatus, payload.board_status, payload.status]
+    .some((value) => typeof value === "string" && value.trim() !== "");
 }
 
 class BoardConnection {
@@ -236,10 +254,12 @@ class BoardConnection {
     }
 
     const type = String(message?.type || "").toUpperCase();
+    let matchedCommand = null;
     if (type === "ACK" || type === "REFUSED") {
       const correlation = commandCorrelationId(message);
       if (correlation && this.pendingCommands.has(correlation)) {
         const pending = this.pendingCommands.get(correlation);
+        matchedCommand = pending;
         clearTimeout(pending.timeout);
         this.pendingCommands.delete(correlation);
         await targetApi(this.config.target_api_base, `/scolia/bridge/commands/${pending.commandId}/result`, {
@@ -249,6 +269,16 @@ class BoardConnection {
             error: type === "REFUSED" ? JSON.stringify(message.payload || {}) : null,
           },
         }).catch((error) => console.warn("Could not report command result:", error.message));
+      }
+    }
+
+    if (type === "ACK" && matchedCommand?.commandType === "GET_SBC_STATUS") {
+      const payload = normalizedStatusPayload(message.payload);
+      if (hasPhysicalStatus(payload)) {
+        // GET_SBC_STATUS is a request/response command. Normalize its ACK into the
+        // same status-event shape as spontaneous Scolia status notifications so
+        // the API can keep physical availability fresh without inventing Offline.
+        message = { ...message, type: "SBC_STATUS_CHANGED", payload };
       }
     }
 
@@ -329,7 +359,11 @@ class BoardConnection {
           body: { result: "failed", error: "no_ack_before_timeout" },
         }).catch((error) => console.warn("Could not mark command timeout:", error.message));
       }, COMMAND_ACK_TIMEOUT_MS);
-      this.pendingCommands.set(command.message_id, { commandId: command.id, timeout });
+      this.pendingCommands.set(command.message_id, {
+        commandId: command.id,
+        commandType: String(command.command_type || "").toUpperCase(),
+        timeout,
+      });
     }
   }
 }
@@ -409,15 +443,18 @@ function nextConfigDelay(data) {
   if ((data?.bridge_mode || "idle") === "active") return ACTIVE_CONFIG_POLL_MS;
 
   let delay = Math.max(
-    60000,
-    Number(data?.idle_poll_seconds || 0) > 0
-      ? Number(data.idle_poll_seconds) * 1000
-      : IDLE_CONFIG_POLL_MS
+    1000,
+    Math.min(
+      IDLE_CONFIG_POLL_MS,
+      Number(data?.idle_poll_seconds || 0) > 0
+        ? Number(data.idle_poll_seconds) * 1000
+        : IDLE_CONFIG_POLL_MS
+    )
   );
 
   const nextActivationSeconds = Number(data?.next_activation_in_seconds);
   if (Number.isFinite(nextActivationSeconds) && nextActivationSeconds >= 0) {
-    delay = Math.min(delay, Math.max(5000, nextActivationSeconds * 1000));
+    delay = Math.min(delay, Math.max(1000, nextActivationSeconds * 1000));
   }
   return delay;
 }
