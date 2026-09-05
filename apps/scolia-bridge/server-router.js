@@ -13,7 +13,7 @@ const SCOLIA_WSS_URL = String(process.env.SCOLIA_WSS_URL || "wss://game.scoliada
 const ACTIVE_CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_POLL_MS || 10000));
 const IDLE_CONFIG_POLL_MS = Math.max(60000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 300000));
 const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
-const DRAIN_POLL_MS = Math.max(1000, Number(process.env.SCOLIA_DRAIN_POLL_MS || 5000));
+const DRAIN_POLL_MS = Math.max(250, Number(process.env.SCOLIA_DRAIN_POLL_MS || 500));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
 const SPOOL_DIR = path.resolve(process.env.SCOLIA_SPOOL_DIR || "./data/scolia-spool");
 const COMMAND_ACK_TIMEOUT_MS = Math.max(2000, Number(process.env.SCOLIA_COMMAND_ACK_TIMEOUT_MS || 8000));
@@ -27,6 +27,8 @@ await fs.mkdir(SPOOL_DIR, { recursive: true });
 
 const connections = new Map();
 let flushing = false;
+let queueDrainInFlight = false;
+let commandPollInFlight = false;
 let routerUnavailableWarned = false;
 let configTimer = null;
 let lastBridgeMode = "unknown";
@@ -172,7 +174,6 @@ class BoardConnection {
     this.closedByConfig = false;
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
-    this.commandTimer = null;
     this.pendingCommands = new Map();
     this.state = "disconnected";
   }
@@ -198,8 +199,6 @@ class BoardConnection {
   stop(reason = "configuration changed") {
     this.closedByConfig = true;
     clearTimeout(this.reconnectTimer);
-    clearInterval(this.commandTimer);
-    this.commandTimer = null;
     for (const pending of this.pendingCommands.values()) clearTimeout(pending.timeout);
     this.pendingCommands.clear();
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) {
@@ -238,10 +237,6 @@ class BoardConnection {
       internalMessage("BRIDGE_CONNECTED", { kiosk_id: this.config.kiosk_id, environment: this.config.environment || "default" })
     );
     flushSpool().catch(() => undefined);
-    this.commandTimer = setInterval(
-      () => this.pollCommands().catch((error) => console.warn(`Command poll board ${this.config.board_number}:`, error.message)),
-      COMMAND_POLL_MS
-    );
   }
 
   async onMessage(data) {
@@ -296,8 +291,6 @@ class BoardConnection {
   }
 
   async onClose(code, reasonBuffer) {
-    clearInterval(this.commandTimer);
-    this.commandTimer = null;
     const reason = `${code}: ${reasonBuffer?.toString("utf8") || "connection closed"}`;
     this.state = "disconnected";
     if (!this.closedByConfig) {
@@ -336,35 +329,31 @@ class BoardConnection {
     return true;
   }
 
-  async pollCommands() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const data = await targetApi(this.config.target_api_base, `/scolia/bridge/commands/${this.config.kiosk_id}`);
-    for (const command of data.items || []) {
-      const outgoing = {
-        id: command.message_id,
-        type: command.command_type,
-        ...(command.payload && Object.keys(command.payload).length ? { payload: command.payload } : {}),
-      };
-      if (!this.send(outgoing)) {
-        await targetApi(this.config.target_api_base, `/scolia/bridge/commands/${command.id}/result`, {
-          method: "POST",
-          body: { result: "failed", error: "socket_not_open" },
-        });
-        continue;
-      }
-      const timeout = setTimeout(() => {
-        this.pendingCommands.delete(command.message_id);
-        targetApi(this.config.target_api_base, `/scolia/bridge/commands/${command.id}/result`, {
-          method: "POST",
-          body: { result: "failed", error: "no_ack_before_timeout" },
-        }).catch((error) => console.warn("Could not mark command timeout:", error.message));
-      }, COMMAND_ACK_TIMEOUT_MS);
-      this.pendingCommands.set(command.message_id, {
-        commandId: command.id,
-        commandType: String(command.command_type || "").toUpperCase(),
-        timeout,
+  async deliverCommand(command) {
+    const outgoing = {
+      id: command.message_id,
+      type: command.command_type,
+      ...(command.payload && Object.keys(command.payload).length ? { payload: command.payload } : {}),
+    };
+    if (!this.send(outgoing)) {
+      await targetApi(this.config.target_api_base, `/scolia/bridge/commands/${command.id}/result`, {
+        method: "POST",
+        body: { result: "failed", error: "socket_not_open" },
       });
+      return;
     }
+    const timeout = setTimeout(() => {
+      this.pendingCommands.delete(command.message_id);
+      targetApi(this.config.target_api_base, `/scolia/bridge/commands/${command.id}/result`, {
+        method: "POST",
+        body: { result: "failed", error: "no_ack_before_timeout" },
+      }).catch((error) => console.warn("Could not mark command timeout:", error.message));
+    }, COMMAND_ACK_TIMEOUT_MS);
+    this.pendingCommands.set(command.message_id, {
+      commandId: command.id,
+      commandType: String(command.command_type || "").toUpperCase(),
+      timeout,
+    });
   }
 }
 
@@ -420,6 +409,36 @@ function groupedConnections() {
   return groups;
 }
 
+async function pollAllCommands() {
+  if (commandPollInFlight || connections.size === 0) return;
+  commandPollInFlight = true;
+  try {
+    const groups = groupedConnections();
+    await Promise.all([...groups.entries()].map(async ([apiBase, items]) => {
+      const ready = items.filter((connection) => (
+        connection.ws?.readyState === WebSocket.OPEN
+        && connection.pendingCommands.size === 0
+      ));
+      if (ready.length === 0) return;
+
+      const byKioskId = new Map(ready.map((connection) => [Number(connection.config.kiosk_id), connection]));
+      const data = await targetApi(apiBase, "/scolia/bridge/commands/poll", {
+        method: "POST",
+        body: { kiosk_ids: [...byKioskId.keys()], limit: Math.min(200, byKioskId.size) },
+      });
+      for (const command of data.items || []) {
+        const connection = byKioskId.get(Number(command.kiosk_id));
+        if (!connection) continue;
+        await connection.deliverCommand(command);
+      }
+    }));
+  } catch (error) {
+    console.warn("Bulk command poll failed:", error.message);
+  } finally {
+    commandPollInFlight = false;
+  }
+}
+
 async function heartbeat() {
   const groups = groupedConnections();
   if (groups.size === 0) return;
@@ -430,13 +449,18 @@ async function heartbeat() {
 }
 
 async function drainServerQueue() {
-  if (connections.size === 0) return;
-  const targets = new Set();
-  for (const connection of connections.values()) targets.add(connection.config.target_api_base || API_BASE);
-  await Promise.all([...targets].map((apiBase) => targetApi(apiBase, "/scolia/bridge/drain", {
-    method: "POST",
-    body: { limit: 100 },
-  }).catch((error) => console.warn(`Queue drain failed for ${apiBase}:`, error.message))));
+  if (queueDrainInFlight || connections.size === 0) return;
+  queueDrainInFlight = true;
+  try {
+    const targets = new Set();
+    for (const connection of connections.values()) targets.add(connection.config.target_api_base || API_BASE);
+    await Promise.all([...targets].map((apiBase) => targetApi(apiBase, "/scolia/bridge/drain", {
+      method: "POST",
+      body: { limit: 100 },
+    }).catch((error) => console.warn(`Queue drain failed for ${apiBase}:`, error.message))));
+  } finally {
+    queueDrainInFlight = false;
+  }
 }
 
 function nextConfigDelay(data) {
@@ -474,10 +498,12 @@ async function boot() {
   await flushSpool().catch((error) => console.warn("Initial spool flush failed:", error.message));
   await configLoop();
 
-  // Local spool checks are cheap and make a failed delivery durable. No API call is
-  // made when the spool is empty.
+  // Local spool is the durable layer outside MySQL. If the DB is unavailable,
+  // Scolia messages stay on disk until ingress can accept them again.
   setInterval(() => flushSpool().catch((error) => console.warn("Spool flush failed:", error.message)), 5000);
-  // These functions return immediately without HTTP/DB traffic while the bridge is idle.
+  // One bulk command poll and one queue drain per API target, regardless of whether
+  // there are 1, 10 or 50 connected boards. Single-flight guards prevent overlap.
+  setInterval(() => pollAllCommands().catch((error) => console.warn("Command poll failed:", error.message)), COMMAND_POLL_MS);
   setInterval(() => heartbeat().catch((error) => console.warn("Bridge heartbeat failed:", error.message)), HEARTBEAT_MS);
   setInterval(() => drainServerQueue().catch((error) => console.warn("Server queue drain failed:", error.message)), DRAIN_POLL_MS);
 }
