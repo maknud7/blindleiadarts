@@ -3,7 +3,7 @@ name: Runtime Error Monitor
 on:
   push:
     branches:
-      - develop
+      - main
     paths:
       - '.github/workflows/runtime-error-monitor.yml'
       - 'infra/monitor/runtime_errors.php'
@@ -12,13 +12,17 @@ on:
       - 'apps/api/src/Repository/ActivityRepository.php'
       - 'apps/admin/tournament-diagnostics.js'
   schedule:
-    # GitHub cron runs in UTC. These map roughly to active Norwegian hours:
-    # morning catch-up, then every 2 hours through the afternoon/evening.
-    - cron: '7 7 * * *'
-    - cron: '7 14 * * *'
-    - cron: '7 16,18,20,22 * * *'
+    # GitHub may delay or drop scheduled jobs around the start of an hour.
+    # Run at :37 and use Europe/Oslo so the intended local times survive DST.
+    - cron: '37 9 * * *'
+      timezone: 'Europe/Oslo'
+    - cron: '37 16 * * *'
+      timezone: 'Europe/Oslo'
+    - cron: '37 0,18,20,22 * * *'
+      timezone: 'Europe/Oslo'
     # Mondays: fill the gaps so Mandagsserien is checked hourly in the evening.
-    - cron: '7 15,17,19,21 * * 1'
+    - cron: '37 17,19,21,23 * * 1'
+      timezone: 'Europe/Oslo'
   workflow_dispatch:
 
 permissions:
@@ -53,10 +57,10 @@ jobs:
           # Manual/push runs retain the focused 65-minute window.
           window=65
           case "${{ github.event.schedule }}" in
-            '7 7 * * *') window=545 ;;
-            '7 14 * * *') window=425 ;;
-            '7 16,18,20,22 * * *') window=125 ;;
-            '7 15,17,19,21 * * 1') window=65 ;;
+            '37 9 * * *') window=545 ;;
+            '37 16 * * *') window=425 ;;
+            '37 0,18,20,22 * * *') window=125 ;;
+            '37 17,19,21,23 * * 1') window=65 ;;
           esac
 
           echo "MONITOR_WINDOW_MINUTES=$window" >> "$GITHUB_ENV"
