@@ -22,8 +22,8 @@ jobs:
           set -Eeuo pipefail
           node --check apps/kiosk/scolia-fallback-manual.js
           node infra/tests/scolia_fallback_manual_test.mjs
-          grep -Fq 'scolia-fallback-manual.js?v=20260904-runtime-sync-01' apps/kiosk/index.html
+          grep -Fq 'scolia-fallback-manual.js?v=20260905-test-runtime-01' apps/kiosk/index.html
           grep -Fq 'scolia-fallback-manual.js' apps/kiosk/service-worker.js
-          grep -Fq 'bd-kiosk-shell-v42' apps/kiosk/service-worker.js
+          grep -Fq 'bd-kiosk-shell-v43' apps/kiosk/service-worker.js
           grep -Fq 'if (url.pathname.includes("/api/") || url.pathname.endsWith(".php")) return;' apps/kiosk/service-worker.js
           grep -Fq '["script", "style"].includes(request.destination)' apps/kiosk/service-worker.js
