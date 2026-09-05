@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Blindleia\Dartkiosk\Api\Http;
 
+use Blindleia\Dartkiosk\Api\Support\RuntimeFailureDiagnostics;
+
 final class JsonResponse
 {
     private int $statusCode;
@@ -38,6 +40,10 @@ final class JsonResponse
      */
     public static function error(int $statusCode, string $code, string $message, array $meta = []): self
     {
+        if ($statusCode >= 500) {
+            $meta['request_id'] ??= RuntimeFailureDiagnostics::requestId();
+        }
+
         $error = [
             'code' => $code,
             'message' => $message,
