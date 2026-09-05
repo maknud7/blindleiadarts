@@ -16,7 +16,7 @@ When no relevant tournament is near its start and no TEST lease is active, the b
 - no bridge heartbeat is written,
 - no command polling runs,
 - no server queue drain runs,
-- the bridge only performs a read-only router check at the idle interval (default five minutes).
+- the bridge only performs a lightweight read-only router check. The idle check is capped at roughly two seconds so a newly acquired TEST lease can wake the physical Scolia connection before kiosk fallback activates.
 
 This is a healthy state. Missing heartbeat while the router says Scolia is not required must not be treated as an outage.
 
@@ -40,7 +40,7 @@ While active, the bridge:
 
 When none of the activation conditions remain, the bridge closes the Scolia connection and returns to Dvale.
 
-A TEST lease can therefore take up to roughly one idle polling interval to wake the bridge when the service is already in Dvale.
+A TEST lease should therefore wake the bridge within a few seconds even when the service was already in Dvale.
 
 Canonical scoring remains in `MatchScoringRepository` / `Dart501Rules`.
 
@@ -54,9 +54,9 @@ Optional:
 - `SCOLIA_WSS_URL` (default `wss://game.scoliadarts.com/api/v1/external`)
 - `SCOLIA_SPOOL_DIR` (default `./data/scolia-spool`)
 - `SCOLIA_CONFIG_POLL_MS` (active polling interval)
-- `SCOLIA_IDLE_POLL_MS` (idle router interval; default five minutes in the production setup)
+- `SCOLIA_IDLE_CONFIG_POLL_MS` (idle router interval; currently capped at 2000 ms so TEST can wake safely)
 - `SCOLIA_COMMAND_POLL_MS` (default 750)
-- `SCOLIA_DRAIN_POLL_MS` (default 2000)
+- `SCOLIA_DRAIN_POLL_MS` (default 5000)
 - `SCOLIA_HEARTBEAT_MS` (default 15000)
 - `SCOLIA_COMMAND_ACK_TIMEOUT_MS` (default 8000)
 
@@ -73,6 +73,8 @@ A TEST lease only changes event routing for the leased physical board. Match, vi
 Scolia documentation does not promise replay after a WebSocket disconnect. Therefore Blindleia never silently assumes that no darts were lost. If a live board disconnects during an active match, the API marks the board `needs_reconciliation` and activates manual fallback. Reconnection does not clear that flag. The score must be checked at the terminal before Scolia is explicitly resumed.
 
 The bridge spool protects the opposite direction: once the bridge has received a Scolia message, an API outage or bridge restart will not lose it. Duplicate delivery is safe because the API stores a deterministic dedupe key before processing.
+
+`GET_SBC_STATUS` is request/response based. The bridge correlates its ACK with the queued command and, when the ACK contains a physical board status, normalizes it to the same `SBC_STATUS_CHANGED` event shape used by spontaneous Scolia status notifications. This prevents the kiosk from declaring a healthy board offline merely because the previous status event became old.
 
 ## Railway production service
 
