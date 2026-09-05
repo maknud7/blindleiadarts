@@ -26,7 +26,7 @@ final class ScoliaRoutedEventRepository
         $this->hardwarePrefix = $database->hardwareTablePrefix();
     }
 
-    /** @param array<string,mixed> $message @return array{id:int,duplicate:bool} */
+    /** @param array<string,mixed> $message @return array{id:int,duplicate:bool,priority:int} */
     public function enqueueEvent(string $serial, array $message, ?int $routedKioskId = null): array
     {
         $serial = strtoupper(trim($serial));
@@ -78,6 +78,7 @@ final class ScoliaRoutedEventRepository
 
         $providerId = trim((string) ($message['id'] ?? ''));
         $type = strtoupper(trim((string) ($message['type'] ?? 'UNKNOWN')));
+        $priority = $this->eventPriority($type);
         $payload = is_array($message['payload'] ?? null) ? $message['payload'] : [];
         $dedupeBasis = $providerId !== ''
             ? 'id:' . $serial . ':' . $providerId
@@ -89,12 +90,12 @@ final class ScoliaRoutedEventRepository
 
         $stmt = $this->connection->prepare(sprintf(
             'INSERT IGNORE INTO `%1$sscolia_events`
-             (club_id,kiosk_id,match_id,provider_event_id,dedupe_key,event_type,provider_detected_at,payload_json)
-             VALUES (?,?,?,?,?,?,?,?)',
+             (club_id,kiosk_id,match_id,provider_event_id,dedupe_key,event_type,priority,provider_detected_at,payload_json)
+             VALUES (?,?,?,?,?,?,?,?,?)',
             $this->dataPrefix
         ));
         $providerIdValue = $providerId !== '' ? $providerId : null;
-        $stmt->bind_param('iiisssss', $clubId, $routedKioskId, $matchId, $providerIdValue, $dedupeKey, $type, $detectedAt, $payloadJson);
+        $stmt->bind_param('iiisssiss', $clubId, $routedKioskId, $matchId, $providerIdValue, $dedupeKey, $type, $priority, $detectedAt, $payloadJson);
         $stmt->execute();
         $inserted = $stmt->affected_rows > 0;
         $id = $inserted ? (int) $stmt->insert_id : 0;
@@ -117,7 +118,7 @@ final class ScoliaRoutedEventRepository
         $stmt->execute();
         $stmt->close();
 
-        return ['id' => $id, 'duplicate' => !$inserted];
+        return ['id' => $id, 'duplicate' => !$inserted, 'priority' => $priority];
     }
 
     /** @return array<string,mixed>|null */
@@ -153,6 +154,19 @@ final class ScoliaRoutedEventRepository
         $value = $stmt->get_result()->fetch_assoc()['id'] ?? null;
         $stmt->close();
         return $value === null ? null : (int) $value;
+    }
+
+    private function eventPriority(string $type): int
+    {
+        return match ($type) {
+            'THROW_DETECTED' => 100,
+            'TAKEOUT_STARTED', 'TAKEOUT_FINISHED' => 95,
+            'BRIDGE_DISCONNECTED', 'BRIDGE_ERROR' => 90,
+            'HELLO_CLIENT' => 50,
+            'BRIDGE_CONNECTED' => 40,
+            'SBC_STATUS_CHANGED', 'SBC_BOARD_AVAILABILITY_CHANGED' => 30,
+            default => 50,
+        };
     }
 
     private function providerDateTime(mixed $value): ?string
