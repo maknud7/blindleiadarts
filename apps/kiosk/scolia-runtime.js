@@ -11,6 +11,8 @@ const TEST_LEASE_PHYSICAL_KEY = "bd:kioskScoliaLeasePhysicalId";
 const OFFLINE_FALLBACK_GRACE_MS = 5000;
 const OFFLINE_FALLBACK_RETRY_MS = 5000;
 const SCOLIA_REQUEST_TIMEOUT_MS = 15000;
+const SCOLIA_REFRESH_OK_MS = 1000;
+const SCOLIA_REFRESH_MAX_BACKOFF_MS = 8000;
 
 let status = null;
 let busy = false;
@@ -20,6 +22,9 @@ let leaseHeartbeatTimer = null;
 let offlineSince = 0;
 let autoFallbackBusy = false;
 let autoFallbackRetryAt = 0;
+let refreshInFlight = false;
+let refreshTimer = null;
+let refreshFailureCount = 0;
 
 function kioskCode() { return localStorage.getItem("bd:kioskCode") || ""; }
 function pairingToken() { return localStorage.getItem("bd:kioskPairingToken") || ""; }
@@ -105,7 +110,12 @@ async function request(path, { method = "GET", body } = {}) {
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Scolia-feil (${response.status})`);
+  if (!response.ok || !payload?.ok) {
+    const error = new Error(payload?.error?.message || `Scolia-feil (${response.status})`);
+    error.status = response.status;
+    error.code = payload?.error?.code || "scolia_request_failed";
+    throw error;
+  }
   return payload.data;
 }
 
@@ -126,6 +136,7 @@ async function leaseRequest(action, body, { keepalive = false } = {}) {
   if (!response.ok || !payload?.ok) {
     const error = new Error(payload?.error?.message || `Scolia test-lease feilet (${response.status})`);
     error.code = payload?.error?.code || "scolia_test_lease_failed";
+    error.status = response.status;
     throw error;
   }
   return payload.data;
@@ -271,7 +282,7 @@ function render() {
   const darts = board.buffer?.darts || [];
   const warning = queueWarning(board.queue);
   const modeLabel = board.mode === "shadow" ? "Shadow – manuell score er fortsatt fasit" : board.mode === "live" ? "Live scoring" : "Av";
-  const canResume = Number(board.needs_reconciliation) === 1 || Number(board.fallback_active) === 1;
+  const canResume = Number(board.needs_reconciliation || 0) === 1 || Number(board.fallback_active || 0) === 1;
   const available = isBoardAvailable(board);
   const testLeaseLabel = isTestEnvironment() && testLeaseActive()
     ? `<p class="muted" style="font-weight:800">TEST · fysisk Scolia er midlertidig routet til isolert test-runtime.</p>`
@@ -335,20 +346,46 @@ async function action(name) {
   }
 }
 
+function nextRefreshDelay(success) {
+  if (success) {
+    refreshFailureCount = 0;
+    return SCOLIA_REFRESH_OK_MS;
+  }
+  refreshFailureCount = Math.min(6, refreshFailureCount + 1);
+  return Math.min(SCOLIA_REFRESH_MAX_BACKOFF_MS, SCOLIA_REFRESH_OK_MS * (2 ** refreshFailureCount));
+}
+
+function scheduleRefresh(delayMs) {
+  window.clearTimeout(refreshTimer);
+  refreshTimer = window.setTimeout(async () => {
+    const success = await refresh().catch(() => false);
+    scheduleRefresh(nextRefreshDelay(success));
+  }, Math.max(0, delayMs));
+}
+
 async function refresh() {
   const code = kioskCode();
-  if (!code || !card) return;
+  if (!code || !card || refreshInFlight) return false;
+  refreshInFlight = true;
   try {
     const data = await request(`/kiosks/${encodeURIComponent(code)}/scolia/status`);
     status = data.board;
     lastError = "";
     status = await maybeAutoFallback(status);
     render();
+    return true;
   } catch (error) {
-    // A manual-only board has no Scolia setup yet; leave the normal kiosk UI untouched.
-    if (error.message.includes("ikke funnet") || error.message.includes("not found")) return;
+    // A manual-only board or a stale TEST alias should not be hammered at 750 ms.
+    // The recursive scheduler backs off and TEST lease maintenance can re-acquire.
+    if (error.code === "kiosk_not_found" || error.status === 404 || error.message.includes("ikke funnet") || error.message.includes("not found")) {
+      if (isTestEnvironment() && testModeActive()) clearLeaseMarker();
+      return false;
+    }
     lastError = error.message;
     if (status) render();
+    return false;
+  } finally {
+    refreshInFlight = false;
   }
 }
 
@@ -365,6 +402,5 @@ if (card) {
       }
     });
   }
-  window.setInterval(() => refresh().catch(() => undefined), 750);
-  refresh().catch(() => undefined);
+  scheduleRefresh(0);
 }
