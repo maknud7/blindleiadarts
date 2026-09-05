@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
+use Blindleia\Dartkiosk\Api\Support\RuntimeFailureDiagnostics;
 
 require __DIR__ . '/bootstrap.php';
 
@@ -16,6 +17,8 @@ $respond = static function (array $payload, int $status = 200): never {
     echo json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 };
+
+$config = null;
 
 try {
     $config = Config::load(__DIR__);
@@ -159,12 +162,19 @@ try {
         ],
     ]);
 } catch (Throwable $error) {
+    RuntimeFailureDiagnostics::log($config, 'kiosk_player_preference', $error, [
+        'method' => (string) ($_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN'),
+        'path' => (string) (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: ''),
+    ]);
+    $details = RuntimeFailureDiagnostics::details($config, $error);
+
     $respond([
         'ok' => false,
         'error' => [
             'code' => 'player_input_preference_unavailable',
             'message' => 'Spillerens scoringpreferanse kunne ikke lastes.',
-            'detail' => isset($config) && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
+            'request_id' => $details['request_id'],
+            'detail' => $config !== null && $config->appEnv() !== 'prod' ? $error->getMessage() : null,
         ],
     ], 500);
 }
