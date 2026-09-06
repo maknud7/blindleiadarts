@@ -10,9 +10,7 @@ use Blindleia\Dartkiosk\Api\Service\ScoliaScoringService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 
-if (PHP_SAPI !== 'cli') {
-    exit(2);
-}
+if (PHP_SAPI !== 'cli') exit(2);
 
 $root = dirname(__DIR__, 2);
 require $root . '/apps/api/bootstrap.php';
@@ -20,19 +18,17 @@ $config = Config::load($root . '/apps/api');
 $database = new Database($config);
 $db = $database->connection();
 $p = $database->tablePrefix();
-
-if ($p !== 'bd_test_') {
-    throw new RuntimeException('Virtual Scolia queue test is TEST-only and refuses table prefix: ' . $p);
-}
+if ($p !== 'bd_test_') throw new RuntimeException('Virtual Scolia queue test is TEST-only and refuses table prefix: ' . $p);
 
 $assert = static function (bool $ok, string $message): void {
     if (!$ok) throw new RuntimeException($message);
 };
-
 $scalar = static function (mysqli $db, string $sql): int {
-    $result = $db->query($sql);
-    $row = $result->fetch_row();
+    $row = $db->query($sql)->fetch_row();
     return (int) ($row[0] ?? 0);
+};
+$q = static function (mysqli $db, string $value): string {
+    return "'" . $db->real_escape_string($value) . "'";
 };
 
 $suffix = strtolower(substr(bin2hex(random_bytes(8)), 0, 12));
@@ -43,8 +39,7 @@ $poisonClubId = 0;
 $kioskIds = [];
 $serials = [];
 $eventIds = [];
-$duplicateCount = 0;
-$startedAt = microtime(true);
+$totalStartedAt = microtime(true);
 
 $stmt = $db->prepare('SELECT GET_LOCK(?, 120) AS locked');
 $stmt->bind_param('s', $lockName);
@@ -89,9 +84,8 @@ try {
         ));
         $stmt->bind_param('issi', $clubId, $code, $boardName, $boardNumber);
         $stmt->execute();
-        $kioskId = (int) $stmt->insert_id;
+        $kioskIds[$board] = (int) $stmt->insert_id;
         $stmt->close();
-        $kioskIds[$board] = $kioskId;
 
         $serial = sprintf('VIRTUAL-%s-%02d', strtoupper($suffix), $board);
         $serials[$board] = $serial;
@@ -99,7 +93,7 @@ try {
             'INSERT INTO `%1$sscolia_board_settings` (kiosk_id,serial_number,mode,auto_fallback_to_manual) VALUES (?, ?,"off",1)',
             $p
         ));
-        $stmt->bind_param('is', $kioskId, $serial);
+        $stmt->bind_param('is', $kioskIds[$board], $serial);
         $stmt->execute();
         $stmt->close();
     }
@@ -108,47 +102,91 @@ try {
     $scoring = new CanonicalScoringService($database);
     $processor = new ScoliaScoringService($repository, $scoring, new Dart501Rules());
     $queue = new ScoliaQueueService($database, $repository, $processor);
+    $kioskSql = implode(',', array_map('intval', array_values($kioskIds)));
+
+    // Keep repository ingress/dedupe coverage small and focused. The load portion
+    // below bulk-loads the staging table so its timing measures queue mechanics,
+    // not thousands of remote repository lookup round-trips.
+    $duplicateCount = 0;
+    for ($board = 1; $board <= 10; $board++) {
+        $message = [
+            'id' => sprintf('vq-probe-%s-b%02d', $suffix, $board),
+            'type' => 'SBC_STATUS_CHANGED',
+            'payload' => ['virtual' => true, 'probe' => true],
+        ];
+        $first = $repository->enqueueEvent($serials[$board], $message);
+        $duplicate = $repository->enqueueEvent($serials[$board], $message);
+        $assert($first['duplicate'] === false && $duplicate['duplicate'] === true, 'Repository dedupe probe failed for board ' . $board . '.');
+        $assert((int) $first['id'] === (int) $duplicate['id'], 'Duplicate probe did not resolve to original event row.');
+        $duplicateCount++;
+    }
+    $probeLike = 'vq-probe-' . $suffix . '-%';
+    $stmt = $db->prepare(sprintf('DELETE FROM `%1$sscolia_events` WHERE provider_event_id LIKE ?', $p));
+    $stmt->bind_param('s', $probeLike);
+    $stmt->execute();
+    $stmt->close();
+    $assert($duplicateCount === 10, 'Expected 10 successful repository dedupe probes.');
 
     $types = ['THROW_DETECTED', 'TAKEOUT_FINISHED', 'HELLO_CLIENT', 'SBC_STATUS_CHANGED'];
+    $burstStartedAt = microtime(true);
+    $batch = [];
     for ($board = 1; $board <= 10; $board++) {
         for ($sequence = 1; $sequence <= 100; $sequence++) {
-            $type = $types[(($sequence - 1) + ($board - 1)) % count($types)];
+            $type = $types[(($sequence - 1) + ($board - 1)) % 4];
             $providerId = sprintf('vq-%s-b%02d-e%03d', $suffix, $board, $sequence);
-            $message = [
+            $dedupeKey = hash('sha256', 'virtual:' . $providerId);
+            $payload = json_encode([
                 'id' => $providerId,
                 'type' => $type,
-                'payload' => [
-                    'virtual' => true,
-                    'board' => $board,
-                    'sequence' => $sequence,
-                    'sector' => 'T20',
-                    'falseTakeout' => false,
-                ],
-            ];
-            $result = $repository->enqueueEvent($serials[$board], $message);
-            $assert($result['duplicate'] === false, 'Unique virtual event was incorrectly deduplicated.');
-            $eventIds[$board][$sequence] = (int) $result['id'];
-
-            if ($sequence === 50) {
-                $duplicate = $repository->enqueueEvent($serials[$board], $message);
-                $assert($duplicate['duplicate'] === true, 'Provider-event dedupe failed for board ' . $board . '.');
-                $assert((int) $duplicate['id'] === (int) $result['id'], 'Duplicate event did not resolve to original row.');
-                $duplicateCount++;
+                'payload' => ['virtual' => true, 'board' => $board, 'sequence' => $sequence, 'sector' => 'T20', 'falseTakeout' => false],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $batch[] = sprintf(
+                '(%d,%d,NULL,%s,%s,%s,%s)',
+                $clubId,
+                $kioskIds[$board],
+                $q($db, $providerId),
+                $q($db, $dedupeKey),
+                $q($db, $type),
+                $q($db, (string) $payload)
+            );
+            if (count($batch) === 100) {
+                $db->query(sprintf(
+                    'INSERT INTO `%1$sscolia_events` (club_id,kiosk_id,match_id,provider_event_id,dedupe_key,event_type,payload_json) VALUES %2$s',
+                    $p,
+                    implode(',', $batch)
+                ));
+                $batch = [];
             }
         }
     }
+    if ($batch !== []) {
+        $db->query(sprintf(
+            'INSERT INTO `%1$sscolia_events` (club_id,kiosk_id,match_id,provider_event_id,dedupe_key,event_type,payload_json) VALUES %2$s',
+            $p,
+            implode(',', $batch)
+        ));
+    }
+    $burstInsertMs = (int) round((microtime(true) - $burstStartedAt) * 1000);
+    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s)', $p, $kioskSql)) === 1000, 'Expected exactly 1000 unique burst events.');
 
-    $kioskSql = implode(',', array_map('intval', array_values($kioskIds)));
-    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s)', $p, $kioskSql)) === 1000, 'Expected exactly 1000 unique queued events.');
-    $assert($duplicateCount === 10, 'Expected exactly 10 duplicate enqueue attempts.');
+    $result = $db->query(sprintf(
+        'SELECT id,provider_event_id FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s) ORDER BY id',
+        $p,
+        $kioskSql
+    ));
+    while ($row = $result->fetch_assoc()) {
+        if (preg_match('/-b(\d{2})-e(\d{3})$/', (string) $row['provider_event_id'], $m) === 1) {
+            $eventIds[(int) $m[1]][(int) $m[2]] = (int) $row['id'];
+        }
+    }
+    $assert(count($eventIds) === 10, 'Could not map all virtual event IDs.');
 
-    $expectedPriorities = [
+    foreach ([
         'THROW_DETECTED' => 100,
         'TAKEOUT_FINISHED' => 95,
         'HELLO_CLIENT' => 70,
         'SBC_STATUS_CHANGED' => 40,
-    ];
-    foreach ($expectedPriorities as $type => $priority) {
+    ] as $type => $priority) {
         $stmt = $db->prepare(sprintf(
             'SELECT COUNT(*) c,MIN(priority) min_p,MAX(priority) max_p FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s) AND event_type=?',
             $p,
@@ -158,33 +196,28 @@ try {
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc() ?: [];
         $stmt->close();
-        $assert((int) ($row['c'] ?? 0) === 250, 'Unexpected event-type distribution for ' . $type . '.');
-        $assert((int) ($row['min_p'] ?? -1) === $priority && (int) ($row['max_p'] ?? -1) === $priority, 'Ingress priority was not assigned for ' . $type . '.');
+        $assert((int) ($row['c'] ?? 0) === 250, 'Unexpected distribution for ' . $type . '.');
+        $assert((int) ($row['min_p'] ?? -1) === $priority && (int) ($row['max_p'] ?? -1) === $priority, 'Priority trigger failed for ' . $type . '.');
     }
 
-    // Verify that the first constrained claim chooses the highest-priority eligible
-    // board head. Board 1 / event 1 is the earliest priority-100 head.
+    // Board 1 and boards 5/9 all have a priority-100 head; board 1 has the oldest ID.
     $firstExpectedId = $eventIds[1][1];
     $first = $queue->drain(1);
-    $assert($first['claimed'] === 1 && $first['processed'] === 1 && $first['failed'] === 0, 'First priority claim did not process exactly one event.');
+    $assert($first === ['claimed' => 1, 'processed' => 1, 'failed' => 0], 'First priority claim did not process exactly one event.');
     $stmt = $db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE id=?', $p));
     $stmt->bind_param('i', $firstExpectedId);
     $stmt->execute();
-    $firstStatus = (string) ($stmt->get_result()->fetch_assoc()['processing_status'] ?? 'missing');
+    $assert((string) ($stmt->get_result()->fetch_assoc()['processing_status'] ?? '') === 'ignored', 'Highest-priority oldest board head was not selected first.');
     $stmt->close();
-    $assert($firstStatus === 'ignored', 'Highest-priority eligible board head was not claimed first.');
 
-    // Poison one future board-1 event by pointing its club_id at another valid TEST
-    // club. The kiosk remains valid, so processing fails deterministically without
-    // malformed SQL or production data. FIFO must then pause only board 1.
+    // Poison board 1 at sequence 20. It must pause only that board.
     $poisonEventId = $eventIds[1][20];
     $stmt = $db->prepare(sprintf('UPDATE `%1$sscolia_events` SET club_id=? WHERE id=?', $p));
     $stmt->bind_param('ii', $poisonClubId, $poisonEventId);
     $stmt->execute();
     $stmt->close();
 
-    // Simulate a worker dying after claiming a board-2 event. The queue service must
-    // recover a stale processing lease and later process the row in FIFO order.
+    // Simulate a worker crash after claiming board 2 sequence 15.
     $staleEventId = $eventIds[2][15];
     $stmt = $db->prepare(sprintf(
         'UPDATE `%1$sscolia_events` SET processing_status="processing",processing_started_at=DATE_SUB(NOW(3),INTERVAL 61 SECOND) WHERE id=?',
@@ -194,14 +227,14 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    $drainStartedAt = microtime(true);
     $poisonFrozen = false;
     for ($round = 1; $round <= 180; $round++) {
-        $result = $queue->drain(100);
-
+        $drained = $queue->drain(100);
         $stmt = $db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE id=?', $p));
         $stmt->bind_param('i', $poisonEventId);
         $stmt->execute();
-        $poisonStatus = (string) ($stmt->get_result()->fetch_assoc()['processing_status'] ?? 'missing');
+        $poisonStatus = (string) ($stmt->get_result()->fetch_assoc()['processing_status'] ?? '');
         $stmt->close();
         if (!$poisonFrozen && $poisonStatus === 'failed') {
             $stmt = $db->prepare(sprintf('UPDATE `%1$sscolia_events` SET next_attempt_at=DATE_ADD(NOW(3),INTERVAL 1 HOUR) WHERE id=?', $p));
@@ -210,64 +243,45 @@ try {
             $stmt->close();
             $poisonFrozen = true;
         }
-
-        if ($result['claimed'] === 0) break;
+        if ($drained['claimed'] === 0) break;
     }
-    $assert($poisonFrozen, 'Poison event never reached failed state.');
+    $assert($poisonFrozen, 'Poison event never entered failed state.');
 
     for ($board = 2; $board <= 10; $board++) {
-        $count = $scalar($db, sprintf(
-            'SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="ignored"',
-            $p,
-            $kioskIds[$board]
-        ));
-        $assert($count === 100, 'Poison event on board 1 blocked virtual board ' . $board . '.');
+        $count = $scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="ignored"', $p, $kioskIds[$board]));
+        $assert($count === 100, 'Poison event on board 1 blocked board ' . $board . '.');
     }
-    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="ignored"', $p, $kioskIds[1])) === 19, 'Board 1 should stop immediately before poison event.');
-    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="failed"', $p, $kioskIds[1])) === 1, 'Board 1 poison event was not retained as failed.');
-    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="queued"', $p, $kioskIds[1])) === 80, 'Board 1 FIFO did not retain all events after poison event.');
+    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="ignored"', $p, $kioskIds[1])) === 19, 'Board 1 did not stop directly before poison event.');
+    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="failed"', $p, $kioskIds[1])) === 1, 'Poison event was not retained as failed.');
+    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id=%2$d AND processing_status="queued"', $p, $kioskIds[1])) === 80, 'Board 1 FIFO did not retain later events.');
 
-    // Recover the poison row and verify the paused board catches up completely.
-    $stmt = $db->prepare(sprintf(
-        'UPDATE `%1$sscolia_events` SET club_id=?,processing_status="failed",next_attempt_at=NOW(3) WHERE id=?',
-        $p
-    ));
+    // Repair the poison row and drain the paused board.
+    $stmt = $db->prepare(sprintf('UPDATE `%1$sscolia_events` SET club_id=?,processing_status="failed",next_attempt_at=NOW(3) WHERE id=?', $p));
     $stmt->bind_param('ii', $clubId, $poisonEventId);
     $stmt->execute();
     $stmt->close();
-
     for ($round = 1; $round <= 120; $round++) {
-        $result = $queue->drain(100);
-        if ($result['claimed'] === 0) break;
+        $drained = $queue->drain(100);
+        if ($drained['claimed'] === 0) break;
     }
+    $drainMs = (int) round((microtime(true) - $drainStartedAt) * 1000);
 
-    $processed = $scalar($db, sprintf(
-        'SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s) AND processing_status="ignored"',
-        $p,
-        $kioskSql
-    ));
-    $assert($processed === 1000, 'Not all 1000 unique virtual events were drained after recovery.');
-    $assert($scalar($db, sprintf(
-        'SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s) AND processing_status IN ("queued","failed","processing","dead_letter")',
-        $p,
-        $kioskSql
-    )) === 0, 'Queue was not empty after recovery.');
+    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s) AND processing_status="ignored"', $p, $kioskSql)) === 1000, 'Not all 1000 events completed after recovery.');
+    $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_events` WHERE kiosk_id IN (%2$s) AND processing_status IN ("queued","failed","processing","dead_letter")', $p, $kioskSql)) === 0, 'Queue was not empty after recovery.');
 
     $stmt = $db->prepare(sprintf('SELECT attempt_count,processing_status FROM `%1$sscolia_events` WHERE id=?', $p));
     $stmt->bind_param('i', $poisonEventId);
     $stmt->execute();
     $poisonFinal = $stmt->get_result()->fetch_assoc() ?: [];
     $stmt->close();
-    $assert((string) ($poisonFinal['processing_status'] ?? '') === 'ignored', 'Recovered poison event did not complete.');
-    $assert((int) ($poisonFinal['attempt_count'] ?? 0) === 2, 'Recovered poison event should have exactly two processing attempts.');
+    $assert((string) ($poisonFinal['processing_status'] ?? '') === 'ignored' && (int) ($poisonFinal['attempt_count'] ?? 0) === 2, 'Poison recovery did not complete in exactly two attempts.');
 
     $stmt = $db->prepare(sprintf('SELECT attempt_count,processing_status FROM `%1$sscolia_events` WHERE id=?', $p));
     $stmt->bind_param('i', $staleEventId);
     $stmt->execute();
     $staleFinal = $stmt->get_result()->fetch_assoc() ?: [];
     $stmt->close();
-    $assert((string) ($staleFinal['processing_status'] ?? '') === 'ignored', 'Stale processing lease was not recovered.');
-    $assert((int) ($staleFinal['attempt_count'] ?? 0) === 1, 'Recovered stale lease should have exactly one real processing attempt.');
+    $assert((string) ($staleFinal['processing_status'] ?? '') === 'ignored' && (int) ($staleFinal['attempt_count'] ?? 0) === 1, 'Stale processing lease did not recover cleanly.');
 
     $fifoViolations = $scalar($db, sprintf(
         'SELECT COUNT(*) FROM `%1$sscolia_events` earlier
@@ -278,41 +292,38 @@ try {
         $p,
         $kioskSql
     ));
-    $assert($fifoViolations === 0, 'Detected per-board FIFO processing violation.');
+    $assert($fifoViolations === 0, 'Detected per-board FIFO violation.');
 
-    // Bulk command polling must deliver exactly one head per board and preserve
-    // command priority/FIFO across all ten virtual boards.
+    // Three command heads per board; bulk polling must return one per board per pass.
     for ($board = 1; $board <= 10; $board++) {
         $repository->queueCommand($clubId, $kioskIds[$board], 'DELETE_THROW', ['virtual' => true, 'sequence' => 1], null);
         $repository->queueCommand($clubId, $kioskIds[$board], 'RESET_PHASE', ['virtual' => true, 'sequence' => 2], null);
         $repository->queueCommand($clubId, $kioskIds[$board], 'VIRTUAL_PING', ['virtual' => true, 'sequence' => 3], null);
     }
-
-    $expectedCommandBatches = [
-        ['DELETE_THROW', 100],
-        ['RESET_PHASE', 90],
-        ['VIRTUAL_PING', 50],
-    ];
-    foreach ($expectedCommandBatches as [$expectedType, $expectedPriority]) {
+    foreach ([['DELETE_THROW', 100], ['RESET_PHASE', 90], ['VIRTUAL_PING', 50]] as [$expectedType, $expectedPriority]) {
         $commands = $queue->pollCommands(array_values($kioskIds), 100);
-        $assert(count($commands) === 10, 'Bulk command poll should return exactly one command per virtual board.');
-        $seenBoards = [];
+        $assert(count($commands) === 10, 'Bulk command poll did not return exactly one head per board.');
+        $seen = [];
         foreach ($commands as $command) {
-            $assert((string) $command['command_type'] === $expectedType, 'Command FIFO/type order mismatch.');
+            $assert((string) $command['command_type'] === $expectedType, 'Command FIFO/type mismatch.');
             $assert((int) $command['priority'] === $expectedPriority, 'Command priority mismatch for ' . $expectedType . '.');
-            $kioskId = (int) $command['kiosk_id'];
-            $assert(!isset($seenBoards[$kioskId]), 'Bulk command poll returned more than one command for a board.');
-            $seenBoards[$kioskId] = true;
+            $kid = (int) $command['kiosk_id'];
+            $assert(!isset($seen[$kid]), 'Bulk command poll returned two commands for one board.');
+            $seen[$kid] = true;
             $repository->completeCommand((int) $command['id'], 'acked');
         }
     }
     $assert($queue->pollCommands(array_values($kioskIds), 100) === [], 'Command queue did not drain completely.');
     $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_commands` WHERE kiosk_id IN (%2$s) AND status="acked"', $p, $kioskSql)) === 30, 'Expected 30 acknowledged virtual commands.');
 
-    $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
+    $totalMs = (int) round((microtime(true) - $totalStartedAt) * 1000);
+    $throughput = $drainMs > 0 ? round(1000000 / $drainMs, 1) : 0.0;
     printf(
-        "SCOLIA QUEUE VIRTUAL TEST OK boards=10 events=1000 duplicates=10 commands=30 lost=0 fifo_violations=0 poison_isolation=ok stale_recovery=ok elapsed_ms=%d\n",
-        $elapsedMs
+        "SCOLIA QUEUE VIRTUAL TEST OK boards=10 events=1000 dedupe_probes=10 commands=30 lost=0 fifo_violations=0 poison_isolation=ok stale_recovery=ok burst_insert_ms=%d drain_ms=%d drain_events_per_sec=%.1f total_ms=%d\n",
+        $burstInsertMs,
+        $drainMs,
+        $throughput,
+        $totalMs
     );
 } finally {
     if ($kioskIds !== []) {
