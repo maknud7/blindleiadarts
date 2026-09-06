@@ -1,3 +1,3 @@
 create_fresh_prod_snapshot=YES
-requested_at=2026-09-04T12:06:00+02:00
-purpose=full_prod_release_20260904
+requested_at=2026-09-06T15:38:29+02:00
+purpose=scolia_scaling_prod_release_883e84da
