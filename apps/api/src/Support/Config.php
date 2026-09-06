@@ -52,6 +52,16 @@ final class Config
     public function dbUsername(): string { return (string) (($this->config['db']['username'] ?? '') ?: ''); }
     public function dbPassword(): string { return (string) (($this->config['db']['password'] ?? '') ?: ''); }
     public function dbTablePrefix(): string { return (string) (($this->config['db']['table_prefix'] ?? '') ?: ''); }
+    public function dbMaxConcurrentConnections(): int
+    {
+        $configured = (int) ($this->config['db']['max_concurrent_connections'] ?? 0);
+        return max(0, min(32, $configured));
+    }
+    public function dbConnectionWaitMs(): int
+    {
+        $configured = (int) ($this->config['db']['connection_wait_ms'] ?? 3000);
+        return max(100, min(15000, $configured));
+    }
 
     /**
      * User accounts, sessions and permissions are shared between test and production.
