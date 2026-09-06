@@ -102,7 +102,8 @@ try {
     $scoring = new CanonicalScoringService($database);
     $processor = new ScoliaScoringService($repository, $scoring, new Dart501Rules());
     $queue = new ScoliaQueueService($database, $repository, $processor);
-    $kioskSql = implode(',', array_map('intval', array_values($kioskIds)));
+    $virtualKioskIds = array_values($kioskIds);
+    $kioskSql = implode(',', array_map('intval', $virtualKioskIds));
 
     // Keep repository ingress/dedupe coverage small and focused. The load portion
     // below bulk-loads the staging table so its timing measures queue mechanics,
@@ -202,7 +203,7 @@ try {
 
     // Board 1 and boards 5/9 all have a priority-100 head; board 1 has the oldest ID.
     $firstExpectedId = $eventIds[1][1];
-    $first = $queue->drain(1);
+    $first = $queue->drain(1, $virtualKioskIds);
     $assert($first === ['claimed' => 1, 'processed' => 1, 'failed' => 0], 'First priority claim did not process exactly one event.');
     $stmt = $db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE id=?', $p));
     $stmt->bind_param('i', $firstExpectedId);
@@ -230,7 +231,7 @@ try {
     $drainStartedAt = microtime(true);
     $poisonFrozen = false;
     for ($round = 1; $round <= 180; $round++) {
-        $drained = $queue->drain(100);
+        $drained = $queue->drain(100, $virtualKioskIds);
         $stmt = $db->prepare(sprintf('SELECT processing_status FROM `%1$sscolia_events` WHERE id=?', $p));
         $stmt->bind_param('i', $poisonEventId);
         $stmt->execute();
@@ -261,7 +262,7 @@ try {
     $stmt->execute();
     $stmt->close();
     for ($round = 1; $round <= 120; $round++) {
-        $drained = $queue->drain(100);
+        $drained = $queue->drain(100, $virtualKioskIds);
         if ($drained['claimed'] === 0) break;
     }
     $drainMs = (int) round((microtime(true) - $drainStartedAt) * 1000);
@@ -301,7 +302,7 @@ try {
         $repository->queueCommand($clubId, $kioskIds[$board], 'VIRTUAL_PING', ['virtual' => true, 'sequence' => 3], null);
     }
     foreach ([['DELETE_THROW', 100], ['RESET_PHASE', 90], ['VIRTUAL_PING', 50]] as [$expectedType, $expectedPriority]) {
-        $commands = $queue->pollCommands(array_values($kioskIds), 100);
+        $commands = $queue->pollCommands($virtualKioskIds, 100);
         $assert(count($commands) === 10, 'Bulk command poll did not return exactly one head per board.');
         $seen = [];
         foreach ($commands as $command) {
@@ -313,7 +314,7 @@ try {
             $repository->completeCommand((int) $command['id'], 'acked');
         }
     }
-    $assert($queue->pollCommands(array_values($kioskIds), 100) === [], 'Command queue did not drain completely.');
+    $assert($queue->pollCommands($virtualKioskIds, 100) === [], 'Command queue did not drain completely.');
     $assert($scalar($db, sprintf('SELECT COUNT(*) FROM `%1$sscolia_commands` WHERE kiosk_id IN (%2$s) AND status="acked"', $p, $kioskSql)) === 30, 'Expected 30 acknowledged virtual commands.');
 
     $totalMs = (int) round((microtime(true) - $totalStartedAt) * 1000);
