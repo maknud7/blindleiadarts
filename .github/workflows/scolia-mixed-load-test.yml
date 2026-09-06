@@ -24,6 +24,7 @@ on:
       - 'infra/sql/scolia_mixed_load_test.php'
       - 'infra/sql/tournament_mixed_load_test.php'
       - '.github/workflows/scolia-mixed-load-test.yml'
+      - '.github/workflows/scolia-queue-virtual-test.yml'
   workflow_dispatch:
 
 permissions:
