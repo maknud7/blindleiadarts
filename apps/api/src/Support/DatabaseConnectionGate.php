@@ -12,6 +12,10 @@ use RuntimeException;
  * The lock is acquired before mysqli connects, so queued PHP requests consume
  * no database connection while waiting. flock() is scoped to the local PHP
  * host/filesystem and is released automatically when the request/process ends.
+ *
+ * Slot ranges let production and test share one DB user without sharing the
+ * same local admission slots. Example: PROD 0-5, TEST 6-7, leaving 8-9 outside
+ * the web-host gate for CI/maintenance headroom.
  */
 final class DatabaseConnectionGate
 {
@@ -32,6 +36,11 @@ final class DatabaseConnectionGate
             return null;
         }
 
+        $slotStart = $config->dbConnectionSlotStart();
+        if ($slotStart + $limit > 32) {
+            throw new RuntimeException('Invalid database connection gate slot range.');
+        }
+
         $key = hash('sha256', implode('|', [
             $config->dbHost(),
             (string) $config->dbPort(),
@@ -49,7 +58,7 @@ final class DatabaseConnectionGate
 
         do {
             for ($step = 0; $step < $limit; $step++) {
-                $slot = ($offset + $step) % $limit;
+                $slot = $slotStart + (($offset + $step) % $limit);
                 $path = $directory . DIRECTORY_SEPARATOR . 'slot-' . $slot . '.lock';
                 $handle = @fopen($path, 'c+');
                 if ($handle === false) {
