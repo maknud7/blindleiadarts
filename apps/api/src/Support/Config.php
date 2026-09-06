@@ -57,6 +57,11 @@ final class Config
         $configured = (int) ($this->config['db']['max_concurrent_connections'] ?? 0);
         return max(0, min(32, $configured));
     }
+    public function dbConnectionSlotStart(): int
+    {
+        $configured = (int) ($this->config['db']['connection_slot_start'] ?? 0);
+        return max(0, min(31, $configured));
+    }
     public function dbConnectionWaitMs(): int
     {
         $configured = (int) ($this->config['db']['connection_wait_ms'] ?? 3000);
