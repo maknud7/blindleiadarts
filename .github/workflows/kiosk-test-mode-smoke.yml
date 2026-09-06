@@ -3,6 +3,8 @@ name: Kiosk Test Mode Smoke
 on:
   push:
     branches: [develop]
+    paths-ignore:
+      - '.github/prod-release-request'
   workflow_dispatch:
 
 permissions:
