@@ -1,5 +1,6 @@
 const nowCard = document.getElementById("playerNowCard");
 const breakCard = document.getElementById("playerBreakCard");
+const breakSection = document.getElementById("playerBreakSection");
 
 let syncing = false;
 
@@ -42,8 +43,20 @@ function mirrorLabel() {
   return null;
 }
 
+function setStandaloneVisibility(mirrored) {
+  if (!breakSection) return;
+  if (mirrored) {
+    breakSection.dataset.playerBreakMirrored = "1";
+    breakSection.style.setProperty("display", "none", "important");
+    return;
+  }
+  delete breakSection.dataset.playerBreakMirrored;
+  breakSection.style.removeProperty("display");
+}
+
 function removeMirror() {
   document.querySelectorAll("[data-player-break-now]").forEach((button) => button.remove());
+  setStandaloneVisibility(false);
 }
 
 function syncNowBreakAction() {
@@ -53,7 +66,7 @@ function syncNowBreakAction() {
     const card = document.getElementById("playerNowCard");
     const actions = card?.querySelector(".player-now-actions");
     const situation = currentSituation();
-    const supported = ["pending_match", "assigned_match", "live_match", "waiting"].includes(situation);
+    const supported = ["pending_match", "assigned_match", "live_match", "waiting", "paused"].includes(situation);
     const state = token() && supported ? mirrorLabel() : null;
 
     if (!actions || !state) {
@@ -84,6 +97,7 @@ function syncNowBreakAction() {
           source.click();
         }
       : null;
+    setStandaloneVisibility(true);
   } finally {
     syncing = false;
   }
