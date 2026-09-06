@@ -12,7 +12,10 @@ on:
       - 'apps/api/src/Service/CanonicalScoringService.php'
       - 'apps/api/src/Service/ScoliaQueueService.php'
       - 'apps/api/src/Service/ScoliaScoringService.php'
+      - 'apps/api/src/Support/Config.php'
       - 'apps/api/src/Support/Database.php'
+      - 'apps/api/src/Support/DatabaseConnectionGate.php'
+      - 'infra/deploy/generate_api_config.php'
       - 'infra/sql/migrations/0034_add_scolia_runtime_and_onsite_checkin.sql'
       - 'infra/sql/migrations/0082_prioritize_scolia_runtime_queues.sql'
       - 'infra/sql/migrations/0083_assign_scolia_queue_priorities.sql'
@@ -48,6 +51,10 @@ jobs:
 
       - name: PHP syntax check
         run: |
+          php -l apps/api/src/Support/Config.php
+          php -l apps/api/src/Support/Database.php
+          php -l apps/api/src/Support/DatabaseConnectionGate.php
+          php -l infra/deploy/generate_api_config.php
           php -l infra/sql/db_concurrency_probe.php
           php -l infra/sql/tournament_mixed_load_test.php
 
@@ -80,13 +87,18 @@ jobs:
           DB_TABLE_PREFIX: bd_test_
           IDENTITY_TABLE_PREFIX: bd_test_
           HARDWARE_TABLE_PREFIX: bd_test_
+          DB_MAX_CONCURRENT_CONNECTIONS: '6'
+          # Mixed-load workers intentionally hold a connection across many operations,
+          # so give queued workers time to drain multiple six-slot waves. Deployed TEST
+          # keeps the normal 3s request wait from generated config.
+          DB_CONNECTION_WAIT_MS: '15000'
           MEMBERS_SQLCONNECT_PATH: /tmp/unused-members-sqlconnect.php
           CHALLONGE_CLIENT_ID: ''
           CHALLONGE_CLIENT_SECRET: ''
           CHALLONGE_DEFAULT_SCOPES: ''
           CHALLONGE_REDIRECT_URI: ''
 
-      - name: Probe concurrent DB connections
+      - name: Verify DB admission gate
         run: php infra/sql/db_concurrency_probe.php
 
       - name: Run concurrent tournament mixed load
