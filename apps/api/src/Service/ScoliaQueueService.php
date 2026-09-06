@@ -30,10 +30,14 @@ final class ScoliaQueueService
         $this->tablePrefix = $database->tablePrefix();
     }
 
-    /** @return array{claimed:int,processed:int,failed:int} */
-    public function drain(int $limit = 25): array
+    /**
+     * @param array<int,int>|null $kioskIds Optional explicit queue scope. Production
+     *        workers omit it; diagnostics/tests use it to avoid claiming unrelated work.
+     * @return array{claimed:int,processed:int,failed:int}
+     */
+    public function drain(int $limit = 25, ?array $kioskIds = null): array
     {
-        $events = $this->claimEvents($limit);
+        $events = $this->claimEvents($limit, $kioskIds);
         $processed = 0;
         $failed = 0;
 
@@ -61,13 +65,24 @@ final class ScoliaQueueService
      * run first; the NOT EXISTS guard prevents later events from overtaking an
      * older queued, failed, processing or dead-letter event on the same board.
      *
+     * @param array<int,int>|null $kioskIds
      * @return array<int,array<string,mixed>>
      */
-    private function claimEvents(int $limit): array
+    private function claimEvents(int $limit, ?array $kioskIds = null): array
     {
         $limit = min(100, max(1, $limit));
         $rows = [];
         $eventsTable = $this->tablePrefix . 'scolia_events';
+
+        $scopeSql = '';
+        if ($kioskIds !== null) {
+            $kioskIds = array_values(array_unique(array_filter(
+                array_map('intval', $kioskIds),
+                static fn(int $id): bool => $id > 0
+            )));
+            if ($kioskIds === []) return [];
+            $scopeSql = ' AND kiosk_id IN (' . implode(',', $kioskIds) . ')';
+        }
 
         $this->connection->begin_transaction();
         try {
@@ -78,14 +93,19 @@ final class ScoliaQueueService
                      last_error=COALESCE(last_error,"Recovered stale Scolia processing lease")
                  WHERE processing_status="processing"
                    AND processing_started_at IS NOT NULL
-                   AND processing_started_at < DATE_SUB(NOW(3), INTERVAL 60 SECOND)',
-                $eventsTable
+                   AND processing_started_at < DATE_SUB(NOW(3), INTERVAL 60 SECOND)%2$s',
+                $eventsTable,
+                $scopeSql
             ));
 
+            $candidateScopeSql = '';
+            if ($kioskIds !== null) {
+                $candidateScopeSql = ' AND e.kiosk_id IN (' . implode(',', $kioskIds) . ')';
+            }
             $sql = sprintf(
                 'SELECT e.* FROM `%1$s` e
                  WHERE e.processing_status IN ("queued","failed")
-                   AND e.next_attempt_at<=NOW(3)
+                   AND e.next_attempt_at<=NOW(3)%3$s
                    AND NOT EXISTS (
                        SELECT 1 FROM `%1$s` older
                        WHERE older.kiosk_id=e.kiosk_id
@@ -95,7 +115,8 @@ final class ScoliaQueueService
                  ORDER BY e.priority DESC,e.id ASC
                  LIMIT %2$d FOR UPDATE',
                 $eventsTable,
-                $limit
+                $limit,
+                $candidateScopeSql
             );
             $result = $this->connection->query($sql);
             $rows = $result->fetch_all(MYSQLI_ASSOC);
