@@ -263,7 +263,7 @@ final class PlayerBreakRepository
                     SELECT 1 FROM `%1$smatches` m
                     WHERE m.tournament_id=t.id
                       AND (m.player_a_id=? OR m.player_b_id=?)
-                      AND m.status IN ("assigned","in_progress")
+                      AND m.status IN ("pending","assigned","in_progress")
                 )
                 OR (
                     t.start_at IS NOT NULL
