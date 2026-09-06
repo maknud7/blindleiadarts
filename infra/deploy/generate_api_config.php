@@ -30,6 +30,7 @@ if ($output === null || $output === '') {
     exit(1);
 }
 
+$appEnv = env_required('APP_ENV');
 $dataPrefix = env_required('DB_TABLE_PREFIX');
 $identityPrefix = env_optional('IDENTITY_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
 $hardwarePrefix = env_optional('HARDWARE_TABLE_PREFIX', $dataPrefix) ?? $dataPrefix;
@@ -37,9 +38,10 @@ $baseUrl = getenv('BASE_URL') ?: '';
 $defaultIdentityBaseUrl = $identityPrefix === 'bd_prod_'
     ? 'https://blindleiadart.ingenting.org'
     : $baseUrl;
+$defaultDbConnectionLimit = strtolower($appEnv) === 'test' ? '6' : '0';
 
 $config = [
-    'app_env' => env_required('APP_ENV'),
+    'app_env' => $appEnv,
     'base_url' => $baseUrl,
     // Identity is shared between test and production. Member-specific account
     // invitations therefore always use the canonical production origin when
@@ -69,9 +71,9 @@ $config = [
         'table_prefix' => $dataPrefix,
         'identity_table_prefix' => $identityPrefix,
         'hardware_table_prefix' => $hardwarePrefix,
-        // 0 leaves the admission gate disabled. TEST explicitly enables this
-        // so production behaviour is unchanged until promoted deliberately.
-        'max_concurrent_connections' => max(0, (int) (env_optional('DB_MAX_CONCURRENT_CONNECTIONS', '0') ?? '0')),
+        // TEST defaults to six admitted PHP->MySQL sessions. Production remains
+        // unchanged (0 = disabled) until the limit is deliberately configured.
+        'max_concurrent_connections' => max(0, (int) (env_optional('DB_MAX_CONCURRENT_CONNECTIONS', $defaultDbConnectionLimit) ?? $defaultDbConnectionLimit)),
         'connection_wait_ms' => max(100, (int) (env_optional('DB_CONNECTION_WAIT_MS', '3000') ?? '3000')),
     ],
     'members_db' => [
