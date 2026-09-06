@@ -34,6 +34,10 @@ return [
         // Physical boards and their permanent configuration are one real registry.
         // Test mode uses these boards but keeps test matches/scoring isolated.
         'hardware_table_prefix' => 'bd_prod_',
+        // 0 disables the gate. Hosted TEST uses 6 to keep margin below a
+        // provider max-connections ceiling while requests wait outside MySQL.
+        'max_concurrent_connections' => 0,
+        'connection_wait_ms' => 3000,
     ],
     'members_db' => [
         // The member registry is shared for test and production and uses the same
