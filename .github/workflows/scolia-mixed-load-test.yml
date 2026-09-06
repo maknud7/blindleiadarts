@@ -16,6 +16,7 @@ on:
       - 'apps/api/src/Support/Database.php'
       - 'apps/api/src/Support/DatabaseConnectionGate.php'
       - 'infra/deploy/generate_api_config.php'
+      - 'infra/sql/migrate.php'
       - 'infra/sql/migrations/0034_add_scolia_runtime_and_onsite_checkin.sql'
       - 'infra/sql/migrations/0082_prioritize_scolia_runtime_queues.sql'
       - 'infra/sql/migrations/0083_assign_scolia_queue_priorities.sql'
@@ -74,6 +75,7 @@ jobs:
           php -l apps/api/src/Support/Database.php
           php -l apps/api/src/Support/DatabaseConnectionGate.php
           php -l infra/deploy/generate_api_config.php
+          php -l infra/sql/migrate.php
           php -l infra/sql/db_concurrency_probe.php
           php -l infra/sql/tournament_mixed_load_test.php
           php -l infra/sql/scolia_queue_virtual_test.php
@@ -105,6 +107,7 @@ jobs:
           DB_USERNAME: blindleiadarts_ci
           DB_PASSWORD: ci-test-only
           DB_TABLE_PREFIX: bd_test_
+          ISOLATED_CI_DATABASE: '1'
 
       - name: Generate isolated CI API config
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
