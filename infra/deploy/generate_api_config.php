@@ -69,6 +69,10 @@ $config = [
         'table_prefix' => $dataPrefix,
         'identity_table_prefix' => $identityPrefix,
         'hardware_table_prefix' => $hardwarePrefix,
+        // 0 leaves the admission gate disabled. TEST explicitly enables this
+        // so production behaviour is unchanged until promoted deliberately.
+        'max_concurrent_connections' => max(0, (int) (env_optional('DB_MAX_CONCURRENT_CONNECTIONS', '0') ?? '0')),
+        'connection_wait_ms' => max(100, (int) (env_optional('DB_CONNECTION_WAIT_MS', '3000') ?? '3000')),
     ],
     'members_db' => [
         'sqlconnect_path' => env_optional(
