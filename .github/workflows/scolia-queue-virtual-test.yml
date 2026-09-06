@@ -20,6 +20,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: ci-root-only
+          MYSQL_ROOT_HOST: '%'
           MYSQL_DATABASE: blindleiadarts_ci
           MYSQL_USER: blindleiadarts_ci
           MYSQL_PASSWORD: ci-test-only
@@ -48,6 +49,10 @@ jobs:
           php -l infra/deploy/generate_api_config.php
           php -l infra/sql/migrate.php
           php -l infra/sql/scolia_queue_virtual_test.php
+
+      - name: Configure isolated MySQL for trigger migrations
+        run: |
+          php -r '$db = new mysqli("127.0.0.1", "root", "ci-root-only", "blindleiadarts_ci", 3306); $db->query("SET GLOBAL log_bin_trust_function_creators = 1"); $db->close();'
 
       - name: Migrate isolated CI database
         run: php infra/sql/migrate.php
