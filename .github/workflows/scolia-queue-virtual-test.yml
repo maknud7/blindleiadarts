@@ -46,6 +46,7 @@ jobs:
           php -l apps/api/src/Support/Config.php
           php -l apps/api/src/Support/DatabaseConnectionGate.php
           php -l infra/deploy/generate_api_config.php
+          php -l infra/sql/migrate.php
           php -l infra/sql/scolia_queue_virtual_test.php
 
       - name: Migrate isolated CI database
@@ -57,6 +58,7 @@ jobs:
           DB_USERNAME: blindleiadarts_ci
           DB_PASSWORD: ci-test-only
           DB_TABLE_PREFIX: bd_test_
+          ISOLATED_CI_DATABASE: '1'
 
       - name: Generate isolated CI API config
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
