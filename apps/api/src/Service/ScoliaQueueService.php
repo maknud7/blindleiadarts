@@ -19,6 +19,9 @@ use Throwable;
  */
 final class ScoliaQueueService
 {
+    private const MAX_DRAIN_BATCH = 25;
+    private const DEFAULT_DRAIN_BUDGET_MS = 750;
+
     private mysqli $connection;
     private string $tablePrefix;
 
@@ -36,8 +39,15 @@ final class ScoliaQueueService
      *        workers omit it; diagnostics/tests use it to avoid claiming unrelated work.
      * @return array{claimed:int,processed:int,failed:int}
      */
-    public function drain(int $limit = 25, ?array $kioskIds = null): array
+    public function drain(int $limit = 25, ?array $kioskIds = null, int $maxProcessingMs = self::DEFAULT_DRAIN_BUDGET_MS): array
     {
+        // A bridge/API caller must never reserve a large queue prefix and hold one
+        // scarce database slot for several seconds. Old bridge versions may still
+        // request 100 rows, so enforce the production-safe batch size here too.
+        $limit = min(self::MAX_DRAIN_BATCH, max(1, $limit));
+        $maxProcessingMs = min(5000, max(100, $maxProcessingMs));
+        $startedAt = microtime(true);
+
         $events = $this->claimEvents($limit, $kioskIds);
         if ($events === []) {
             return ['claimed' => 0, 'processed' => 0, 'failed' => 0];
@@ -48,6 +58,7 @@ final class ScoliaQueueService
         $fastIgnoredIds = [];
         $releaseIds = [];
         $byKiosk = [];
+        $budgetExhausted = false;
 
         foreach ($events as $event) {
             $byKiosk[(int) $event['kiosk_id']][] = $event;
@@ -56,7 +67,18 @@ final class ScoliaQueueService
         foreach ($byKiosk as $boardEvents) {
             $blocked = false;
             foreach ($boardEvents as $event) {
-                if ($blocked) {
+                // The budget is cooperative: never interrupt an event while its
+                // canonical scoring transaction is running. Instead, stop between
+                // events and release every unprocessed claim without consuming a
+                // retry. This preserves FIFO while giving other web requests a turn.
+                if (!$budgetExhausted) {
+                    $elapsedMs = (microtime(true) - $startedAt) * 1000;
+                    if ($elapsedMs >= $maxProcessingMs) {
+                        $budgetExhausted = true;
+                    }
+                }
+
+                if ($blocked || $budgetExhausted) {
                     $releaseIds[] = (int) $event['id'];
                     continue;
                 }
