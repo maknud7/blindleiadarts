@@ -1,0 +1,85 @@
+name: Scolia Mixed Load Test
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/src/Repository/MatchScoringRepository.php'
+      - 'apps/api/src/Repository/PlayerBreakRepository.php'
+      - 'apps/api/src/Repository/ScoliaRepository.php'
+      - 'apps/api/src/Repository/TournamentOperationsRepository.php'
+      - 'apps/api/src/Service/CanonicalScoringService.php'
+      - 'apps/api/src/Service/ScoliaQueueService.php'
+      - 'apps/api/src/Service/ScoliaScoringService.php'
+      - 'infra/sql/migrations/0034_add_scolia_runtime_and_onsite_checkin.sql'
+      - 'infra/sql/migrations/0082_prioritize_scolia_runtime_queues.sql'
+      - 'infra/sql/migrations/0083_assign_scolia_queue_priorities.sql'
+      - 'infra/sql/migrations/0084_index_scolia_fifo_claims.sql'
+      - 'infra/sql/scolia_mixed_load_test.php'
+      - '.github/workflows/scolia-mixed-load-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scolia-mixed-load-test
+  cancel-in-progress: true
+
+jobs:
+  mixed-load:
+    runs-on: ubuntu-latest
+    environment: test
+    timeout-minutes: 8
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: PHP syntax check
+        run: php -l infra/sql/scolia_mixed_load_test.php
+
+      - name: Migrate isolated TEST database
+        run: php infra/sql/migrate.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+
+      - name: Generate isolated TEST API config
+        run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          REALTIME_WEBSOCKET_URL: ''
+          REALTIME_PUBLISH_URL: ''
+          REALTIME_PUBLISH_SECRET: ''
+          SCOLIA_BRIDGE_SECRET: mixed-load-test-only
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_test_
+          HARDWARE_TABLE_PREFIX: bd_test_
+          MEMBERS_SQLCONNECT_PATH: /tmp/unused-members-sqlconnect.php
+          CHALLONGE_CLIENT_ID: ''
+          CHALLONGE_CLIENT_SECRET: ''
+          CHALLONGE_DEFAULT_SCOPES: ''
+          CHALLONGE_REDIRECT_URI: ''
+
+      - name: Run concurrent tournament mixed load
+        run: php infra/sql/scolia_mixed_load_test.php
