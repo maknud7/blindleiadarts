@@ -6,11 +6,8 @@ on:
 permissions:
   contents: read
 
-# Automatic DB-stress validation now runs the queue test after the mixed-load
-# test in one serialized workflow. This standalone workflow remains available
-# for targeted manual diagnosis and shares the same DB concurrency group.
 concurrency:
-  group: shared-db-ci
+  group: isolated-db-stress-ci
   cancel-in-progress: false
 
 jobs:
@@ -18,6 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     environment: test
     timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-only
+          MYSQL_DATABASE: blindleiadarts_ci
+          MYSQL_USER: blindleiadarts_ci
+          MYSQL_PASSWORD: ci-test-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -pci-root-only"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,55 +48,37 @@ jobs:
           php -l infra/deploy/generate_api_config.php
           php -l infra/sql/scolia_queue_virtual_test.php
 
-      - name: Wait for matching TEST release
-        env:
-          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
-          EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          set -Eeuo pipefail
-          base="${BASE_URL%/}"
-          for attempt in $(seq 1 60); do
-            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
-            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then
-              echo "Matching TEST release is live."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Virtual queue test refused to compete with an in-flight TEST deploy." >&2
-          exit 1
-
-      - name: Migrate isolated TEST database
+      - name: Migrate isolated CI database
         run: php infra/sql/migrate.php
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.CI_DB_USERNAME || secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD || secrets.DB_PASSWORD }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: blindleiadarts_ci
+          DB_USERNAME: blindleiadarts_ci
+          DB_PASSWORD: ci-test-only
           DB_TABLE_PREFIX: bd_test_
 
-      - name: Generate isolated TEST API config
+      - name: Generate isolated CI API config
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
         env:
           APP_ENV: test
-          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
-          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          BASE_URL: http://127.0.0.1
+          STATIC_BASE_URL: http://127.0.0.1
           SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
           REALTIME_WEBSOCKET_URL: ''
           REALTIME_PUBLISH_URL: ''
           REALTIME_PUBLISH_SECRET: ''
           SCOLIA_BRIDGE_SECRET: virtual-test-only
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.CI_DB_USERNAME || secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD || secrets.DB_PASSWORD }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: blindleiadarts_ci
+          DB_USERNAME: blindleiadarts_ci
+          DB_PASSWORD: ci-test-only
           DB_TABLE_PREFIX: bd_test_
           IDENTITY_TABLE_PREFIX: bd_test_
           HARDWARE_TABLE_PREFIX: bd_test_
-          DB_MAX_CONCURRENT_CONNECTIONS: '1'
-          DB_CONNECTION_SLOT_START: '8'
+          DB_MAX_CONCURRENT_CONNECTIONS: '6'
+          DB_CONNECTION_SLOT_START: '0'
           DB_CONNECTION_WAIT_MS: '15000'
           MEMBERS_SQLCONNECT_PATH: /tmp/unused-members-sqlconnect.php
           CHALLONGE_CLIENT_ID: ''
