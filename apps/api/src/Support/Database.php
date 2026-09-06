@@ -6,11 +6,15 @@ namespace Blindleia\Dartkiosk\Api\Support;
 
 use mysqli;
 use RuntimeException;
+use Throwable;
 
 final class Database
 {
     private ?mysqli $connection = null;
     private ?string $tablePrefixOverride = null;
+    private ?DatabaseConnectionGate $connectionGate = null;
+    private bool $ownsConnection = false;
+    private float $connectionGateWaitMs = 0.0;
 
     public function __construct(private ?Config $config = null)
     {
@@ -41,18 +45,48 @@ final class Database
             throw new RuntimeException('Database configuration is unavailable.');
         }
 
-        $connection = new mysqli(
-            $this->config->dbHost(),
-            $this->config->dbUsername(),
-            $this->config->dbPassword(),
-            $this->config->dbName(),
-            $this->config->dbPort()
-        );
+        $gate = DatabaseConnectionGate::acquire($this->config);
+        try {
+            $connection = new mysqli(
+                $this->config->dbHost(),
+                $this->config->dbUsername(),
+                $this->config->dbPassword(),
+                $this->config->dbName(),
+                $this->config->dbPort()
+            );
+            $connection->set_charset('utf8mb4');
+        } catch (Throwable $error) {
+            $gate?->release();
+            throw $error;
+        }
 
-        $connection->set_charset('utf8mb4');
         $this->connection = $connection;
+        $this->connectionGate = $gate;
+        $this->connectionGateWaitMs = $gate?->waitMs() ?? 0.0;
+        $this->ownsConnection = true;
 
         return $this->connection;
+    }
+
+    public function releaseConnection(): void
+    {
+        if ($this->ownsConnection && $this->connection instanceof mysqli) {
+            try {
+                $this->connection->close();
+            } catch (Throwable) {
+            }
+        }
+        if ($this->ownsConnection) {
+            $this->connection = null;
+        }
+        $this->ownsConnection = false;
+        $this->connectionGate?->release();
+        $this->connectionGate = null;
+    }
+
+    public function connectionGateWaitMs(): float
+    {
+        return $this->connectionGateWaitMs;
     }
 
     public function ping(): bool
@@ -90,5 +124,10 @@ final class Database
             return $this->tablePrefix();
         }
         return $this->config->hardwareTablePrefix();
+    }
+
+    public function __destruct()
+    {
+        $this->releaseConnection();
     }
 }
