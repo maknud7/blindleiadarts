@@ -64,12 +64,26 @@ $phpFiles = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.php') ?: [];
 $files = array_merge($sqlFiles, $phpFiles);
 sort($files, SORT_STRING);
 
+$dbHost = required_env('DB_HOST');
+$dbUsername = required_env('DB_USERNAME');
+$dbPassword = required_env('DB_PASSWORD');
+$dbName = required_env('DB_NAME');
+$dbPort = (int) required_env('DB_PORT');
+$isIsolatedCiDatabase = getenv('ISOLATED_CI_DATABASE') === '1';
+
+// This escape hatch exists only for disposable CI databases that deliberately do
+// not contain canonical PROD identity tables. Refuse to honor it for any remote DB
+// host so a normal TEST/PROD migration can never bypass shared-identity guardrails.
+if ($isIsolatedCiDatabase && !in_array(strtolower(trim($dbHost)), ['127.0.0.1', 'localhost', '::1'], true)) {
+    throw new RuntimeException('ISOLATED_CI_DATABASE is only permitted for a local database host.');
+}
+
 $mysqli = new mysqli(
-    required_env('DB_HOST'),
-    required_env('DB_USERNAME'),
-    required_env('DB_PASSWORD'),
-    required_env('DB_NAME'),
-    (int) required_env('DB_PORT')
+    $dbHost,
+    $dbUsername,
+    $dbPassword,
+    $dbName,
+    $dbPort
 );
 
 $mysqli->set_charset('utf8mb4');
@@ -121,6 +135,13 @@ try {
         '0073_cleanup_test_legacy_board_materialization.php',
     ];
 
+    // These migrations are meaningful only in the deployed TEST topology where
+    // canonical identity lives under a separate PROD prefix in the same database.
+    // Disposable local CI databases intentionally have no PROD identity namespace.
+    $isolatedCiNoopMigrations = [
+        '0067_cleanup_test_shared_identity.php',
+    ];
+
     $appliedCount = 0;
 
     foreach ($files as $file) {
@@ -133,6 +154,19 @@ try {
 
         if ($prefix !== 'bd_test_' && in_array($name, $testOnlyNoopMigrations, true)) {
             fwrite(STDOUT, "Recording TEST-only no-op migration for {$prefix}: {$name}" . PHP_EOL);
+            $statement = $mysqli->prepare(
+                "INSERT IGNORE INTO `{$migrationsTable}` (`migration_name`) VALUES (?)"
+            );
+            $statement->bind_param('s', $name);
+            $statement->execute();
+            $statement->close();
+            $applied[$name] = true;
+            $appliedCount++;
+            continue;
+        }
+
+        if ($isIsolatedCiDatabase && $prefix === 'bd_test_' && in_array($name, $isolatedCiNoopMigrations, true)) {
+            fwrite(STDOUT, "Recording isolated-CI no-op migration for {$prefix}: {$name}" . PHP_EOL);
             $statement = $mysqli->prepare(
                 "INSERT IGNORE INTO `{$migrationsTable}` (`migration_name`) VALUES (?)"
             );
