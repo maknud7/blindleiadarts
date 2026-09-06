@@ -7,6 +7,7 @@ let context = null;
 let fetchedAt = 0;
 let refreshBusy = false;
 let ticker = null;
+let lastError = "";
 
 function token() { return localStorage.getItem(TOKEN_KEY) || ""; }
 function escapeHtml(value) {
@@ -65,6 +66,14 @@ function ensureStyles() {
     .break-state{display:grid;gap:.65rem}
     .break-state button{width:100%}
     .pause-managed-note{margin:.5rem 0 0}
+    .hub-player-break-inline{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.75rem .9rem;border:1px solid var(--line);border-radius:14px;background:var(--surface-soft,rgba(255,255,255,.04))}
+    .hub-player-break-inline>div{display:grid;gap:.12rem;min-width:0}
+    .hub-player-break-inline strong{font-size:.94rem}
+    .hub-player-break-inline small{color:var(--muted)}
+    .hub-player-break-inline button{flex:0 0 auto;white-space:nowrap}
+    .hub-player-break-inline .hub-break-clock{font-size:1.15rem;font-variant-numeric:tabular-nums}
+    .hub-player-break-inline .hub-break-error{color:var(--danger,#b42318)}
+    @media(max-width:620px){.hub-player-break-inline{align-items:stretch;flex-direction:column}.hub-player-break-inline button{width:100%}}
   `;
   document.head.appendChild(style);
 }
@@ -105,16 +114,78 @@ function patchPortalRendering() {
   }
 }
 
+function inlineBreakState() {
+  const pause = context?.break;
+  const match = context?.match;
+  if (pause?.status === "scheduled") {
+    return {
+      signature: `scheduled:${Number(pause.after_match_id || 0)}:${lastError}`,
+      html: `<div><strong>Pause registrert</strong><small>Starter etter ${escapeHtml(pause.after_match_round || match?.round_label || "denne kampen")} og varer i 7 minutter.${lastError ? ` <span class="hub-break-error">${escapeHtml(lastError)}</span>` : ""}</small></div>`,
+    };
+  }
+  if (pause?.status === "active") {
+    const left = remainingSeconds();
+    return {
+      signature: `active:${left}:${lastError}`,
+      html: `<div><strong>På pause</strong><small>Du blir ikke sendt til ny skive før pausen er ferdig.${lastError ? ` <span class="hub-break-error">${escapeHtml(lastError)}</span>` : ""}</small></div><strong class="hub-break-clock">${clock(left)}</strong>`,
+    };
+  }
+
+  const afterMatch = match && ["assigned", "in_progress"].includes(String(match.status || ""));
+  const label = afterMatch ? "Ta 7 min pause etter kampen" : "Ta 7 min pause";
+  const note = afterMatch ? "Pausen starter når kampen din er ferdig." : "Du tas ut av kampkøen i 7 minutter.";
+  return {
+    signature: `available:${afterMatch ? "after" : "now"}:${refreshBusy ? "busy" : "ready"}:${lastError}`,
+    html: `<div><strong>Spillerpause</strong><small>${escapeHtml(note)}${lastError ? ` <span class="hub-break-error">${escapeHtml(lastError)}</span>` : ""}</small></div><button type="button" class="ghost" data-player-break-request ${refreshBusy ? "disabled" : ""}>${refreshBusy ? "Registrerer …" : escapeHtml(label)}</button>`,
+  };
+}
+
+function patchActiveTournamentRendering() {
+  const hub = document.getElementById("activeTournamentHub");
+  if (!hub) return;
+
+  let slot = hub.querySelector(".hub-player-break-inline");
+  const heading = hub.querySelector(".hub-heading h2")?.textContent?.trim() || "";
+  const sameTournament = Boolean(context && (!heading || heading === String(context.tournament_name || "")));
+  if (!token() || !sameTournament || hub.classList.contains("hidden")) {
+    slot?.remove();
+    return;
+  }
+
+  const anchor = hub.querySelector(".hub-personal-strip") || hub.querySelector(".hub-heading");
+  if (!anchor) return;
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.className = "hub-player-break-inline";
+    slot.addEventListener("click", (event) => {
+      const button = event.target.closest?.("[data-player-break-request]");
+      if (button) requestBreak({ currentTarget: button });
+    });
+    anchor.insertAdjacentElement("afterend", slot);
+  }
+
+  const next = inlineBreakState();
+  if (slot.dataset.breakSignature !== next.signature) {
+    slot.dataset.breakSignature = next.signature;
+    slot.innerHTML = next.html;
+  }
+}
+
 function render() {
   ensureStyles();
   section?.classList.toggle("player-break-available", Boolean(token() && context));
-  if (!card) return;
+  if (!card) {
+    patchActiveTournamentRendering();
+    return;
+  }
   if (!token()) {
     card.innerHTML = `<p class="muted">Logg inn for å bruke spillerpause.</p>`;
+    patchActiveTournamentRendering();
     return;
   }
   if (!context) {
     card.innerHTML = `<p class="muted">Ingen aktiv turnering der du er checket inn akkurat nå.</p>`;
+    patchActiveTournamentRendering();
     return;
   }
 
@@ -126,6 +197,7 @@ function render() {
         <strong>${escapeHtml(context.tournament_name)}</strong>
         <p>Pausen er registrert.</p>
         <p class="muted">Den starter idet ${escapeHtml(pause.after_match_round || match?.round_label || "kampen din")} er ferdig, og varer deretter nøyaktig 7 minutter.</p>
+        ${lastError ? `<p class="muted">${escapeHtml(lastError)}</p>` : ""}
       </div>`;
   } else if (pause?.status === "active") {
     card.innerHTML = `
@@ -133,6 +205,7 @@ function render() {
         <strong>${escapeHtml(context.tournament_name)} · pause</strong>
         <div class="break-countdown">${clock(remainingSeconds())}</div>
         <p class="muted">Du blir ikke satt opp på ny skive før klokken er ute. Pausen kan ikke forlenges.</p>
+        ${lastError ? `<p class="muted">${escapeHtml(lastError)}</p>` : ""}
       </div>`;
   } else {
     const afterMatch = match && ["assigned", "in_progress"].includes(String(match.status || ""));
@@ -140,25 +213,31 @@ function render() {
       <div class="break-state">
         <strong>${escapeHtml(context.tournament_name)}</strong>
         <p class="muted">Pausen varer alltid 7 minutter. ${afterMatch ? "Siden du allerede har en kamp, starter den først når kampen er ferdig." : "Den starter med én gang."}</p>
-        <button id="requestPlayerBreak" type="button">${afterMatch ? "Ta 7 min pause etter kampen" : "Ta 7 min pause"}</button>
+        ${lastError ? `<p class="muted">${escapeHtml(lastError)}</p>` : ""}
+        <button type="button" data-player-break-request>${afterMatch ? "Ta 7 min pause etter kampen" : "Ta 7 min pause"}</button>
       </div>`;
-    document.getElementById("requestPlayerBreak")?.addEventListener("click", requestBreak);
+    card.querySelector("[data-player-break-request]")?.addEventListener("click", requestBreak);
   }
   patchPortalRendering();
+  patchActiveTournamentRendering();
 }
 
 async function requestBreak(event) {
   const button = event?.currentTarget;
   if (!context?.tournament_id || refreshBusy) return;
   refreshBusy = true;
+  lastError = "";
   if (button) { button.disabled = true; button.textContent = "Registrerer pause …"; }
+  patchActiveTournamentRendering();
   try {
     await api(`/tournaments/${Number(context.tournament_id)}/me/break`, { method: "POST" });
     await refresh();
   } catch (error) {
-    card.innerHTML = `<div class="break-state"><strong>Kunne ikke starte pause</strong><p class="muted">${escapeHtml(error.message)}</p></div>`;
+    lastError = error.message || "Kunne ikke starte pause.";
+    render();
   } finally {
     refreshBusy = false;
+    patchActiveTournamentRendering();
   }
 }
 
@@ -166,6 +245,7 @@ async function refresh() {
   if (refreshBusy && !context) return;
   if (!token()) {
     context = null;
+    lastError = "";
     render();
     return;
   }
@@ -177,6 +257,7 @@ async function refresh() {
   } catch (error) {
     if (Number(error.status) === 401) {
       context = null;
+      lastError = "";
       render();
       return;
     }
@@ -194,8 +275,15 @@ function startTicker() {
   }, 1000);
 }
 
-const observer = new MutationObserver(() => patchPortalRendering());
-[document.getElementById("registrationList"), document.getElementById("tournamentList")]
+const observer = new MutationObserver(() => {
+  patchPortalRendering();
+  patchActiveTournamentRendering();
+});
+[
+  document.getElementById("registrationList"),
+  document.getElementById("tournamentList"),
+  document.getElementById("activeTournamentHub"),
+]
   .filter(Boolean)
   .forEach((node) => observer.observe(node, { childList: true, subtree: true }));
 
