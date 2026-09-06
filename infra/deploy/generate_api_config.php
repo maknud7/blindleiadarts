@@ -38,7 +38,15 @@ $baseUrl = getenv('BASE_URL') ?: '';
 $defaultIdentityBaseUrl = $identityPrefix === 'bd_prod_'
     ? 'https://blindleiadart.ingenting.org'
     : $baseUrl;
-$defaultDbConnectionLimit = strtolower($appEnv) === 'test' ? '6' : '0';
+
+// Hosted MySQL currently caps the shared DB user at 10 sessions. Reserve the
+// first six local web-host gate slots for PROD, give deployed TEST only two,
+// and leave slots 8-9 outside the web-host gate as CI/maintenance headroom.
+// These are local admission budgets; MySQL remains the final global authority.
+$isTest = strtolower($appEnv) === 'test';
+$isProd = strtolower($appEnv) === 'production' || strtolower($appEnv) === 'prod';
+$defaultDbConnectionLimit = $isTest ? '2' : ($isProd ? '6' : '0');
+$defaultDbConnectionSlotStart = $isTest ? '6' : '0';
 
 $config = [
     'app_env' => $appEnv,
@@ -71,9 +79,8 @@ $config = [
         'table_prefix' => $dataPrefix,
         'identity_table_prefix' => $identityPrefix,
         'hardware_table_prefix' => $hardwarePrefix,
-        // TEST defaults to six admitted PHP->MySQL sessions. Production remains
-        // unchanged (0 = disabled) until the limit is deliberately configured.
         'max_concurrent_connections' => max(0, (int) (env_optional('DB_MAX_CONCURRENT_CONNECTIONS', $defaultDbConnectionLimit) ?? $defaultDbConnectionLimit)),
+        'connection_slot_start' => max(0, (int) (env_optional('DB_CONNECTION_SLOT_START', $defaultDbConnectionSlotStart) ?? $defaultDbConnectionSlotStart)),
         'connection_wait_ms' => max(100, (int) (env_optional('DB_CONNECTION_WAIT_MS', '3000') ?? '3000')),
     ],
     'members_db' => [
