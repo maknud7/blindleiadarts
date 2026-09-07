@@ -1,3 +1,3 @@
-release_sha=4751f15deb7dedeb561892c8fe6ab00d27cee68b
+release_sha=a5593fd00698729bef63531cdfa38d35a87f50e3
 scope=kiosk-static-only
-reason=Retry tested kiosk release after full-history validation fix
+reason=Deploy tested kiosk render-collision fix to production
