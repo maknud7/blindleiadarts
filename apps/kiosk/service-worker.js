@@ -1,4 +1,4 @@
-const SHELL_CACHE = "bd-kiosk-shell-v43";
+const SHELL_CACHE = "bd-kiosk-shell-v44";
 const SHELL = [
   "./",
   "./index.html",
@@ -24,7 +24,6 @@ const SHELL = [
   "./pairing-runtime.js",
   "./pairing-canonical-link.js",
   "./operations-runtime.js",
-  "./scolia-runtime.js",
   "./scolia-live-ux.js",
   "./scolia-fallback-manual.js",
   "./admin-mode.js",
