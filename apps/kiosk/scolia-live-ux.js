@@ -6,7 +6,7 @@
 
   const API_URL = "../api/kiosk-scolia-ui.php";
   const API_ROOT = "../api/v1";
-  const OFFLINE_FALLBACK_GRACE_MS = 5000;
+  const OFFLINE_FALLBACK_GRACE_MS = 30000;
   const OFFLINE_FALLBACK_RETRY_MS = 5000;
 
   const surface = document.createElement("section");
@@ -37,6 +37,16 @@
 
   function pairingToken() {
     return localStorage.getItem("bd:kioskPairingToken") || "";
+  }
+
+  function testLeasePending() {
+    return document.body?.dataset?.appEnv === "test"
+      && localStorage.getItem("bd:kioskTestMode") === "1"
+      && localStorage.getItem("bd:kioskScoliaLeasePending") === "1";
+  }
+
+  function testLeaseError() {
+    return localStorage.getItem("bd:kioskScoliaLeaseError") || "";
   }
 
   function escapeHtml(value) {
@@ -83,6 +93,7 @@
   }
 
   function shouldAutoFallback(board) {
+    if (testLeasePending()) return false;
     if (!board || board.mode !== "live") return false;
     if (board.effective_scoring_mode !== "scolia") return false;
     if (fallbackActive(board)) return false;
@@ -157,6 +168,33 @@
     lastFingerprint = "";
   }
 
+  function renderTestLeaseTransition() {
+    clearManualFallbackUi();
+    offlineSince = 0;
+    autoFallbackRetryAt = 0;
+    document.body.classList.add("scolia-live-active");
+    surface.classList.remove("hidden");
+
+    const error = testLeaseError();
+    const fingerprint = JSON.stringify({ testLease: true, error });
+    if (fingerprint === lastFingerprint) return;
+    lastFingerprint = fingerprint;
+
+    surface.innerHTML = `
+      <div class="scolia-live-header">
+        <div class="scolia-live-state"><span class="scolia-live-dot" style="background:#c98016;box-shadow:0 0 0 4px rgba(201,128,22,.14)"></span><strong>Scolia</strong><span>Kobler til</span></div>
+        <span class="scolia-live-auto">TEST</span>
+      </div>
+      <div class="scolia-live-content" style="display:grid;place-items:center;text-align:center">
+        <div style="display:grid;gap:10px;max-width:560px">
+          <strong style="font-size:clamp(28px,5vw,44px)">Kobler TEST til Scolia …</strong>
+          <span class="muted" style="font-size:clamp(15px,2.5vw,19px)">Den fysiske skiva kobles midlertidig til den isolerte testterminalen. Vi prøver automatisk videre før eventuell fallback.</span>
+          ${error ? `<span style="font-weight:800">${escapeHtml(error)} · prøver igjen …</span>` : ""}
+        </div>
+      </div>
+      <div class="scolia-live-footer"><span class="scolia-live-hint">Manuell fallback aktiveres ikke mens TEST-koblingen etableres.</span></div>`;
+  }
+
   function renderOfflineTransition(board) {
     clearManualFallbackUi();
     document.body.classList.add("scolia-live-active");
@@ -167,7 +205,7 @@
     const state = isBoardOffline(board) ? "Skiva er offline" : "Scolia-forbindelsen er brutt";
     const detail = autoFallbackBusy
       ? "Aktiverer manuell scoring …"
-      : `Bytter automatisk til manuell scoring${remaining > 0 ? ` om ${remaining} sek` : ""}.`;
+      : `Prøver å få kontakt med Scolia. Bytter automatisk til manuell scoring${remaining > 0 ? ` om ${remaining} sek` : ""}.`;
 
     const fingerprint = JSON.stringify({ transition: true, state, detail, fallbackError });
     if (fingerprint === lastFingerprint) return;
@@ -270,6 +308,11 @@
   function render(data) {
     current = data;
     const board = data?.board || null;
+
+    if (testLeasePending()) {
+      renderTestLeaseTransition();
+      return;
+    }
 
     if (fallbackActive(board)) {
       renderManualFallback(board);
@@ -428,6 +471,14 @@
       polling = false;
     }
   }
+
+  window.addEventListener("bd:scolia-test-lease-ready", () => {
+    offlineSince = 0;
+    autoFallbackRetryAt = 0;
+    fallbackError = "";
+    lastFingerprint = "";
+    poll({ force: true }).catch(() => undefined);
+  });
 
   window.addEventListener("pagehide", () => {
     document.body.classList.remove("scolia-live-active");
