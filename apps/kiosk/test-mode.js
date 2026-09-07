@@ -181,6 +181,31 @@
     change?.classList.toggle("hidden", !hasSelection);
   }
 
+  async function handOffToKioskRuntime(code) {
+    document.body.classList.add("kiosk-test-mode", "test-mode-ready");
+    removePanel();
+    ensureAdminTestControl();
+
+    // app.js is already loaded before test-mode.js. Updating localStorage alone does
+    // not update its in-memory state, so an ordinary reload left the selected TEST
+    // alias stuck on the chooser/loading surface in some kiosk browser contexts.
+    // Hand the alias directly to the live kiosk runtime instead.
+    if (typeof state !== "undefined") {
+      state.kioskCode = code;
+      state.snapshot = null;
+      state.renderedView = "";
+    }
+    if (typeof render === "function") render();
+
+    if (typeof loadState !== "function") {
+      window.location.reload();
+      return;
+    }
+
+    await loadState();
+    if (typeof startLive === "function") await startLive();
+  }
+
   async function activateTestBoard(kioskId, source, label, button) {
     const token = ensureTestToken();
     button.disabled = true;
@@ -190,13 +215,20 @@
         headers: { "Content-Type": "application/json", "X-Kiosk-Pairing-Token": token },
         body: JSON.stringify({ kiosk_id: Number(kioskId), source: source || "physical" }),
       });
-      localStorage.setItem("bd:kioskCode", data.kiosk.code);
+      const code = String(data.kiosk?.code || "").trim();
+      if (!code) throw new Error("TEST-runtime mangler kiosk-kode.");
+
+      localStorage.setItem("bd:kioskCode", code);
       localStorage.setItem(TEST_BOARD_ID_KEY, String(data.source_board?.id || data.physical_board?.id || kioskId));
       localStorage.setItem(TEST_BOARD_LABEL_KEY, label || data.kiosk.name || `Skive ${data.kiosk.board_number || ""}`);
       localStorage.removeItem("bd:kioskPairingRequestCode");
       localStorage.removeItem("bd:kioskPairingExpires");
-      window.location.reload();
+
+      await handOffToKioskRuntime(code);
     } catch (error) {
+      clearTestSelection();
+      localStorage.removeItem("bd:kioskCode");
+      document.body.classList.remove("test-mode-ready");
       button.disabled = false;
       const old = button.textContent;
       button.textContent = error.message || "Kunne ikke velge skive";
