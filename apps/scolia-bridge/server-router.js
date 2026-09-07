@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createCoalescingRunner } from "./coalescing-runner.js";
+import {
+  hasScoliaPhysicalStatus,
+  normalizeScoliaStatusPayload,
+  resolvePendingScoliaCommand,
+} from "./scolia-protocol.js";
 
 const API_BASE = String(process.env.BLINDLEIA_API_BASE || "http://127.0.0.1/api/v1").replace(/\/$/, "");
 const BRIDGE_SECRET = String(process.env.SCOLIA_BRIDGE_SECRET || "");
@@ -12,7 +17,9 @@ const ROUTER_URL = String(
 );
 const SCOLIA_WSS_URL = String(process.env.SCOLIA_WSS_URL || "wss://game.scoliadarts.com/api/v1/external");
 const ACTIVE_CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_POLL_MS || 10000));
-const IDLE_CONFIG_POLL_MS = Math.max(60000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 300000));
+// A TEST lease can appear while the bridge is idle. Keep the idle router check cheap,
+// but never let configuration/env drift stretch the wake-up beyond the kiosk grace.
+const IDLE_CONFIG_POLL_MS = Math.min(2000, Math.max(1000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 2000)));
 const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
 const DRAIN_POLL_MS = Math.max(250, Number(process.env.SCOLIA_DRAIN_POLL_MS || 500));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
@@ -156,42 +163,6 @@ function internalMessage(type, payload = {}) {
   return { id: randomUUID(), type, payload };
 }
 
-function commandCorrelationId(message) {
-  const payload = message && typeof message.payload === "object" && message.payload ? message.payload : {};
-  for (const value of [
-    message?.inReplyTo,
-    message?.replyTo,
-    message?.requestId,
-    message?.correlationId,
-    payload.inReplyTo,
-    payload.replyTo,
-    payload.requestId,
-    payload.messageId,
-    payload.id,
-    message?.id,
-  ]) {
-    if (typeof value === "string" && value) return value;
-  }
-  return null;
-}
-
-function normalizedStatusPayload(payload) {
-  const root = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
-  for (const key of ["sbcStatus", "status", "data", "result"]) {
-    const nested = root[key];
-    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-      return { ...root, ...nested };
-    }
-  }
-  return root;
-}
-
-function hasPhysicalStatus(payload) {
-  if (!payload || typeof payload !== "object") return false;
-  return [payload.boardStatus, payload.board_status, payload.status]
-    .some((value) => typeof value === "string" && value.trim() !== "");
-}
-
 class BoardConnection {
   constructor(config) {
     this.config = {
@@ -279,12 +250,12 @@ class BoardConnection {
     const type = String(message?.type || "").toUpperCase();
     let matchedCommand = null;
     if (type === "ACK" || type === "REFUSED") {
-      const correlation = commandCorrelationId(message);
-      if (correlation && this.pendingCommands.has(correlation)) {
-        const pending = this.pendingCommands.get(correlation);
+      const resolved = resolvePendingScoliaCommand(message, this.pendingCommands);
+      if (resolved) {
+        const { key, pending } = resolved;
         matchedCommand = pending;
         clearTimeout(pending.timeout);
-        this.pendingCommands.delete(correlation);
+        this.pendingCommands.delete(key);
         await targetApi(this.config.target_api_base, `/scolia/bridge/commands/${pending.commandId}/result`, {
           method: "POST",
           body: {
@@ -295,12 +266,16 @@ class BoardConnection {
       }
     }
 
-    if (type === "ACK" && matchedCommand?.commandType === "GET_SBC_STATUS") {
-      const payload = normalizedStatusPayload(message.payload);
-      if (hasPhysicalStatus(payload)) {
-        // GET_SBC_STATUS is a request/response command. Normalize its ACK into the
-        // same status-event shape as spontaneous Scolia status notifications so
-        // the API can keep physical availability fresh without inventing Offline.
+    if (type === "ACK") {
+      const payload = normalizeScoliaStatusPayload(message.payload);
+      if (
+        hasScoliaPhysicalStatus(payload)
+        && (matchedCommand?.commandType === "GET_SBC_STATUS" || hasScoliaPhysicalStatus(message.payload))
+      ) {
+        // GET_SBC_STATUS replies vary slightly between Scolia/SBC versions. As long
+        // as the ACK actually contains a physical status, canonicalize it into the
+        // same event shape as spontaneous status notifications. This refreshes the
+        // physical-status timestamp and avoids false Offline/fallback transitions.
         message = { ...message, type: "SBC_STATUS_CHANGED", payload };
       }
     }
@@ -501,16 +476,17 @@ function requestServerDrain(apiBase = null) {
 function nextConfigDelay(data) {
   if ((data?.bridge_mode || "idle") === "active") return ACTIVE_CONFIG_POLL_MS;
 
-  let delay = Math.max(
-    60000,
-    Number(data?.idle_poll_seconds || 0) > 0
-      ? Number(data.idle_poll_seconds) * 1000
-      : IDLE_CONFIG_POLL_MS
-  );
+  // Router metadata may advertise a much slower idle cadence for installations that
+  // do not support TEST leases. Blindleia does, so the local 2 s cap is authoritative.
+  let delay = IDLE_CONFIG_POLL_MS;
+  const advertisedIdleMs = Number(data?.idle_poll_seconds) * 1000;
+  if (Number.isFinite(advertisedIdleMs) && advertisedIdleMs > 0) {
+    delay = Math.min(delay, Math.max(1000, advertisedIdleMs));
+  }
 
   const nextActivationSeconds = Number(data?.next_activation_in_seconds);
   if (Number.isFinite(nextActivationSeconds) && nextActivationSeconds >= 0) {
-    delay = Math.min(delay, Math.max(5000, nextActivationSeconds * 1000));
+    delay = Math.min(delay, Math.max(1000, nextActivationSeconds * 1000));
   }
   return delay;
 }

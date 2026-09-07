@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server-router.js",
     "start:legacy": "node server.js",
-    "check": "node --check server-router.js && node --check coalescing-runner.js && node coalescing-runner.test.mjs"
+    "check": "node --check server-router.js && node --check coalescing-runner.js && node --check scolia-protocol.js && node coalescing-runner.test.mjs && node scolia-protocol.test.mjs"
   },
   "dependencies": {
     "ws": "^8.18.3"
