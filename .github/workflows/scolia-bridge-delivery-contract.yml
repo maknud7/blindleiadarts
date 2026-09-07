@@ -1,0 +1,46 @@
+name: Scolia Bridge Delivery Contract
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/scolia-bridge/**'
+      - '.github/workflows/scolia-bridge-delivery-contract.yml'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/scolia-bridge/**'
+      - '.github/workflows/scolia-bridge-delivery-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify bridge syntax and coalescing delivery
+        run: npm --prefix apps/scolia-bridge run check
+
+      - name: Verify live delivery wiring
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'SPOOL_RETRY_MS' apps/scolia-bridge/server-router.js
+          grep -Fq 'requestSpoolFlush().catch' apps/scolia-bridge/server-router.js
+          grep -Fq 'requestServerDrain(targetBase)' apps/scolia-bridge/server-router.js
+          grep -Fq 'createCoalescingRunner(flushSpoolPass)' apps/scolia-bridge/server-router.js
+          grep -Fq 'createCoalescingRunner(drainServerQueuePass)' apps/scolia-bridge/server-router.js
+          if grep -Fq 'if (flushing) return' apps/scolia-bridge/server-router.js; then
+            echo 'Lost-wakeup spool guard must not return while new work can arrive.' >&2
+            exit 1
+          fi
+          if grep -Fq 'queueDrainInFlight' apps/scolia-bridge/server-router.js; then
+            echo 'Lost-wakeup queue-drain guard must be replaced by coalescing delivery.' >&2
+            exit 1
+          fi
