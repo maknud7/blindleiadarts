@@ -2,6 +2,7 @@ import "./pairing-claim-core.js?v=20260828-1745";
 import "./equipment-admin-ux.js?v=20260826-1345";
 import "./board-admin.js";
 import "./tablet-replacement.js?v=20260828-1700";
+import "./terminal-pairing-ux.js?v=20260907-terminal-ux-01";
 import "./member-onboarding-admin.js";
 import "./tournament-admin.js";
 import "./tournament-playoff-admin.js";
