@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f4ed" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Olivia skole" />
+  <title>Olivia skole</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Borkedalen · 4B</div>
+        <h1>Olivia skole</h1>
+        <p id="subhead">Laster ukeplan …</p>
+      </div>
+      <div class="week-badge" id="weekBadge">–</div>
+    </header>
+
+    <section id="installCard" class="card hidden">
+      <h2>Legg på Hjem-skjermen</h2>
+      <p>På iPhone: trykk Del → <strong>Legg til på Hjem-skjerm</strong>. Åpne så appen derfra for å aktivere varsler.</p>
+    </section>
+
+    <section id="accessError" class="card error hidden">
+      <h2>Privat lenke mangler</h2>
+      <p>Åpne lenken du fikk på e-post. Den inneholder familietilgangen til Olivia-siden.</p>
+    </section>
+
+    <section id="todayCard" class="card accent hidden">
+      <div class="section-kicker">I dag</div>
+      <div id="today"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Denne uka</div>
+          <h2 id="weekTitle">Ukeplan</h2>
+        </div>
+        <button id="notifyBtn" class="button secondary" type="button">Aktiver varsler</button>
+      </div>
+      <div id="events" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-kicker">Lekser</div>
+      <div id="homework" class="stack"></div>
+    </section>
+
+    <section id="noticeCard" class="card hidden">
+      <div class="section-kicker">Beskjeder</div>
+      <div id="notices" class="stack"></div>
+    </section>
+
+    <section class="card muted-card">
+      <div class="section-kicker">Nyttig</div>
+      <div class="links">
+        <a id="sourceLink" href="#" target="_blank" rel="noopener">Original ukeplan</a>
+        <a id="timetableLink" href="#" target="_blank" rel="noopener">Fast timeplan 4B</a>
+        <a id="calendarLink" href="#">Abonner i kalender</a>
+      </div>
+    </section>
+
+    <footer>
+      <span id="updated">–</span>
+      <span>·</span>
+      <span>Privat familievisning</span>
+    </footer>
+  </main>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
