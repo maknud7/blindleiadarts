@@ -20,6 +20,7 @@ function ensureStyles() {
   style.textContent = `
     #kioskList .terminal-internal-code{display:none!important}
     #kioskList .terminal-quick-action{white-space:nowrap}
+    #kioskList .terminal-quick-action.hidden{display:none!important}
     #kioskList .reset-pairing{font-size:12px;opacity:.82}
     #kioskList .board-controls{align-items:center}
     .pairing-from-qr .terminal-qr-note{display:block}
@@ -144,6 +145,7 @@ function decorateBoardRows() {
     const id = boardId(row);
     if (!id) return;
     const paired = pairedRow(row);
+    const testHardwareReadonly = kioskSection?.classList.contains("test-hardware-readonly") === true;
     const meta = row.querySelector(".board-main .row-meta");
     const metaSpans = [...(meta?.querySelectorAll(":scope > span") || [])];
 
@@ -178,6 +180,7 @@ function decorateBoardRows() {
       controls.insertBefore(quick, edit || reset || null);
     }
     setText(quick, paired ? "Bytt nettbrett" : "Koble terminal");
+    quick.classList.toggle("hidden", paired && testHardwareReadonly);
     quick.onclick = () => {
       if (paired) openReplacementForRow(row).catch(() => undefined);
       else openPairingForBoard(id);
@@ -222,10 +225,21 @@ function boot() {
   decorateDynamicCopy();
 
   const observer = new MutationObserver(() => window.queueMicrotask(decorateDynamicCopy));
-  if (kioskSection) observer.observe(kioskSection, { childList: true, subtree: true, characterData: true });
+  if (kioskSection) {
+    observer.observe(kioskSection, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  }
 
-  const editorObserver = new MutationObserver(() => window.queueMicrotask(decorateBoardEditor));
-  editorObserver.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class"] });
+  const editorRoot = document.getElementById("boardEditorBackdrop");
+  if (editorRoot) {
+    const editorObserver = new MutationObserver(() => window.queueMicrotask(decorateBoardEditor));
+    editorObserver.observe(editorRoot, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class"] });
+  }
 }
 
 boot();
