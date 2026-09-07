@@ -1,0 +1,288 @@
+name: Deploy Production Admin UI
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - '.github/prod-admin-ui-release-request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production-admin-ui
+  cancel-in-progress: false
+
+jobs:
+  deploy-admin-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate admin UI release request
+        id: request
+        run: |
+          set -Eeuo pipefail
+          marker=.github/prod-admin-ui-release-request
+          test -f "$marker"
+
+          release_sha="$(awk -F= '$1=="release_sha" {print $2}' "$marker" | tail -1 | tr -d '[:space:]')"
+          scope="$(awk -F= '$1=="scope" {print $2}' "$marker" | tail -1 | tr -d '[:space:]')"
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Admin UI production release requires an exact 40-character tested SHA."
+            exit 1
+          fi
+          if [[ "$scope" != "admin-terminal-guide-static-only" ]]; then
+            echo "::error::Only admin-terminal-guide-static-only scope is allowed."
+            exit 1
+          fi
+
+          mapfile -t changed < <(git diff --name-only HEAD^ HEAD)
+          if (( ${#changed[@]} != 1 )) || [[ "${changed[0]}" != "$marker" ]]; then
+            printf '::error::Release request commit may only change %s. Changed files:\n' "$marker"
+            printf '%s\n' "${changed[@]}"
+            exit 1
+          fi
+
+          git cat-file -e "${release_sha}^{commit}"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "Admin UI static-only release request accepted for $release_sha."
+
+      - name: Checkout exact tested admin UI release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.release_sha }}
+          fetch-depth: 1
+
+      - name: Verify admin UI source, guide and syntax
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -f apps/admin/pairing-claim.js
+          test -f apps/admin/terminal-pairing-ux.js
+          test -f packages/ui-assets/user-guide.js
+
+          node --check apps/admin/pairing-claim.js
+          node --check apps/admin/terminal-pairing-ux.js
+          node --check packages/ui-assets/user-guide.js
+
+          grep -Fq './terminal-pairing-ux.js' apps/admin/pairing-claim.js
+          grep -Fq 'Koble terminal' apps/admin/terminal-pairing-ux.js
+          grep -Fq 'Bytt nettbrett' apps/admin/terminal-pairing-ux.js
+          grep -Fq 'const GUIDE_VERSION = "07.09.2026"' packages/ui-assets/user-guide.js
+          grep -Fq 'Koble terminal til en skive' packages/ui-assets/user-guide.js
+          grep -Fq 'tilkoblingskoden' packages/ui-assets/user-guide.js
+          grep -Fq 'Bytt nettbrett' packages/ui-assets/user-guide.js
+
+          echo "ADMIN_UI_SOURCE_OK=yes"
+          echo "GUIDE_IMPACT=updated"
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Build exact TEST and PROD packages
+        run: |
+          set -Eeuo pipefail
+          bash infra/deploy/build-release.sh test
+          bash infra/deploy/build-release.sh prod
+
+          cat > /tmp/admin-ui-files.txt <<'EOF'
+          admin/pairing-claim.js
+          admin/terminal-pairing-ux.js
+          packages/ui-assets/user-guide.js
+          EOF
+
+          while IFS= read -r file; do
+            test -f "dist/test/$file"
+            test -f "dist/prod/$file"
+          done < /tmp/admin-ui-files.txt
+
+          echo "Files in admin UI static-only release:"
+          cat /tmp/admin-ui-files.txt
+
+      - name: Verify exact admin UI assets are on TEST
+        env:
+          TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          while IFS= read -r file; do
+            curl --fail --silent --show-error --location \
+              --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 \
+              --header 'Cache-Control: no-cache' --header 'Pragma: no-cache' \
+              "$TEST_BASE_URL/$file?cb=${RANDOM}-${RANDOM}" -o "/tmp/test-$(basename "$file")"
+            expected="$(sha256sum "dist/test/$file" | awk '{print $1}')"
+            actual="$(sha256sum "/tmp/test-$(basename "$file")" | awk '{print $1}')"
+            if [[ "$expected" != "$actual" ]]; then
+              echo "::error::TEST asset does not match exact release: $file"
+              exit 1
+            fi
+          done < /tmp/admin-ui-files.txt
+          echo "TEST_ADMIN_UI_EXACT=yes"
+
+      - name: Read-only production preflight
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: |
+          set +e
+          php infra/sql/prod_preflight.php | tee /tmp/prod-admin-ui-preflight.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 && "$status" -ne 2 ]]; then
+            echo "::error::Production preflight is not safe for admin UI static-only deployment."
+            exit "$status"
+          fi
+          echo "ADMIN_UI_PROD_PREFLIGHT_OK=yes"
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Snapshot current production admin UI files for rollback
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/prod
+        run: |
+          set -Eeuo pipefail
+          for name in SFTP_HOST SFTP_USERNAME SFTP_PASSWORD REMOTE_ROOT; do test -n "${!name:-}"; done
+          mkdir -p /tmp/prod-admin-ui-rollback/admin /tmp/prod-admin-ui-rollback/packages/ui-assets
+          : > /tmp/admin-ui-sftp-snapshot.txt
+          while IFS= read -r file; do
+            printf -- '-get %s/%s /tmp/prod-admin-ui-rollback/%s\n' "$REMOTE_ROOT" "$file" "$file" >> /tmp/admin-ui-sftp-snapshot.txt
+          done < /tmp/admin-ui-files.txt
+          echo quit >> /tmp/admin-ui-sftp-snapshot.txt
+
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
+            -b /tmp/admin-ui-sftp-snapshot.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+          : > /tmp/prod-admin-ui-rollback/present.list
+          : > /tmp/prod-admin-ui-rollback/absent.list
+          while IFS= read -r file; do
+            if [[ -f "/tmp/prod-admin-ui-rollback/$file" ]]; then
+              echo "$file" >> /tmp/prod-admin-ui-rollback/present.list
+            else
+              echo "$file" >> /tmp/prod-admin-ui-rollback/absent.list
+            fi
+          done < /tmp/admin-ui-files.txt
+          echo "ADMIN_UI_ROLLBACK_SNAPSHOT_READY=yes"
+
+      - name: Store production admin UI rollback snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-admin-ui-before-${{ steps.request.outputs.release_sha }}
+          path: /tmp/prod-admin-ui-rollback
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Deploy exact admin UI static bundle to production
+        id: deploy
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/prod
+        run: |
+          set -Eeuo pipefail
+          : > /tmp/admin-ui-sftp-put.txt
+          while IFS= read -r file; do
+            printf 'put dist/prod/%s %s/%s\n' "$file" "$REMOTE_ROOT" "$file" >> /tmp/admin-ui-sftp-put.txt
+          done < /tmp/admin-ui-files.txt
+          echo quit >> /tmp/admin-ui-sftp-put.txt
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
+            -b /tmp/admin-ui-sftp-put.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+      - name: Verify exact production admin UI filesystem
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/prod
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/prod-admin-ui-remote/admin /tmp/prod-admin-ui-remote/packages/ui-assets
+          : > /tmp/admin-ui-sftp-get.txt
+          while IFS= read -r file; do
+            printf 'get %s/%s /tmp/prod-admin-ui-remote/%s\n' "$REMOTE_ROOT" "$file" "$file" >> /tmp/admin-ui-sftp-get.txt
+          done < /tmp/admin-ui-files.txt
+          echo quit >> /tmp/admin-ui-sftp-get.txt
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
+            -b /tmp/admin-ui-sftp-get.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+
+          while IFS= read -r file; do
+            expected="$(sha256sum "dist/prod/$file" | awk '{print $1}')"
+            actual="$(sha256sum "/tmp/prod-admin-ui-remote/$file" | awk '{print $1}')"
+            [[ "$expected" == "$actual" ]] || { echo "::error::Production filesystem mismatch: $file"; exit 1; }
+          done < /tmp/admin-ui-files.txt
+          echo "ADMIN_UI_PROD_FILESYSTEM_EXACT=yes"
+
+      - name: Verify production admin UI over HTTP
+        env:
+          PROD_BASE_URL: https://blindleiadart.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          while IFS= read -r file; do
+            matched=no
+            target="/tmp/prod-http-$(basename "$file")"
+            for attempt in {1..12}; do
+              if curl --fail --silent --show-error --location --max-time 30 \
+                  --header 'Cache-Control: no-cache' --header 'Pragma: no-cache' \
+                  "$PROD_BASE_URL/$file?cb=${RANDOM}-${attempt}" -o "$target"; then
+                expected="$(sha256sum "dist/prod/$file" | awk '{print $1}')"
+                actual="$(sha256sum "$target" | awk '{print $1}')"
+                if [[ "$expected" == "$actual" ]]; then matched=yes; break; fi
+              fi
+              sleep 5
+            done
+            [[ "$matched" == yes ]] || { echo "::error::Production HTTP mismatch: $file"; exit 1; }
+          done < /tmp/admin-ui-files.txt
+
+          grep -Fq 'Koble terminal' /tmp/prod-http-terminal-pairing-ux.js
+          grep -Fq 'Bytt nettbrett' /tmp/prod-http-terminal-pairing-ux.js
+          grep -Fq 'const GUIDE_VERSION = "07.09.2026"' /tmp/prod-http-user-guide.js
+          grep -Fq 'Koble terminal til en skive' /tmp/prod-http-user-guide.js
+          echo "ADMIN_UI_PROD_HTTP_EXACT=yes"
+          echo "ADMIN_UI_PROD_DEPLOY_OK=yes"
+          echo "GUIDE_PROD_DEPLOY_OK=yes"
+
+      - name: Roll back production admin UI after failed deployment verification
+        if: failure() && steps.deploy.outcome == 'success'
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/prod
+        run: |
+          set -Eeuo pipefail
+          : > /tmp/admin-ui-sftp-rollback.txt
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+            printf 'put /tmp/prod-admin-ui-rollback/%s %s/%s\n' "$file" "$REMOTE_ROOT" "$file" >> /tmp/admin-ui-sftp-rollback.txt
+          done < /tmp/prod-admin-ui-rollback/present.list
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+            printf -- '-rm %s/%s\n' "$REMOTE_ROOT" "$file" >> /tmp/admin-ui-sftp-rollback.txt
+          done < /tmp/prod-admin-ui-rollback/absent.list
+          echo quit >> /tmp/admin-ui-sftp-rollback.txt
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
+            -b /tmp/admin-ui-sftp-rollback.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+          echo "::warning::Admin UI deployment verification failed; production static-file rollback was applied."
