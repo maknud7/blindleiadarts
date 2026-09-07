@@ -9,6 +9,10 @@ const pairingFromQr = Boolean(
     .replace(/[^A-Z0-9]/g, "")
 );
 
+function setText(node, value) {
+  if (node && node.textContent !== value) node.textContent = value;
+}
+
 function ensureStyles() {
   if (document.getElementById("terminalPairingUxStyles")) return;
   const style = document.createElement("style");
@@ -18,8 +22,6 @@ function ensureStyles() {
     #kioskList .terminal-quick-action{white-space:nowrap}
     #kioskList .reset-pairing{font-size:12px;opacity:.82}
     #kioskList .board-controls{align-items:center}
-    .terminal-connection-note{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)}
-    .terminal-connection-note::before{content:"";width:8px;height:8px;border-radius:999px;background:currentColor;opacity:.65}
     .pairing-from-qr .terminal-qr-note{display:block}
     .terminal-qr-note{display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(77,212,166,.35);border-radius:10px;background:rgba(77,212,166,.08);font-size:13px;line-height:1.45}
     @media(max-width:700px){#kioskList .terminal-quick-action{width:100%}}
@@ -47,44 +49,34 @@ function replaceTechnicalPairingWords(root) {
 }
 
 function decoratePairingFlow() {
-  const pairButton = document.getElementById("pairTabletButton");
-  if (pairButton) pairButton.textContent = "Koble terminal";
+  setText(document.getElementById("pairTabletButton"), "Koble terminal");
 
   const reveal = document.getElementById("pairingReveal");
   if (reveal) {
-    const title = reveal.querySelector(".equipment-reveal-head h3");
-    const description = reveal.querySelector(".equipment-reveal-head .muted");
-    if (title) title.textContent = "Koble ny terminal";
-    if (description) {
-      description.textContent = pairingFromQr
+    setText(reveal.querySelector(".equipment-reveal-head h3"), "Koble ny terminal");
+    setText(
+      reveal.querySelector(".equipment-reveal-head .muted"),
+      pairingFromQr
         ? "Terminalen er gjenkjent fra QR-koden. Velg skiva den står ved og koble."
-        : "Scan QR-koden fra Blindleia Kiosk, eller skriv tilkoblingskoden som vises på nettbrettet.";
-    }
+        : "Scan QR-koden fra Blindleia Kiosk, eller skriv tilkoblingskoden som vises på nettbrettet."
+    );
   }
 
   const intro = kioskSection?.querySelector(".equipment-pairing-intro");
   if (intro) {
-    const eyebrow = intro.querySelector(".eyebrow");
-    const heading = intro.querySelector("h3");
-    const copy = intro.querySelector(".muted");
-    if (eyebrow) eyebrow.textContent = "Terminal";
-    if (heading) heading.textContent = "Koble terminal til en skive";
-    if (copy) {
-      copy.textContent = pairingFromQr
+    setText(intro.querySelector(".eyebrow"), "Terminal");
+    setText(intro.querySelector("h3"), "Koble terminal til en skive");
+    setText(
+      intro.querySelector(".muted"),
+      pairingFromQr
         ? "Terminalen er allerede funnet. Velg skiva den står ved."
-        : "Åpne Blindleia Kiosk på nettbrettet. Scan QR-koden med adminmobilen, eller skriv tilkoblingskoden under.";
-    }
+        : "Åpne Blindleia Kiosk på nettbrettet. Scan QR-koden med adminmobilen, eller skriv tilkoblingskoden under."
+    );
   }
 
-  const codeLabel = codeInput?.closest("label")?.querySelector("span");
-  if (codeLabel) codeLabel.textContent = "Tilkoblingskode";
-
-  const flow = document.getElementById("claimAdminFlow");
-  const firstStep = flow?.querySelector('[data-claim-step="1"] p');
-  if (firstStep) firstStep.textContent = "Finn terminalen";
-
-  const devicePreviewLabel = document.querySelector("#claimDevicePreview div > span");
-  if (devicePreviewLabel) devicePreviewLabel.textContent = "Terminal funnet";
+  setText(codeInput?.closest("label")?.querySelector("span"), "Tilkoblingskode");
+  setText(document.querySelector('#claimAdminFlow [data-claim-step="1"] p'), "Finn terminalen");
+  setText(document.querySelector("#claimDevicePreview div > span"), "Terminal funnet");
 
   const card = document.querySelector("#claimKioskForm")?.closest(".claim-admin-card");
   if (card && pairingFromQr && !card.querySelector(".terminal-qr-note")) {
@@ -158,22 +150,24 @@ function decorateBoardRows() {
     if (metaSpans[0]) metaSpans[0].classList.add("terminal-internal-code");
     if (metaSpans[1]) {
       const raw = metaSpans[1].textContent || "";
-      if (paired) metaSpans[1].textContent = raw.replace(/^Paret:\s*/i, "Terminal: ");
-      else metaSpans[1].textContent = "Ingen terminal koblet til";
+      const wanted = paired ? raw.replace(/^Paret:\s*/i, "Terminal: ") : "Ingen terminal koblet til";
+      setText(metaSpans[1], wanted);
     }
 
     const statusBadge = [...row.querySelectorAll(".board-controls .badge")]
       .find((badge) => ["paret", "ledig", "tilkoblet", "ingen terminal"].includes(String(badge.textContent || "").trim().toLowerCase()));
-    if (statusBadge) statusBadge.textContent = paired ? "Tilkoblet" : "Ingen terminal";
+    setText(statusBadge, paired ? "Tilkoblet" : "Ingen terminal");
 
     const reset = row.querySelector(".reset-pairing");
     if (reset) {
-      reset.textContent = "Koble fra";
-      reset.title = "Koble fra dette nettbrettet. Skiva og historikken beholdes.";
+      setText(reset, "Koble fra");
+      if (reset.title !== "Koble fra dette nettbrettet. Skiva og historikken beholdes.") {
+        reset.title = "Koble fra dette nettbrettet. Skiva og historikken beholdes.";
+      }
     }
 
     const edit = row.querySelector(".board-edit-button");
-    if (edit) edit.textContent = "Detaljer";
+    setText(edit, "Detaljer");
 
     const controls = row.querySelector(".board-controls") || row;
     let quick = row.querySelector(".terminal-quick-action");
@@ -183,7 +177,7 @@ function decorateBoardRows() {
       quick.className = "button secondary terminal-quick-action";
       controls.insertBefore(quick, edit || reset || null);
     }
-    quick.textContent = paired ? "Bytt nettbrett" : "Koble terminal";
+    setText(quick, paired ? "Bytt nettbrett" : "Koble terminal");
     quick.onclick = () => {
       if (paired) openReplacementForRow(row).catch(() => undefined);
       else openPairingForBoard(id);
@@ -197,19 +191,19 @@ function decorateBoardEditor() {
     const label = device.querySelector(":scope > span.muted");
     const strong = device.querySelector(":scope > strong");
     const small = device.querySelector(":scope > small");
-    if (strong?.textContent?.trim() === "Ikke paret") {
-      if (label) label.textContent = "Terminal";
-      strong.textContent = "Ingen terminal";
-      if (small) small.textContent = "Åpne Blindleia Kiosk på nytt nettbrett og bruk QR-koden eller tilkoblingskoden.";
+    if (strong?.textContent?.trim() === "Ikke paret" || strong?.textContent?.trim() === "Ingen terminal") {
+      setText(label, "Terminal");
+      setText(strong, "Ingen terminal");
+      setText(small, "Åpne Blindleia Kiosk på nytt nettbrett og bruk QR-koden eller tilkoblingskoden.");
     } else if (strong) {
-      if (label) label.textContent = "Terminal";
-      if (small) small.textContent = (small.textContent || "").replace(/^Paret\s/i, "Tilkoblet ");
+      setText(label, "Terminal");
+      const current = small?.textContent || "";
+      setText(small, current.replace(/^Paret\s/i, "Tilkoblet "));
     }
   }
 
   const tabletActions = document.getElementById("boardTabletActions");
-  const tabletHint = tabletActions?.querySelector("small");
-  if (tabletHint) tabletHint.textContent = "Nettbrettet er utskiftbart. Skive, Scolia-oppsett, kamp og historikk blir stående.";
+  setText(tabletActions?.querySelector("small"), "Nettbrettet er utskiftbart. Skive, Scolia-oppsett, kamp og historikk blir stående.");
 
   const replacement = document.getElementById("tabletReplacementPanel");
   replaceTechnicalPairingWords(replacement);
