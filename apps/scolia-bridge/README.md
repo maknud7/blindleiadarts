@@ -34,9 +34,12 @@ While active, the bridge:
 1. opens one Scolia WebSocket connection per routed physical board,
 2. durably spools every inbound message to disk before delivery,
 3. delivers events to the routed Blindleia environment,
-4. polls outbound Scolia commands and forwards them to the board,
-5. writes bridge heartbeat/runtime status,
-6. reconnects with exponential backoff.
+4. immediately wakes canonical queue processing after accepted ingress,
+5. polls outbound Scolia commands and forwards them to the board,
+6. writes bridge heartbeat/runtime status,
+7. reconnects with exponential backoff.
+
+Normal inbound delivery is event-driven. A new durable spool item wakes the sender immediately, and a new item arriving during an active flush schedules an immediate follow-up pass. The periodic spool/drain timers are recovery nets rather than the normal latency path.
 
 When none of the activation conditions remain, the bridge closes the Scolia connection and returns to Dvale.
 
@@ -56,7 +59,8 @@ Optional:
 - `SCOLIA_CONFIG_POLL_MS` (active polling interval)
 - `SCOLIA_IDLE_CONFIG_POLL_MS` (idle router interval; currently capped at 2000 ms so TEST can wake safely)
 - `SCOLIA_COMMAND_POLL_MS` (default 750)
-- `SCOLIA_DRAIN_POLL_MS` (default 5000)
+- `SCOLIA_DRAIN_POLL_MS` (default 500; recovery sweep, normal ingress triggers a drain immediately)
+- `SCOLIA_SPOOL_RETRY_MS` (default 1000; recovery retry after API/network failure)
 - `SCOLIA_HEARTBEAT_MS` (default 15000)
 - `SCOLIA_COMMAND_ACK_TIMEOUT_MS` (default 8000)
 
@@ -72,7 +76,7 @@ A TEST lease only changes event routing for the leased physical board. Match, vi
 
 Scolia documentation does not promise replay after a WebSocket disconnect. Therefore Blindleia never silently assumes that no darts were lost. If a live board disconnects during an active match, the API marks the board `needs_reconciliation` and activates manual fallback. Reconnection does not clear that flag. The score must be checked at the terminal before Scolia is explicitly resumed.
 
-The bridge spool protects the opposite direction: once the bridge has received a Scolia message, an API outage or bridge restart will not lose it. Duplicate delivery is safe because the API stores a deterministic dedupe key before processing.
+The bridge spool protects the opposite direction: once the bridge has received a Scolia message, an API outage or bridge restart will not lose it. Duplicate delivery is safe because the API stores a deterministic dedupe key before processing. Spool flush and server queue drain use coalescing single-flight runners: work never overlaps itself, but work arriving while a pass is running cannot be lost and causes an immediate follow-up pass.
 
 `GET_SBC_STATUS` is request/response based. The bridge correlates its ACK with the queued command and, when the ACK contains a physical board status, normalizes it to the same `SBC_STATUS_CHANGED` event shape used by spontaneous Scolia status notifications. This prevents the kiosk from declaring a healthy board offline merely because the previous status event became old.
 
