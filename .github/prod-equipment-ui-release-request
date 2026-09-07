@@ -1,0 +1,3 @@
+release_sha=4f9316d5c6dec8656b4745afb3b1bf048abfa3c4
+scope=admin-equipment-static-only
+reason=Publish tested Club Admin Utstyr flow alongside kiosk and terminal UX
