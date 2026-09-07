@@ -1,6 +1,6 @@
-release_sha=883e84dab2eb5bf2637a7fd02e3c5ca22ac9820c
+release_sha=9d33488846b70aaeefc3f74655a0685245ff7e8a
 backup_confirmed=YES
-migration_review_confirmed=YES
-requested_at=2026-09-06T13:40:00Z
-purpose=scolia_scaling_prod_release_883e84da
-backup_prefix=bd_backup_20260906_133848_
+migration_review_confirmed=NO
+requested_at=2026-09-07T16:12:00Z
+purpose=scolia_live_delivery_prod_release_9d334888
+backup_prefix=bd_backup_20260907_161041_
