@@ -1,4 +1,4 @@
-const KIOSK_RUNTIME_VERSION = "20260907-test-runtime-02";
+const KIOSK_RUNTIME_VERSION = "20260907-test-runtime-03";
 const kioskBrandStyles = document.createElement("link");
 kioskBrandStyles.rel = "stylesheet";
 kioskBrandStyles.href = `./brand-light.css?v=${KIOSK_RUNTIME_VERSION}`;
@@ -10,7 +10,8 @@ document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.se
 // Runtime composition is canonical in index.html. In particular, do not load the
 // legacy scolia-runtime.js here: it declares a global render() function and can
 // overwrite the main kiosk render() after a TEST board has already loaded. The
-// current Scolia surface and fallback runtime are loaded statically by index.html.
+// current Scolia surface, TEST lease bridge and fallback runtime are loaded
+// statically by index.html.
 
 let deferredInstallPrompt = null;
 
