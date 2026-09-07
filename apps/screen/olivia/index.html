@@ -35,7 +35,7 @@
     </section>
 
     <section id="todayCard" class="card accent hidden">
-      <div class="section-kicker">I dag</div>
+      <div class="section-kicker" id="focusLabel">I dag</div>
       <div id="today"></div>
     </section>
 
@@ -48,6 +48,16 @@
         <button id="notifyBtn" class="button secondary" type="button">Aktiver varsler</button>
       </div>
       <div id="events" class="stack"></div>
+    </section>
+
+    <section class="card" id="reminderCard">
+      <div class="section-kicker">Påminnelser</div>
+      <h2>Når vil du bli varslet?</h2>
+      <div class="segmented" role="radiogroup" aria-label="Tidspunkt for påminnelse">
+        <label><input type="radio" name="reminderTiming" value="morning" checked><span>Om morgenen <small>07:00</small></span></label>
+        <label><input type="radio" name="reminderTiming" value="evening"><span>Kvelden før <small>19:00</small></span></label>
+      </div>
+      <p class="setting-note" id="timingStatus">Gjelder konkrete ting å huske i oddetallsuker. Valget gjelder denne telefonen.</p>
     </section>
 
     <section class="card">
