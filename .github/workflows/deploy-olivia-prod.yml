@@ -1,0 +1,54 @@
+name: Deploy Olivia PWA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/screen/olivia/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-olivia-pwa
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify PWA files
+        run: |
+          set -Eeuo pipefail
+          test -f apps/screen/olivia/index.html
+          test -f apps/screen/olivia/app.js
+          test -f apps/screen/olivia/style.css
+          test -f apps/screen/olivia/manifest.webmanifest
+          test -f apps/screen/olivia/sw.js
+          test -f apps/screen/olivia/icon.svg
+
+      - name: Deploy Olivia PWA directly to production
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./apps/screen/olivia/*
+          remote_path: /www/blindleiadarts/prod/screen/olivia
+          sftp_only: true
+          rsyncArgs: --exclude=.git
+
+      - name: Verify public page
+        run: |
+          set -Eeuo pipefail
+          url='https://blindleiadart.ingenting.org/screen/olivia/'
+          html="$(curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 "$url?cb=$RANDOM")"
+          grep -Fq '<title>Olivia skole</title>' <<<"$html"
+          grep -Fq 'Borkedalen · 4B' <<<"$html"
+          echo "OLIVIA_PWA_URL=$url"
