@@ -1,4 +1,4 @@
-const KIOSK_RUNTIME_VERSION = "20260905-test-runtime-01";
+const KIOSK_RUNTIME_VERSION = "20260907-test-runtime-02";
 const kioskBrandStyles = document.createElement("link");
 kioskBrandStyles.rel = "stylesheet";
 kioskBrandStyles.href = `./brand-light.css?v=${KIOSK_RUNTIME_VERSION}`;
@@ -7,34 +7,10 @@ document.head.appendChild(kioskBrandStyles);
 document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#0b3145");
 document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute("content", "default");
 
-function ensureExtendedKioskRuntime() {
-  if (!document.getElementById("prodTestEntryStyles")) {
-    const css = document.createElement("link");
-    css.id = "prodTestEntryStyles";
-    css.rel = "stylesheet";
-    css.href = `./prod-test-entry.css?v=${KIOSK_RUNTIME_VERSION}`;
-    document.head.appendChild(css);
-  }
-
-  const load = (id, src) => new Promise((resolve) => {
-    if (document.getElementById(id)) { resolve(); return; }
-    const script = document.createElement("script");
-    script.id = id;
-    script.src = src;
-    script.async = false;
-    script.addEventListener("load", resolve, { once: true });
-    script.addEventListener("error", () => {
-      console.warn(`Kunne ikke laste kiosk-runtime: ${src}`);
-      resolve();
-    }, { once: true });
-    document.body.appendChild(script);
-  });
-
-  load("prodTestEntryRuntime", `./prod-test-entry.js?v=${KIOSK_RUNTIME_VERSION}`)
-    .then(() => load("scoliaRuntime", `./scolia-runtime.js?v=${KIOSK_RUNTIME_VERSION}`));
-}
-
-ensureExtendedKioskRuntime();
+// Runtime composition is canonical in index.html. In particular, do not load the
+// legacy scolia-runtime.js here: it declares a global render() function and can
+// overwrite the main kiosk render() after a TEST board has already loaded. The
+// current Scolia surface and fallback runtime are loaded statically by index.html.
 
 let deferredInstallPrompt = null;
 
