@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { createCoalescingRunner } from "./coalescing-runner.js";
 
 const API_BASE = String(process.env.BLINDLEIA_API_BASE || "http://127.0.0.1/api/v1").replace(/\/$/, "");
 const BRIDGE_SECRET = String(process.env.SCOLIA_BRIDGE_SECRET || "");
@@ -15,6 +16,7 @@ const IDLE_CONFIG_POLL_MS = Math.max(60000, Number(process.env.SCOLIA_IDLE_CONFI
 const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
 const DRAIN_POLL_MS = Math.max(250, Number(process.env.SCOLIA_DRAIN_POLL_MS || 500));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
+const SPOOL_RETRY_MS = Math.max(250, Number(process.env.SCOLIA_SPOOL_RETRY_MS || 1000));
 const SPOOL_DIR = path.resolve(process.env.SCOLIA_SPOOL_DIR || "./data/scolia-spool");
 const COMMAND_ACK_TIMEOUT_MS = Math.max(2000, Number(process.env.SCOLIA_COMMAND_ACK_TIMEOUT_MS || 8000));
 
@@ -26,12 +28,12 @@ if (!BRIDGE_SECRET) {
 await fs.mkdir(SPOOL_DIR, { recursive: true });
 
 const connections = new Map();
-let flushing = false;
-let queueDrainInFlight = false;
+const pendingDrainTargets = new Set();
 let commandPollInFlight = false;
 let routerUnavailableWarned = false;
 let configTimer = null;
 let lastBridgeMode = "unknown";
+let lastSpoolOrder = 0;
 
 function bridgeHeaders(extra = {}) {
   return {
@@ -80,6 +82,11 @@ function safeFileName(serial) {
   return String(serial).replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 100);
 }
 
+function nextSpoolOrder() {
+  lastSpoolOrder = Math.max(Date.now(), lastSpoolOrder + 1);
+  return lastSpoolOrder;
+}
+
 async function spool(serial, targetApiBase, message) {
   const record = {
     serial_number: serial,
@@ -87,40 +94,62 @@ async function spool(serial, targetApiBase, message) {
     message,
     spooled_at: new Date().toISOString(),
   };
-  const name = `${Date.now()}-${safeFileName(serial)}-${randomUUID()}.json`;
+  // The numeric prefix is strictly monotonic inside this bridge process. Scolia can
+  // emit several messages in the same millisecond; a random UUID must never decide
+  // the order in which throws/takeout events reach canonical scoring.
+  const name = `${nextSpoolOrder()}-${safeFileName(serial)}-${randomUUID()}.json`;
   const temp = path.join(SPOOL_DIR, `.${name}.tmp`);
   const final = path.join(SPOOL_DIR, name);
   await fs.writeFile(temp, JSON.stringify(record), { encoding: "utf8", flag: "wx" });
   await fs.rename(temp, final);
+
+  // Every durable write wakes the sender. If a message arrives while a flush is in
+  // progress, the coalescing runner guarantees an immediate follow-up pass instead
+  // of leaving the new file asleep until the periodic retry timer.
+  requestSpoolFlush().catch((error) => console.warn("Spool flush failed:", error.message));
   return final;
 }
 
-async function flushSpool() {
-  if (flushing) return;
-  flushing = true;
-  try {
-    const files = (await fs.readdir(SPOOL_DIR)).filter((name) => name.endsWith(".json")).sort();
-    for (const name of files.slice(0, 200)) {
-      const file = path.join(SPOOL_DIR, name);
-      let record;
-      try {
-        record = JSON.parse(await fs.readFile(file, "utf8"));
-      } catch (error) {
-        console.error("Invalid spool file", name, error.message);
-        await fs.rename(file, `${file}.invalid`).catch(() => undefined);
-        continue;
-      }
-      try {
-        await targetApi(record.target_api_base || API_BASE, "/scolia/bridge/events", { method: "POST", body: record });
-        await fs.unlink(file);
-      } catch (error) {
-        console.warn("Spool delivery paused:", error.message);
-        break;
-      }
+async function flushSpoolPass() {
+  const files = (await fs.readdir(SPOOL_DIR)).filter((name) => name.endsWith(".json")).sort();
+  let deliveryPaused = false;
+  for (const name of files.slice(0, 200)) {
+    const file = path.join(SPOOL_DIR, name);
+    let record;
+    try {
+      record = JSON.parse(await fs.readFile(file, "utf8"));
+    } catch (error) {
+      console.error("Invalid spool file", name, error.message);
+      await fs.rename(file, `${file}.invalid`).catch(() => undefined);
+      continue;
     }
-  } finally {
-    flushing = false;
+    try {
+      const targetBase = String(record.target_api_base || API_BASE).replace(/\/$/, "");
+      await targetApi(targetBase, "/scolia/bridge/events", { method: "POST", body: record });
+      await fs.unlink(file);
+
+      // Ingress only persists/dedupes. Start canonical processing immediately after
+      // acceptance instead of waiting up to the periodic server-queue interval.
+      requestServerDrain(targetBase).catch((error) => console.warn(`Immediate queue drain failed for ${targetBase}:`, error.message));
+    } catch (error) {
+      console.warn("Spool delivery paused:", error.message);
+      deliveryPaused = true;
+      break;
+    }
   }
+
+  // Large recovered spools keep flowing in bounded passes without waiting for the
+  // periodic timer. API failure is intentionally different: stop and let the retry
+  // timer/new inbound traffic wake delivery later, avoiding a tight failure loop.
+  if (!deliveryPaused && files.length > 200) {
+    requestSpoolFlush().catch((error) => console.warn("Spool continuation failed:", error.message));
+  }
+}
+
+const spoolFlushRunner = createCoalescingRunner(flushSpoolPass);
+
+function requestSpoolFlush() {
+  return spoolFlushRunner.trigger();
 }
 
 function internalMessage(type, payload = {}) {
@@ -236,7 +265,6 @@ class BoardConnection {
       this.config.target_api_base,
       internalMessage("BRIDGE_CONNECTED", { kiosk_id: this.config.kiosk_id, environment: this.config.environment || "default" })
     );
-    flushSpool().catch(() => undefined);
   }
 
   async onMessage(data) {
@@ -287,7 +315,6 @@ class BoardConnection {
     }
 
     await spool(this.config.serial_number, this.config.target_api_base, message);
-    flushSpool().catch(() => undefined);
   }
 
   async onClose(code, reasonBuffer) {
@@ -295,13 +322,12 @@ class BoardConnection {
     this.state = "disconnected";
     if (!this.closedByConfig) {
       console.warn(`Skive ${this.config.board_number}: Scolia disconnected · reconnecting`);
+      this.scheduleReconnect();
       await spool(
         this.config.serial_number,
         this.config.target_api_base,
         internalMessage("BRIDGE_DISCONNECTED", { code, reason, environment: this.config.environment || "default" })
       );
-      flushSpool().catch(() => undefined);
-      this.scheduleReconnect();
     }
   }
 
@@ -312,7 +338,6 @@ class BoardConnection {
       this.config.target_api_base,
       internalMessage("BRIDGE_ERROR", { error: String(error?.message || error), environment: this.config.environment || "default" })
     );
-    flushSpool().catch(() => undefined);
   }
 
   scheduleReconnect() {
@@ -448,19 +473,29 @@ async function heartbeat() {
   }));
 }
 
-async function drainServerQueue() {
-  if (queueDrainInFlight || connections.size === 0) return;
-  queueDrainInFlight = true;
-  try {
-    const targets = new Set();
-    for (const connection of connections.values()) targets.add(connection.config.target_api_base || API_BASE);
-    await Promise.all([...targets].map((apiBase) => targetApi(apiBase, "/scolia/bridge/drain", {
-      method: "POST",
-      body: { limit: 100 },
-    }).catch((error) => console.warn(`Queue drain failed for ${apiBase}:`, error.message))));
-  } finally {
-    queueDrainInFlight = false;
+async function drainServerQueuePass() {
+  const targets = [...pendingDrainTargets];
+  pendingDrainTargets.clear();
+  if (targets.length === 0) return;
+
+  await Promise.all(targets.map((apiBase) => targetApi(apiBase, "/scolia/bridge/drain", {
+    method: "POST",
+    body: { limit: 100 },
+  }).catch((error) => console.warn(`Queue drain failed for ${apiBase}:`, error.message))));
+}
+
+const queueDrainRunner = createCoalescingRunner(drainServerQueuePass);
+
+function requestServerDrain(apiBase = null) {
+  if (apiBase) {
+    pendingDrainTargets.add(String(apiBase).replace(/\/$/, ""));
+  } else {
+    for (const connection of connections.values()) {
+      pendingDrainTargets.add(String(connection.config.target_api_base || API_BASE).replace(/\/$/, ""));
+    }
   }
+  if (pendingDrainTargets.size === 0) return Promise.resolve();
+  return queueDrainRunner.trigger();
 }
 
 function nextConfigDelay(data) {
@@ -495,17 +530,18 @@ async function configLoop() {
 
 async function boot() {
   console.log(`Blindleia Scolia Bridge starting. Control=${API_BASE}, router=${ROUTER_URL}, spool=${SPOOL_DIR}`);
-  await flushSpool().catch((error) => console.warn("Initial spool flush failed:", error.message));
+  await requestSpoolFlush().catch((error) => console.warn("Initial spool flush failed:", error.message));
   await configLoop();
 
-  // Local spool is the durable layer outside MySQL. If the DB is unavailable,
-  // Scolia messages stay on disk until ingress can accept them again.
-  setInterval(() => flushSpool().catch((error) => console.warn("Spool flush failed:", error.message)), 5000);
+  // Local spool is the durable layer outside MySQL. Normal delivery is event-driven;
+  // this short retry interval is only the recovery net for API/network failures.
+  setInterval(() => requestSpoolFlush().catch((error) => console.warn("Spool flush failed:", error.message)), SPOOL_RETRY_MS);
   // One bulk command poll and one queue drain per API target, regardless of whether
-  // there are 1, 10 or 50 connected boards. Single-flight guards prevent overlap.
+  // there are 1, 10 or 50 connected boards. Coalescing runners prevent overlap and
+  // guarantee that work arriving during a pass gets an immediate follow-up pass.
   setInterval(() => pollAllCommands().catch((error) => console.warn("Command poll failed:", error.message)), COMMAND_POLL_MS);
   setInterval(() => heartbeat().catch((error) => console.warn("Bridge heartbeat failed:", error.message)), HEARTBEAT_MS);
-  setInterval(() => drainServerQueue().catch((error) => console.warn("Server queue drain failed:", error.message)), DRAIN_POLL_MS);
+  setInterval(() => requestServerDrain().catch((error) => console.warn("Server queue drain failed:", error.message)), DRAIN_POLL_MS);
 }
 
 function shutdown() {
