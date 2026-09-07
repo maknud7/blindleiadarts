@@ -21,9 +21,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           node --check apps/kiosk/scolia-fallback-manual.js
+          node --check apps/kiosk/scolia-live-ux.js
+          node --check apps/kiosk/scolia-test-lease.js
           node infra/tests/scolia_fallback_manual_test.mjs
-          grep -Fq 'scolia-fallback-manual.js?v=20260905-test-runtime-01' apps/kiosk/index.html
+          grep -Fq 'scolia-fallback-manual.js?v=' apps/kiosk/index.html
+          grep -Fq 'scolia-test-lease.js?v=' apps/kiosk/index.html
           grep -Fq 'scolia-fallback-manual.js' apps/kiosk/service-worker.js
-          grep -Fq 'bd-kiosk-shell-v43' apps/kiosk/service-worker.js
+          grep -Fq 'scolia-test-lease.js' apps/kiosk/service-worker.js
+          grep -Eq 'bd-kiosk-shell-v[0-9]+' apps/kiosk/service-worker.js
+          grep -Fq 'const OFFLINE_FALLBACK_GRACE_MS = 30000;' apps/kiosk/scolia-live-ux.js
+          grep -Fq 'bd:kioskScoliaLeasePending' apps/kiosk/scolia-test-lease.js
           grep -Fq 'if (url.pathname.includes("/api/") || url.pathname.endsWith(".php")) return;' apps/kiosk/service-worker.js
           grep -Fq '["script", "style"].includes(request.destination)' apps/kiosk/service-worker.js
