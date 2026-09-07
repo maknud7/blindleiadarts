@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Olivia skole" />
+  <meta name="robots" content="noindex,nofollow" />
   <title>Olivia skole</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
@@ -25,12 +26,12 @@
 
     <section id="installCard" class="card hidden">
       <h2>Legg på Hjem-skjermen</h2>
-      <p>På iPhone: trykk Del → <strong>Legg til på Hjem-skjerm</strong>. Åpne så appen derfra for å aktivere varsler.</p>
+      <p>På iPhone: trykk Del → <strong>Legg til på Hjem-skjerm</strong>. Deretter kan den åpnes som en vanlig app.</p>
     </section>
 
-    <section id="accessError" class="card error hidden">
-      <h2>Privat lenke mangler</h2>
-      <p>Åpne lenken du fikk på e-post. Den inneholder familietilgangen til Olivia-siden.</p>
+    <section id="loadError" class="card error hidden">
+      <h2>Kunne ikke laste ukeplanen</h2>
+      <p>Prøv å åpne appen på nytt. Dataene hentes fra skoleoversikten i Supabase.</p>
     </section>
 
     <section id="todayCard" class="card accent hidden">
@@ -71,7 +72,7 @@
     <footer>
       <span id="updated">–</span>
       <span>·</span>
-      <span>Privat familievisning</span>
+      <span>Borkedalen 4B</span>
     </footer>
   </main>
 
