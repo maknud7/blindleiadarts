@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server-router.js",
     "start:legacy": "node server.js",
-    "check": "node --check server-router.js"
+    "check": "node --check server-router.js && node --check coalescing-runner.js && node coalescing-runner.test.mjs"
   },
   "dependencies": {
     "ws": "^8.18.3"
