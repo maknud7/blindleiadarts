@@ -1,0 +1,106 @@
+name: Backfill Round Five ELO Snapshots In Production
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-backfill-round-five-elo-snapshots-prod.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backfill-round-five-elo-snapshots-production
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROD_BASE_URL: https://blindleiadart.ingenting.org
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - name: Checkout exact backfill commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate request and canonical PROD ledger
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'BACKFILL_ROUND_FIVE_ELO_SNAPSHOTS_PROD=yes' infra/sql/run-backfill-round-five-elo-snapshots-prod.flag
+          php -l infra/sql/migrations/0074_add_tournament_elo_snapshots.php
+          php -l infra/sql/run_php_migration.php
+          php infra/sql/elo_ledger_doctor.php
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";$x="xPoP3xqp9n73";
+            $s=$db->prepare("SELECT er.internal_id,t.name,t.status FROM `{$p}external_references` er INNER JOIN `{$p}tournaments` t ON t.id=er.internal_id WHERE er.external_system=\"dartsatlas\" AND er.external_entity_type=\"tournament\" AND er.external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$t=$s->get_result()->fetch_assoc();$tid=(int)($t["internal_id"]??0);
+            if($tid!==12||($t["name"]??"")!=="Mandagsserien #5"||($t["status"]??"")!=="completed")throw new RuntimeException("Canonical round five identity drift");
+            $events=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` WHERE tournament_id={$tid} AND status=\"applied\"")->fetch_assoc()["c"];
+            $participants=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}")->fetch_assoc()["c"];
+            $snapshots=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_elo_snapshots` WHERE tournament_id={$tid}")->fetch_assoc()["c"];
+            if($events!==31||$participants!==8||!in_array($snapshots,[0,8],true))throw new RuntimeException("Round five ELO preflight drift: ".json_encode(compact("events","participants","snapshots")));
+            echo "ROUND5_ELO_SNAPSHOT_PREFLIGHT_OK=yes tournament_id={$tid} events={$events} participants={$participants} snapshots={$snapshots}\n";
+          '
+
+      - name: Snapshot PROD before ELO snapshot backfill
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Backfill canonical tournament ELO snapshots
+        run: php infra/sql/run_php_migration.php infra/sql/migrations/0074_add_tournament_elo_snapshots.php bd_prod_
+
+      - name: Verify round-five snapshots and unchanged ledger
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/elo_ledger_doctor.php
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";$tid=12;
+            $snapshots=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_elo_snapshots` WHERE tournament_id={$tid}")->fetch_assoc()["c"];
+            $events=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` WHERE tournament_id={$tid} AND status=\"applied\"")->fetch_assoc()["c"];
+            $ratings=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_current_ratings` WHERE season_id=3")->fetch_assoc()["c"];
+            $invalid=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_elo_snapshots` WHERE tournament_id={$tid} AND (elo_after IS NULL OR matches_after IS NULL OR matches_after<=matches_before)")->fetch_assoc()["c"];
+            $duplicates=(int)$db->query("SELECT COUNT(*) c FROM (SELECT player_id FROM `{$p}tournament_elo_snapshots` WHERE tournament_id={$tid} GROUP BY player_id HAVING COUNT(*)>1) x")->fetch_assoc()["c"];
+            if($snapshots!==8||$events!==31||$ratings!==19||$invalid!==0||$duplicates!==0)throw new RuntimeException("Round five ELO snapshot verification failed: ".json_encode(compact("snapshots","events","ratings","invalid","duplicates")));
+            echo "ROUND5_ELO_SNAPSHOT_DB_OK=yes tournament_id={$tid} snapshots={$snapshots} elo_events={$events} current_ratings={$ratings} backup=".getenv("PROD_BACKUP_PREFIX")."\n";
+          '
+
+      - name: Verify public round-five ELO readback
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 12); do
+            payload="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/tournament-elo.php?tournament_id=12&cb=$RANDOM" || true)"
+            if PAYLOAD="$payload" php -r '
+              $d=json_decode(getenv("PAYLOAD"),true);$t=$d["data"]["tournament"]??[];$players=$d["data"]["players"]??[];$names=[];$matchRows=0;
+              foreach($players as $p){$n=mb_strtolower(trim((string)($p["display_name"]??"")));if($n===""||isset($names[$n]))exit(1);$names[$n]=1;$matchRows+=count($p["matches"]??[]);if($p["rating_after"]===null||$p["matches_after"]===null)exit(1);}
+              exit(($d["ok"]??false)===true&&(int)($t["id"]??0)===12&&($t["status"]??"")==="completed"&&count($players)===8&&$matchRows===62?0:1);
+            '; then echo "ROUND5_ELO_PUBLIC_READBACK_OK=yes players=8 match_rows=62"; exit 0; fi
+            sleep 10
+          done
+          echo "Public round-five ELO endpoint did not expose all eight snapshots." >&2
+          exit 1
+
