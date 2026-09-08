@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#f7f4ed" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Olivia skole" />
+  <meta name="apple-mobile-web-app-title" content="Barna" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>Olivia skole</title>
+  <title>Barna – Olivia og Othilie</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./style.css" />
@@ -17,9 +17,9 @@
   <main class="shell">
     <header class="hero">
       <div>
-        <div class="eyebrow">Borkedalen · 4B</div>
-        <h1>Olivia skole</h1>
-        <p id="subhead">Laster ukeplan …</p>
+        <div class="eyebrow">Borkedalen · Borketun</div>
+        <h1>Barna</h1>
+        <p id="subhead">Laster ukeoversikt …</p>
       </div>
       <div class="week-badge" id="weekBadge">–</div>
     </header>
@@ -30,8 +30,8 @@
     </section>
 
     <section id="loadError" class="card error hidden">
-      <h2>Kunne ikke laste ukeplanen</h2>
-      <p>Prøv å åpne appen på nytt. Dataene hentes fra skoleoversikten i Supabase.</p>
+      <h2>Kunne ikke laste familieoversikten</h2>
+      <p>Prøv å åpne appen på nytt. Dataene hentes fra familieoversikten i Supabase.</p>
     </section>
 
     <section id="todayCard" class="card accent hidden">
@@ -39,15 +39,35 @@
       <div id="today"></div>
     </section>
 
-    <section class="card">
+    <section class="card child-card">
       <div class="section-head">
         <div>
-          <div class="section-kicker">Denne uka</div>
+          <div class="section-kicker">Olivia · Borkedalen 4B</div>
           <h2 id="weekTitle">Ukeplan</h2>
         </div>
         <button id="notifyBtn" class="button secondary" type="button">Aktiver varsler</button>
       </div>
       <div id="events" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-kicker">Olivia · Lekser</div>
+      <div id="homework" class="stack"></div>
+    </section>
+
+    <section id="noticeCard" class="card hidden">
+      <div class="section-kicker">Olivia · Beskjeder</div>
+      <div id="notices" class="stack"></div>
+    </section>
+
+    <section class="card child-card othilie-card">
+      <div class="section-kicker">Othilie · Borketun</div>
+      <div class="child-title-row">
+        <h2>Grubleklubben</h2>
+        <span class="child-pill">Barnehage</span>
+      </div>
+      <div id="othilieEvents" class="stack"></div>
+      <div id="othilieNotices" class="stack compact-stack"></div>
     </section>
 
     <section class="card" id="reminderCard">
@@ -57,32 +77,23 @@
         <label><input type="radio" name="reminderTiming" value="morning" checked><span>Om morgenen <small>07:00</small></span></label>
         <label><input type="radio" name="reminderTiming" value="evening"><span>Kvelden før <small>19:00</small></span></label>
       </div>
-      <p class="setting-note" id="timingStatus">Gjelder konkrete ting å huske i oddetallsuker. Valget gjelder denne telefonen.</p>
-    </section>
-
-    <section class="card">
-      <div class="section-kicker">Lekser</div>
-      <div id="homework" class="stack"></div>
-    </section>
-
-    <section id="noticeCard" class="card hidden">
-      <div class="section-kicker">Beskjeder</div>
-      <div id="notices" class="stack"></div>
+      <p class="setting-note" id="timingStatus">Gjelder konkrete ting å huske for begge barna i oddetallsuker. Valget gjelder denne telefonen.</p>
     </section>
 
     <section class="card muted-card">
       <div class="section-kicker">Nyttig</div>
       <div class="links">
-        <a id="sourceLink" href="#" target="_blank" rel="noopener">Original ukeplan</a>
-        <a id="timetableLink" href="#" target="_blank" rel="noopener">Fast timeplan 4B</a>
-        <a id="calendarLink" href="#">Abonner i kalender</a>
+        <a id="sourceLink" href="#" target="_blank" rel="noopener">Olivia – original ukeplan</a>
+        <a id="timetableLink" href="#" target="_blank" rel="noopener">Olivia – fast timeplan 4B</a>
+        <a id="barnehageLink" href="#" target="_blank" rel="noopener">Othilie – kommunens barnehagerute</a>
+        <a id="calendarLink" href="#">Abonner i familiekalender</a>
       </div>
     </section>
 
     <footer>
       <span id="updated">–</span>
       <span>·</span>
-      <span>Borkedalen 4B</span>
+      <span>Olivia 4B · Othilie Borketun</span>
     </footer>
   </main>
 
