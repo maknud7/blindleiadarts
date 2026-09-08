@@ -45,6 +45,7 @@ $normalise = static function (string $value): string {
 $sourcePlayerNames = [];
 $groupExternalOrder = [];
 $expectedMatchIds = [];
+$expectedMatchOrder = [];
 foreach ($groups as $group) {
     $groupNumber = (int) ($group['number'] ?? 0);
     $pageName = 'group-' . $groupNumber;
@@ -55,12 +56,20 @@ foreach ($groups as $group) {
     foreach ((array) ($pages[$pageName]['players'] ?? []) as $externalId => $name) {
         $sourcePlayerNames[(string) $externalId] = trim((string) $name);
     }
-    foreach ((array) ($group['match_ids'] ?? []) as $externalId) $expectedMatchIds[(string) $externalId] = $pageName;
+    foreach ((array) ($group['match_ids'] ?? []) as $externalId) {
+        $externalId = (string) $externalId;
+        $expectedMatchIds[$externalId] = $pageName;
+        $expectedMatchOrder[$externalId] = count($expectedMatchOrder) + 1;
+    }
 }
 if (!isset($pages['results']) || (int) ($pages['results']['status'] ?? 0) !== 200) {
     throw new RuntimeException('Missing successful results page.');
 }
-foreach ((array) ($playoffConfig['match_ids'] ?? []) as $externalId) $expectedMatchIds[(string) $externalId] = 'results';
+foreach ((array) ($playoffConfig['match_ids'] ?? []) as $externalId) {
+    $externalId = (string) $externalId;
+    $expectedMatchIds[$externalId] = 'results';
+    $expectedMatchOrder[$externalId] = count($expectedMatchOrder) + 1;
+}
 if (count($expectedMatchIds) !== $expectedMatches) throw new RuntimeException('Manifest match-id count differs from expected_matches.');
 
 foreach ($manifestPlayers as $externalId => $name) {
@@ -127,6 +136,9 @@ foreach ($expectedMatchIds as $externalId => $pageName) {
     if ($label === '') throw new RuntimeException("Expected Atlas match {$externalId} missing from {$pageName}");
     $groupNumber = str_starts_with($pageName, 'group-') ? (int) substr($pageName, 6) : null;
     $match = $parseMatch($externalId, $label, $pageName, $groupNumber);
+    // The manifest is frozen in source-page order. Preserve that order for the
+    // ELO ledger instead of sorting same-round matches by opaque Atlas IDs.
+    $match['stage_order'] = $expectedMatchOrder[$externalId];
     $matches[$externalId] = $match;
     if ($groupNumber === null) $playoffMatches[] = $match;
 }

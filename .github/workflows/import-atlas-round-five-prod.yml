@@ -1,0 +1,235 @@
+name: Import Verified Atlas Round Five To Production
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - infra/sql/run-import-atlas-round-five-prod.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-atlas-round-five-production
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+      PROD_BASE_URL: https://blindleiadart.ingenting.org
+      MANIFEST: infra/atlas/manifests/mandagsserien-2026-05.json
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - name: Checkout exact import commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate frozen round-five request
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_FIVE_TO_PROD=yes' infra/sql/run-import-atlas-round-five-prod.flag
+          php -l infra/sql/import_atlas_manifest_test.php
+          php -l infra/sql/import_atlas_match_visits_test.php
+          php -l infra/sql/atlas_repair_round_five_match_lifecycle_test.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_promote_test_history_to_prod.php
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            if(($m["tournament_external_id"]??"")!=="xPoP3xqp9n73"||($m["season_external_id"]??"")!=="rFByCgOqI1rq")throw new RuntimeException("Wrong frozen source");
+            if(($m["tournament_date"]??"")!=="2026-09-07"||($m["expected_players"]??0)!==8||($m["expected_matches"]??0)!==31||($m["expected_legs"]??0)!==36)throw new RuntimeException("Wrong frozen counts");
+            $ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
+            if(count($ids)!==31||count(array_unique($ids))!==31||count($m["players"]??[])!==8)throw new RuntimeException("Frozen manifest is incomplete");
+            if(($m["playoff"]["champion_external_id"]??"")!=="6dLds5Na0PsZ")throw new RuntimeException("Wrong champion");
+            echo "ROUND5_MANIFEST_OK=yes\n";
+          '
+
+      - name: Require exact commit live on canonical TEST
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${TEST_BASE_URL%/}"
+          for attempt in $(seq 1 60); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release" && grep -Fq '"environment":"test"' <<<"$release"; then
+              echo "Exact round-five import commit is live on TEST: $EXPECTED_SHA"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "TEST never reached the exact import commit." >&2
+          exit 1
+
+      - name: Fetch and validate round-five tournament source
+        run: |
+          set -Eeuo pipefail
+          target=/tmp/round-five-probe.json
+          fetched=no
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS -L --connect-timeout 8 --max-time 120 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-tournament-probe.php?tournament=xPoP3xqp9n73&cb=$RANDOM" || true)"
+            if [[ "$status" == "200" ]] && php -r '
+              $d=json_decode(file_get_contents($argv[1]),true);
+              $p=$d["pages"]??[];
+              exit(is_array($d)&&($d["ok"]??false)===true&&($p["root"]["status"]??0)===200&&($p["group-1"]["status"]??0)===200&&($p["results"]["status"]??0)===200?0:1);
+            ' "$target"; then fetched=yes; break; fi
+            echo "Retrying tournament probe: HTTP ${status}, attempt ${attempt}/12"
+            sleep $((30 + attempt * 10))
+          done
+          [[ "$fetched" == yes ]] || { echo "Could not fetch complete round-five source." >&2; exit 1; }
+          php -r '
+            $d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);$p=$d["pages"];
+            $group=count($p["group-1"]["matches"]??[]);$playoff=count($p["results"]["matches"]??[]);$players=count($p["group-1"]["players"]??[]);
+            if($group!==28||$playoff!==3||$players!==8)throw new RuntimeException("Source count drift: players={$players} group={$group} playoff={$playoff}");
+            echo "ROUND5_SOURCE_OK=yes players={$players} matches=".($group+$playoff)."\n";
+          ' "$target"
+
+      - name: Import round-five skeleton into TEST
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/round-five-probe.json
+
+      - name: Fetch every round-five leg and visit through TEST
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/round-five-matches
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            target="/tmp/round-five-matches/${id}.json"
+            fetched=no
+            for attempt in $(seq 1 10); do
+              status="$(curl -sS -L --connect-timeout 8 --max-time 90 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-match-visits.php?match=${id}&cb=$RANDOM" || true)"
+              if [[ "$status" == "200" ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(is_array($d)&&($d["ok"]??false)===true&&($d["external_id"]??"")===$argv[2]?0:1);' "$target" "$id"; then fetched=yes; break; fi
+              echo "Retrying ${id}: HTTP ${status}, attempt ${attempt}/10"
+              sleep $((30 + attempt * 10))
+            done
+            [[ "$fetched" == yes ]] || { echo "Could not fetch verified match detail for ${id}." >&2; exit 1; }
+            php -r '$d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);printf("FETCHED_MATCH id=%s legs=%d visits=%d darts=%d\n",$d["external_id"],$d["leg_count"],$d["visit_count"],$d["darts_count"]);' "$target"
+            sleep 12
+          done
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
+            $legs=$visits=$darts=0;foreach($ids as $id){$d=json_decode(file_get_contents("/tmp/round-five-matches/{$id}.json"),true,512,JSON_THROW_ON_ERROR);$legs+=(int)$d["leg_count"];$visits+=(int)$d["visit_count"];$darts+=(int)$d["darts_count"];}
+            if($legs!==36||$visits<72)throw new RuntimeException("Round-five detail drift: legs={$legs} visits={$visits}");
+            file_put_contents("/tmp/round-five-detail-counts.json",json_encode(compact("legs","visits","darts"),JSON_THROW_ON_ERROR));
+            echo "ROUND5_FETCH_OK=yes matches=31 legs={$legs} visits={$visits} darts={$darts}\n";
+          '
+
+      - name: Import canonical legs visits and statistics into TEST
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-five-matches/${id}.json"
+          done
+
+      - name: Verify and finalize canonical TEST round five
+        env:
+          DB_TABLE_PREFIX: bd_test_
+          ALLOW_TEST_ROUND_FIVE_LIFECYCLE_REPAIR: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_repair_round_five_match_lifecycle_test.php
+          php infra/sql/atlas_history_verify.php --external=xPoP3xqp9n73 --expected-matches=31 --expected-players=8 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external=xPoP3xqp9n73
+          php infra/sql/elo_ledger_doctor.php
+          php infra/sql/atlas_history_verify.php --external=xPoP3xqp9n73 --expected-matches=31 --expected-players=8 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external=xPoP3xqp9n73
+
+      - name: Freeze verified TEST totals for this promotion
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);$db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_test_";$x="xPoP3xqp9n73";
+            $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()["internal_id"]??0);if($tid<1)throw new RuntimeException("Round five TEST ref missing");
+            $players=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}")->fetch_assoc()["c"];$matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()["c"];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];$visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];
+            if($players!==8||$matches!==31||$legs!==36||$visits<72)throw new RuntimeException("Final TEST count drift");
+            $promotion=["mode"=>"incremental_existing_season","source_prefix"=>"bd_test_","target_prefix"=>"bd_prod_","club_slug"=>"blindleia-dartklubb","season_external_id"=>"rFByCgOqI1rq","tournaments"=>[["external_id"=>$x,"name"=>"Mandagsserien #5","expected_players"=>$players,"expected_matches"=>$matches,"expected_legs"=>$legs,"expected_visits"=>$visits]],"expected_totals"=>["tournaments"=>1,"matches"=>$matches,"legs"=>$legs,"visits"=>$visits,"atlas_player_references"=>8]];
+            file_put_contents("/tmp/round-five-promotion.json",json_encode($promotion,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));echo "ROUND5_TEST_FROZEN=yes tournament_id={$tid} players={$players} matches={$matches} legs={$legs} visits={$visits}\n";
+          '
+
+      - name: Guard canonical PROD before promotion
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);$db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";
+            $activeT=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournaments` WHERE status IN (\"ready\",\"in_progress\")")->fetch_assoc()["c"];$activeM=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE status IN (\"pending\",\"assigned\",\"in_progress\")")->fetch_assoc()["c"];if($activeT!==0||$activeM!==0)throw new RuntimeException("Active PROD runtime exists");
+            $present=["fpC4m4hIZdjZ","FHHAnnuO8txa","PvGa73emrY6e","jort2WSBWFwN"];$absent="xPoP3xqp9n73";$s=$db->prepare("SELECT COUNT(*) c FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=?");foreach($present as $x){$s->bind_param("s",$x);$s->execute();if((int)$s->get_result()->fetch_assoc()["c"]!==1)throw new RuntimeException("Missing canonical PROD tournament {$x}");}$s->bind_param("s",$absent);$s->execute();if((int)$s->get_result()->fetch_assoc()["c"]!==0)throw new RuntimeException("Round five is already present in PROD");
+            $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches`")->fetch_assoc()["c"];if($matches!==188)throw new RuntimeException("Existing PROD match total drift: {$matches}");
+            $dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1) x")->fetch_assoc()["c"];if($dups!==0)throw new RuntimeException("PROD active player duplicates remain: {$dups}");
+            echo "ROUND5_PROD_PREFLIGHT_OK=yes history_matches={$matches}\n";
+          '
+
+      - name: Snapshot existing PROD tables inside database
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Promote exact verified TEST round five into staged PROD rows
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_PROMOTION: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_promote_test_history_to_prod.php /tmp/round-five-promotion.json | tee /tmp/round-five-prod-promotion.txt
+          grep -Fq 'ATLAS_PROD_PROMOTION_STAGED=yes' /tmp/round-five-prod-promotion.txt
+
+      - name: Verify and finalize canonical PROD round five
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_FINALIZE: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external=xPoP3xqp9n73 --expected-matches=31 --expected-players=8 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external=xPoP3xqp9n73
+          php infra/sql/run_php_migration.php infra/sql/migrations/0053_rebuild_elo_in_logical_match_order.php bd_prod_
+          php infra/sql/elo_ledger_doctor.php
+          php infra/sql/atlas_history_verify.php --external=xPoP3xqp9n73 --expected-matches=31 --expected-players=8 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external=xPoP3xqp9n73
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);$db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";$x="xPoP3xqp9n73";
+            $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system=\"dartsatlas\" AND external_entity_type=\"tournament\" AND external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()["internal_id"]??0);if($tid<1)throw new RuntimeException("Round five PROD ref missing");
+            $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches`")->fetch_assoc()["c"];$roundMatches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()["c"];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];$elo=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` e JOIN `{$p}matches` m ON m.id=e.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()["c"];$dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1) x")->fetch_assoc()["c"];
+            if($matches!==219||$roundMatches!==31||$legs!==36||$elo!==31||$dups!==0)throw new RuntimeException("Final PROD integrity failed: ".json_encode(compact("matches","roundMatches","legs","elo","dups")));
+            echo "ROUND5_PROD_FINAL_OK=yes tournament_id={$tid} matches={$roundMatches} legs={$legs} elo_events={$elo} backup=".getenv("PROD_BACKUP_PREFIX")."\n";
+          '
+
+      - name: Verify public PROD readback
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 12); do
+            tournaments="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/clubs/1/tournaments?cb=$RANDOM" || true)"
+            elo="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/clubs/1/elo?cb=$RANDOM" || true)"
+            if TOURNAMENTS="$tournaments" ELO="$elo" php -r '
+              $t=json_decode(getenv("TOURNAMENTS"),true);$e=json_decode(getenv("ELO"),true);$items=$t["data"]["items"]??[];$found=false;foreach($items as $x)if(($x["name"]??"")==="Mandagsserien #5"&&($x["status"]??"")==="completed"&&(int)($x["match_count"]??0)===31)$found=true;$names=[];$dups=0;foreach(($e["data"]["items"]??[]) as $x){$n=mb_strtolower(trim((string)($x["display_name"]??"")));if(isset($names[$n]))$dups++;$names[$n]=1;}exit($found&&$dups===0?0:1);
+            '; then echo "ROUND5_PUBLIC_READBACK_OK=yes"; exit 0; fi
+            sleep 10
+          done
+          echo "Public PROD readback did not expose round five cleanly." >&2
+          exit 1

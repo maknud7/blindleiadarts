@@ -1,0 +1,87 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "xPoP3xqp9n73",
+  "tournament_name": "Mandagsserien #5",
+  "tournament_date": "2026-09-07",
+  "tournament_start_at": "2026-09-07 18:30:00",
+  "tournament_slug": "mandagsserien-5-2026-09-07",
+  "expected_players": 8,
+  "expected_matches": 31,
+  "expected_legs": 36,
+  "players": {
+    "DUq32rNObrUk": "Thomas Kildal",
+    "6dLds5Na0PsZ": "Arild Eidesund",
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen",
+    "0J6SDLVfThUs": "Magnus Knudsen",
+    "46u0DEjhFWti": "Andreas Hasselgård",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "w2Le6znc1DlX": "Sven Einar Davidsen",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "DUq32rNObrUk",
+        "6dLds5Na0PsZ",
+        "GFg9pZkPKrpU",
+        "0J6SDLVfThUs",
+        "46u0DEjhFWti",
+        "Rujhhq1jF7Uu",
+        "w2Le6znc1DlX",
+        "xTpeuJWBefFN"
+      ],
+      "match_ids": [
+        "U1WL8sf17klI", "2CvXfF2lP2SE", "AVVA27a7UAfj", "FAck9zbq4637",
+        "U8jdtzCii34p", "RLyvhYJ6VQQ0", "RkiETe4pHfzC", "2sVeYjvPqnhY",
+        "fwhNDXKf4uhk", "uAw00BZdWekl", "fXQTZvMyJY6e", "YIHnT8UFm2aD",
+        "SFT0xF8IfOK3", "I8jABJJe0dGi", "K1HWC8yqnbul", "mxJGOUPRy0Hs",
+        "fHVobTUsJm6V", "wEmj3Qobvqvw", "CYXSoE0LbhmG", "WHbttcP9ESmj",
+        "BGRjnsx0YCdZ", "twnaswkUnTGq", "CzNRFdfyI55k", "aphOawOAU9Di",
+        "lJ90GGA5nS0w", "kazyOd9zlFg3", "y3pge0xfIqWb", "N3hlKIldSsvf"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": ["DUq32rNObrUk", "6dLds5Na0PsZ", "GFg9pZkPKrpU", "0J6SDLVfThUs"],
+    "match_ids": ["6sCiFEvuokom", "GhxBDUZA2FEQ", "Ux3NGBKVpvW0"],
+    "champion_external_id": "6dLds5Na0PsZ",
+    "champion_name": "Arild Eidesund"
+  },
+  "ranking_points": {
+    "6dLds5Na0PsZ": 4,
+    "DUq32rNObrUk": 3,
+    "GFg9pZkPKrpU": 2,
+    "0J6SDLVfThUs": 2,
+    "46u0DEjhFWti": 1,
+    "Rujhhq1jF7Uu": 1,
+    "w2Le6znc1DlX": 1,
+    "xTpeuJWBefFN": 1
+  },
+  "ranking_stages": {
+    "6dLds5Na0PsZ": "Winner",
+    "DUq32rNObrUk": "Final",
+    "GFg9pZkPKrpU": "Semi-Final",
+    "0J6SDLVfThUs": "Semi-Final",
+    "46u0DEjhFWti": "Group stage",
+    "Rujhhq1jF7Uu": "Group stage",
+    "w2Le6znc1DlX": "Group stage",
+    "xTpeuJWBefFN": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #5 Champion Arild Eidesund",
+    "verified_at": "2026-09-07T20:35:00Z"
+  }
+}
