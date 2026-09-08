@@ -16,6 +16,11 @@ function weekForDate(node,date){const n=isoForDate(date);return node?.weeks?.fin
 function parseClock(v){const m=String(v||'').match(/(\d{1,2}):(\d{2})/);return m?{h:Number(m[1]),m:Number(m[2])}:null}
 function moreThanHourAfterSchool(date,summary){if(date.getDay()===0||date.getDay()===6)return true;const t=parseClock(summary?.dismissal?.[wd(date)]);if(!t)return false;const end=new Date(date);end.setHours(t.h,t.m,0,0);return Date.now()>end.getTime()+3600000}
 function currentIsoWeekIsOdd(date=new Date()){return isoForDate(date).week%2===1}
+function localYmd(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`}
+function parseLocalDate(v){const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3])):null}
+function eventMatchesDate(e,date){const key=localYmd(date);if(e?.start_date){const end=e.end_date||e.start_date;return key>=e.start_date&&key<=end}return e?.day===wd(date)}
+function shortDate(v){const d=parseLocalDate(v);return d?d.toLocaleDateString('nb-NO',{day:'numeric',month:'short'}):v}
+function eventMeta(e){if(e?.start_date&&e?.end_date&&e.start_date!==e.end_date)return `${shortDate(e.start_date)}–${shortDate(e.end_date)}`;return [e?.day,e?.time].filter(Boolean).join(' · ')}
 
 async function currentSubscription(){if(!('serviceWorker'in navigator)||!('PushManager'in window))return null;const reg=await navigator.serviceWorker.ready;return reg.pushManager.getSubscription()}
 async function saveTiming(value){
@@ -63,9 +68,9 @@ function renderFocus(data,currentWeek){
   const summary=targetWeek?.summary||currentSummary;
   const day=wd(target);
   const targetIso=isoForDate(target);
-  const oliviaEvents=(targetWeek?.summary?.events||[]).filter(e=>e.day===day);
+  const oliviaEvents=(targetWeek?.summary?.events||[]).filter(e=>eventMatchesDate(e,target));
   const homework=(targetWeek?.summary?.homework||[]).filter(h=>(h.due||'').toLowerCase()===day.toLowerCase());
-  const othilieEvents=targetIso.week%2===1?(targetOthilieWeek?.summary?.events||[]).filter(e=>e.day===day):[];
+  const othilieEvents=targetIso.week%2===1?(targetOthilieWeek?.summary?.events||[]).filter(e=>eventMatchesDate(e,target)):[];
   const dismissal=summary.dismissal?.[day];
   const items=[
     ...oliviaEvents.map(e=>row(e.icon||'•',`Olivia · ${e.title}`,e.detail,e.time||'')),
@@ -85,7 +90,7 @@ function renderOthilie(data,date=new Date()){
   const events=s.events||[];
   const notices=s.notices||[];
   if(events.length){
-    $('othilieEvents').innerHTML=events.map(e=>row(e.icon||'•',e.title,e.detail,[e.day,e.time].filter(Boolean).join(' · '))).join('');
+    $('othilieEvents').innerHTML=events.map(e=>row(e.icon||'•',e.title,e.detail,eventMeta(e))).join('');
   }else{
     $('othilieEvents').innerHTML=`<p class="empty">${odd?'Ingen spesielle hendelser registrert i barnehageruta denne uka.':'Kort oversikt i partallsuke – ingen spesielle hendelser registrert.'}</p>`;
   }
@@ -101,13 +106,13 @@ async function main(){
   const data=await r.json();const n=isoForDate(new Date());const w=weekForDate(data,new Date())||data.weeks?.[0];if(!w)throw new Error('Ingen ukeplan tilgjengelig');
   const s=w.summary||{},odd=n.week%2===1;
   $('weekBadge').textContent=`Uke ${n.week}`;$('subhead').textContent=odd?'Detaljert uke – Olivia og Othilie hos dere':'Kort oversikt – partallsuke';$('weekTitle').textContent=`Uke ${n.week}`;
-  $('sourceLink').href=w.source_url||data.household.source_url;$('timetableLink').href=data.household.timetable_url;$('barnehageLink').href=data.othilie?.household?.source_url||'https://www.lillesand.kommune.no/Barnehagerute.html';$('calendarLink').href=data.calendar_url.replace(/^https:/,'webcal:');
+  $('sourceLink').href=w.source_url||data.household.source_url;$('timetableLink').href=data.household.timetable_url;$('schoolRouteLink').href=data.school_route_url||'https://www.lillesand.kommune.no/Skolerute.html';$('barnehageLink').href=data.othilie?.household?.source_url||'https://www.lillesand.kommune.no/Barnehagerute.html';$('calendarLink').href=data.calendar_url.replace(/^https:/,'webcal:');
   const oWeek=weekForDate(data.othilie,new Date());
   const stamps=[w.updated_at||w.fetched_at,oWeek?.updated_at||oWeek?.fetched_at].filter(Boolean).map(x=>new Date(x).getTime());
   const latest=stamps.length?new Date(Math.max(...stamps)):new Date();
   $('updated').textContent=`Oppdatert ${latest.toLocaleString('nb-NO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}`;
   const ev=s.events||[],hw=s.homework||[],nt=s.notices||[];
-  $('events').innerHTML=ev.length?ev.map(e=>row(e.icon||'•',e.title,e.detail,[e.day,e.time].filter(Boolean).join(' · '))).join(''):'<p class="empty">Ingen spesielle hendelser registrert.</p>';
+  $('events').innerHTML=ev.length?ev.map(e=>row(e.icon||'•',e.title,e.detail,eventMeta(e))).join(''):'<p class="empty">Ingen spesielle hendelser registrert.</p>';
   $('homework').innerHTML=hw.length?hw.map(h=>row('📚',h.subject,h.detail,h.due?`Til ${h.due.toLowerCase()}`:'')).join(''):'<p class="empty">Ingen lekser registrert.</p>';
   if(nt.length){$('noticeCard').classList.remove('hidden');$('notices').innerHTML=nt.map(x=>row('ℹ️','Beskjed',x)).join('')}
   renderOthilie(data);
