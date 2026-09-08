@@ -5,6 +5,7 @@ on:
     branches: [develop]
     paths-ignore:
       - '.github/prod-release-request'
+      - '.github/prod-snapshot-request'
   workflow_dispatch:
 
 permissions:
