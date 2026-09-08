@@ -148,7 +148,6 @@ jobs:
           php infra/sql/atlas_repair_round_five_match_lifecycle_test.php
           php infra/sql/atlas_history_verify.php --external=xPoP3xqp9n73 --expected-matches=31 --expected-players=8 --phase=data --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_finalize.php --external=xPoP3xqp9n73
-          php infra/sql/elo_ledger_doctor.php
           php infra/sql/atlas_history_verify.php --external=xPoP3xqp9n73 --expected-matches=31 --expected-players=8 --phase=final --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_lifecycle_verify.php --external=xPoP3xqp9n73
 
