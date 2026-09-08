@@ -1,4 +1,4 @@
-name: Deploy Olivia PWA
+name: Deploy family PWA
 
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
           test -f apps/screen/olivia/sw.js
           test -f apps/screen/olivia/icon.svg
 
-      - name: Deploy Olivia PWA directly to production
+      - name: Deploy family PWA directly to production
         uses: wlixcc/SFTP-Deploy-Action@v1.2.6
         with:
           server: ${{ secrets.SFTP_HOST }}
@@ -49,6 +49,7 @@ jobs:
           set -Eeuo pipefail
           url='https://blindleiadart.ingenting.org/screen/olivia/'
           html="$(curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 2 --max-time 30 "$url?cb=$RANDOM")"
-          grep -Fq '<title>Olivia skole</title>' <<<"$html"
-          grep -Fq 'Borkedalen · 4B' <<<"$html"
-          echo "OLIVIA_PWA_URL=$url"
+          grep -Fq '<title>Barna – Olivia og Othilie</title>' <<<"$html"
+          grep -Fq 'Othilie · Borketun' <<<"$html"
+          grep -Fq 'Abonner i familiekalender' <<<"$html"
+          echo "FAMILY_PWA_URL=$url"
