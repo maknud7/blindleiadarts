@@ -1,0 +1,40 @@
+name: Scolia Release Control Contract
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/scolia-bridge-control.php'
+      - 'apps/admin/scolia-release-control.js'
+      - 'apps/admin/index.html'
+      - 'infra/tests/scolia_release_control_contract_test.mjs'
+      - '.github/workflows/scolia-release-control-contract.yml'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/scolia-bridge-control.php'
+      - 'apps/admin/scolia-release-control.js'
+      - 'apps/admin/index.html'
+      - 'infra/tests/scolia_release_control_contract_test.mjs'
+      - '.github/workflows/scolia-release-control-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Verify release API and admin control
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/scolia-bridge-control.php
+          node --check apps/admin/scolia-release-control.js
+          node infra/tests/scolia_release_control_contract_test.mjs
