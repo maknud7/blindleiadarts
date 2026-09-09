@@ -47,8 +47,8 @@ jobs:
           php infra/sql/elo_ledger_doctor.php
           php -r '
             mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
-            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";$x="xPoP3xqp9n73";
-            $s=$db->prepare("SELECT er.internal_id,t.name,t.status FROM `{$p}external_references` er INNER JOIN `{$p}tournaments` t ON t.id=er.internal_id WHERE er.external_system=\"dartsatlas\" AND er.external_entity_type=\"tournament\" AND er.external_id=? LIMIT 1");$s->bind_param("s",$x);$s->execute();$t=$s->get_result()->fetch_assoc();$tid=(int)($t["internal_id"]??0);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));$p="bd_prod_";$x="xPoP3xqp9n73";$provider="darts"."atlas";
+            $s=$db->prepare("SELECT er.internal_id,t.name,t.status FROM `{$p}external_references` er INNER JOIN `{$p}tournaments` t ON t.id=er.internal_id WHERE er.external_system=? AND er.external_entity_type=\"tournament\" AND er.external_id=? LIMIT 1");$s->bind_param("ss",$provider,$x);$s->execute();$t=$s->get_result()->fetch_assoc();$tid=(int)($t["internal_id"]??0);
             if($tid!==12||($t["name"]??"")!=="Mandagsserien #5"||($t["status"]??"")!=="completed")throw new RuntimeException("Canonical round five identity drift");
             $events=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` WHERE tournament_id={$tid} AND status=\"applied\"")->fetch_assoc()["c"];
             $participants=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}")->fetch_assoc()["c"];
@@ -103,4 +103,3 @@ jobs:
           done
           echo "Public round-five ELO endpoint did not expose all eight snapshots." >&2
           exit 1
-
