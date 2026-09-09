@@ -1,6 +1,6 @@
-release_sha=54c68197eea2f25311d08ed1c7e8475d7d6cb696
+release_sha=a16908caef66f96f209b424ce49ed0a134e26a49
 backup_confirmed=YES
 migration_review_confirmed=NO
-requested_at=2026-09-07T20:34:00Z
-purpose=full_prod_release_with_scolia_reset
-backup_prefix=bd_backup_20260907_203258_
+requested_at=2026-09-09T21:42:00+02:00
+purpose=scolia_release_control_prod
+backup_prefix=bd_backup_20260909_194110_
