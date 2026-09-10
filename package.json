@@ -7,13 +7,16 @@
     "v2:typecheck": "tsc -p apps/platform-v2/tsconfig.json --noEmit",
     "backend-v2:build": "tsc -p apps/backend-v2/tsconfig.json",
     "backend-v2:typecheck": "tsc -p apps/backend-v2/tsconfig.json --noEmit",
-    "backend-v2:test": "npm run backend-v2:build && node --test apps/backend-v2/test/*.test.mjs"
+    "backend-v2:test": "npm run backend-v2:build && node --test apps/backend-v2/test/*.test.mjs",
+    "backend-v2:start": "npm run backend-v2:build && node apps/backend-v2/dist/server.js"
   },
   "dependencies": {
+    "mysql2": "3.15.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@types/node": "24.3.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "typescript": "7.0.2",
