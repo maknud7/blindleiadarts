@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { resolveBoardScoringMode, shouldPersistRuntimeScoring } from "../../apps/admin/board-admin-core.mjs";
 
 const canonicalScolia = {
@@ -33,4 +34,13 @@ assert.equal(
 assert.equal(shouldPersistRuntimeScoring({ isTestEnvironment: false, configurationScope: "production_hardware" }), true);
 assert.equal(shouldPersistRuntimeScoring({ isTestEnvironment: true, configurationScope: "" }), true);
 
-console.log("Board admin canonical Scolia checks passed.");
+const adminApp = readFileSync("apps/admin/app.js", "utf8");
+const loadKioskAdmin = adminApp.match(/async function loadKioskAdmin\(\) \{([\s\S]*?)\n\}/)?.[1] || "";
+assert.match(loadKioskAdmin, /const kiosks = await api\(`\/clubs\/\$\{state\.clubId\}\/kiosks`\)/);
+assert.match(loadKioskAdmin, /state\.kiosks = kiosks\.items \|\| \[\]/);
+assert.match(loadKioskAdmin, /try \{[\s\S]*kiosk-pairing-requests/);
+assert.match(loadKioskAdmin, /catch \(error\) \{[\s\S]*state\.pairingRequests = \[\]/);
+assert.doesNotMatch(loadKioskAdmin, /Promise\.all\(/, "Pairing failure must not prevent canonical boards from loading");
+assert.match(adminApp, /Promise\.allSettled\(\[loadAdminData\(\), loadKioskAdmin\(\)\]\)/, "Admin must render independent data domains even when one fails");
+
+console.log("Board admin canonical Scolia and resilient equipment loading checks passed.");
