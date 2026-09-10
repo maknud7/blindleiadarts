@@ -1,0 +1,45 @@
+name: Platform v2 TEST Remote Dirs
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'apps/platform-v2/**'
+      - 'infra/deploy/build-release.sh'
+      - '.github/workflows/platform-v2-test-remote-dirs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Ensure Platform v2 directories exist in TEST
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_ROOT: /www/blindleiadarts/test/v2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > sftp-batch.txt <<EOF
+          -mkdir ${REMOTE_ROOT}
+          -mkdir ${REMOTE_ROOT}/assets
+          -mkdir ${REMOTE_ROOT}/equipment
+          -mkdir ${REMOTE_ROOT}/kiosk
+          ls ${REMOTE_ROOT}
+          quit
+          EOF
+          SSHPASS="$SFTP_PASSWORD" sshpass -e sftp \
+            -oBatchMode=no \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -b sftp-batch.txt "${SFTP_USERNAME}@${SFTP_HOST}"
+          echo "PLATFORM_V2_TEST_REMOTE_DIRS_OK=yes"
