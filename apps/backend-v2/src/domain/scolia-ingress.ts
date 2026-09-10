@@ -1,5 +1,4 @@
 import type {
-  KnownScoliaEventType,
   ScoliaEventDisposition,
   ScoliaIngressIdentity,
   ScoliaMessage,
@@ -7,18 +6,6 @@ import type {
 import { DomainValidationError } from "./errors.js";
 
 export type Sha256Hex = (value: string) => string;
-
-const KNOWN_TYPES = new Set<KnownScoliaEventType>([
-  "BRIDGE_CONNECTED",
-  "BRIDGE_DISCONNECTED",
-  "BRIDGE_ERROR",
-  "HELLO_CLIENT",
-  "SBC_STATUS_CHANGED",
-  "SBC_BOARD_AVAILABILITY_CHANGED",
-  "TAKEOUT_STARTED",
-  "TAKEOUT_FINISHED",
-  "THROW_DETECTED",
-]);
 
 export function normalizeScoliaSerial(serialInput: string): string {
   const serial = serialInput.trim().toUpperCase();
@@ -109,8 +96,4 @@ export function classifyScoliaEvent(typeInput: string): ScoliaEventDisposition {
     return { kind: "throw", event_type: eventType };
   }
   return { kind: "ignore", event_type: eventType };
-}
-
-export function isKnownScoliaEventType(typeInput: string): typeInput is KnownScoliaEventType {
-  return KNOWN_TYPES.has(typeInput.trim().toUpperCase() as KnownScoliaEventType);
 }
