@@ -19,7 +19,7 @@ type Props = {
   currentClubId: number;
   boards: Board[];
   onClubChange: (clubId: number) => Promise<void>;
-  onClaimed: (board: Board) => Promise<void>;
+  onClaimed: (board: Board, clubId: number) => Promise<void>;
   onCancel: () => void;
 };
 
@@ -90,7 +90,7 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
         token,
         body: { code: normalizedCode, kiosk_id: boardId },
       });
-      await onClaimed(board);
+      await onClaimed(board, clubId);
     } catch (cause) {
       setError(text(cause));
     } finally {
@@ -100,7 +100,7 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
 
   return <section className="panel pairing-claim-card">
     <div className="panel-head">
-      <div><span className="section-label">Koble nettbrett</span><h2>Terminal {normalizedCode}</h2><p>QR-koden tilhører ikke en klubb. Velg først klubben, deretter skiva nettbrettet står ved.</p></div>
+      <div><span className="section-label">Koble nettbrett</span><h2>Terminal {normalizedCode}</h2><p>Koden er ikke knyttet til en klubb ennå. Velg klubben nettbrettet skal tilhøre, og deretter skiva det står ved.</p></div>
       <button className="button secondary small" disabled={busy} onClick={onCancel}>Avbryt</button>
     </div>
     <div className="pairing-claim-steps">
@@ -108,7 +108,7 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
       <label className="field"><span>2. Skive</span><select value={boardId} disabled={busy || !clubId || !info?.claimable} onChange={(event) => setBoardId(Number(event.target.value))}><option value="0">Velg skive …</option>{activeBoards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select></label>
       <button className="button" disabled={busy || !boardId || !info?.claimable} onClick={() => void claim()}>{busy ? "Kontrollerer …" : "Koble nettbrett"}</button>
     </div>
-    {clubId && !busy && info?.claimable && <div className="notice good"><strong>{info.device_name || "Nettbrett"} er klart.</strong> Velg riktig fysisk skive.</div>}
+    {clubId && !busy && info?.claimable && <div className="notice good"><strong>{info.device_name || "Nettbrett"} er klart.</strong> Velg riktig skive og koble til.</div>}
     {clubId && !busy && info && !info.claimable && <div className="notice warn">Denne koden kan ikke lenger brukes. Lag en ny kode på nettbrettet.</div>}
     {clubId && !busy && activeBoards.length === 0 && !error && <div className="notice warn">Klubben har ingen ledige aktive skiver. Koble fra eksisterende nettbrett på skiva først hvis det skal erstattes.</div>}
     {error && <div className="notice bad">{error}</div>}
