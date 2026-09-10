@@ -6,6 +6,7 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\EquipmentInventoryRepository;
 use Blindleia\Dartkiosk\Api\Repository\EquipmentRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
@@ -32,33 +33,31 @@ final class EquipmentApplication
         $path = trim($request->path(), '/');
         $method = $request->method();
 
-        if (!$this->handles($method, $path)) {
-            return false;
-        }
+        if (!$this->handles($method, $path)) return false;
 
         try {
             $config = Config::load($this->rootPath);
             $database = new Database($config);
             $users = new UserAccountRepository($database);
             $repo = new EquipmentRepository($database);
+            $inventory = new EquipmentInventoryRepository($database);
             $kiosks = new KioskRepository($database);
 
-            if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
+            if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/equipment/boards$#', $path, $matches) === 1) {
                 $clubId = (int) $matches[1];
-                $response = JsonResponse::ok([
-                    'club_id' => $clubId,
-                    'items' => $repo->listBoards($clubId),
-                ] + $repo->scope());
+                $admin = $this->requireAdmin($request, $users, $clubId);
+                $response = $admin instanceof JsonResponse
+                    ? $admin
+                    : JsonResponse::ok(['club_id' => $clubId, 'items' => $inventory->listBoards($clubId)] + $repo->scope());
+            } elseif ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
+                $clubId = (int) $matches[1];
+                $response = JsonResponse::ok(['club_id' => $clubId, 'items' => $repo->listBoards($clubId)] + $repo->scope());
             } elseif ($method === 'POST' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
                 $clubId = (int) $matches[1];
                 $admin = $this->requireAdmin($request, $users, $clubId);
-                if ($admin instanceof JsonResponse) {
-                    $response = $admin;
-                } else {
-                    $response = JsonResponse::ok([
-                        'kiosk' => $repo->createBoard($clubId, $request->jsonBody()),
-                    ] + $repo->scope(), 201);
-                }
+                $response = $admin instanceof JsonResponse
+                    ? $admin
+                    : JsonResponse::ok(['kiosk' => $repo->createBoard($clubId, $request->jsonBody())] + $repo->scope(), 201);
             } elseif ($method === 'PATCH' && preg_match('#^v1/clubs/(\d+)/kiosks/(\d+)$#', $path, $matches) === 1) {
                 $clubId = (int) $matches[1];
                 $admin = $this->requireAdmin($request, $users, $clubId);
@@ -91,14 +90,13 @@ final class EquipmentApplication
                     $physicalId = (int) ($payload['kiosk_id'] ?? 0);
                     if ($physicalId <= 0) {
                         $response = JsonResponse::error(422, 'kiosk_required', 'kiosk_id er påkrevd for å godkjenne pairing.');
+                    } elseif (!$inventory->isActiveBoard($clubId, $physicalId)) {
+                        $response = JsonResponse::error(409, 'board_inactive', 'Deaktiverte skiver kan ikke pares med en terminal. Aktiver skiva først.');
                     } else {
                         $runtimeId = $repo->ensureRuntimeAlias($clubId, $physicalId);
                         $approval = $kiosks->approvePairingRequest($clubId, (string) $matches[2], $runtimeId, (int) $admin['id']);
                         $response = $approval !== null
-                            ? JsonResponse::ok($approval + [
-                                'physical_kiosk_id' => $physicalId,
-                                'runtime_kiosk_id' => $runtimeId,
-                            ] + $repo->scope())
+                            ? JsonResponse::ok($approval + ['physical_kiosk_id' => $physicalId, 'runtime_kiosk_id' => $runtimeId] + $repo->scope())
                             : JsonResponse::error(404, 'pairing_request_not_found', 'Pairingforespørselen ble ikke funnet.');
                     }
                 }
@@ -139,6 +137,7 @@ final class EquipmentApplication
 
     private function handles(string $method, string $path): bool
     {
+        if ($method === 'GET' && preg_match('#^v1/clubs/\d+/equipment/boards$#', $path) === 1) return true;
         if ($method === 'GET' && preg_match('#^v1/clubs/\d+/kiosks$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^v1/clubs/\d+/kiosks$#', $path) === 1) return true;
         if ($method === 'PATCH' && preg_match('#^v1/clubs/\d+/kiosks/\d+$#', $path) === 1) return true;

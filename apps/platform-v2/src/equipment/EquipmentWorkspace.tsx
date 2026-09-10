@@ -5,7 +5,7 @@ import type { Board, Club, EquipmentScope, Health, PairingRequest, ScreenDevice,
 import { BoardEditor } from "./BoardEditor";
 import { ScoliaPanel } from "./ScoliaPanel";
 
-type LoadErrors = { boards?: string; pairing?: string; screens?: string };
+type LoadErrors = { inventory?: string; boards?: string; pairing?: string; screens?: string };
 type BoardResponse = EquipmentScope & { club_id: number; items: Board[] };
 type AuthResponse = { access_token: string; user: User };
 
@@ -15,6 +15,7 @@ function formatDate(value?: string | null): string {
   const date = new Date(String(value).replace(" ", "T"));
   return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
+function isActive(board: Board): boolean { return Number(board.is_active ?? 1) === 1; }
 
 function Login({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -41,7 +42,8 @@ export function EquipmentWorkspace() {
   const [health, setHealth] = useState<Health | null>(null);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [clubId, setClubId] = useState(() => Number(read("selectedClub") || 0));
-  const [boards, setBoards] = useState<Board[]>([]);
+  const [inventoryBoards, setInventoryBoards] = useState<Board[]>([]);
+  const [activeBoards, setActiveBoards] = useState<Board[]>([]);
   const [pairing, setPairing] = useState<PairingRequest[]>([]);
   const [screens, setScreens] = useState<ScreenDevice[]>([]);
   const [scope, setScope] = useState<EquipmentScope>({});
@@ -54,22 +56,28 @@ export function EquipmentWorkspace() {
 
   const selectedClub = useMemo(() => clubs.find((club) => Number(club.id) === clubId) || null, [clubs, clubId]);
   const masterReadOnly = health?.environment === "test" && scope.configuration_scope === "production_hardware";
+  const inactiveCount = inventoryBoards.filter((board) => !isActive(board)).length;
 
   const loadEquipment = useCallback(async (activeClubId: number, activeToken: string) => {
     if (!activeClubId) return;
     setLoading(true);
     const result = await Promise.allSettled([
+      api<BoardResponse>(`/clubs/${activeClubId}/equipment/boards`, { token: activeToken }),
       api<BoardResponse>(`/clubs/${activeClubId}/kiosks`),
       api<{ items: PairingRequest[] }>(`/clubs/${activeClubId}/kiosk-pairing-requests`, { token: activeToken }),
       api<{ items: ScreenDevice[] }>(`/clubs/${activeClubId}/screen-devices`, { token: activeToken }),
     ]);
     const next: LoadErrors = {};
-    if (result[0].status === "fulfilled") {
-      setBoards(result[0].value.items || []);
-      setScope({ configuration_scope: result[0].value.configuration_scope, shared_across_environments: result[0].value.shared_across_environments });
-    } else { setBoards([]); next.boards = text(result[0].reason); }
-    if (result[1].status === "fulfilled") setPairing(result[1].value.items || []); else { setPairing([]); next.pairing = text(result[1].reason); }
-    if (result[2].status === "fulfilled") setScreens(result[2].value.items || []); else { setScreens([]); next.screens = text(result[2].reason); }
+    let activeItems: Board[] = [];
+    if (result[1].status === "fulfilled") {
+      activeItems = result[1].value.items || [];
+      setActiveBoards(activeItems);
+      setScope({ configuration_scope: result[1].value.configuration_scope, shared_across_environments: result[1].value.shared_across_environments });
+    } else { setActiveBoards([]); next.boards = text(result[1].reason); }
+    if (result[0].status === "fulfilled") setInventoryBoards(result[0].value.items || []);
+    else { setInventoryBoards(activeItems); next.inventory = text(result[0].reason); }
+    if (result[2].status === "fulfilled") setPairing(result[2].value.items || []); else { setPairing([]); next.pairing = text(result[2].reason); }
+    if (result[3].status === "fulfilled") setScreens(result[3].value.items || []); else { setScreens([]); next.screens = text(result[3].reason); }
     setErrors(next); setLoading(false);
   }, []);
 
@@ -103,7 +111,7 @@ export function EquipmentWorkspace() {
     if (!["club_admin", "super_admin"].includes(data.user.role)) throw new Error("Denne kontoen har ikke administratortilgang.");
     write("adminToken", data.access_token); setToken(data.access_token);
   }
-  function logout() { write("adminToken", null); setToken(""); setBoards([]); setPairing([]); setScreens([]); setEditingBoard(null); }
+  function logout() { write("adminToken", null); setToken(""); setInventoryBoards([]); setActiveBoards([]); setPairing([]); setScreens([]); setEditingBoard(null); }
 
   async function mutate(label: string, action: () => Promise<unknown>, success: string) {
     setMutation(label); setNotice("");
@@ -141,35 +149,29 @@ export function EquipmentWorkspace() {
       {masterReadOnly && <div className="notice warn"><strong>TEST bruker PROD sitt fysiske skiveregister.</strong> Fysisk masterdata er skrivebeskyttet; pairing og TEST-runtime er fortsatt tilgjengelig.</div>}
       {notice && <div className="notice">{notice}</div>}
 
-      <section className="panel"><div className="panel-head"><div><h2>Skiver</h2><p>{selectedClub?.name || "Klubb"} · {boards.length} aktive skiver</p></div><span className={`pill ${errors.boards ? "bad" : "good"}`}>{errors.boards ? "Feil" : "Canonical"}</span></div>
-        {errors.boards && <div className="notice bad">Kunne ikke laste skiver: {errors.boards}</div>}
+      <section className="panel"><div className="panel-head"><div><h2>Skiver</h2><p>{selectedClub?.name || "Klubb"} · {activeBoards.length} aktive{inactiveCount ? ` · ${inactiveCount} deaktiverte` : ""}</p></div><span className={`pill ${errors.boards || errors.inventory ? "warn" : "good"}`}>{errors.boards ? "Runtime-feil" : errors.inventory ? "Inventory-feil" : "Canonical"}</span></div>
+        {errors.boards && <div className="notice bad">Kunne ikke laste aktive runtime-skiver: {errors.boards}</div>}
+        {errors.inventory && <div className="notice warn">Admin-inventory kunne ikke lastes. Viser bare aktive skiver: {errors.inventory}</div>}
         {!masterReadOnly && <form className="inline-create" onSubmit={createBoard}><label className="field"><span>Skivenummer</span><input name="board_number" type="number" min="1" required /></label><label className="field"><span>Scoring</span><select name="scoring_mode"><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label><label className="field grow"><span>Navn</span><input name="name" placeholder="Skive 1" /></label><button className="button" disabled={mutation === "create-board"}>+ Ny skive</button></form>}
-        <div className="equipment-list">{boards.length === 0 && !errors.boards && <div className="empty">Ingen skiver.</div>}{boards.map((board) => <article className="board-row" key={board.id}><div className="board-number">{board.board_number}</div><div className="row-main"><strong>{board.name || `Skive ${board.board_number}`}</strong><div className="row-meta"><span>{board.code}</span><span>{board.is_paired ? `Paret: ${board.paired_device_name || "nettbrett"}` : "Ikke paret"}</span><span>Sist sett: {formatDate(board.last_seen_at)}</span>{board.sponsor_label ? <span>Presentert av {board.sponsor_label}</span> : null}</div></div><div className="row-actions"><span className={`pill ${board.scoring_mode === "scolia" ? "good" : ""}`}>{board.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</span><span className={`pill ${board.is_paired ? "good" : ""}`}>{board.is_paired ? "Paret" : "Ledig"}</span><button className="button secondary small" disabled={Boolean(mutation)} onClick={() => setEditingBoard(board)}>{masterReadOnly ? "Detaljer" : "Rediger"}</button>{board.is_paired ? <button className="button secondary small" disabled={Boolean(mutation)} onClick={() => void mutate(`reset-${board.id}`, () => api(`/clubs/${clubId}/kiosks/${board.id}/reset-pairing`, { method: "POST", token }), `Pairing for skive ${board.board_number} er nullstilt.`)}>Nullstill pairing</button> : null}</div></article>)}</div>
+        <div className="equipment-list">{inventoryBoards.length === 0 && !errors.boards && <div className="empty">Ingen skiver.</div>}{inventoryBoards.map((board) => <article className={`board-row ${isActive(board) ? "" : "is-inactive"}`} key={board.id}><div className="board-number">{board.board_number}</div><div className="row-main"><strong>{board.name || `Skive ${board.board_number}`}</strong><div className="row-meta"><span>{board.code}</span><span>{board.is_paired ? `Paret: ${board.paired_device_name || "nettbrett"}` : "Ikke paret"}</span><span>Sist sett: {formatDate(board.last_seen_at)}</span>{board.sponsor_label ? <span>Presentert av {board.sponsor_label}</span> : null}</div></div><div className="row-actions"><span className={`pill ${isActive(board) ? "good" : "warn"}`}>{isActive(board) ? "Aktiv" : "Deaktivert"}</span><span className={`pill ${board.scoring_mode === "scolia" ? "good" : ""}`}>{board.scoring_mode === "scolia" ? "Scolia" : "Manuell"}</span>{isActive(board) && <span className={`pill ${board.is_paired ? "good" : ""}`}>{board.is_paired ? "Paret" : "Ledig"}</span>}<button className="button secondary small" disabled={Boolean(mutation)} onClick={() => setEditingBoard(board)}>{masterReadOnly ? "Detaljer" : "Rediger"}</button>{isActive(board) && board.is_paired ? <button className="button secondary small" disabled={Boolean(mutation)} onClick={() => void mutate(`reset-${board.id}`, () => api(`/clubs/${clubId}/kiosks/${board.id}/reset-pairing`, { method: "POST", token }), `Pairing for skive ${board.board_number} er nullstilt.`)}>Nullstill pairing</button> : null}</div></article>)}</div>
       </section>
 
-      <ScoliaPanel clubId={clubId} token={token} environment={health?.environment} boards={boards} onEquipmentRefresh={() => loadEquipment(clubId, token)} />
+      <ScoliaPanel clubId={clubId} token={token} environment={health?.environment} boards={activeBoards} onEquipmentRefresh={() => loadEquipment(clubId, token)} />
 
-      <section className="panel"><div className="panel-head"><div><h2>Nettbrett som venter</h2><p>Pairing er runtime-data og lastes uavhengig.</p></div><span className={`pill ${errors.pairing ? "bad" : pairing.length ? "warn" : "good"}`}>{errors.pairing ? "Utilgjengelig" : `${pairing.length} venter`}</span></div>{errors.pairing && <div className="notice bad">{errors.pairing}</div>}<div className="equipment-list">{!errors.pairing && pairing.length === 0 && <div className="empty">Ingen nettbrett venter på pairing.</div>}{pairing.map((request) => <PairingRow key={request.request_code} request={request} boards={boards} busy={Boolean(mutation)} onApprove={(boardId) => mutate(`pair-${request.request_code}`, () => api(`/clubs/${clubId}/kiosk-pairing-requests/${encodeURIComponent(request.request_code)}/approve`, { method: "POST", token, body: { kiosk_id: boardId } }), `Nettbrettet er koblet til skive ${boards.find((board) => board.id === boardId)?.board_number || ""}.`)} />)}</div></section>
+      <section className="panel"><div className="panel-head"><div><h2>Nettbrett som venter</h2><p>Pairing kan bare kobles til aktive skiver.</p></div><span className={`pill ${errors.pairing ? "bad" : pairing.length ? "warn" : "good"}`}>{errors.pairing ? "Utilgjengelig" : `${pairing.length} venter`}</span></div>{errors.pairing && <div className="notice bad">{errors.pairing}</div>}<div className="equipment-list">{!errors.pairing && pairing.length === 0 && <div className="empty">Ingen nettbrett venter på pairing.</div>}{pairing.map((request) => <PairingRow key={request.request_code} request={request} boards={activeBoards} busy={Boolean(mutation)} onApprove={(boardId) => mutate(`pair-${request.request_code}`, () => api(`/clubs/${clubId}/kiosk-pairing-requests/${encodeURIComponent(request.request_code)}/approve`, { method: "POST", token, body: { kiosk_id: boardId } }), `Nettbrettet er koblet til skive ${activeBoards.find((board) => board.id === boardId)?.board_number || ""}.`)} />)}</div></section>
 
       <section className="panel"><div className="panel-head"><div><h2>Venue-skjermer</h2><p>Egen livssyklus, uavhengig av skivene.</p></div><span className={`pill ${errors.screens ? "bad" : "good"}`}>{errors.screens ? "Feil" : `${screens.length} stk`}</span></div>{errors.screens && <div className="notice bad">{errors.screens}</div>}<form onSubmit={createScreen} className="inline-create"><label className="field grow"><span>Ny venue-skjerm</span><input name="label" placeholder="Bar-TV" required /></label><button className="button" disabled={mutation === "create-screen"}>Lag skjermkode</button></form><div className="equipment-list">{screens.map((screen) => <article className="screen-row" key={screen.id}><div className="board-number">TV</div><div className="row-main"><strong>{screen.label}</strong><div className="row-meta"><span>Kode: {screen.access_code}</span><span>Sist tilkoblet: {formatDate(screen.last_connected_at)}</span></div></div><span className={`pill ${Number(screen.is_active ?? 1) === 1 ? "good" : "bad"}`}>{Number(screen.is_active ?? 1) === 1 ? "Aktiv" : "Inaktiv"}</span></article>)}</div></section>
     </main>
 
-    {editingBoard && <BoardEditor
-      board={editingBoard}
-      clubId={clubId}
-      token={token}
-      readOnly={masterReadOnly}
-      onClose={() => setEditingBoard(null)}
-      onSaved={async () => {
-        await loadEquipment(clubId, token);
-        setNotice(`Skive ${editingBoard.board_number} er oppdatert.`);
-      }}
-    />}
+    {editingBoard && <BoardEditor board={editingBoard} clubId={clubId} token={token} readOnly={masterReadOnly} onClose={() => setEditingBoard(null)} onSaved={async () => {
+      await loadEquipment(clubId, token);
+      setNotice(`Skive ${editingBoard.board_number} er oppdatert.`);
+    }} />}
   </div>;
 }
 
 function PairingRow({ request, boards, busy, onApprove }: { request: PairingRequest; boards: Board[]; busy: boolean; onApprove: (boardId: number) => Promise<unknown> }) {
   const [boardId, setBoardId] = useState(Number(boards[0]?.id || 0));
   useEffect(() => { if (!boards.some((board) => board.id === boardId)) setBoardId(Number(boards[0]?.id || 0)); }, [boards, boardId]);
-  return <article className="pair-row"><div className="board-number">↔</div><div className="row-main"><strong>{request.device_name || "Nettbrett"}</strong><div className="row-meta"><span>Kode: {request.request_code}</span><span>Utløper: {formatDate(request.expires_at)}</span></div></div><div className="row-actions"><select value={boardId} onChange={(event) => setBoardId(Number(event.target.value))}>{boards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select><button className="button small" disabled={busy || !boardId} onClick={() => void onApprove(boardId)}>Koble</button></div></article>;
+  return <article className="pair-row"><div className="board-number">↔</div><div className="row-main"><strong>{request.device_name || "Nettbrett"}</strong><div className="row-meta"><span>Kode: {request.request_code}</span><span>Utløper: {formatDate(request.expires_at)}</span></div></div><div className="row-actions"><select value={boardId} disabled={!boards.length} onChange={(event) => setBoardId(Number(event.target.value))}>{boards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select><button className="button small" disabled={busy || !boardId} onClick={() => void onApprove(boardId)}>Koble</button></div></article>;
 }
