@@ -38,6 +38,24 @@ jobs:
       - name: Typecheck platform v2
         run: npm run v2:typecheck
 
+      - name: Enforce v2 architecture boundaries
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if grep -R -n -F 'MutationObserver' apps/platform-v2/src --include='*.ts' --include='*.tsx'; then
+            echo 'Platform v2 must not compose features through MutationObserver.' >&2
+            exit 1
+          fi
+
+          direct_fetch="$(grep -R -n -F 'fetch(' apps/platform-v2/src --include='*.ts' --include='*.tsx' \
+            | grep -v '^apps/platform-v2/src/shared/api.ts:' || true)"
+          if [[ -n "$direct_fetch" ]]; then
+            printf '%s\n' "$direct_fetch"
+            echo 'Platform v2 HTTP traffic must go through src/shared/api.ts.' >&2
+            exit 1
+          fi
+
       - name: Build platform v2
         run: npm run v2:build
 
