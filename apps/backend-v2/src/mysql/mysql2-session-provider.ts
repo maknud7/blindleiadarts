@@ -303,9 +303,9 @@ function isConnectionFailure(error: unknown): boolean {
   ].includes(code);
 }
 
-function isReadStatement(sql: string): boolean {
+export function isReadStatement(sql: string): boolean {
   const normalized = sql.trimStart().toUpperCase();
-  return normalized.startsWith("SELECT ") || normalized.startsWith("SHOW ") || normalized.startsWith("EXPLAIN ");
+  return /^(SELECT|SHOW|EXPLAIN)\b/.test(normalized);
 }
 
 function isMultiStatement(sql: string): boolean {
