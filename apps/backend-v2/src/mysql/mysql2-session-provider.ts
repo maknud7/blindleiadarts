@@ -1,6 +1,5 @@
 import {
   createConnection,
-  type Connection,
   type ResultSetHeader,
   type RowDataPacket,
 } from "mysql2/promise";
@@ -12,6 +11,8 @@ import type {
   QueryResultRow,
   SqlExecutor,
 } from "./contracts.js";
+
+type PromiseConnection = Awaited<ReturnType<typeof createConnection>>;
 
 export interface MySql2SessionOptions {
   host: string;
@@ -70,9 +71,9 @@ export class MySql2SessionProvider implements MySqlSessionProvider {
     });
   }
 
-  private async withPhysicalConnection<T>(work: (connection: Connection) => Promise<T>): Promise<T> {
+  private async withPhysicalConnection<T>(work: (connection: PromiseConnection) => Promise<T>): Promise<T> {
     const release = await this.admission.acquire();
-    let connection: Connection | null = null;
+    let connection: PromiseConnection | null = null;
     try {
       connection = await createConnection({
         host: this.options.host,
@@ -103,7 +104,7 @@ export class MySql2SessionProvider implements MySqlSessionProvider {
 
 class MySql2Executor implements SqlExecutor {
   constructor(
-    private readonly connection: Connection,
+    private readonly connection: PromiseConnection,
     private readonly writable: boolean,
   ) {}
 
