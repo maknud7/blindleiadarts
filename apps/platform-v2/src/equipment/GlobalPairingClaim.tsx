@@ -37,6 +37,7 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
   const [boardId, setBoardId] = useState(0);
   const [info, setInfo] = useState<PairingInfoResponse["request"] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [switchingClub, setSwitchingClub] = useState(false);
   const [error, setError] = useState("");
   const normalizedCode = useMemo(() => normalize(code), [code]);
   const activeBoards = useMemo(() => boards.filter((board) => Number(board.is_active ?? 1) === 1 && !board.is_paired), [boards]);
@@ -46,7 +47,7 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
   }, [multiClub, clubs, currentClubId, onClubChange]);
 
   useEffect(() => {
-    if (!clubId || !normalizedCode) {
+    if (!clubId || !normalizedCode || switchingClub) {
       setInfo(null);
       setBoardId(0);
       return;
@@ -68,18 +69,29 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
       })
       .finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
-  }, [clubId, normalizedCode, token]);
+  }, [clubId, normalizedCode, token, switchingClub]);
 
   async function chooseClub(value: number) {
-    setClubId(value);
     setInfo(null);
     setBoardId(0);
     setError("");
-    if (value) await onClubChange(value);
+    if (!value) {
+      setClubId(0);
+      return;
+    }
+    setSwitchingClub(true);
+    try {
+      await onClubChange(value);
+      setClubId(value);
+    } catch (cause) {
+      setError(text(cause));
+    } finally {
+      setSwitchingClub(false);
+    }
   }
 
   async function claim() {
-    if (!clubId || !boardId || !normalizedCode || busy) return;
+    if (!clubId || !boardId || !normalizedCode || busy || switchingClub) return;
     const board = activeBoards.find((item) => Number(item.id) === boardId);
     if (!board) return;
     setBusy(true);
@@ -98,19 +110,21 @@ export function GlobalPairingClaim({ code, token, clubs, currentClubId, boards, 
     }
   }
 
+  const waiting = busy || switchingClub;
+
   return <section className="panel pairing-claim-card">
     <div className="panel-head">
       <div><span className="section-label">Koble nettbrett</span><h2>Terminal {normalizedCode}</h2><p>Koden er ikke knyttet til en klubb ennå. Velg klubben nettbrettet skal tilhøre, og deretter skiva det står ved.</p></div>
-      <button className="button secondary small" disabled={busy} onClick={onCancel}>Avbryt</button>
+      <button className="button secondary small" disabled={waiting} onClick={onCancel}>Avbryt</button>
     </div>
     <div className="pairing-claim-steps">
-      <label className="field"><span>1. Klubb</span><select value={clubId} disabled={busy || !multiClub} onChange={(event) => void chooseClub(Number(event.target.value))}>{multiClub && <option value="0">Velg klubb …</option>}{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
-      <label className="field"><span>2. Skive</span><select value={boardId} disabled={busy || !clubId || !info?.claimable} onChange={(event) => setBoardId(Number(event.target.value))}><option value="0">Velg skive …</option>{activeBoards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select></label>
-      <button className="button" disabled={busy || !boardId || !info?.claimable} onClick={() => void claim()}>{busy ? "Kontrollerer …" : "Koble nettbrett"}</button>
+      <label className="field"><span>1. Klubb</span><select value={clubId} disabled={waiting || !multiClub} onChange={(event) => void chooseClub(Number(event.target.value))}>{multiClub && <option value="0">Velg klubb …</option>}{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
+      <label className="field"><span>2. Skive</span><select value={boardId} disabled={waiting || !clubId || !info?.claimable} onChange={(event) => setBoardId(Number(event.target.value))}><option value="0">Velg skive …</option>{activeBoards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select></label>
+      <button className="button" disabled={waiting || !boardId || !info?.claimable} onClick={() => void claim()}>{waiting ? "Kontrollerer …" : "Koble nettbrett"}</button>
     </div>
-    {clubId && !busy && info?.claimable && <div className="notice good"><strong>{info.device_name || "Nettbrett"} er klart.</strong> Velg riktig skive og koble til.</div>}
-    {clubId && !busy && info && !info.claimable && <div className="notice warn">Denne koden kan ikke lenger brukes. Lag en ny kode på nettbrettet.</div>}
-    {clubId && !busy && activeBoards.length === 0 && !error && <div className="notice warn">Klubben har ingen ledige aktive skiver. Koble fra eksisterende nettbrett på skiva først hvis det skal erstattes.</div>}
+    {clubId && !waiting && info?.claimable && <div className="notice good"><strong>{info.device_name || "Nettbrett"} er klart.</strong> Velg riktig skive og koble til.</div>}
+    {clubId && !waiting && info && !info.claimable && <div className="notice warn">Denne koden kan ikke lenger brukes. Lag en ny kode på nettbrettet.</div>}
+    {clubId && !waiting && activeBoards.length === 0 && !error && <div className="notice warn">Klubben har ingen ledige aktive skiver. Koble fra eksisterende nettbrett på skiva først hvis det skal erstattes.</div>}
     {error && <div className="notice bad">{error}</div>}
   </section>;
 }
