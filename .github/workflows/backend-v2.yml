@@ -52,8 +52,11 @@ jobs:
           set -Eeuo pipefail
           test -f apps/backend-v2/src/server.ts
           test -f apps/backend-v2/src/mysql/mysql2-session-provider.ts
+          test -f apps/backend-v2/src/mysql/canonical-scoring-state.ts
+          test -f apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
+          test -f apps/backend-v2/src/runtime/core-only-side-effects.ts
           test -f apps/backend-v2/src/service/canonical-scoring-service.ts
 
           # One deliberately tiny provider owns the real mysql2 driver import.
@@ -68,15 +71,20 @@ jobs:
           fi
           ! grep -R -n -E '\bcreatePool\b|\.getConnection\(' apps/backend-v2/src/mysql
 
-          # The coexistence ceiling and explicit PROD arming phrase are architecture invariants.
+          # The coexistence ceiling and table boundaries remain architecture invariants.
           grep -Fq 'may not exceed 2 during coexistence with PHP' apps/backend-v2/src/runtime/config.ts
-          grep -Fq 'ALLOW_PROD_SCORING_WRITES' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'DB_TABLE_PREFIX=bd_test_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
+
+          # PROD writes are compile-time blocked until the complete canonical side-effect chain is migrated.
+          grep -Fq 'const FULL_CANONICAL_SIDE_EFFECTS_READY = false' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'backend-v2-e2e-tournament-' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
+          grep -Fq 'backend_v2_side_effects_not_ready' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
           # Side effects must stay behind the canonical orchestration boundary.
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalProjectionPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/service/canonical-scoring-service.ts
+          grep -Fq 'new CanonicalScoringService' apps/backend-v2/src/server.ts
