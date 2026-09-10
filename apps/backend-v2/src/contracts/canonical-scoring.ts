@@ -1,4 +1,4 @@
-import type { DbId, VisitInput } from "./scoring.js";
+import type { DbId, EvaluatedVisit, VisitInput } from "./scoring.js";
 
 export type ScoringSource = "manual" | "scolia" | "import" | "api";
 
@@ -18,13 +18,37 @@ export interface UndoVisitCommand {
   source: ScoringSource;
 }
 
+export type StartMatchResult =
+  | { readonly kind: "no_match" }
+  | { readonly kind: "started"; readonly match_id: DbId; readonly leg_id: DbId };
+
+export type RecordVisitResult =
+  | { readonly kind: "duplicate" }
+  | {
+      readonly kind: "recorded";
+      readonly match_id: DbId;
+      readonly leg_id: DbId;
+      readonly player_id: DbId;
+      readonly evaluation: EvaluatedVisit;
+      readonly match_completed: boolean;
+    };
+
+export type UndoVisitResult =
+  | { readonly kind: "no_visit" }
+  | {
+      readonly kind: "undone";
+      readonly match_id: DbId;
+      readonly leg_id: DbId;
+      readonly visit_id: DbId;
+    };
+
 /**
  * Source-agnostic mutation boundary matching today's CanonicalScoringService.
  * Adapters normalize input before calling this port; ELO, playoff reconciliation,
  * projections and realtime refresh stay behind the canonical scoring boundary.
  */
 export interface CanonicalScoringPort {
-  startMatch(command: StartMatchCommand): Promise<void> | void;
-  recordVisit(command: RecordVisitCommand): Promise<void> | void;
-  undoLastVisit(command: UndoVisitCommand): Promise<void> | void;
+  startMatch(command: StartMatchCommand): Promise<StartMatchResult> | StartMatchResult;
+  recordVisit(command: RecordVisitCommand): Promise<RecordVisitResult> | RecordVisitResult;
+  undoLastVisit(command: UndoVisitCommand): Promise<UndoVisitResult> | UndoVisitResult;
 }
