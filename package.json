@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "v2:build": "vite build --config apps/platform-v2/vite.config.mjs",
-    "v2:typecheck": "tsc -p apps/platform-v2/tsconfig.json --noEmit"
+    "v2:typecheck": "tsc -p apps/platform-v2/tsconfig.json --noEmit",
+    "backend-v2:build": "tsc -p apps/backend-v2/tsconfig.json",
+    "backend-v2:typecheck": "tsc -p apps/backend-v2/tsconfig.json --noEmit",
+    "backend-v2:test": "npm run backend-v2:build && node --test apps/backend-v2/test/*.test.mjs"
   },
   "dependencies": {
     "react": "19.2.8",
