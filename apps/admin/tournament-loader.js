@@ -1,3 +1,5 @@
+import "./test-v2-routing.js?v=20260910-01";
+
 const host = document.getElementById("tournaments");
 const MODULE_VERSION = "20260904-tournament-render-loop-01";
 let requested = false;
