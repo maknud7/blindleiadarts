@@ -77,6 +77,20 @@ final class EquipmentInventoryRepository
         return $rows;
     }
 
+    public function isActiveBoard(int $environmentClubId, int $physicalId): bool
+    {
+        $canonicalClubId = $this->canonicalClubId($environmentClubId);
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT is_active FROM `%1$skiosks` WHERE club_id=? AND id=? LIMIT 1',
+            $this->hardwarePrefix
+        ));
+        $stmt->bind_param('ii', $canonicalClubId, $physicalId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        return $row !== null && (int) ($row['is_active'] ?? 0) === 1;
+    }
+
     private function canonicalClubId(int $environmentClubId): int
     {
         if ($this->dataPrefix === $this->hardwarePrefix) return $environmentClubId;
