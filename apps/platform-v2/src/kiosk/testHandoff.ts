@@ -31,6 +31,12 @@ function safeProdReturnUrl(raw: string): string {
   }
 }
 
+function cleanLaunchUrl(): void {
+  const url = new URL(window.location.href);
+  ["testmode", "return_url", "embedded"].forEach((key) => url.searchParams.delete(key));
+  history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function clearTestSessionMarkers(): void {
   clearKioskRuntime();
   clearTestLeaseMarkers();
@@ -68,6 +74,12 @@ export function initializeTestHandoff(): boolean {
     write("testEmbedded", "1");
     write("testMode", "1");
     sessionStorage.setItem(TEST_SESSION_AUTH_KEY, "1");
+
+    // The launch parameters are one-shot authorization data. Leaving them in the
+    // address bar made every refresh look like a brand-new test launch and reset
+    // the selected physical board back to the chooser. v1 already treated them as
+    // one-shot; v2 must preserve the same behaviour.
+    cleanLaunchUrl();
   }
 
   let lastKioskCode = read("kioskCode");
