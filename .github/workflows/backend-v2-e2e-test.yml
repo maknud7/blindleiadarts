@@ -78,3 +78,23 @@ jobs:
           IDENTITY_TABLE_PREFIX: bd_prod_
           HARDWARE_TABLE_PREFIX: bd_prod_
         run: node apps/backend-v2/e2e/scoring-lifecycle.mjs
+
+      - name: Run canonical ELO lifecycle against TEST MySQL
+        env:
+          BD_APP_ENV: test
+          BD_BACKEND_V2_MODE: test-write
+          BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+          BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+          BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '10000'
+          HOST: 127.0.0.1
+          PORT: '18083'
+          RELEASE_SHA: ${{ github.sha }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: node apps/backend-v2/e2e/elo-lifecycle.mjs
