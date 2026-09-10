@@ -100,3 +100,18 @@ Realtime refresh publication is the first post-mutation side effect migrated fro
 - the old `CoreOnlyCanonicalSideEffects` no longer contains a realtime no-op; remaining temporary ports are ELO, playoff reconciliation and ranking projections only.
 
 Realtime configuration uses `REALTIME_PUBLISH_URL` and `REALTIME_PUBLISH_SECRET`. Production scoring writes remain compile-time disabled after this slice because ELO, playoff reconciliation, tournament ELO and linear ranking are still pending migration.
+
+## Slice 7: canonical season ELO ledger
+
+Season ELO now follows the current PHP event model rather than the older incremental-ledger assumptions:
+
+- a completed, ELO-enabled season match is represented by `elo_match_events`,
+- true guest matches without member identity remain ELO-neutral,
+- historical player rows that resolve to the same club member share one ELO identity during replay,
+- the TypeScript calculator is parity-tested directly against PHP, including provisional K=25 while `matches_before <= 10` and established K=15 afterwards,
+- applied season events are replayed deterministically by tournament, phase, logical round, group/playoff order and occurrence time,
+- event before/after values, `elo_current_ratings` and ELO `ranking_snapshots` are rebuilt together,
+- backend-v2 serializes apply/revert and the whole season rebuild behind a season row lock in one transaction, so a failed database exchange cannot expose a partially rebuilt ELO season,
+- all event, season, tournament, player and member identifiers remain decimal strings at the TypeScript boundary.
+
+Tournament-level ELO snapshots are intentionally still a separate projection and are the next ELO migration slice. Playoff reconciliation and linear season ranking are also still pending. PROD scoring writes therefore remain compile-time disabled after this slice.
