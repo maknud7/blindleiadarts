@@ -11,6 +11,7 @@ export interface BackendRuntimeConfig {
   releaseSha: string;
   internalToken: string | null;
   prodCanaryWritesEnabled: boolean;
+  canonicalSideEffectsReady: boolean;
   prefixes: {
     runtime: TablePrefix;
     identity: TablePrefix;
@@ -28,6 +29,12 @@ export interface BackendRuntimeConfig {
 }
 
 const PROD_WRITE_CONFIRMATION = "ALLOW_PROD_SCORING_WRITES";
+
+// Deliberately compile-time false while ELO, playoff reconciliation, tournament
+// ELO, linear ranking and realtime are still being migrated behind the canonical
+// orchestration boundary. An environment variable alone must never be able to
+// turn partial backend-v2 semantics into a production writer.
+const FULL_CANONICAL_SIDE_EFFECTS_READY = false;
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): BackendRuntimeConfig {
   const environment = parseEnvironment(env.BD_APP_ENV ?? env.APP_ENV ?? "development");
@@ -59,9 +66,6 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
     }
   }
 
-  const prodCanaryWritesEnabled =
-    mode === "prod-canary" && env.BD_BACKEND_V2_PROD_WRITE_CONFIRMATION === PROD_WRITE_CONFIRMATION;
-
   if (mode === "prod-canary") {
     if (environment !== "prod") {
       throw new TypeError("prod-canary mode requires BD_APP_ENV=prod.");
@@ -70,6 +74,10 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
       throw new TypeError("prod-canary mode requires DB_TABLE_PREFIX=bd_prod_.");
     }
   }
+
+  const prodWriteConfirmationPresent =
+    mode === "prod-canary" && env.BD_BACKEND_V2_PROD_WRITE_CONFIRMATION === PROD_WRITE_CONFIRMATION;
+  const prodCanaryWritesEnabled = prodWriteConfirmationPresent && FULL_CANONICAL_SIDE_EFFECTS_READY;
 
   const internalToken = env.BD_BACKEND_V2_INTERNAL_TOKEN?.trim() || null;
   if (mode !== "readonly" && internalToken === null) {
@@ -84,6 +92,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
     releaseSha: env.RELEASE_SHA?.trim() || env.GITHUB_SHA?.trim() || "unknown",
     internalToken,
     prodCanaryWritesEnabled,
+    canonicalSideEffectsReady: FULL_CANONICAL_SIDE_EFFECTS_READY,
     prefixes: {
       runtime: runtimePrefix,
       identity: identityPrefix,
@@ -113,7 +122,9 @@ export function assertMutationAllowed(config: BackendRuntimeConfig): void {
       403,
       "backend_v2_read_only",
       config.mode === "prod-canary"
-        ? "PROD canary is connected but scoring writes are not armed."
+        ? config.canonicalSideEffectsReady
+          ? "PROD canary is connected but scoring writes are not armed."
+          : "PROD scoring writes are blocked until full canonical side effects are migrated."
         : "Backend v2 is running in read-only mode.",
     );
   }

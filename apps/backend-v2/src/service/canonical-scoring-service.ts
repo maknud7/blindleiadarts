@@ -1,16 +1,14 @@
 import type {
   CanonicalScoringPort,
   RecordVisitCommand,
+  RecordVisitResult,
   StartMatchCommand,
+  StartMatchResult,
   UndoVisitCommand,
+  UndoVisitResult,
 } from "../contracts/canonical-scoring.js";
 import type { DbId } from "../contracts/scoring.js";
-import type {
-  MySqlCanonicalScoringRepository,
-  RecordVisitWriteResult,
-  StartMatchWriteResult,
-  UndoVisitWriteResult,
-} from "../mysql/canonical-scoring-repository.js";
+import type { MySqlCanonicalScoringRepository } from "../mysql/canonical-scoring-repository.js";
 
 export interface StartScoringState {
   readonly id: DbId;
@@ -49,9 +47,9 @@ export interface CanonicalRealtimePort {
 }
 
 export interface CanonicalScoringRepositoryPort {
-  startMatch(command: StartMatchCommand): Promise<StartMatchWriteResult>;
-  recordVisit(command: RecordVisitCommand): Promise<RecordVisitWriteResult>;
-  undoLastVisit(command: UndoVisitCommand): Promise<UndoVisitWriteResult>;
+  startMatch(command: StartMatchCommand): Promise<StartMatchResult>;
+  recordVisit(command: RecordVisitCommand): Promise<RecordVisitResult>;
+  undoLastVisit(command: UndoVisitCommand): Promise<UndoVisitResult>;
 }
 
 /**
@@ -72,14 +70,14 @@ export class CanonicalScoringService implements CanonicalScoringPort {
     private readonly realtime: CanonicalRealtimePort,
   ) {}
 
-  async startMatch(command: StartMatchCommand): Promise<void> {
+  async startMatch(command: StartMatchCommand): Promise<StartMatchResult> {
     const before = await this.state.startState(command.kiosk_id);
-    await this.repository.startMatch(command);
+    const result = await this.repository.startMatch(command);
 
     // Matches PHP: repeated start calls while an open leg already exists are true
     // no-ops for playoff reconciliation and realtime publication.
     if (before === null || (before.status === "in_progress" && before.has_open_leg)) {
-      return;
+      return result;
     }
 
     await this.playoffs.afterMutation(before.id, false);
@@ -89,13 +87,14 @@ export class CanonicalScoringService implements CanonicalScoringPort {
       source: command.source,
       reason: "match_started",
     });
+    return result;
   }
 
-  async recordVisit(command: RecordVisitCommand): Promise<void> {
+  async recordVisit(command: RecordVisitCommand): Promise<RecordVisitResult> {
     // PHP resolves the target before recording. Preserve that detail so a retry
     // after checkout still reconciles/publishes against the same completed match.
     const matchId = await this.state.targetMatchIdForKiosk(command.kiosk_id, false);
-    await this.repository.recordVisit(command);
+    const result = await this.repository.recordVisit(command);
 
     if (matchId !== null && await this.state.matchIsCompleted(matchId)) {
       await this.elo.applyCompletedMatch(matchId);
@@ -110,12 +109,13 @@ export class CanonicalScoringService implements CanonicalScoringPort {
       source: command.source,
       reason: "visit_recorded",
     });
+    return result;
   }
 
-  async undoLastVisit(command: UndoVisitCommand): Promise<void> {
+  async undoLastVisit(command: UndoVisitCommand): Promise<UndoVisitResult> {
     // The playoff guard must execute before canonical state is mutated.
     const matchId = await this.playoffs.assertUndoAllowed(command.kiosk_id);
-    await this.repository.undoLastVisit(command);
+    const result = await this.repository.undoLastVisit(command);
 
     if (matchId !== null) {
       await this.elo.revertMatch(matchId);
@@ -130,6 +130,7 @@ export class CanonicalScoringService implements CanonicalScoringPort {
       source: command.source,
       reason: "visit_undone",
     });
+    return result;
   }
 }
 
