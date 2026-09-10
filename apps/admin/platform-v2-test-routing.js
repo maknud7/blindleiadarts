@@ -8,9 +8,18 @@
 
   if (!isTestEnvironment) return;
 
+  function prodKioskUrl() {
+    const url = new URL(window.location.href);
+    url.hostname = url.hostname.replace(/^test\./i, "");
+    url.pathname = "/kiosk/";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  }
+
   const ROUTES = Object.freeze({
     equipment: "/v2/equipment/",
-    kiosk: "/v2/kiosk/?testmode=1",
+    kiosk: prodKioskUrl(),
   });
   const EQUIPMENT_HASHES = new Set(["#equipment", "#kiosks", "#admin/kiosks"]);
 

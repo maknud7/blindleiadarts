@@ -21,9 +21,18 @@ function isTestHost(): boolean {
   return /(^|[.-])test([.-]|$)/i.test(window.location.hostname) || /\/test(?:\/|$)/i.test(window.location.pathname);
 }
 
+function prodKioskHref(): string {
+  const url = new URL(window.location.href);
+  url.hostname = url.hostname.replace(/^test\./i, "");
+  url.pathname = "/kiosk/";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 export function PlatformNav({ active }: { active: Surface }) {
   const testHost = isTestHost();
-  const kioskHref = testHost ? `${routes.kiosk}?testmode=1` : routes.kiosk;
+  const kioskHref = testHost ? prodKioskHref() : routes.kiosk;
 
   useEffect(() => {
     const body = document.body;
@@ -65,7 +74,7 @@ export function PlatformNav({ active }: { active: Surface }) {
       <a href={routes.admin}>Administrasjon</a>
       <a href={routes.tournament} className={active === "tournament" ? "active" : ""}>Turneringer</a>
       <a href={routes.equipment} className={active === "equipment" ? "active" : ""} aria-current={active === "equipment" ? "page" : undefined}>Utstyr</a>
-      <a href={kioskHref} className={active === "kiosk" ? "active" : ""} aria-current={active === "kiosk" ? "page" : undefined}>{testHost ? "Kiosk · TEST" : "Kiosk"}</a>
+      <a href={kioskHref} className={active === "kiosk" ? "active" : ""} aria-current={active === "kiosk" ? "page" : undefined}>{testHost ? "Kiosk · start TEST" : "Kiosk"}</a>
     </div>
   </nav>;
 }
