@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, legacyApi } from "../shared/api";
 import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/storage";
 import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard } from "../shared/types";
+import { RecentVisitsEditor } from "./RecentVisitsEditor";
 import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
@@ -420,7 +421,7 @@ export function KioskWorkspace() {
       {view === "pairing" && <PairingView code={pairingCode} expires={pairingExpires} busy={busy} onNew={() => void createPairing(true)} />}
       {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1><p>Venter på neste kamp · {effectiveScoringMode.startsWith("scolia") ? "Scolia scoring" : "manuell scoring"}</p></div>}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
-      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy)} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} />}
+      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} kioskCode={kioskCode} kioskToken={kioskToken} scoringMode={effectiveScoringMode} recentVisitsEditable={kiosk.scoring_mode === "manual"} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy)} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onVisitEditBusy={setBusy} onVisitCorrected={(data) => { setSnapshot(data); resetInput(); setError(""); }} onVisitReload={() => loadState(kioskCode, kioskToken)} />}
     </section></main>
 
     {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
@@ -486,10 +487,13 @@ function AssignedView({ match, board, busy, onStart }: { match: KioskMatch; boar
   return <div className="assigned-view"><div className="match-tools"><span className="pill good">Skive {board} · kamp klar</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"} · best of {match.best_of_legs}</span></div><div className="versus assigned-versus"><div className="player-tile"><p>Spiller 1</p><h2>{match.player_a.display_name}</h2></div><div className="vs-mark">VS</div><div className="player-tile"><p>Spiller 2</p><h2>{match.player_b.display_name}</h2></div></div><button className="button start-match-button" disabled={busy} onClick={onStart}>{busy ? "Starter …" : "Start kamp"}</button></div>;
 }
 
-function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo }: {
+function MatchView({ match, board, kioskCode, kioskToken, scoringMode, recentVisitsEditable, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo, onVisitEditBusy, onVisitCorrected, onVisitReload }: {
   match: KioskMatch;
   board: number;
+  kioskCode: string;
+  kioskToken: string;
   scoringMode: string;
+  recentVisitsEditable: boolean;
   scoliaBoard: ScoliaRuntimeBoard | null;
   lastScoliaVisit: ScoliaLastVisit | null;
   inputMode: InputMode;
@@ -505,13 +509,16 @@ function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, in
   onScore: (value: string) => void;
   onSubmit: () => void;
   onUndo: () => void;
+  onVisitEditBusy: (busy: boolean) => void;
+  onVisitCorrected: (snapshot: KioskSnapshot) => void;
+  onVisitReload: () => Promise<void>;
 }) {
   const throwing = currentPlayer(match);
   const automatic = scoringMode === "scolia" || scoringMode === "scolia-pending";
   const preview = automatic ? null : manualRemainingPreview(throwing, inputMode, score, darts);
   const playerAActive = Number(match.current_player_id) === Number(match.player_a.id);
   const playerBActive = Number(match.current_player_id) === Number(match.player_b.id);
-  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} preview={playerAActive ? preview : null} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} preview={playerBActive ? preview : null} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface throwing={throwing} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits">{(match.recent_visits || []).slice(0, 5).map((visit, index) => <div className="visit" key={`${visit.visit_number || index}-${index}`}><span>{visit.player_name || "Spiller"}</span><strong>{Number(visit.score || 0)} {Number(visit.is_bust) === 1 ? "· Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</strong></div>)}</div></div>;
+  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} preview={playerAActive ? preview : null} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} preview={playerBActive ? preview : null} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface throwing={throwing} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<RecentVisitsEditor match={match} kioskCode={kioskCode} kioskToken={kioskToken} editable={recentVisitsEditable} disabled={busy} onBusyChange={onVisitEditBusy} onCorrected={onVisitCorrected} onReload={onVisitReload} /></div>;
 }
 
 function ManualScoreSurface({ throwing, inputMode, multiplier, darts, score, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit }: {
