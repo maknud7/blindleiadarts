@@ -1,0 +1,61 @@
+name: Backend v2 TEST E2E
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Deploy Test
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-v2-test-e2e
+  cancel-in-progress: false
+
+jobs:
+  scoring-lifecycle:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact tested release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Build backend v2
+        run: npm run backend-v2:build
+
+      - name: Generate loopback-only E2E token
+        shell: bash
+        run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Run canonical scoring lifecycle against TEST MySQL
+        env:
+          BD_APP_ENV: test
+          BD_BACKEND_V2_MODE: test-write
+          BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+          BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+          BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '10000'
+          HOST: 127.0.0.1
+          PORT: '18082'
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: node apps/backend-v2/e2e/scoring-lifecycle.mjs
