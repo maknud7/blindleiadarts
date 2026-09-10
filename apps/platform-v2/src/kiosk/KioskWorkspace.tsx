@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, legacyApi } from "../shared/api";
 import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/storage";
-import type { Health, KioskMatch, KioskSnapshot, PlayerScore, ScoliaBoard, TestBoard } from "../shared/types";
-import { useScoliaRuntime } from "./useScoliaRuntime";
+import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard } from "../shared/types";
+import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
 type PairingStatusResponse = { status: string; kiosk?: { code?: string; name?: string }; snapshot?: KioskSnapshot | null };
@@ -42,16 +42,8 @@ export function KioskWorkspace() {
   const effectiveTestMode = Boolean(isTestEnvironment && testMode);
   const physicalBoardId = Number(read("testPhysicalBoardId") || 0);
 
-  const scolia = useScoliaRuntime({
-    environment: health?.environment,
-    kioskCode,
-    kioskToken,
-    testMode: effectiveTestMode,
-    physicalBoardId,
-  });
-  const effectiveScoringMode = scolia.leasePending
-    ? "scolia-pending"
-    : (scolia.effectiveScoringMode || kiosk?.scoring_mode || "manual");
+  const scolia = useScoliaRuntime({ environment: health?.environment, kioskCode, kioskToken, testMode: effectiveTestMode, physicalBoardId });
+  const effectiveScoringMode = scolia.leasePending ? "scolia-pending" : (scolia.effectiveScoringMode || kiosk?.scoring_mode || "manual");
 
   const loadState = useCallback(async (code = kioskCode, token = kioskToken) => {
     if (!code) return;
@@ -156,7 +148,14 @@ export function KioskWorkspace() {
   }
 
   async function startMatch() { await mutate(() => api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/start-match`, { method: "POST", kioskToken })); }
-  async function undo() { await mutate(() => api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/undo`, { method: "POST", kioskToken })); }
+  async function undo() {
+    if (scolia.automatic && !scolia.fallbackActive) {
+      await scolia.undo();
+      await loadState();
+      return;
+    }
+    await mutate(() => api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/undo`, { method: "POST", kioskToken }));
+  }
   async function submitVisit(value: number, dartsUsed = 3) {
     await mutate(() => api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/visit`, { method: "POST", kioskToken, body: { score: value, darts_used: dartsUsed, input_mode: "sum" } })); setCheckoutScore(null);
   }
@@ -182,7 +181,6 @@ export function KioskWorkspace() {
     setBusy(true);
     try {
       await scolia.releaseLease(); clearKioskRuntime(); write("testMode", null); setTestMode(false); setKioskCode(""); setSnapshot(null); setTestBoards([]); setPairingCode("");
-      await createPairing(true);
     } finally { setBusy(false); }
   }
 
@@ -208,7 +206,7 @@ export function KioskWorkspace() {
       {view === "pairing" && <PairingView code={pairingCode} expires={pairingExpires} busy={busy} onNew={() => void createPairing(true)} />}
       {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1><p>Venter på neste kamp · {effectiveScoringMode.startsWith("scolia") ? "Scolia scoring" : "manuell scoring"}</p></div>}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
-      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} score={score} busy={busy || Boolean(scolia.busy)} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} />}
+      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} score={score} busy={busy || Boolean(scolia.busy)} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} />}
     </section></main>
 
     {checkoutScore !== null && <div className="login-shell" style={{ position: "fixed", inset: 0, background: "rgba(7,24,39,.6)", zIndex: 20 }}><div className="login-card"><span className="pill good">Checkout</span><h1>Hvor mange piler?</h1><p>Registrer hvor mange piler som ble brukt på checkouten.</p><div className="grid three">{[1,2,3].map((darts) => <button key={darts} className="button" disabled={busy} onClick={() => void submitVisit(checkoutScore, darts)}>{darts} pil{darts > 1 ? "er" : ""}</button>)}</div><button className="button secondary" style={{ marginTop: 12 }} onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
@@ -216,14 +214,14 @@ export function KioskWorkspace() {
 }
 
 function ScoliaRuntimePanel({ snapshotMode, board, leasePending, leaseError, runtimeError, available, fallbackActive, automatic, remaining, busy, onFallback, onResume, onResetPhase }: {
-  snapshotMode: string; board: ScoliaBoard | null; leasePending: boolean; leaseError: string; runtimeError: string; available: boolean; fallbackActive: boolean; automatic: boolean; remaining: number; busy: string; onFallback: () => Promise<void>; onResume: () => Promise<void>; onResetPhase: () => Promise<void>;
+  snapshotMode: string; board: ScoliaRuntimeBoard | null; leasePending: boolean; leaseError: string; runtimeError: string; available: boolean; fallbackActive: boolean; automatic: boolean; remaining: number; busy: string; onFallback: () => Promise<void>; onResume: () => Promise<void>; onResetPhase: () => Promise<void>;
 }) {
-  const relevant = snapshotMode === "scolia" || Boolean(board) || leasePending;
+  const relevant = snapshotMode === "scolia" || leasePending || board?.mode === "live" || fallbackActive || Boolean(board?.serial_number);
   if (!relevant) return null;
   if (leasePending) return <div className="scolia-kiosk-strip warn"><div><strong>TEST kobler til fysisk Scolia …</strong><span>{leaseError || "Oppretter midlertidig lease. Manuell fallback er sperret mens tilkoblingen etableres."}</span></div><span className="pill warn">TEST · Scolia</span></div>;
   if (fallbackActive) return <div className="scolia-kiosk-strip warn"><div><strong>{available ? "Scolia er tilbake – score må avstemmes" : "Scolia offline · manuell fallback"}</strong><span>{available ? "Fortsett manuelt til scoren er kontrollert. Scolia overtar først etter bekreftet avstemming." : "Kampen kan fortsette manuelt. Kiosken følger med på forbindelsen."}</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><div className="row-actions">{available && <button className="button small" disabled={Boolean(busy)} onClick={() => void onResume()}>Score avstemt · bruk Scolia</button>}<button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
-  if (automatic && !available) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia-forbindelsen er brutt</strong><span>Prøver å få kontakt. Automatisk manuell fallback {remaining > 0 ? `om ca. ${remaining} sek` : "aktiveres nå"}.</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onFallback()}>Bruk manuell nå</button></div>;
-  if (automatic && available) return <div className="scolia-kiosk-strip good"><div><strong>Scolia tilkoblet · automatisk scoring</strong><span>{board?.board_status || "Online"}{board?.board_phase ? ` · ${board.board_phase}` : ""}</span></div><div className="row-actions"><span className="pill good"><span className="dot" />Live</span><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
+  if (automatic && !available) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia-forbindelsen er brutt</strong><span>Fysisk skivestatus er ikke fersk/tilgjengelig. Automatisk manuell fallback {remaining > 0 ? `om ca. ${remaining} sek` : "aktiveres nå"}.</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onFallback()}>Bruk manuell nå</button></div>;
+  if (automatic && available) return <div className="scolia-kiosk-strip good"><div><strong>Scolia tilkoblet · automatisk scoring</strong><span>{board?.physical_board_status || board?.board_status || "Online"}{board?.board_phase ? ` · ${board.board_phase}` : ""}</span></div><div className="row-actions"><span className="pill good"><span className="dot" />Live</span><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
   return <div className="scolia-kiosk-strip"><div><strong>Scolia er ikke aktiv for runtime</strong><span>{runtimeError || "Kiosken bruker manuell scoring."}</span></div><span className="pill">Manuell</span></div>;
 }
 
@@ -236,10 +234,34 @@ function PairingView({ code, expires, busy, onNew }: { code: string; expires: st
 function AssignedView({ match, board, busy, onStart }: { match: KioskMatch; board: number; busy: boolean; onStart: () => void }) {
   return <div><div className="match-tools"><span className="pill good">Skive {board} · kamp klar</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"} · best of {match.best_of_legs}</span></div><div className="versus"><div className="player-tile"><p>Spiller 1</p><h2>{match.player_a.display_name}</h2></div><div className="vs-mark">VS</div><div className="player-tile"><p>Spiller 2</p><h2>{match.player_b.display_name}</h2></div></div><button className="button" style={{ width: "100%", minHeight: 64, fontSize: 20 }} disabled={busy} onClick={onStart}>{busy ? "Starter …" : "Start kamp"}</button></div>;
 }
-function MatchView({ match, board, scoringMode, score, busy, onScore, onSubmit, onUndo }: { match: KioskMatch; board: number; scoringMode: string; score: string; busy: boolean; onScore: (value: string) => void; onSubmit: () => void; onUndo: () => void }) {
+function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, score, busy, onScore, onSubmit, onUndo }: { match: KioskMatch; board: number; scoringMode: string; scoliaBoard: ScoliaRuntimeBoard | null; lastScoliaVisit: ScoliaLastVisit | null; score: string; busy: boolean; onScore: (value: string) => void; onSubmit: () => void; onUndo: () => void }) {
   const throwing = currentPlayer(match); const keys = ["1","2","3","4","5","6","7","8","9","del","0","ok"];
   const automatic = scoringMode === "scolia" || scoringMode === "scolia-pending";
-  return <div><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={Number(match.current_player_id) === Number(match.player_a.id)} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={Number(match.current_player_id) === Number(match.player_b.id)} /></div>{automatic ? <div className="kiosk-hero scolia-wait"><span className={`pill ${scoringMode === "scolia-pending" ? "warn" : "good"}`}>Scolia</span><h2>{scoringMode === "scolia-pending" ? "Kobler til skiva …" : "Venter på kast"}</h2><p>{scoringMode === "scolia-pending" ? "TEST-leasen etableres før scoring starter." : "Kast registreres automatisk av Scolia og oppdaterer kampen her."}</p></div> : <div className="score-entry"><div className="panel-head"><div><h3>{throwing?.display_name || "Registrer kast"}</h3><p>Sum for tre piler</p></div><span className="pill warn">Manuell</span></div><div className="score-display">{score || "0"}</div><div className="keypad">{keys.map((key) => <button key={key} className={key === "ok" ? "primary" : ""} disabled={busy} onClick={() => { if (key === "del") onScore(score.slice(0, -1)); else if (key === "ok") onSubmit(); else if (score.length < 3) onScore(score + key); }}>{key === "del" ? "⌫" : key === "ok" ? "Lagre" : key}</button>)}</div></div>}<div className="visits">{(match.recent_visits || []).slice(0, 5).map((visit, index) => <div className="visit" key={`${visit.visit_number || index}-${index}`}><span>{visit.player_name || "Spiller"}</span><strong>{Number(visit.score || 0)} {Number(visit.is_bust) === 1 ? "· Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</strong></div>)}</div></div>;
+  return <div><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={Number(match.current_player_id) === Number(match.player_a.id)} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={Number(match.current_player_id) === Number(match.player_b.id)} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <div className="score-entry"><div className="panel-head"><div><h3>{throwing?.display_name || "Registrer kast"}</h3><p>Sum for tre piler</p></div><span className="pill warn">Manuell</span></div><div className="score-display">{score || "0"}</div><div className="keypad">{keys.map((key) => <button key={key} className={key === "ok" ? "primary" : ""} disabled={busy} onClick={() => { if (key === "del") onScore(score.slice(0, -1)); else if (key === "ok") onSubmit(); else if (score.length < 3) onScore(score + key); }}>{key === "del" ? "⌫" : key === "ok" ? "Lagre" : key}</button>)}</div></div>}<div className="visits">{(match.recent_visits || []).slice(0, 5).map((visit, index) => <div className="visit" key={`${visit.visit_number || index}-${index}`}><span>{visit.player_name || "Spiller"}</span><strong>{Number(visit.score || 0)} {Number(visit.is_bust) === 1 ? "· Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</strong></div>)}</div></div>;
+}
+
+function dartLabel(dart?: ScoliaDart | null): string {
+  if (!dart) return "—";
+  const multiplier = String(dart.multiplier || dart.m || "S").toUpperCase();
+  const raw = dart.value ?? dart.v ?? 0;
+  if (String(raw).toUpperCase() === "BULL") return multiplier === "D" ? "BULL" : "25";
+  const value = Number(raw || 0); if (!Number.isFinite(value) || value <= 0) return "MISS";
+  return `${multiplier === "S" ? "" : multiplier}${value}`;
+}
+function dartScore(dart?: ScoliaDart | null): number {
+  if (!dart) return 0;
+  const multiplier = String(dart.multiplier || dart.m || "S").toUpperCase(); const raw = dart.value ?? dart.v ?? 0;
+  if (String(raw).toUpperCase() === "BULL") return multiplier === "D" ? 50 : 25;
+  const value = Number(raw || 0); if (!Number.isFinite(value) || value <= 0) return 0;
+  return multiplier === "T" ? value * 3 : multiplier === "D" ? value * 2 : value;
+}
+function ScoliaScoreSurface({ pending, board, lastVisit, throwing }: { pending: boolean; board: ScoliaRuntimeBoard | null; lastVisit: ScoliaLastVisit | null; throwing: PlayerScore | null }) {
+  if (pending) return <div className="kiosk-hero scolia-wait"><span className="pill warn">Scolia</span><h2>Kobler til skiva …</h2><p>TEST-leasen etableres før automatisk scoring starter.</p></div>;
+  const buffer = board?.buffer?.darts || []; const showingBuffer = buffer.length > 0; const darts = showingBuffer ? buffer : (lastVisit?.darts || []);
+  const total = showingBuffer ? darts.reduce((sum, dart) => sum + dartScore(dart), 0) : (lastVisit?.score ?? null);
+  const title = showingBuffer ? "Kaster nå" : lastVisit ? "Siste kast" : "Klar for kast";
+  const player = showingBuffer ? throwing?.display_name : lastVisit?.player_name;
+  return <div className="scolia-score-v2"><div className="scolia-score-head"><div><span className="pill good">Scolia live</span><h3>{title}</h3><p>{showingBuffer ? `${darts.length}/3 piler${player ? ` · ${player}` : ""}` : (player || "Kast når du er klar")}</p></div><div className={`scolia-score-total ${lastVisit?.is_bust && !showingBuffer ? "bust" : ""}`}><span>{lastVisit?.is_bust && !showingBuffer ? "Bust" : "Sum"}</span><strong>{total === null ? "—" : total}</strong></div></div><div className="scolia-darts-v2">{[0,1,2].map((index) => <div className={darts[index] ? "has-dart" : ""} key={index}><span>Pil {index + 1}</span><strong>{dartLabel(darts[index])}</strong></div>)}</div></div>;
 }
 function PlayerTile({ player, active }: { player: PlayerScore; active: boolean }) {
   return <article className={`player-tile ${active ? "active" : ""}`}><p>{active ? "Kaster" : `${player.legs_won} legs`}</p><h2>{player.display_name}</h2><div className="remaining">{player.remaining}</div><p>{player.legs_won} legs</p></article>;
