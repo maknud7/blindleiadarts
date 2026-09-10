@@ -70,6 +70,7 @@ jobs:
           grep -Fq 'new URL("/v2/kiosk/", testOrigin())' apps/kiosk/prod-test-entry.js
           grep -Fq 'initializeTestHandoff()' apps/platform-v2/src/kiosk/main.tsx
           grep -Fq 'embeddedLaunch' apps/platform-v2/src/kiosk/testHandoff.ts
+          grep -Fq 'cleanLaunchUrl()' apps/platform-v2/src/kiosk/testHandoff.ts
           grep -Fq 'window.location.replace(prodKioskUrl())' apps/platform-v2/src/kiosk/testHandoff.ts
           grep -Fq 'bd:kiosk-test-exit' apps/platform-v2/src/kiosk/testHandoff.ts
           grep -Fq 'searchParams.delete("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
@@ -86,6 +87,23 @@ jobs:
           grep -Fq 'Kode fra nettbrett' apps/platform-v2/src/equipment/BoardEditor.tsx
           if grep -Fq '/kiosk-pairing-requests' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx; then
             echo 'Equipment v2 must not expose the club-scoped pending tablet queue.' >&2
+            exit 1
+          fi
+
+      - name: Verify tablet-first kiosk parity contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f apps/platform-v2/src/kiosk/kiosk-tablet.css
+          test -f apps/platform-v2/src/kiosk/kiosk-interactions.css
+          grep -Fq 'overflow: hidden' apps/platform-v2/src/kiosk/kiosk-tablet.css
+          grep -Fq 'grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr)' apps/platform-v2/src/kiosk/kiosk-tablet.css
+          grep -Fq 'aspect-ratio: 3 / 4' apps/platform-v2/src/kiosk/kiosk-tablet.css
+          grep -Fq '"per_dart"' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq '>Per pil<' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'kiosk-settings-button' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          if grep -Fq 'PlatformNav' apps/platform-v2/src/kiosk/main.tsx; then
+            echo 'Kiosk v2 must be a full-screen terminal surface, not a portal page.' >&2
             exit 1
           fi
 
