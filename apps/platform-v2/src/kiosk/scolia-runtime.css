@@ -1,0 +1,14 @@
+.scolia-kiosk-strip { display:flex; justify-content:space-between; align-items:center; gap:14px; margin:0 0 14px; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:#f7fafb; }
+.scolia-kiosk-strip.good { border-color:#b8ead5; background:#ecfdf5; }
+.scolia-kiosk-strip.warn { border-color:#eed89a; background:#fff8e5; }
+.scolia-kiosk-strip strong,.scolia-kiosk-strip span { display:block; }
+.scolia-kiosk-strip > div > span { margin-top:3px; color:var(--muted); font-size:12px; }
+.scolia-kiosk-strip .error-copy { color:var(--bad); font-weight:750; }
+.scolia-kiosk-strip .row-actions { flex:0 0 auto; }
+.scolia-wait { min-height:240px; }
+
+@media (max-width:760px) {
+  .scolia-kiosk-strip { display:grid; align-items:stretch; }
+  .scolia-kiosk-strip .row-actions { justify-content:stretch; }
+  .scolia-kiosk-strip .row-actions > * { flex:1; }
+}
