@@ -1,0 +1,34 @@
+.v2-test-nav {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px clamp(12px, 3vw, 28px);
+  border-bottom: 1px solid #d8e2e8;
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 4px 18px rgba(20, 48, 66, .08);
+}
+
+.v2-test-nav .button {
+  text-decoration: none;
+}
+
+@media (max-width: 760px) {
+  .v2-test-nav {
+    gap: 6px;
+  }
+
+  .v2-test-nav .pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .v2-test-nav .button {
+    flex: 1 1 calc(50% - 6px);
+    text-align: center;
+  }
+}
