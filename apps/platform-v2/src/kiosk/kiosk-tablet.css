@@ -1,0 +1,627 @@
+/* Kiosk v2 is a physical portrait-tablet product, not a normal responsive web page.
+ * Keep every operational state inside one viewport and preserve the v1 mental model.
+ */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  background: #e9f1f5;
+}
+
+#root {
+  display: grid;
+  place-items: stretch;
+}
+
+.kiosk-shell {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: max(7px, env(safe-area-inset-top)) max(7px, env(safe-area-inset-right)) max(7px, env(safe-area-inset-bottom)) max(7px, env(safe-area-inset-left));
+  background: #eef4f7;
+}
+
+.test-banner {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.15;
+  letter-spacing: .09em;
+}
+
+.kiosk-topbar {
+  flex: 0 0 auto;
+  min-height: 62px;
+  max-height: 68px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 7px 22px rgba(9, 44, 69, .11);
+  background: white;
+}
+
+.kiosk-topbar .v2-brand {
+  min-width: 0;
+  gap: 9px;
+}
+
+.kiosk-topbar .v2-logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+}
+
+.kiosk-topbar .v2-brand > div {
+  min-width: 0;
+}
+
+.kiosk-topbar .v2-brand strong {
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(16px, 3.2vw, 20px);
+  line-height: 1.05;
+}
+
+.kiosk-topbar .v2-brand span {
+  margin-top: 2px;
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+
+.kiosk-topbar .v2-top-actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.kiosk-topbar .v2-top-actions .pill {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.kiosk-topbar .button.small {
+  min-height: 40px;
+  padding: 7px 9px;
+  white-space: nowrap;
+}
+
+.kiosk-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: block;
+  padding: 0;
+}
+
+.kiosk-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(9, 44, 69, .08);
+}
+
+.kiosk-card > .notice {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.kiosk-card > .scolia-kiosk-strip {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+}
+
+.kiosk-card > .kiosk-hero,
+.kiosk-card > div:not(.scolia-kiosk-strip):not(.notice) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.kiosk-card > div:not(.kiosk-hero):not(.scolia-kiosk-strip):not(.notice) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kiosk-hero {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  align-content: center;
+  gap: 8px;
+  padding: 6px;
+}
+
+.kiosk-hero h1 {
+  font-size: clamp(58px, 12vw, 92px);
+}
+
+.kiosk-hero h2 {
+  max-width: 100%;
+  font-size: clamp(27px, 5.5vw, 40px);
+  line-height: 1.04;
+}
+
+.kiosk-hero p {
+  max-width: 650px;
+  font-size: clamp(12px, 2.1vw, 15px);
+  line-height: 1.35;
+}
+
+/* Pairing: QR is primary; manual code is a clear fallback. */
+.kiosk-hero > img[alt*="QR"] {
+  width: min(34dvh, 260px);
+  height: min(34dvh, 260px);
+  max-width: 48vw;
+  max-height: 48vw;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+}
+
+.pair-code {
+  font-size: clamp(36px, 7vw, 52px);
+  line-height: 1;
+}
+
+/* Test chooser: large board targets, one-screen operation on club tablets. */
+.test-board-grid {
+  width: min(680px, 100%);
+  min-height: 0;
+  max-height: min(52dvh, 480px);
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(76px, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.test-board {
+  min-height: 76px;
+  padding: 12px 14px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border-width: 2px;
+  border-radius: 15px;
+  touch-action: manipulation;
+}
+
+.test-board strong {
+  font-size: clamp(20px, 4vw, 28px);
+  line-height: 1;
+}
+
+.test-board span {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+/* Assigned/live match keep both players side by side, also on 500–600px Android tablets. */
+.match-tools {
+  flex: 0 0 auto;
+  min-height: 36px;
+  margin: 0 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.match-tools .pill {
+  min-width: 0;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+.match-tools .button.small {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.versus {
+  flex: 0 0 clamp(142px, 20dvh, 170px);
+  min-height: 0;
+  margin: 0 0 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+  gap: 6px;
+  align-items: stretch;
+}
+
+.player-tile {
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-width: 2px;
+  border-radius: 14px;
+}
+
+.player-tile h2 {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: clip;
+  font-size: clamp(17px, 3.6vw, 25px);
+  line-height: 1.02;
+}
+
+.player-tile p {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.player-tile .remaining {
+  margin: 3px 0;
+  font-size: clamp(48px, 9.5vw, 70px);
+  line-height: .92;
+}
+
+.vs-mark {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+/* Manual scoring uses the remaining vertical space. */
+.score-entry {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  display: grid;
+  grid-template-rows: 42px 54px minmax(0, 1fr);
+  gap: 5px;
+  overflow: hidden;
+}
+
+.score-entry .panel-head {
+  min-height: 0;
+  margin: 0;
+  align-items: center;
+}
+
+.score-entry .panel-head h3 {
+  font-size: clamp(18px, 3.7vw, 26px);
+  line-height: 1;
+}
+
+.score-entry .panel-head p {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.score-display {
+  min-height: 0;
+  height: 54px;
+  border-radius: 12px;
+  font-size: clamp(32px, 6vw, 43px);
+  line-height: 1;
+}
+
+.keypad {
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(40px, 1fr));
+  gap: 5px;
+}
+
+.keypad button {
+  min-height: 0;
+  height: 100%;
+  padding: 3px 6px;
+  border-radius: 11px;
+  font-size: clamp(20px, 4.2vw, 28px);
+  touch-action: manipulation;
+}
+
+.keypad button.primary {
+  font-size: clamp(15px, 3vw, 19px);
+}
+
+/* Scolia uses the same central scoring slot as the manual keypad. */
+.scolia-score-v2,
+.scolia-wait {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+}
+
+.scolia-score-v2 {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 7px;
+  padding: 10px;
+}
+
+.scolia-score-head h3 {
+  font-size: clamp(21px, 4vw, 28px);
+}
+
+.scolia-score-total {
+  min-width: 88px;
+  padding: 7px 10px;
+}
+
+.scolia-score-total strong {
+  font-size: 34px;
+}
+
+.scolia-darts-v2 {
+  min-height: 0;
+  height: 100%;
+  margin-top: 0;
+  gap: 7px;
+}
+
+.scolia-darts-v2 > div {
+  min-height: 0;
+  height: 100%;
+}
+
+/* Recent visits are a compact horizontal strip, never a scrolling feed. */
+.visits {
+  flex: 0 0 68px;
+  min-height: 0;
+  height: 68px;
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  overflow: hidden;
+}
+
+.visit {
+  min-width: 0;
+  height: 100%;
+  padding: 6px 8px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.visit:nth-child(n+4) {
+  display: none;
+}
+
+.visit span,
+.visit strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visit strong {
+  font-size: 13px;
+}
+
+/* Scolia status must not consume the scoring viewport. */
+.scolia-kiosk-strip {
+  min-height: 0;
+  padding: 7px 9px;
+  gap: 8px;
+  border-radius: 11px;
+}
+
+.scolia-kiosk-strip > div > span {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.scolia-kiosk-strip strong {
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.scolia-kiosk-strip .button.small {
+  min-height: 34px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+/* Checkout dialog stays touch-friendly without leaving the terminal viewport. */
+.login-shell {
+  min-height: 0 !important;
+  height: 100dvh;
+  padding: 14px;
+}
+
+.login-card {
+  width: min(440px, 100%);
+  max-height: calc(100dvh - 28px);
+  overflow: hidden;
+}
+
+.login-card .grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.login-card .grid.three .button {
+  min-height: 58px;
+}
+
+/* Actual club tablets often report only 500–600 CSS px in portrait. */
+@media (orientation: portrait) and (min-width: 480px) and (min-height: 720px) {
+  .kiosk-shell {
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+
+  .kiosk-topbar .v2-top-actions .pill {
+    display: none;
+  }
+
+  .kiosk-hero > p {
+    max-width: 92%;
+  }
+
+  .test-board-grid {
+    width: 100%;
+  }
+}
+
+/* Tiny phones are emergency-only. Preserve the operational surface by reducing detail,
+ * not by turning the kiosk into a long scrolling mobile page.
+ */
+@media (orientation: portrait) and (max-width: 479px) {
+  .kiosk-shell {
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .test-banner {
+    min-height: 24px;
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+
+  .kiosk-topbar {
+    min-height: 54px;
+    max-height: 58px;
+    padding: 5px 7px;
+  }
+
+  .kiosk-topbar .v2-logo {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .kiosk-topbar .v2-brand strong {
+    font-size: 15px;
+  }
+
+  .kiosk-topbar .v2-brand span,
+  .kiosk-topbar .v2-top-actions .pill {
+    display: none;
+  }
+
+  .kiosk-topbar .button.small {
+    min-height: 36px;
+    font-size: 10px;
+  }
+
+  .kiosk-card {
+    padding: 5px;
+  }
+
+  .test-board-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+
+  .test-board {
+    min-height: 64px;
+    padding: 8px;
+  }
+
+  .versus {
+    flex-basis: 132px;
+    grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .player-tile {
+    padding: 6px;
+  }
+
+  .player-tile h2 {
+    font-size: 15px;
+  }
+
+  .player-tile .remaining {
+    font-size: 46px;
+  }
+
+  .visits {
+    display: none;
+  }
+
+  .score-entry {
+    grid-template-rows: 38px 48px minmax(0, 1fr);
+  }
+
+  .score-display {
+    height: 48px;
+  }
+}
+
+/* Desktop testing intentionally stays inside a portrait tablet canvas. */
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  body {
+    display: grid;
+    place-items: center;
+    padding: 16px;
+  }
+
+  #root {
+    width: auto;
+    height: min(1024px, calc(100dvh - 32px));
+    aspect-ratio: 3 / 4;
+    max-width: calc(100vw - 32px);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: 0 20px 60px rgba(9, 44, 69, .18);
+  }
+
+  .kiosk-shell {
+    height: 100%;
+  }
+}
