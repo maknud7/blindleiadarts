@@ -7,6 +7,7 @@ on:
       - 'package.json'
       - 'apps/platform-v2/**'
       - 'apps/admin/platform-v2-test-routing.js'
+      - 'apps/kiosk/prod-test-entry.js'
       - 'infra/deploy/build-release.sh'
       - '.github/workflows/platform-v2.yml'
   push:
@@ -15,6 +16,7 @@ on:
       - 'package.json'
       - 'apps/platform-v2/**'
       - 'apps/admin/platform-v2-test-routing.js'
+      - 'apps/kiosk/prod-test-entry.js'
       - 'infra/deploy/build-release.sh'
       - '.github/workflows/platform-v2.yml'
   workflow_dispatch:
@@ -63,8 +65,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           grep -Fq 'equipment: "/v2/equipment/"' apps/admin/platform-v2-test-routing.js
-          grep -Fq 'kiosk: "/v2/kiosk/?testmode=1"' apps/admin/platform-v2-test-routing.js
-          grep -Fq '?testmode=1' apps/platform-v2/src/shared/PlatformNav.tsx
+          grep -Fq 'kiosk: prodKioskUrl()' apps/admin/platform-v2-test-routing.js
+          grep -Fq 'const kioskHref = testHost ? prodKioskHref() : routes.kiosk' apps/platform-v2/src/shared/PlatformNav.tsx
+          grep -Fq 'new URL("/v2/kiosk/", testOrigin())' apps/kiosk/prod-test-entry.js
+          grep -Fq 'initializeTestHandoff()' apps/platform-v2/src/kiosk/main.tsx
+          grep -Fq 'embeddedLaunch' apps/platform-v2/src/kiosk/testHandoff.ts
+          grep -Fq 'window.location.replace(prodKioskUrl())' apps/platform-v2/src/kiosk/testHandoff.ts
+          grep -Fq 'bd:kiosk-test-exit' apps/platform-v2/src/kiosk/testHandoff.ts
           grep -Fq 'searchParams.delete("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
           grep -Fq 'get("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
 
