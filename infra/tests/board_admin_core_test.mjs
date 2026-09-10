@@ -43,4 +43,26 @@ assert.match(loadKioskAdmin, /catch \(error\) \{[\s\S]*state\.pairingRequests = 
 assert.doesNotMatch(loadKioskAdmin, /Promise\.all\(/, "Pairing failure must not prevent canonical boards from loading");
 assert.match(adminApp, /Promise\.allSettled\(\[loadAdminData\(\), loadKioskAdmin\(\)\]\)/, "Admin must render independent data domains even when one fails");
 
-console.log("Board admin canonical Scolia and resilient equipment loading checks passed.");
+const equipmentRepository = readFileSync("apps/api/src/Repository/EquipmentRepository.php", "utf8");
+assert.match(equipmentRepository, /WHERE club_id=\? AND is_active=1 ORDER BY board_number,id/, "Runtime board registry must remain active-only");
+
+const inventoryRepository = readFileSync("apps/api/src/Repository/EquipmentInventoryRepository.php", "utf8");
+assert.match(inventoryRepository, /WHERE club_id=\? ORDER BY is_active DESC,board_number,id/, "Admin inventory must include inactive boards");
+assert.match(inventoryRepository, /\$this->equipment->listBoards\(\$environmentClubId\)/, "Active runtime state must be reused rather than reimplemented");
+
+const equipmentApplication = readFileSync("apps/api/src/EquipmentApplication.php", "utf8");
+assert.match(equipmentApplication, /v1\/clubs\/\(\\d\+\)\/equipment\/boards/);
+assert.match(equipmentApplication, /equipment\/boards[\s\S]*requireAdmin\(\$request, \$users, \$clubId\)[\s\S]*inventory->listBoards/, "Inactive inventory must require admin access");
+
+const v2Equipment = readFileSync("apps/platform-v2/src/equipment/EquipmentWorkspace.tsx", "utf8");
+assert.match(v2Equipment, /equipment\/boards/);
+assert.match(v2Equipment, /const \[inventoryBoards,/);
+assert.match(v2Equipment, /const \[activeBoards,/);
+assert.match(v2Equipment, /ScoliaPanel[\s\S]*boards=\{activeBoards\}/, "Inactive boards must not enter Scolia runtime controls");
+assert.match(v2Equipment, /PairingRow[\s\S]*boards=\{activeBoards\}/, "Inactive boards must not enter pairing choices");
+
+const boardEditor = readFileSync("apps/platform-v2/src/equipment/BoardEditor.tsx", "utf8");
+assert.match(boardEditor, /name="is_active"/);
+assert.match(boardEditor, /is_active: active \? 1 : 0/);
+
+console.log("Board admin canonical Scolia, resilient loading, and equipment inventory checks passed.");
