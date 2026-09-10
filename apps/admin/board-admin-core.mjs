@@ -1,3 +1,5 @@
+import "./platform-v2-test-routing.js?v=20260910-v2-nav-01";
+
 export function resolveBoardScoringMode(runtimeBoard = {}, canonicalBoard = null) {
   if (canonicalBoard && typeof canonicalBoard === "object") {
     const physicalMode = String(canonicalBoard.scoring_mode || "").trim().toLowerCase();
