@@ -54,9 +54,16 @@ jobs:
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
 
-          # One deliberately tiny provider owns mysql2. No pool is permitted while PHP coexists.
-          mysql_imports="$(grep -R -l -E 'mysql2(/promise)?' apps/backend-v2/src || true)"
-          [[ "$mysql_imports" == "apps/backend-v2/src/mysql/mysql2-session-provider.ts" ]]
+          # One deliberately tiny provider owns the real mysql2 driver import.
+          grep -Fq 'from "mysql2/promise"' apps/backend-v2/src/mysql/mysql2-session-provider.ts
+          if grep -R -n -F --exclude='mysql2-session-provider.ts' 'from "mysql2/promise"' apps/backend-v2/src; then
+            echo 'mysql2/promise may only be imported by mysql2-session-provider.ts' >&2
+            exit 1
+          fi
+          if grep -R -n -F 'from "mysql2"' apps/backend-v2/src; then
+            echo 'Use the guarded promise provider instead of importing mysql2 directly.' >&2
+            exit 1
+          fi
           ! grep -R -n -E '\bcreatePool\b|\.getConnection\(' apps/backend-v2/src/mysql
 
           # The coexistence ceiling and explicit PROD arming phrase are architecture invariants.
