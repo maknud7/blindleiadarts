@@ -1,0 +1,119 @@
+name: Backend v2 PROD Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/**'
+      - '.github/workflows/backend-v2-prod-preflight.yml'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-v2-prod-preflight
+  cancel-in-progress: true
+
+jobs:
+  readonly-production-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Build backend v2
+        run: npm run backend-v2:build
+
+      - name: Generate loopback-only preflight token
+        shell: bash
+        run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Start read-only backend v2 against production schema
+        env:
+          BD_APP_ENV: prod
+          BD_BACKEND_V2_MODE: readonly
+          BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+          BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+          BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '10000'
+          HOST: 127.0.0.1
+          PORT: '18083'
+          RELEASE_SHA: ${{ github.sha }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node apps/backend-v2/dist/server.js > backend-v2-prod-preflight.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; cat backend-v2-prod-preflight.log || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18083/health > health.json; then
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo 'Backend v2 exited before health check.' >&2
+              exit 1
+            fi
+            sleep 0.25
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:18083/ready > ready.json
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          const ready = JSON.parse(fs.readFileSync('ready.json', 'utf8'));
+          if (!health.ok || health.environment !== 'prod' || health.mode !== 'readonly') {
+            throw new Error(`Unexpected production health payload: ${JSON.stringify(health)}`);
+          }
+          if (health.writes_armed !== false || health.runtime_prefix !== 'bd_prod_' || health.max_connections !== 1) {
+            throw new Error(`Production safety boundary is not read-only: ${JSON.stringify(health)}`);
+          }
+          if (!ready.ok || ready.runtime_prefix !== 'bd_prod_' || ready.writes_armed !== false) {
+            throw new Error(`Production schema preflight failed: ${JSON.stringify(ready)}`);
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            mode: health.mode,
+            writes_armed: health.writes_armed,
+            mysql_version: ready.mysql_version,
+            checked_tables: ready.checked_tables,
+          }));
+          NODE
+
+          status="$(curl --silent --show-error -o mutation.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:18083/internal/v1/scoring/start-match \
+            -H 'content-type: application/json' \
+            -H "x-bd-backend-v2-token: $BD_BACKEND_V2_INTERNAL_TOKEN" \
+            --data '{"kiosk_id":"1","source":"api"}')"
+          test "$status" = '403'
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const mutation = JSON.parse(fs.readFileSync('mutation.json', 'utf8'));
+          if (mutation?.error?.code !== 'backend_v2_read_only') {
+            throw new Error(`Read-only mutation guard did not fire: ${JSON.stringify(mutation)}`);
+          }
+          NODE
+
+          kill "$server_pid"
+          wait "$server_pid" || true
+          trap - EXIT
+          cat backend-v2-prod-preflight.log
