@@ -9,8 +9,10 @@ type PairingStatusResponse = { status: string; kiosk?: { code?: string; name?: s
 type TestChooserResponse = { items: TestBoard[] };
 type TestActivationResponse = { kiosk: { code: string; name?: string; board_number?: number }; source_board?: { id?: number }; physical_board?: { id?: number } };
 type InputMode = "sum" | "per_dart";
+type InputModeMap = Record<string, InputMode>;
 type Multiplier = "S" | "D" | "T";
 type ManualDart = { multiplier: Multiplier; value: number | "BULL" };
+type RemainingPreview = { remaining: number; state: "live" | "bust" | "checkout" };
 
 function text(error: unknown): string { return error instanceof Error ? error.message : "Ukjent feil"; }
 function matchIsAssigned(match: KioskMatch | null | undefined): boolean { return Boolean(match && ["assigned", "ready", "pending"].includes(String(match.status || "").toLowerCase())); }
@@ -50,6 +52,38 @@ function isDoubleOut(darts: ManualDart[]): boolean {
   const last = [...darts].reverse().find((dart) => dart.value !== 0);
   return Boolean(last && last.multiplier === "D");
 }
+function readPlayerInputModes(): InputModeMap {
+  const raw = read("kioskPlayerInputModes");
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const modes: InputModeMap = {};
+    for (const [playerId, mode] of Object.entries(parsed)) {
+      if ((mode === "sum" || mode === "per_dart") && /^\d+$/.test(playerId)) modes[playerId] = mode;
+    }
+    return modes;
+  } catch {
+    return {};
+  }
+}
+function manualRemainingPreview(player: PlayerScore | null, inputMode: InputMode, score: string, darts: ManualDart[]): RemainingPreview | null {
+  if (!player) return null;
+  const hasInput = inputMode === "sum" ? score !== "" : darts.length > 0;
+  if (!hasInput) return null;
+  const visitScore = inputMode === "sum"
+    ? Number(score)
+    : darts.reduce((sum, dart) => sum + manualDartScore(dart), 0);
+  if (!Number.isFinite(visitScore) || visitScore < 0) return null;
+
+  const candidate = Number(player.remaining) - visitScore;
+  if (candidate < 0 || candidate === 1) return { remaining: Number(player.remaining), state: "bust" };
+  if (candidate === 0) {
+    if (inputMode === "per_dart" && !isDoubleOut(darts)) return { remaining: Number(player.remaining), state: "bust" };
+    return { remaining: 0, state: "checkout" };
+  }
+  return { remaining: candidate, state: "live" };
+}
 
 export function KioskWorkspace() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -63,7 +97,7 @@ export function KioskWorkspace() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [score, setScore] = useState("");
-  const [inputMode, setInputMode] = useState<InputMode>(() => read("kioskInputMode") === "per_dart" ? "per_dart" : "sum");
+  const [playerInputModes, setPlayerInputModes] = useState<InputModeMap>(readPlayerInputModes);
   const [darts, setDarts] = useState<ManualDart[]>([]);
   const [multiplier, setMultiplier] = useState<Multiplier>("S");
   const [checkoutScore, setCheckoutScore] = useState<number | null>(null);
@@ -73,6 +107,8 @@ export function KioskWorkspace() {
   const kiosk = snapshot?.kiosk || null;
   const match = snapshot?.match || null;
   const throwing = currentPlayer(match);
+  const throwingPlayerId = throwing?.id ?? null;
+  const inputMode: InputMode = throwingPlayerId !== null ? (playerInputModes[String(throwingPlayerId)] || "sum") : "sum";
   const isTestEnvironment = health?.environment === "test";
   const effectiveTestMode = Boolean(isTestEnvironment && testMode);
   const physicalBoardId = Number(read("testPhysicalBoardId") || 0);
@@ -195,6 +231,10 @@ export function KioskWorkspace() {
     return () => window.clearInterval(handle);
   }, [busy, kioskCode, effectiveTestMode, pairingCode, testBoards.length, loadState, loadTestBoards, checkPairing, createPairing]);
 
+  useEffect(() => {
+    resetInput();
+  }, [throwingPlayerId]);
+
   async function selectTestBoard(board: TestBoard) {
     setBusy(true);
     setError("");
@@ -289,8 +329,12 @@ export function KioskWorkspace() {
   }
 
   function setManualMode(mode: InputMode) {
-    setInputMode(mode);
-    write("kioskInputMode", mode);
+    if (!throwingPlayerId) return;
+    setPlayerInputModes((current) => {
+      const next = { ...current, [String(throwingPlayerId)]: mode };
+      write("kioskPlayerInputModes", JSON.stringify(next));
+      return next;
+    });
     resetInput();
   }
 
@@ -464,7 +508,10 @@ function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, in
 }) {
   const throwing = currentPlayer(match);
   const automatic = scoringMode === "scolia" || scoringMode === "scolia-pending";
-  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={Number(match.current_player_id) === Number(match.player_a.id)} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={Number(match.current_player_id) === Number(match.player_b.id)} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface throwing={throwing} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits">{(match.recent_visits || []).slice(0, 5).map((visit, index) => <div className="visit" key={`${visit.visit_number || index}-${index}`}><span>{visit.player_name || "Spiller"}</span><strong>{Number(visit.score || 0)} {Number(visit.is_bust) === 1 ? "· Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</strong></div>)}</div></div>;
+  const preview = automatic ? null : manualRemainingPreview(throwing, inputMode, score, darts);
+  const playerAActive = Number(match.current_player_id) === Number(match.player_a.id);
+  const playerBActive = Number(match.current_player_id) === Number(match.player_b.id);
+  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} preview={playerAActive ? preview : null} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} preview={playerBActive ? preview : null} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface throwing={throwing} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits">{(match.recent_visits || []).slice(0, 5).map((visit, index) => <div className="visit" key={`${visit.visit_number || index}-${index}`}><span>{visit.player_name || "Spiller"}</span><strong>{Number(visit.score || 0)} {Number(visit.is_bust) === 1 ? "· Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</strong></div>)}</div></div>;
 }
 
 function ManualScoreSurface({ throwing, inputMode, multiplier, darts, score, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit }: {
@@ -532,6 +579,14 @@ function ScoliaScoreSurface({ pending, board, lastVisit, throwing }: { pending: 
   return <div className="scolia-score-v2"><div className="scolia-score-head"><div><span className="pill good">Scolia live</span><h3>{title}</h3><p>{showingBuffer ? `${darts.length}/3 piler${player ? ` · ${player}` : ""}` : (player || "Kast når du er klar")}</p></div><div className={`scolia-score-total ${lastVisit?.is_bust && !showingBuffer ? "bust" : ""}`}><span>{lastVisit?.is_bust && !showingBuffer ? "Bust" : "Sum"}</span><strong>{total === null ? "—" : total}</strong></div></div><div className="scolia-darts-v2">{[0, 1, 2].map((index) => <div className={darts[index] ? "has-dart" : ""} key={index}><span>Pil {index + 1}</span><strong>{dartLabel(darts[index])}</strong></div>)}</div></div>;
 }
 
-function PlayerTile({ player, active }: { player: PlayerScore; active: boolean }) {
-  return <article className={`player-tile ${active ? "active" : ""}`}><p>{active ? "Kaster" : `${player.legs_won} legs`}</p><h2>{player.display_name}</h2><div className="remaining">{player.remaining}</div><p>{player.legs_won} legs</p></article>;
+function PlayerTile({ player, active, preview }: { player: PlayerScore; active: boolean; preview?: RemainingPreview | null }) {
+  const remaining = active && preview ? preview.remaining : player.remaining;
+  const footer = active && preview
+    ? preview.state === "bust"
+      ? "Bust · scoren står"
+      : preview.state === "checkout"
+        ? "Checkout"
+        : "Igjen · live"
+    : `${player.legs_won} legs`;
+  return <article className={`player-tile ${active ? "active" : ""}`}><p>{active ? "Kaster" : `${player.legs_won} legs`}</p><h2>{player.display_name}</h2><div className="remaining">{remaining}</div><p>{footer}</p></article>;
 }
