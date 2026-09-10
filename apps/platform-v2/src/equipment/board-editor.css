@@ -32,26 +32,23 @@
   background: #edf0f2;
   color: var(--muted);
 }
-
-.pairing-task {
-  margin: 0 0 18px;
-  padding: 14px;
-  border: 1px solid #d6e4ec;
-  border-radius: 14px;
-  background: #f7fafb;
-}
-.pairing-task-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-.pairing-task-head h3 { margin: 3px 0 2px; }
-.pairing-task-head p { margin: 0; color: var(--muted); font-size: 13px; }
-.pairing-task .pair-row { background: white; }
 .board-create { margin-bottom: 16px; }
 .board-list { margin-top: 4px; }
+
+.pairing-claim-card {
+  margin-bottom: 18px;
+  border-width: 2px;
+}
+.pairing-claim-card .panel-head h2 { margin: 4px 0; }
+.pairing-claim-card .panel-head p { max-width: 700px; }
+.pairing-claim-steps {
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) minmax(220px, 1.2fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 14px;
+}
+.pairing-claim-steps .button { min-height: 42px; }
 
 .board-connection-card {
   display: grid;
@@ -73,6 +70,14 @@
 .board-connection-card strong { display: block; margin-top: 3px; }
 .board-connection-card small { color: var(--muted); line-height: 1.45; }
 .board-connection-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.board-pairing-entry {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 8px;
+}
+.board-pairing-entry .button { min-height: 42px; }
 .section-label {
   display: block;
   color: var(--muted);
@@ -88,10 +93,17 @@
 .scolia-workspace .scolia-board-list { display: none; }
 .scolia-workspace > .panel-head > div > p { max-width: 680px; }
 
+@media (max-width: 760px) {
+  .pairing-claim-steps { grid-template-columns: 1fr; }
+  .pairing-claim-steps .button { width: 100%; }
+}
+
 @media (max-width: 640px) {
   .board-editor-backdrop { padding: 8px; place-items: end center; }
   .board-editor-card { width: 100%; max-height: calc(100dvh - 16px); border-radius: 20px 20px 14px 14px; }
-  .pairing-task-head, .board-connection-head { display: grid; }
+  .board-connection-head { display: grid; }
+  .board-pairing-entry { grid-template-columns: 1fr; }
+  .board-pairing-entry .button { width: 100%; }
   .board-runtime-actions { display: grid; }
   .board-runtime-actions .button { width: 100%; }
 }

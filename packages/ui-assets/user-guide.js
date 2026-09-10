@@ -1,5 +1,5 @@
 const SURFACE = document.body.dataset.bdSurface === "admin" || document.body.dataset.portalDefault === "overview" ? "admin" : "player";
-const GUIDE_VERSION = "07.09.2026";
+const GUIDE_VERSION = "10.09.2026";
 
 const ELO_EXPLANATION = Object.freeze([
   "Alle starter på 1000 ELO i sesongen når den første tellende ELO-kampen registreres.",
@@ -123,8 +123,9 @@ const GUIDES = Object.freeze({
         steps: [
           "Åpne Klubbadmin → Utstyr og opprett den fysiske skiva med riktig skivenummer.",
           "For en vanlig skive velger du Manuell som scoringstype. Du kan opprette skiva først og koble en terminal til den senere.",
-          "Skal skiva ha et fast nettbrett for manuell scoring, åpner du Blindleia Kiosk på nettbrettet og kobler terminalen til den eksisterende skiva. QR via adminmobil er hovedmetoden.",
-          "Hvis QR-koden ikke kan brukes, skriver du tilkoblingskoden fra nettbrettet manuelt under Utstyr.",
+          "Skal skiva ha et fast nettbrett for manuell scoring, åpner du Blindleia Kiosk på nettbrettet. Nettbrettet viser en klubb-uavhengig QR-kode og tilkoblingskode.",
+          "Scan QR-koden med adminmobilen. Velg klubb hvis kontoen din administrerer flere klubber, og velg deretter skiva nettbrettet står ved.",
+          "Hvis QR-koden ikke kan brukes, åpner du den aktuelle skiva under Utstyr og skriver inn tilkoblingskoden fra nettbrettet der.",
           "For automatisk scoring velger du Scolia på skiva og kobler riktig Scolia-enhet til skivenummeret etter at klubbens Scolia Service Account er konfigurert.",
           "Hvis et nettbrett skal erstattes, beholder du skiva og bruker Bytt nettbrett på den eksisterende skiva. Det gamle nettbrettet fortsetter å virke til det nye faktisk har overtatt.",
         ],
@@ -143,7 +144,7 @@ const GUIDES = Object.freeze({
           "Velg Manuell under Scoring.",
           "La Scolia-feltene være tomme.",
           "Trykk Opprett skive og kontroller at skiva ligger i listen Skiver.",
-          "Hvis skiva skal ha fast nettbrett, åpner du Blindleia Kiosk på nettbrettet og følger QR-tilkoblingen. Du kan også gjøre dette senere.",
+          "Hvis skiva skal ha fast nettbrett, åpner du Blindleia Kiosk på nettbrettet og følger QR-tilkoblingen. Du kan også åpne skiva i Utstyr og skrive inn koden fra nettbrettet.",
         ],
         note: "Det er ikke nødvendig å opprette en ny skive når et nettbrett flyttes eller erstattes. Terminaltilkoblingen kan endres uavhengig av skiva.",
       },
@@ -151,18 +152,17 @@ const GUIDES = Object.freeze({
         id: "pair-tablet",
         group: "Utstyr",
         title: "Koble terminal til en skive",
-        summary: "Bruk QR-koden på nettbrettet som hovedmetode. Tilkoblingskoden er reservealternativet.",
+        summary: "Nettbrettet starter uten klubb. Bruk QR-koden på nettbrettet, eller skriv koden direkte inn på skiva i Utstyr.",
         steps: [
-          "Åpne Blindleia Kiosk på nettbrettet. En terminal som ikke er koblet til viser automatisk en QR-kode og en tilkoblingskode.",
+          "Åpne Blindleia Kiosk på nettbrettet. En terminal som ikke er koblet til viser automatisk en QR-kode og en tilkoblingskode. Koden tilhører ikke en klubb ennå.",
           "Ta opp mobilen din der du er innlogget som klubbadmin, og scan QR-koden med kameraet.",
-          "Blindleia Darts åpner Utstyr og gjenkjenner terminalen automatisk.",
-          "Velg skiva nettbrettet fysisk står ved.",
-          "Trykk Koble. Nettbrettet går videre automatisk til den valgte skiva.",
-          "Kontroller på nettbrettet at riktig skivenummer vises før første kamp startes.",
-          "Hvis du ikke får scannet QR-koden, går du manuelt til Klubbadmin → Utstyr → Koble terminal og skriver inn tilkoblingskoden som vises på nettbrettet.",
-          "Hvis skiva allerede har et nettbrett og du skal erstatte det, trykker du Bytt nettbrett på skiva og kobler det nye. Det gamle fortsetter å virke til det nye har overtatt.",
+          "Hvis kontoen din administrerer flere klubber, velger du først klubben nettbrettet skal tilhøre. Har du bare én klubb, brukes den automatisk.",
+          "Velg skiva nettbrettet fysisk står ved og trykk Koble nettbrett.",
+          "Nettbrettet går videre automatisk til den valgte skiva. Kontroller at riktig skivenummer vises før første kamp startes.",
+          "Som alternativ til QR går du til Klubbadmin → Utstyr, åpner den aktuelle skiva og skriver koden fra nettbrettet i feltet Kode fra nettbrett.",
+          "Hvis skiva allerede har et nettbrett og du skal erstatte det, bruker du Bytt / koble fra nettbrett på skiva før du kobler det nye.",
         ],
-        note: "Koble fra er en separat, sekundær handling. Den fjerner terminaltilkoblingen, men skiva og historikken beholdes.",
+        note: "Terminalkoden er global og får først klubbtilhørighet når en administrator kobler den til en skive. Skiva og historikken beholdes når et nettbrett byttes.",
       },
       {
         id: "scolia",
