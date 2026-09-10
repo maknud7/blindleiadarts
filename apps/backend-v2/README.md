@@ -53,3 +53,17 @@ The second slice keeps the existing Scolia bridge and PHP queue operational, but
 - The canonical scoring port contains no Scolia-specific hardware or WebSocket concepts.
 
 This slice still opens no MySQL connections and exposes no HTTP server. The live PHP implementation remains authoritative for queue persistence, TEST lease routing, reconciliation, ELO/playoff side effects and realtime publication.
+
+## Slice 3: canonical scoring repository boundary
+
+The third slice ports the current PHP `recordVisit` repository/transaction semantics behind the existing TypeScript MySQL session contract:
+
+- the request-key retry check runs before the transaction and is repeated inside it before row locks, matching PHP,
+- active match and open-leg selection retain `SELECT ... FOR UPDATE`,
+- visit evaluation uses the already parity-tested TypeScript 501 rules,
+- leg completion, match completion and `match_statistics` rebuild remain inside the same canonical write transaction,
+- every database `BIGINT` id is required to enter TypeScript as a decimal string,
+- repository SQL uses only the runtime table prefix; identity and hardware prefixes are not reachable from this layer,
+- all SQL calls are serial on one transaction session; there is no nested acquisition and no background/shadow database traffic.
+
+The repository still owns no MySQL driver or pool and is not wired to HTTP, kiosk or Scolia runtime traffic. CI uses a recording session provider to lock query order, idempotency behavior, row-lock placement, prefix isolation and connection usage before any TEST database adapter is introduced.

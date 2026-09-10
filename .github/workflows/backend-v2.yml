@@ -9,6 +9,7 @@ on:
       - 'apps/api/src/Service/Dart501Rules.php'
       - 'apps/api/src/Service/ScoliaSectorMapper.php'
       - 'apps/api/src/Service/ScoliaScoringService.php'
+      - 'apps/api/src/Repository/MatchScoringRepository.php'
       - 'apps/api/src/Repository/ScoliaRoutedEventRepository.php'
       - 'apps/api/src/Repository/ValidationException.php'
       - 'package.json'
