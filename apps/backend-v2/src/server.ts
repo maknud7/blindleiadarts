@@ -4,6 +4,8 @@ import type { ScoringSource } from "./contracts/canonical-scoring.js";
 import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
+import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
+import { MySqlCoreOnlyMutationGuard } from "./mysql/core-only-mutation-guard.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import {
   assertInternalToken,
@@ -12,7 +14,9 @@ import {
   mutationsAllowed,
   RuntimeAccessError,
 } from "./runtime/config.js";
+import { CoreOnlyCanonicalSideEffects } from "./runtime/core-only-side-effects.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
+import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
 
 const config = loadRuntimeConfig();
 const sessions = new MySql2SessionProvider({
@@ -25,7 +29,18 @@ const sessions = new MySql2SessionProvider({
   budget: config.mysql.budget,
   writable: mutationsAllowed(config),
 });
-const scoring = new MySqlCanonicalScoringRepository(sessions, config.prefixes.runtime);
+const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.prefixes.runtime);
+const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
+const coreOnlyMutationGuard = new MySqlCoreOnlyMutationGuard(sessions, config.prefixes.runtime);
+const coreOnlySideEffects = new CoreOnlyCanonicalSideEffects(scoringState);
+const scoring = new CanonicalScoringService(
+  scoringRepository,
+  scoringState,
+  coreOnlySideEffects,
+  coreOnlySideEffects,
+  coreOnlySideEffects,
+  coreOnlySideEffects,
+);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
@@ -47,6 +62,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       environment: config.environment,
       mode: config.mode,
       writes_armed: mutationsAllowed(config),
+      canonical_side_effects_ready: config.canonicalSideEffectsReady,
       release_sha: config.releaseSha,
       runtime_prefix: config.prefixes.runtime,
       max_connections: config.mysql.budget.maxConcurrentConnections,
@@ -62,6 +78,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       environment: config.environment,
       mode: config.mode,
       writes_armed: mutationsAllowed(config),
+      canonical_side_effects_ready: config.canonicalSideEffectsReady,
       release_sha: config.releaseSha,
     });
     return;
@@ -69,8 +86,9 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
 
   if (method === "POST" && url.pathname === "/internal/v1/scoring/start-match") {
     const { kioskId, source } = await scoringCommandContext(request);
-    const result = await scoring.startMatch({ kiosk_id: kioskId, source });
-    sendJson(response, 200, { ok: true, result });
+    await coreOnlyMutationGuard.assertAllowed(kioskId, "start");
+    await scoring.startMatch({ kiosk_id: kioskId, source });
+    sendJson(response, 200, { ok: true });
     return;
   }
 
@@ -85,19 +103,21 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       throw new DomainValidationError("invalid_visit_payload", "Scoring payload must be a JSON object.");
     }
 
-    const result = await scoring.recordVisit({
+    await coreOnlyMutationGuard.assertAllowed(kioskId, "visit");
+    await scoring.recordVisit({
       kiosk_id: kioskId,
       source,
       payload: payload as VisitInput,
     });
-    sendJson(response, 200, { ok: true, result });
+    sendJson(response, 200, { ok: true });
     return;
   }
 
   if (method === "POST" && url.pathname === "/internal/v1/scoring/undo") {
     const { kioskId, source } = await scoringCommandContext(request);
-    const result = await scoring.undoLastVisit({ kiosk_id: kioskId, source });
-    sendJson(response, 200, { ok: true, result });
+    await coreOnlyMutationGuard.assertAllowed(kioskId, "undo");
+    await scoring.undoLastVisit({ kiosk_id: kioskId, source });
+    sendJson(response, 200, { ok: true });
     return;
   }
 
@@ -197,6 +217,7 @@ server.listen(config.port, config.host, () => {
     environment: config.environment,
     mode: config.mode,
     writes_armed: mutationsAllowed(config),
+    canonical_side_effects_ready: config.canonicalSideEffectsReady,
     host: config.host,
     port: config.port,
     max_connections: config.mysql.budget.maxConcurrentConnections,
