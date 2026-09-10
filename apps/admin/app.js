@@ -146,12 +146,20 @@ async function loadAdminData() {
 }
 
 async function loadKioskAdmin() {
-  const [kiosks, pairing] = await Promise.all([
-    api(`/clubs/${state.clubId}/kiosks`),
-    api(`/clubs/${state.clubId}/kiosk-pairing-requests`, { auth: true }),
-  ]);
+  // Physical boards are canonical equipment and must render independently of
+  // transient pairing/runtime data. A pairing failure must never hide valid
+  // PROD-backed boards in TEST or PROD.
+  const kiosks = await api(`/clubs/${state.clubId}/kiosks`);
   state.kiosks = kiosks.items || [];
-  state.pairingRequests = pairing.items || [];
+
+  try {
+    const pairing = await api(`/clubs/${state.clubId}/kiosk-pairing-requests`, { auth: true });
+    state.pairingRequests = pairing.items || [];
+    return null;
+  } catch (error) {
+    state.pairingRequests = [];
+    return `Skivene er lastet, men pairingstatus kunne ikke hentes: ${error.message}`;
+  }
 }
 
 async function loadAll() {
@@ -160,10 +168,14 @@ async function loadAll() {
   el.refreshAllButton.disabled = true;
   hideMessage(el.globalMessage);
   try {
-    await Promise.all([loadAdminData(), loadKioskAdmin()]);
+    const [adminResult, kioskResult] = await Promise.allSettled([loadAdminData(), loadKioskAdmin()]);
     renderAll();
-  } catch (error) {
-    showMessage(el.globalMessage, error.message, "error");
+
+    const warnings = [];
+    if (adminResult.status === "rejected") warnings.push(`Øvrige admindata kunne ikke lastes: ${adminResult.reason?.message || "ukjent feil"}`);
+    if (kioskResult.status === "rejected") warnings.push(`Skivene kunne ikke lastes: ${kioskResult.reason?.message || "ukjent feil"}`);
+    else if (kioskResult.value) warnings.push(kioskResult.value);
+    if (warnings.length) showMessage(el.globalMessage, warnings.join(" "), "warning");
   } finally {
     state.loading = false;
     el.refreshAllButton.disabled = false;
