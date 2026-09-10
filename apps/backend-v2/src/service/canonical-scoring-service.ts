@@ -32,8 +32,11 @@ export interface CanonicalEloPort {
   revertMatch(matchId: DbId): Promise<void>;
 }
 
-export interface CanonicalProjectionPort {
+export interface CanonicalTournamentEloPort {
   syncTournamentElo(matchId: DbId | null): Promise<void>;
+}
+
+export interface CanonicalRankingPort {
   reconcileLinearRanking(matchId: DbId | null): Promise<void>;
 }
 
@@ -66,7 +69,8 @@ export class CanonicalScoringService implements CanonicalScoringPort {
     private readonly state: CanonicalScoringStatePort,
     private readonly playoffs: CanonicalPlayoffPort,
     private readonly elo: CanonicalEloPort,
-    private readonly projections: CanonicalProjectionPort,
+    private readonly tournamentElo: CanonicalTournamentEloPort,
+    private readonly ranking: CanonicalRankingPort,
     private readonly realtime: CanonicalRealtimePort,
   ) {}
 
@@ -74,8 +78,6 @@ export class CanonicalScoringService implements CanonicalScoringPort {
     const before = await this.state.startState(command.kiosk_id);
     const result = await this.repository.startMatch(command);
 
-    // Matches PHP: repeated start calls while an open leg already exists are true
-    // no-ops for playoff reconciliation and realtime publication.
     if (before === null || (before.status === "in_progress" && before.has_open_leg)) {
       return result;
     }
@@ -91,8 +93,6 @@ export class CanonicalScoringService implements CanonicalScoringPort {
   }
 
   async recordVisit(command: RecordVisitCommand): Promise<RecordVisitResult> {
-    // PHP resolves the target before recording. Preserve that detail so a retry
-    // after checkout still reconciles/publishes against the same completed match.
     const matchId = await this.state.targetMatchIdForKiosk(command.kiosk_id, false);
     const result = await this.repository.recordVisit(command);
 
@@ -101,8 +101,8 @@ export class CanonicalScoringService implements CanonicalScoringPort {
     }
 
     await this.playoffs.afterMutation(matchId, false);
-    await this.projections.syncTournamentElo(matchId);
-    await this.projections.reconcileLinearRanking(matchId);
+    await this.tournamentElo.syncTournamentElo(matchId);
+    await this.ranking.reconcileLinearRanking(matchId);
     await this.realtime.publishRefresh({
       kiosk_id: command.kiosk_id,
       match_id: matchId,
@@ -113,7 +113,6 @@ export class CanonicalScoringService implements CanonicalScoringPort {
   }
 
   async undoLastVisit(command: UndoVisitCommand): Promise<UndoVisitResult> {
-    // The playoff guard must execute before canonical state is mutated.
     const matchId = await this.playoffs.assertUndoAllowed(command.kiosk_id);
     const result = await this.repository.undoLastVisit(command);
 
@@ -122,8 +121,8 @@ export class CanonicalScoringService implements CanonicalScoringPort {
     }
 
     await this.playoffs.afterMutation(matchId, true);
-    await this.projections.syncTournamentElo(matchId);
-    await this.projections.reconcileLinearRanking(matchId);
+    await this.tournamentElo.syncTournamentElo(matchId);
+    await this.ranking.reconcileLinearRanking(matchId);
     await this.realtime.publishRefresh({
       kiosk_id: command.kiosk_id,
       match_id: matchId,
@@ -134,7 +133,6 @@ export class CanonicalScoringService implements CanonicalScoringPort {
   }
 }
 
-// Compile-time compatibility assertion without constructing the concrete class.
 type RepositoryCompatibility = MySqlCanonicalScoringRepository extends CanonicalScoringRepositoryPort ? true : never;
 const repositoryCompatibility: RepositoryCompatibility = true;
 void repositoryCompatibility;

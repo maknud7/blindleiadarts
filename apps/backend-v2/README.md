@@ -115,3 +115,18 @@ Season ELO now follows the current PHP event model rather than the older increme
 - all event, season, tournament, player and member identifiers remain decimal strings at the TypeScript boundary.
 
 Tournament-level ELO snapshots are intentionally still a separate projection and are the next ELO migration slice. Playoff reconciliation and linear season ranking are also still pending. PROD scoring writes therefore remain compile-time disabled after this slice.
+
+## Slice 8: tournament ELO snapshots
+
+Tournament ELO is now a separate explicit projection from linear season ranking:
+
+- scoring resolves a match to its tournament and serializes snapshot synchronization behind a tournament row lock,
+- the first snapshot batch covers the full ranked club population, not only tournament participants,
+- if the first synchronization happens after a tournament match already changed ELO, `elo_match_events.rating_*_before` and `matches_before_*` reconstruct the true tournament-start baseline,
+- late participants receive an `entry` baseline while the initial population uses `start`,
+- in-progress tournaments clear stale end values after undo or replay,
+- completed tournaments capture ELO, matches played and full-club rank after the tournament, including non-participants whose rank moved because tournament players passed them,
+- legacy participant-only snapshot sets are repaired by adding missing club baseline rows and recalculating `rank_before`,
+- the PHP read/decorate surface remains available during coexistence; this slice moves only the canonical scoring-side sync mutation.
+
+The former combined projection port is split into `CanonicalTournamentEloPort` and `CanonicalRankingPort`. At this point season ELO, tournament ELO and realtime use real backend-v2 adapters; only playoff reconciliation and linear ranking remain temporary core-only side effects. PROD scoring writes remain compile-time disabled.

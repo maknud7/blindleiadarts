@@ -8,6 +8,7 @@ import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repos
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
 import { MySqlCoreOnlyMutationGuard } from "./mysql/core-only-mutation-guard.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
+import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
   assertInternalToken,
@@ -36,6 +37,7 @@ const sessions = new MySql2SessionProvider({
 const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.prefixes.runtime);
 const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
 const elo = new MySqlCanonicalEloLedger(sessions, config.prefixes.runtime);
+const tournamentElo = new MySqlTournamentEloProjection(sessions, config.prefixes.runtime);
 const coreOnlyMutationGuard = new MySqlCoreOnlyMutationGuard(sessions, config.prefixes.runtime);
 const coreOnlySideEffects = new CoreOnlyCanonicalSideEffects(scoringState);
 const realtime = new CanonicalRealtimePublisher(
@@ -54,6 +56,7 @@ const scoring = new CanonicalScoringService(
   scoringState,
   coreOnlySideEffects,
   elo,
+  tournamentElo,
   coreOnlySideEffects,
   realtime,
 );

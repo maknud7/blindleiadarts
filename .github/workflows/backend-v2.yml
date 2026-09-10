@@ -12,6 +12,7 @@ on:
       - 'apps/api/src/Service/ScoliaSectorMapper.php'
       - 'apps/api/src/Service/ScoliaScoringService.php'
       - 'apps/api/src/Repository/EloLedgerRepository.php'
+      - 'apps/api/src/Repository/TournamentEloSnapshotRepository.php'
       - 'apps/api/src/Repository/MatchScoringRepository.php'
       - 'apps/api/src/Repository/ScoliaRoutedEventRepository.php'
       - 'apps/api/src/Repository/ValidationException.php'
@@ -58,6 +59,7 @@ jobs:
           test -f apps/backend-v2/src/mysql/mysql2-session-provider.ts
           test -f apps/backend-v2/src/mysql/canonical-scoring-state.ts
           test -f apps/backend-v2/src/mysql/canonical-elo-ledger.ts
+          test -f apps/backend-v2/src/mysql/tournament-elo-projection.ts
           test -f apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
@@ -65,7 +67,6 @@ jobs:
           test -f apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
           test -f apps/backend-v2/src/service/canonical-scoring-service.ts
 
-          # One deliberately tiny provider owns the real mysql2 driver import.
           grep -Fq 'from "mysql2/promise"' apps/backend-v2/src/mysql/mysql2-session-provider.ts
           if grep -R -n -F --exclude='mysql2-session-provider.ts' 'from "mysql2/promise"' apps/backend-v2/src; then
             echo 'mysql2/promise may only be imported by mysql2-session-provider.ts' >&2
@@ -77,38 +78,40 @@ jobs:
           fi
           ! grep -R -n -E '\bcreatePool\b|\.getConnection\(' apps/backend-v2/src/mysql
 
-          # Current runtime uses exactly one reusable physical connection and returns
-          # it after a short idle period; no connection churn or hidden pool.
           grep -Fq 'connectionReuse: "idle-reuse"' apps/backend-v2/src/server.ts
           grep -Fq 'idle-reuse requires exactly one backend-v2 MySQL connection slot' apps/backend-v2/src/mysql/mysql2-session-provider.ts
           grep -Fq 'BD_BACKEND_V2_DB_IDLE_MS' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Never auto-retry a unit of work' apps/backend-v2/src/mysql/mysql2-session-provider.ts
 
-          # The coexistence ceiling and table boundaries remain architecture invariants.
           grep -Fq 'may not exceed 2 during coexistence with PHP' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'DB_TABLE_PREFIX=bd_test_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
 
-          # PROD writes remain compile-time blocked until every canonical side effect is migrated.
           grep -Fq 'const FULL_CANONICAL_SIDE_EFFECTS_READY = false' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'backend-v2-e2e-tournament-' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           grep -Fq 'backend_v2_side_effects_not_ready' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
-          # Side effects stay behind orchestration; realtime and season ELO are real adapters.
+          # Each remaining side effect is now an explicit port. Do not recombine
+          # tournament ELO and linear ranking into an ambiguous projection port.
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
-          grep -Fq 'CanonicalProjectionPort' apps/backend-v2/src/service/canonical-scoring-service.ts
+          grep -Fq 'CanonicalTournamentEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
+          grep -Fq 'CanonicalRankingPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/service/canonical-scoring-service.ts
-          grep -Fq 'new CanonicalScoringService' apps/backend-v2/src/server.ts
+          ! grep -Fq 'CanonicalProjectionPort' apps/backend-v2/src/service/canonical-scoring-service.ts
+
           grep -Fq 'new MySqlCanonicalEloLedger' apps/backend-v2/src/server.ts
+          grep -Fq 'new MySqlTournamentEloProjection' apps/backend-v2/src/server.ts
           grep -Fq 'new CanonicalRealtimePublisher' apps/backend-v2/src/server.ts
-          grep -Fq 'SELECT id FROM ${this.table("seasons")} WHERE id=? FOR UPDATE' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
-          grep -Fq 'elo_match_events' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
-          grep -Fq 'elo_current_ratings' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
-          grep -Fq 'ranking_snapshots' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
+          grep -Fq 'FOR UPDATE' apps/backend-v2/src/mysql/tournament-elo-projection.ts
+          grep -Fq 'INSERT IGNORE INTO ${this.table("tournament_elo_snapshots")}' apps/backend-v2/src/mysql/tournament-elo-projection.ts
+          grep -Fq 'elo_match_events' apps/backend-v2/src/mysql/tournament-elo-projection.ts
           grep -Fq 'event: "snapshot"' apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
-          if grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/runtime/core-only-side-effects.ts; then
-            echo 'Realtime must not regress to the core-only no-op adapter.' >&2
+
+          if grep -Eq 'Canonical(Elo|TournamentElo|Realtime)Port' apps/backend-v2/src/runtime/core-only-side-effects.ts; then
+            echo 'Migrated ELO/realtime ports must not regress to core-only no-op adapters.' >&2
             exit 1
           fi
+          grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/runtime/core-only-side-effects.ts
+          grep -Fq 'CanonicalRankingPort' apps/backend-v2/src/runtime/core-only-side-effects.ts
