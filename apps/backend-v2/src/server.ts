@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { ScoringSource } from "./contracts/canonical-scoring.js";
 import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
+import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
 import { MySqlCoreOnlyMutationGuard } from "./mysql/core-only-mutation-guard.js";
@@ -34,6 +35,7 @@ const sessions = new MySql2SessionProvider({
 });
 const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.prefixes.runtime);
 const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
+const elo = new MySqlCanonicalEloLedger(sessions, config.prefixes.runtime);
 const coreOnlyMutationGuard = new MySqlCoreOnlyMutationGuard(sessions, config.prefixes.runtime);
 const coreOnlySideEffects = new CoreOnlyCanonicalSideEffects(scoringState);
 const realtime = new CanonicalRealtimePublisher(
@@ -51,7 +53,7 @@ const scoring = new CanonicalScoringService(
   scoringRepository,
   scoringState,
   coreOnlySideEffects,
-  coreOnlySideEffects,
+  elo,
   coreOnlySideEffects,
   realtime,
 );
