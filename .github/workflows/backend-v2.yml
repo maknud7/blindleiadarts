@@ -71,6 +71,13 @@ jobs:
           fi
           ! grep -R -n -E '\bcreatePool\b|\.getConnection\(' apps/backend-v2/src/mysql
 
+          # Current runtime uses exactly one reusable physical connection and returns
+          # it after a short idle period; no connection churn or hidden pool.
+          grep -Fq 'connectionReuse: "idle-reuse"' apps/backend-v2/src/server.ts
+          grep -Fq 'idle-reuse requires exactly one backend-v2 MySQL connection slot' apps/backend-v2/src/mysql/mysql2-session-provider.ts
+          grep -Fq 'BD_BACKEND_V2_DB_IDLE_MS' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'Never auto-retry a unit of work' apps/backend-v2/src/mysql/mysql2-session-provider.ts
+
           # The coexistence ceiling and table boundaries remain architecture invariants.
           grep -Fq 'may not exceed 2 during coexistence with PHP' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'DB_TABLE_PREFIX=bd_test_' apps/backend-v2/src/runtime/config.ts
