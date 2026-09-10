@@ -109,7 +109,10 @@ jobs:
           grep -Fq 'kioskPlayerInputModes' apps/platform-v2/src/shared/storage.ts
           grep -Fq 'readPlayerInputModes' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq 'manualRemainingPreview' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
-          grep -Fq 'Bust · scoren står' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq '<div className="remaining">{player.remaining}</div>' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq '<h3>Registrer kast</h3>' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'Etter kast' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'grid-template-columns: repeat(4, minmax(0, 1fr))' apps/platform-v2/src/kiosk/recent-visit-editor.css
           if grep -Fq 'PlatformNav' apps/platform-v2/src/kiosk/main.tsx; then
             echo 'Kiosk v2 must be a full-screen terminal surface, not a portal page.' >&2
             exit 1
