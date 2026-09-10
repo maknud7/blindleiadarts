@@ -1,0 +1,73 @@
+name: Platform v2 TEST Smoke
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'package.json'
+      - 'apps/platform-v2/**'
+      - 'infra/deploy/build-release.sh'
+      - '.github/workflows/platform-v2-test-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-v2-test-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://test.blindleiadarts.ingenting.org
+      EXPECTED_SHA: ${{ github.sha }}
+    steps:
+      - name: Wait for exact TEST release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in $(seq 1 40); do
+            release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq "$EXPECTED_SHA" <<<"$release"; then
+              echo "PLATFORM_V2_TEST_RELEASE_MATCH=yes"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Platform v2 smoke failed: exact TEST release did not become live." >&2
+          exit 1
+
+      - name: Verify v2 browser entries and hashed assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for surface in equipment kiosk; do
+            html="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/v2/$surface/?cb=$RANDOM")"
+            grep -Fq '/v2/assets/' <<<"$html"
+            assets="$(grep -oE '/v2/assets/[^\" ]+\.(js|css)' <<<"$html" | sort -u)"
+            test -n "$assets"
+            while IFS= read -r asset; do
+              curl -fsS --connect-timeout 5 --max-time 20 -o /dev/null "$base$asset?cb=$RANDOM"
+            done <<<"$assets"
+            echo "PLATFORM_V2_${surface^^}_ENTRY_OK=yes"
+          done
+
+      - name: Verify shared API and canonical TEST board registry
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          health="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/api/v1/health?cb=$RANDOM")"
+          chooser="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/api/kiosk-test-mode.php?cb=$RANDOM")"
+
+          jq -e '.ok == true and .data.status == "ok" and .data.environment == "test"' <<<"$health" >/dev/null
+          jq -e '.ok == true' <<<"$chooser" >/dev/null
+          jq -e '.data.source == "canonical_physical_board_registry"' <<<"$chooser" >/dev/null
+          jq -e 'any(.data.items[]; .club_slug == "blindleia-dartklubb")' <<<"$chooser" >/dev/null
+
+          echo "PLATFORM_V2_TEST_API_OK=yes"
+          echo "PLATFORM_V2_CANONICAL_BOARD_REGISTRY_OK=yes"
