@@ -87,8 +87,8 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   if (method === "POST" && url.pathname === "/internal/v1/scoring/start-match") {
     const { kioskId, source } = await scoringCommandContext(request);
     await coreOnlyMutationGuard.assertAllowed(kioskId, "start");
-    await scoring.startMatch({ kiosk_id: kioskId, source });
-    sendJson(response, 200, { ok: true });
+    const result = await scoring.startMatch({ kiosk_id: kioskId, source });
+    sendJson(response, 200, { ok: true, result });
     return;
   }
 
@@ -104,20 +104,20 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     }
 
     await coreOnlyMutationGuard.assertAllowed(kioskId, "visit");
-    await scoring.recordVisit({
+    const result = await scoring.recordVisit({
       kiosk_id: kioskId,
       source,
       payload: payload as VisitInput,
     });
-    sendJson(response, 200, { ok: true });
+    sendJson(response, 200, { ok: true, result });
     return;
   }
 
   if (method === "POST" && url.pathname === "/internal/v1/scoring/undo") {
     const { kioskId, source } = await scoringCommandContext(request);
     await coreOnlyMutationGuard.assertAllowed(kioskId, "undo");
-    await scoring.undoLastVisit({ kiosk_id: kioskId, source });
-    sendJson(response, 200, { ok: true });
+    const result = await scoring.undoLastVisit({ kiosk_id: kioskId, source });
+    sendJson(response, 200, { ok: true, result });
     return;
   }
 
