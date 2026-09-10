@@ -7,6 +7,7 @@ import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repos
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
 import { MySqlCoreOnlyMutationGuard } from "./mysql/core-only-mutation-guard.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
+import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
   assertInternalToken,
   assertMutationAllowed,
@@ -35,13 +36,24 @@ const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.p
 const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
 const coreOnlyMutationGuard = new MySqlCoreOnlyMutationGuard(sessions, config.prefixes.runtime);
 const coreOnlySideEffects = new CoreOnlyCanonicalSideEffects(scoringState);
+const realtime = new CanonicalRealtimePublisher(
+  sessions,
+  config.prefixes.runtime,
+  {
+    publishUrl: config.realtime.publishUrl,
+    publishSecret: config.realtime.publishSecret,
+    timeoutMs: config.realtime.timeoutMs,
+  },
+  globalThis.fetch.bind(globalThis),
+  { warn: (message, details) => console.warn(message, details) },
+);
 const scoring = new CanonicalScoringService(
   scoringRepository,
   scoringState,
   coreOnlySideEffects,
   coreOnlySideEffects,
   coreOnlySideEffects,
-  coreOnlySideEffects,
+  realtime,
 );
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
@@ -65,6 +77,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       mode: config.mode,
       writes_armed: mutationsAllowed(config),
       canonical_side_effects_ready: config.canonicalSideEffectsReady,
+      realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
       runtime_prefix: config.prefixes.runtime,
       max_connections: config.mysql.budget.maxConcurrentConnections,
@@ -83,6 +96,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       mode: config.mode,
       writes_armed: mutationsAllowed(config),
       canonical_side_effects_ready: config.canonicalSideEffectsReady,
+      realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
     });
     return;
@@ -222,6 +236,7 @@ server.listen(config.port, config.host, () => {
     mode: config.mode,
     writes_armed: mutationsAllowed(config),
     canonical_side_effects_ready: config.canonicalSideEffectsReady,
+    realtime_publish_enabled: config.realtime.publishEnabled,
     host: config.host,
     port: config.port,
     max_connections: config.mysql.budget.maxConcurrentConnections,

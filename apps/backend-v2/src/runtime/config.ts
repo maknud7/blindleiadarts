@@ -27,12 +27,18 @@ export interface BackendRuntimeConfig {
     idleConnectionTimeoutMs: number;
     budget: MySqlConnectionBudget;
   };
+  realtime: {
+    publishUrl: string | null;
+    publishSecret: string | null;
+    timeoutMs: number;
+    publishEnabled: boolean;
+  };
 }
 
 const PROD_WRITE_CONFIRMATION = "ALLOW_PROD_SCORING_WRITES";
 
 // Deliberately compile-time false while ELO, playoff reconciliation, tournament
-// ELO, linear ranking and realtime are still being migrated behind the canonical
+// ELO and linear ranking are still being migrated behind the canonical
 // orchestration boundary. An environment variable alone must never be able to
 // turn partial backend-v2 semantics into a production writer.
 const FULL_CANONICAL_SIDE_EFFECTS_READY = false;
@@ -50,6 +56,16 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
     env.BD_BACKEND_V2_DB_IDLE_MS ?? "15000",
     "BD_BACKEND_V2_DB_IDLE_MS",
   );
+  const realtimeTimeoutMs = integer(
+    env.BD_BACKEND_V2_REALTIME_TIMEOUT_MS ?? "1500",
+    "BD_BACKEND_V2_REALTIME_TIMEOUT_MS",
+  );
+  if (realtimeTimeoutMs > 10_000) {
+    throw new TypeError("BD_BACKEND_V2_REALTIME_TIMEOUT_MS may not exceed 10000.");
+  }
+  const realtimePublishUrl = optional(env.REALTIME_PUBLISH_URL);
+  const realtimePublishSecret = optional(env.REALTIME_PUBLISH_SECRET);
+  const realtimePublishEnabled = realtimePublishUrl !== null && realtimePublishSecret !== null;
 
   // Backend-v2 deliberately owns only a tiny slice of hosted DB capacity while
   // PHP remains live. Raising this ceiling requires an explicit architecture change.
@@ -113,6 +129,12 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
       idleConnectionTimeoutMs,
       budget,
     },
+    realtime: {
+      publishUrl: realtimePublishUrl,
+      publishSecret: realtimePublishSecret,
+      timeoutMs: realtimeTimeoutMs,
+      publishEnabled: realtimePublishEnabled,
+    },
   };
 }
 
@@ -173,6 +195,11 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]?.trim();
   if (!value) throw new TypeError(`${name} is required.`);
   return value;
+}
+
+function optional(value: string | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return normalized === "" ? null : normalized;
 }
 
 function integer(value: string, name: string): number {

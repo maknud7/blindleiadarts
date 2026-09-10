@@ -71,18 +71,32 @@ The third slice ports the current PHP `recordVisit` repository/transaction seman
 The fourth slice makes backend-v2 runnable as a separate Node service without routing any user traffic to it:
 
 - `mysql2` is isolated behind one `MySqlSessionProvider`; there is no pool,
-- one physical connection is opened per admitted unit of work and closed immediately afterwards,
+- normal runtime work is serialized through one admitted slot and one physical connection is reused only for a short idle window before being returned,
 - coexistence with PHP defaults to one backend-v2 connection and is hard-capped at two,
 - `/health` is local runtime state while `/ready` performs a real read-only scoring-schema compatibility probe,
 - runtime modes are `readonly`, `test-write` and `prod-canary`,
 - TEST writes require both the TEST environment and `bd_test_` runtime prefix,
-- PROD compatibility testing is read-only by default; a separate explicit confirmation is required before the provider can ever become writable,
+- PROD compatibility testing is read-only by default; production writes remain compile-time blocked until the complete canonical side-effect chain is migrated,
 - mutation HTTP routes require an internal token.
 
 ## Slice 5: scoring lifecycle E2E and production preflight
 
 The fifth slice extends the same canonical repository to `startMatch`, `recordVisit` and `undoLastVisit`, preserving PHP transaction and row-lock behavior. The internal HTTP runtime exposes the full scoring lifecycle without changing kiosk or Scolia routing.
 
-A real TEST E2E workflow runs only after a successful `Deploy Test` and checks out that exact SHA. It creates an isolated `bd_test_` fixture, starts backend-v2 with a one-connection budget, runs start → scoring → idempotent retry → checkout → statistics → undo through HTTP, verifies persisted MySQL state and removes the fixture.
+A real TEST E2E workflow is SHA-gated against the deployed TEST release. It creates an isolated `bd_test_` fixture, starts backend-v2 with a one-connection budget, runs start → scoring → idempotent retry → checkout → statistics → undo through HTTP, verifies persisted MySQL state and removes the fixture. This lifecycle is now proven green against the hosted TEST database.
 
-A separate production preflight starts the same backend-v2 runtime against `bd_prod_` in `readonly` mode with a one-connection budget. It validates the production scoring schema through `/ready` and proves the mutation endpoint is rejected before any write. This is the first preproduction use of real production data; production scoring remains owned by PHP until canonical side effects and source routing have also moved behind backend-v2.
+A separate production preflight starts the same backend-v2 runtime against `bd_prod_` in `readonly` mode with a one-connection budget. It validates the production scoring schema through `/ready` and proves the mutation endpoint is rejected before any write. This is preproduction use of real production data; production scoring remains owned by PHP until canonical side effects and source routing have also moved behind backend-v2.
+
+## Slice 6: canonical realtime publication
+
+Realtime refresh publication is the first post-mutation side effect migrated from the orchestration boundary:
+
+- backend-v2 reads the kiosk code and club id only after the canonical scoring mutation has committed,
+- it publishes the same `snapshot` event to `kiosk:<code>` and `club:<id>` channels,
+- the refresh payload preserves reason and scoring source while keeping canonical database ids as decimal strings,
+- relay exchanges default to the same 1.5 second bound as PHP,
+- missing realtime configuration is a zero-work no-op and does not spend a MySQL connection slot,
+- lookup, network, timeout and relay response failures are all best effort and can never turn a successful canonical scoring mutation into a client-visible write failure,
+- the old `CoreOnlyCanonicalSideEffects` no longer contains a realtime no-op; remaining temporary ports are ELO, playoff reconciliation and ranking projections only.
+
+Realtime configuration uses `REALTIME_PUBLISH_URL` and `REALTIME_PUBLISH_SECRET`. Production scoring writes remain compile-time disabled after this slice because ELO, playoff reconciliation, tournament ELO and linear ranking are still pending migration.

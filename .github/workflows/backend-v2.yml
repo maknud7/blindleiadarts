@@ -13,6 +13,7 @@ on:
       - 'apps/api/src/Repository/MatchScoringRepository.php'
       - 'apps/api/src/Repository/ScoliaRoutedEventRepository.php'
       - 'apps/api/src/Repository/ValidationException.php'
+      - 'apps/api/src/Support/Config.php'
       - 'package.json'
       - '.github/workflows/backend-v2.yml'
   workflow_dispatch:
@@ -57,6 +58,7 @@ jobs:
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
           test -f apps/backend-v2/src/runtime/core-only-side-effects.ts
+          test -f apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
           test -f apps/backend-v2/src/service/canonical-scoring-service.ts
 
           # One deliberately tiny provider owns the real mysql2 driver import.
@@ -89,9 +91,17 @@ jobs:
           grep -Fq 'backend-v2-e2e-tournament-' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           grep -Fq 'backend_v2_side_effects_not_ready' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
-          # Side effects must stay behind the canonical orchestration boundary.
+          # Side effects stay behind orchestration; realtime is now a real best-effort adapter.
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalProjectionPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'new CanonicalScoringService' apps/backend-v2/src/server.ts
+          grep -Fq 'new CanonicalRealtimePublisher' apps/backend-v2/src/server.ts
+          grep -Fq 'timeoutMs: config.realtime.timeoutMs' apps/backend-v2/src/server.ts
+          grep -Fq 'event: "snapshot"' apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
+          grep -Fq 'Realtime is' apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
+          if grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/runtime/core-only-side-effects.ts; then
+            echo 'Realtime must not regress to the core-only no-op adapter.' >&2
+            exit 1
+          fi
