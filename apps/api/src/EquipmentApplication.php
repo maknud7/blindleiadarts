@@ -6,6 +6,7 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\EquipmentInventoryRepository;
 use Blindleia\Dartkiosk\Api\Repository\EquipmentRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
@@ -41,9 +42,21 @@ final class EquipmentApplication
             $database = new Database($config);
             $users = new UserAccountRepository($database);
             $repo = new EquipmentRepository($database);
+            $inventory = new EquipmentInventoryRepository($database);
             $kiosks = new KioskRepository($database);
 
-            if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
+            if ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/equipment/boards$#', $path, $matches) === 1) {
+                $clubId = (int) $matches[1];
+                $admin = $this->requireAdmin($request, $users, $clubId);
+                if ($admin instanceof JsonResponse) {
+                    $response = $admin;
+                } else {
+                    $response = JsonResponse::ok([
+                        'club_id' => $clubId,
+                        'items' => $inventory->listBoards($clubId),
+                    ] + $repo->scope());
+                }
+            } elseif ($method === 'GET' && preg_match('#^v1/clubs/(\d+)/kiosks$#', $path, $matches) === 1) {
                 $clubId = (int) $matches[1];
                 $response = JsonResponse::ok([
                     'club_id' => $clubId,
@@ -139,6 +152,7 @@ final class EquipmentApplication
 
     private function handles(string $method, string $path): bool
     {
+        if ($method === 'GET' && preg_match('#^v1/clubs/\d+/equipment/boards$#', $path) === 1) return true;
         if ($method === 'GET' && preg_match('#^v1/clubs/\d+/kiosks$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^v1/clubs/\d+/kiosks$#', $path) === 1) return true;
         if ($method === 'PATCH' && preg_match('#^v1/clubs/\d+/kiosks/\d+$#', $path) === 1) return true;
