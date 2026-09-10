@@ -21,13 +21,20 @@ function baseEnv(overrides = {}) {
   };
 }
 
-test("readonly is the safe default and never arms writes", () => {
+test("readonly is the safe default and keeps one MySQL slot with short idle reuse", () => {
   const config = loadRuntimeConfig(baseEnv({ BD_BACKEND_V2_MODE: undefined }));
   assert.equal(config.mode, "readonly");
   assert.equal(config.mysql.budget.maxConcurrentConnections, 1);
+  assert.equal(config.mysql.idleConnectionTimeoutMs, 15_000);
   assert.equal(config.canonicalSideEffectsReady, false);
   assert.equal(mutationsAllowed(config), false);
   assert.throws(() => assertMutationAllowed(config), /read-only mode/);
+});
+
+test("MySQL idle reuse can be tuned without changing the connection budget", () => {
+  const config = loadRuntimeConfig(baseEnv({ BD_BACKEND_V2_DB_IDLE_MS: "5000" }));
+  assert.equal(config.mysql.idleConnectionTimeoutMs, 5000);
+  assert.equal(config.mysql.budget.maxConcurrentConnections, 1);
 });
 
 test("TEST writes require test environment, test prefix and internal token", () => {
