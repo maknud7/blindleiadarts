@@ -1,0 +1,32 @@
+.scolia-kiosk-strip { display:flex; justify-content:space-between; align-items:center; gap:14px; margin:0 0 14px; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:#f7fafb; }
+.scolia-kiosk-strip.good { border-color:#b8ead5; background:#ecfdf5; }
+.scolia-kiosk-strip.warn { border-color:#eed89a; background:#fff8e5; }
+.scolia-kiosk-strip strong,.scolia-kiosk-strip span { display:block; }
+.scolia-kiosk-strip > div > span { margin-top:3px; color:var(--muted); font-size:12px; }
+.scolia-kiosk-strip .error-copy { color:var(--bad); font-weight:750; }
+.scolia-kiosk-strip .row-actions { flex:0 0 auto; }
+.scolia-wait { min-height:240px; }
+
+.scolia-score-v2 { margin-top:14px; padding:16px; border:1px solid #b8ead5; border-radius:18px; background:#f2fcf8; }
+.scolia-score-head { display:flex; justify-content:space-between; gap:16px; align-items:center; }
+.scolia-score-head h3 { margin:7px 0 2px; font-size:clamp(23px,4vw,34px); }
+.scolia-score-head p { margin:0; color:var(--muted); }
+.scolia-score-total { min-width:112px; text-align:center; padding:10px 14px; border-radius:14px; background:#fff; border:1px solid var(--line); }
+.scolia-score-total span,.scolia-score-total strong { display:block; }
+.scolia-score-total span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+.scolia-score-total strong { font-size:42px; line-height:1; margin-top:4px; }
+.scolia-score-total.bust { border-color:#f1b2b2; background:#fff0f0; }
+.scolia-darts-v2 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:14px; }
+.scolia-darts-v2 > div { display:grid; place-items:center; min-height:88px; border:1px dashed #aac0ca; border-radius:14px; background:rgba(255,255,255,.72); }
+.scolia-darts-v2 > div.has-dart { border-style:solid; border-color:#8dd7bc; background:#fff; }
+.scolia-darts-v2 span { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+.scolia-darts-v2 strong { margin-top:3px; font-size:clamp(24px,5vw,38px); }
+
+@media (max-width:760px) {
+  .scolia-kiosk-strip { display:grid; align-items:stretch; }
+  .scolia-kiosk-strip .row-actions { justify-content:stretch; }
+  .scolia-kiosk-strip .row-actions > * { flex:1; }
+  .scolia-score-head { align-items:flex-start; }
+  .scolia-score-total { min-width:86px; }
+  .scolia-darts-v2 > div { min-height:72px; }
+}

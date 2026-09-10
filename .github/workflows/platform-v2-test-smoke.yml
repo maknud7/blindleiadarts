@@ -46,15 +46,37 @@ jobs:
           set -Eeuo pipefail
           base="${BASE_URL%/}"
           for surface in equipment kiosk; do
-            html="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/v2/$surface/?cb=$RANDOM")"
-            grep -Fq '/v2/assets/' <<<"$html"
-            assets="$(grep -oE '/v2/assets/[^\" ]+\.(js|css)' <<<"$html" | sort -u)"
-            test -n "$assets"
-            while IFS= read -r asset; do
-              curl -fsS --connect-timeout 5 --max-time 20 -o /dev/null "$base$asset?cb=$RANDOM"
-            done <<<"$assets"
+            ready=no
+            for attempt in $(seq 1 30); do
+              html="$(curl -fsS --connect-timeout 5 --max-time 20 "$base/v2/$surface/?cb=$RANDOM" || true)"
+              if grep -Fq '/v2/assets/' <<<"$html"; then
+                assets="$(grep -oE '/v2/assets/[^\" ]+\.(js|css)' <<<"$html" | sort -u || true)"
+                if [[ -n "$assets" ]]; then
+                  assets_ok=yes
+                  while IFS= read -r asset; do
+                    if ! curl -fsS --connect-timeout 5 --max-time 20 -o /dev/null "$base$asset?cb=$RANDOM"; then
+                      assets_ok=no
+                      break
+                    fi
+                  done <<<"$assets"
+                  if [[ "$assets_ok" == "yes" ]]; then
+                    ready=yes
+                    break
+                  fi
+                fi
+              fi
+              sleep 2
+            done
+            if [[ "$ready" != "yes" ]]; then
+              echo "Platform v2 smoke failed: $surface entry or hashed assets did not become ready after release marker." >&2
+              exit 1
+            fi
             echo "PLATFORM_V2_${surface^^}_ENTRY_OK=yes"
           done
+
+          release="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/release.json?cb=$RANDOM")"
+          grep -Fq "$EXPECTED_SHA" <<<"$release"
+          echo "PLATFORM_V2_ASSETS_MATCH_RELEASE=yes"
 
       - name: Verify shared API and canonical TEST board registry
         shell: bash

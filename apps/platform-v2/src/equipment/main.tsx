@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { EquipmentApp } from "./EquipmentApp";
+import { EquipmentWorkspace } from "./EquipmentWorkspace";
 import "../shared/styles.css";
+import "./scolia.css";
 
-createRoot(document.getElementById("root")!).render(<StrictMode><EquipmentApp /></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><EquipmentWorkspace /></StrictMode>);
