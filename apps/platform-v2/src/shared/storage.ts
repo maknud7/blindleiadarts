@@ -10,14 +10,19 @@ const KEYS = {
   testBoardLabel: "bd:kioskTestBoardLabel",
 } as const;
 
-export function read(key: keyof typeof KEYS): string {
+export type StorageKey = keyof typeof KEYS;
+export const STORAGE_EVENT = "bd:v2-storage";
+
+export function read(key: StorageKey): string {
   return localStorage.getItem(KEYS[key]) || "";
 }
 
-export function write(key: keyof typeof KEYS, value: string | number | null | undefined): void {
+export function write(key: StorageKey, value: string | number | null | undefined): void {
   const storageKey = KEYS[key];
-  if (value === null || value === undefined || String(value) === "") localStorage.removeItem(storageKey);
-  else localStorage.setItem(storageKey, String(value));
+  const normalized = value === null || value === undefined || String(value) === "" ? "" : String(value);
+  if (!normalized) localStorage.removeItem(storageKey);
+  else localStorage.setItem(storageKey, normalized);
+  window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: { key, value: normalized } }));
 }
 
 export function ensureKioskToken(): string {
