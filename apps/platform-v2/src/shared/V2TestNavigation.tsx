@@ -1,3 +1,5 @@
+import "./v2-test-navigation.css";
+
 function isTestHost(): boolean {
   return /^test\./i.test(window.location.hostname) || /(^|\.)test\./i.test(window.location.hostname);
 }
