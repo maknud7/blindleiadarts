@@ -106,6 +106,10 @@ jobs:
           grep -Fq 'KioskErrorBoundary' apps/platform-v2/src/kiosk/main.tsx
           grep -Fq 'leg_number' apps/platform-v2/src/shared/api.ts
           grep -Fq 'normalizeKioskSnapshot' apps/platform-v2/src/shared/api.ts
+          grep -Fq 'kioskPlayerInputModes' apps/platform-v2/src/shared/storage.ts
+          grep -Fq 'readPlayerInputModes' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'manualRemainingPreview' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'Bust · scoren står' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           if grep -Fq 'PlatformNav' apps/platform-v2/src/kiosk/main.tsx; then
             echo 'Kiosk v2 must be a full-screen terminal surface, not a portal page.' >&2
             exit 1
