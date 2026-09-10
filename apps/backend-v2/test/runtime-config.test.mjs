@@ -25,6 +25,7 @@ test("readonly is the safe default and never arms writes", () => {
   const config = loadRuntimeConfig(baseEnv({ BD_BACKEND_V2_MODE: undefined }));
   assert.equal(config.mode, "readonly");
   assert.equal(config.mysql.budget.maxConcurrentConnections, 1);
+  assert.equal(config.canonicalSideEffectsReady, false);
   assert.equal(mutationsAllowed(config), false);
   assert.throws(() => assertMutationAllowed(config), /read-only mode/);
 });
@@ -60,7 +61,7 @@ test("TEST writes require test environment, test prefix and internal token", () 
   );
 });
 
-test("PROD canary connects read-only until a second explicit write confirmation is present", () => {
+test("PROD canary remains read-only even when the legacy write confirmation is supplied", () => {
   const safeCanary = loadRuntimeConfig(baseEnv({
     BD_APP_ENV: "prod",
     BD_BACKEND_V2_MODE: "prod-canary",
@@ -70,16 +71,19 @@ test("PROD canary connects read-only until a second explicit write confirmation 
     BD_BACKEND_V2_INTERNAL_TOKEN: "canary-token",
   }));
   assert.equal(mutationsAllowed(safeCanary), false);
-  assert.throws(() => assertMutationAllowed(safeCanary), /writes are not armed/);
+  assert.equal(safeCanary.canonicalSideEffectsReady, false);
+  assert.throws(() => assertMutationAllowed(safeCanary), /full canonical side effects/);
 
-  const armedCanary = loadRuntimeConfig(baseEnv({
+  const confirmedCanary = loadRuntimeConfig(baseEnv({
     BD_APP_ENV: "prod",
     BD_BACKEND_V2_MODE: "prod-canary",
     DB_TABLE_PREFIX: "bd_prod_",
     BD_BACKEND_V2_INTERNAL_TOKEN: "canary-token",
     BD_BACKEND_V2_PROD_WRITE_CONFIRMATION: "ALLOW_PROD_SCORING_WRITES",
   }));
-  assert.equal(mutationsAllowed(armedCanary), true);
+  assert.equal(confirmedCanary.prodCanaryWritesEnabled, false);
+  assert.equal(mutationsAllowed(confirmedCanary), false);
+  assert.throws(() => assertMutationAllowed(confirmedCanary), /full canonical side effects/);
 });
 
 test("coexistence hard caps backend-v2 at two database connections", () => {
