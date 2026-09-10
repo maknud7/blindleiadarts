@@ -28,6 +28,8 @@ const sessions = new MySql2SessionProvider({
   connectTimeoutMs: config.mysql.connectTimeoutMs,
   budget: config.mysql.budget,
   writable: mutationsAllowed(config),
+  connectionReuse: "idle-reuse",
+  idleConnectionTimeoutMs: config.mysql.idleConnectionTimeoutMs,
 });
 const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.prefixes.runtime);
 const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
@@ -66,6 +68,8 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       release_sha: config.releaseSha,
       runtime_prefix: config.prefixes.runtime,
       max_connections: config.mysql.budget.maxConcurrentConnections,
+      connection_mode: "idle-reuse",
+      db_idle_ms: config.mysql.idleConnectionTimeoutMs,
     });
     return;
   }
@@ -221,17 +225,30 @@ server.listen(config.port, config.host, () => {
     host: config.host,
     port: config.port,
     max_connections: config.mysql.budget.maxConcurrentConnections,
+    connection_mode: "idle-reuse",
+    db_idle_ms: config.mysql.idleConnectionTimeoutMs,
     release_sha: config.releaseSha,
   }));
 });
 
+let shuttingDown = false;
 function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(JSON.stringify({ event: "backend_v2_shutdown", signal }));
   server.close((error) => {
-    if (error) {
-      console.error(error);
-      process.exitCode = 1;
-    }
+    void (async () => {
+      if (error) {
+        console.error(error);
+        process.exitCode = 1;
+      }
+      try {
+        await sessions.close();
+      } catch (closeError) {
+        console.error("backend-v2 MySQL shutdown failed", closeError);
+        process.exitCode = 1;
+      }
+    })();
   });
 }
 
