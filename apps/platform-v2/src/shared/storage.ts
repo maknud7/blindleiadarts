@@ -3,6 +3,7 @@ const KEYS = {
   selectedClub: "bd:selectedClubId",
   kioskCode: "bd:kioskCode",
   kioskToken: "bd:kioskPairingToken",
+  kioskInputMode: "bd:kioskInputMode",
   pairingRequest: "bd:kioskPairingRequestCode",
   pairingExpires: "bd:kioskPairingExpires",
   testMode: "bd:kioskTestMode",
