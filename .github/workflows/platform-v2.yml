@@ -6,6 +6,7 @@ on:
     paths:
       - 'package.json'
       - 'apps/platform-v2/**'
+      - 'apps/admin/platform-v2-test-routing.js'
       - 'infra/deploy/build-release.sh'
       - '.github/workflows/platform-v2.yml'
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - 'package.json'
       - 'apps/platform-v2/**'
+      - 'apps/admin/platform-v2-test-routing.js'
       - 'infra/deploy/build-release.sh'
       - '.github/workflows/platform-v2.yml'
   workflow_dispatch:
@@ -55,6 +57,16 @@ jobs:
             echo 'Platform v2 HTTP traffic must go through src/shared/api.ts.' >&2
             exit 1
           fi
+
+      - name: Verify connected TEST navigation contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'equipment: "/v2/equipment/"' apps/admin/platform-v2-test-routing.js
+          grep -Fq 'kiosk: "/v2/kiosk/?testmode=1"' apps/admin/platform-v2-test-routing.js
+          grep -Fq '?testmode=1' apps/platform-v2/src/shared/PlatformNav.tsx
+          grep -Fq 'searchParams.delete("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
+          grep -Fq 'get("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
 
       - name: Build platform v2
         run: npm run v2:build

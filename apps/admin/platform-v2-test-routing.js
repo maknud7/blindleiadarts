@@ -10,11 +10,12 @@
 
   const ROUTES = Object.freeze({
     equipment: "/v2/equipment/",
-    kiosk: "/v2/kiosk/",
+    kiosk: "/v2/kiosk/?testmode=1",
   });
+  const EQUIPMENT_HASHES = new Set(["#equipment", "#kiosks", "#admin/kiosks"]);
 
   function wireLinks() {
-    document.querySelectorAll('a[href="#kiosks"],a[href="#equipment"]').forEach((link) => {
+    document.querySelectorAll('a[href="#kiosks"],a[href="#equipment"],a[href$="#equipment"],a[href$="#kiosks"]').forEach((link) => {
       link.setAttribute("href", ROUTES.equipment);
       link.dataset.platformV2Route = "equipment";
       link.removeAttribute("target");
@@ -29,16 +30,35 @@
   }
 
   function redirectLegacyEquipmentRoute() {
-    const hash = String(window.location.hash || "").replace(/^#/, "").trim().toLowerCase();
-    if (["equipment", "kiosks", "admin/kiosks"].includes(hash)) {
+    const hash = String(window.location.hash || "").trim().toLowerCase();
+    if (EQUIPMENT_HASHES.has(hash)) {
       window.location.replace(ROUTES.equipment);
       return true;
     }
     return false;
   }
 
+  function equipmentLink(link) {
+    const raw = String(link.getAttribute("href") || "").trim();
+    if (!raw) return false;
+    try {
+      const target = new URL(raw, window.location.href);
+      return target.origin === window.location.origin && EQUIPMENT_HASHES.has(target.hash.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
+
   if (redirectLegacyEquipmentRoute()) return;
   wireLinks();
   document.addEventListener("DOMContentLoaded", wireLinks, { once: true });
   window.addEventListener("bd:portal-view", wireLinks);
+  window.addEventListener("hashchange", redirectLegacyEquipmentRoute);
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("a") : null;
+    if (!target || !equipmentLink(target)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    window.location.assign(ROUTES.equipment);
+  }, true);
 })();

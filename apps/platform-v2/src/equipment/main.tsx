@@ -5,6 +5,7 @@ import { EquipmentWorkspace } from "./EquipmentWorkspace";
 import "../shared/styles.css";
 import "./scolia.css";
 import "./board-editor.css";
+import "./pairing-deeplink.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
