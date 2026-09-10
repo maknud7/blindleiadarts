@@ -5,6 +5,7 @@ import { initializeTestHandoff } from "./testHandoff";
 import "../shared/styles.css";
 import "./scolia-runtime.css";
 import "./kiosk-tablet.css";
+import "./kiosk-interactions.css";
 
 if (initializeTestHandoff()) {
   createRoot(document.getElementById("root")!).render(
