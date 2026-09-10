@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/**'
+      - 'apps/api/src/Service/CanonicalScoringService.php'
       - 'apps/api/src/Service/Dart501Rules.php'
       - 'apps/api/src/Service/ScoliaSectorMapper.php'
       - 'apps/api/src/Service/ScoliaScoringService.php'
@@ -53,6 +54,7 @@ jobs:
           test -f apps/backend-v2/src/mysql/mysql2-session-provider.ts
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
+          test -f apps/backend-v2/src/service/canonical-scoring-service.ts
 
           # One deliberately tiny provider owns the real mysql2 driver import.
           grep -Fq 'from "mysql2/promise"' apps/backend-v2/src/mysql/mysql2-session-provider.ts
@@ -72,3 +74,9 @@ jobs:
           grep -Fq 'DB_TABLE_PREFIX=bd_test_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
+
+          # Side effects must stay behind the canonical orchestration boundary.
+          grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
+          grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
+          grep -Fq 'CanonicalProjectionPort' apps/backend-v2/src/service/canonical-scoring-service.ts
+          grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/service/canonical-scoring-service.ts
