@@ -1,0 +1,265 @@
+.kiosk-settings-button {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 900;
+  box-shadow: none;
+  touch-action: manipulation;
+}
+
+.kiosk-settings-button:active {
+  transform: translateY(1px);
+}
+
+.kiosk-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  background: rgba(7, 24, 39, .62);
+}
+
+.kiosk-settings-dialog,
+.kiosk-dialog-card {
+  width: min(460px, 100%);
+  max-height: calc(100dvh - 28px);
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 22px 60px rgba(6, 29, 45, .24);
+}
+
+.kiosk-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.kiosk-settings-head span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.kiosk-settings-head h2 {
+  margin: 2px 0 0;
+  font-size: 25px;
+}
+
+.kiosk-settings-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.kiosk-settings-actions .button {
+  min-height: 52px;
+  font-size: 15px;
+}
+
+.start-match-button {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 62px;
+  margin-top: 2px;
+  font-size: 19px;
+}
+
+.assigned-view .assigned-versus {
+  flex: 1 1 auto;
+  max-height: 320px;
+}
+
+.test-chooser .test-exit {
+  min-height: 44px;
+  margin-top: 2px;
+}
+
+.manual-mode-switch {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+  width: min(220px, 45vw);
+  padding: 3px;
+  border: 1px solid #cfdae4;
+  border-radius: 11px;
+  background: #eef3f7;
+}
+
+.manual-mode-switch button {
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #53697d;
+  font-size: 12px;
+  font-weight: 900;
+  touch-action: manipulation;
+}
+
+.manual-mode-switch button.active {
+  background: var(--brand);
+  color: white;
+  box-shadow: 0 2px 7px rgba(10, 103, 163, .22);
+}
+
+.score-entry.dart-entry-active {
+  grid-template-rows: 42px minmax(0, 1fr);
+}
+
+.manual-dart-entry {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr) 46px;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.dart-summary-v2 {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.dart-summary-v2 > div {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 4px 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fbfc;
+}
+
+.dart-summary-v2 span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.dart-summary-v2 strong {
+  margin-top: 1px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.dart-summary-v2 .dart-total-v2 {
+  background: #edf7fc;
+  border-color: #c7e0ed;
+}
+
+.dart-summary-v2 .dart-total-v2 strong {
+  font-size: 22px;
+}
+
+.dart-pick-area {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 5px;
+}
+
+.multiplier-column {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.multiplier-column button,
+.number-grid-v2 button {
+  min-height: 0;
+  height: 100%;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+  color: var(--ink);
+  font-weight: 850;
+  touch-action: manipulation;
+}
+
+.multiplier-column button {
+  font-size: 17px;
+}
+
+.multiplier-column button.active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: white;
+}
+
+.number-grid-v2 {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(30px, 1fr));
+  gap: 4px;
+}
+
+.number-grid-v2 button {
+  font-size: clamp(13px, 2.8vw, 18px);
+}
+
+.dart-entry-actions {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+  gap: 5px;
+}
+
+.dart-entry-actions .button {
+  min-height: 0;
+  height: 46px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+@media (orientation: portrait) and (max-width: 479px) {
+  .kiosk-settings-button {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .manual-mode-switch {
+    width: 160px;
+  }
+
+  .manual-dart-entry {
+    grid-template-rows: 42px minmax(0, 1fr) 42px;
+  }
+
+  .dart-pick-area {
+    grid-template-columns: 45px minmax(0, 1fr);
+  }
+
+  .dart-entry-actions .button {
+    height: 42px;
+    font-size: 10px;
+  }
+}
