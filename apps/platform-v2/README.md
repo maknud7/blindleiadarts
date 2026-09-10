@@ -29,3 +29,7 @@ npm run v2:build
 ```
 
 The build output is `apps/platform-v2-dist/` and is packaged as `/v2/` by `infra/deploy/build-release.sh`.
+
+## TEST deployment
+
+The TEST host predates `/v2/`, and its SFTP-only deploy action cannot create a new top-level directory while uploading. The `Platform v2 TEST Remote Dirs` workflow therefore ensures the stable `/v2/assets`, `/v2/equipment` and `/v2/kiosk` directories exist. The normal immutable TEST release remains responsible for uploading and verifying the actual files.
