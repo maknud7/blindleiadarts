@@ -10,27 +10,14 @@ const canonicalScolia = {
   configuration_scope: "production_hardware",
 };
 
+assert.equal(resolveBoardScoringMode({ scoring_mode: "manual" }, canonicalScolia), "scolia", "TEST runtime must display the physical board's canonical Scolia mode");
 assert.equal(
-  resolveBoardScoringMode({ scoring_mode: "manual" }, canonicalScolia),
-  "scolia",
-  "TEST runtime must display the physical board's canonical Scolia mode",
-);
-assert.equal(
-  resolveBoardScoringMode({ scoring_mode: "scolia" }, {
-    scoring_mode: "manual",
-    mode: "off",
-    physical_kiosk_id: 4,
-    configuration_scope: "production_hardware",
-  }),
+  resolveBoardScoringMode({ scoring_mode: "scolia" }, { scoring_mode: "manual", mode: "off", physical_kiosk_id: 4, configuration_scope: "production_hardware" }),
   "manual",
   "Canonical physical mode must win over stale runtime state",
 );
 assert.equal(resolveBoardScoringMode({ scoring_mode: "scolia" }, null), "scolia");
-assert.equal(
-  shouldPersistRuntimeScoring({ isTestEnvironment: true, configurationScope: "production_hardware" }),
-  false,
-  "Saving canonical hardware from TEST must not turn the TEST alias into a physical Scolia board",
-);
+assert.equal(shouldPersistRuntimeScoring({ isTestEnvironment: true, configurationScope: "production_hardware" }), false, "Saving canonical hardware from TEST must not turn the TEST alias into a physical Scolia board");
 assert.equal(shouldPersistRuntimeScoring({ isTestEnvironment: false, configurationScope: "production_hardware" }), true);
 assert.equal(shouldPersistRuntimeScoring({ isTestEnvironment: true, configurationScope: "" }), true);
 
@@ -49,10 +36,13 @@ assert.match(equipmentRepository, /WHERE club_id=\? AND is_active=1 ORDER BY boa
 const inventoryRepository = readFileSync("apps/api/src/Repository/EquipmentInventoryRepository.php", "utf8");
 assert.match(inventoryRepository, /WHERE club_id=\? ORDER BY is_active DESC,board_number,id/, "Admin inventory must include inactive boards");
 assert.match(inventoryRepository, /\$this->equipment->listBoards\(\$environmentClubId\)/, "Active runtime state must be reused rather than reimplemented");
+assert.match(inventoryRepository, /function isActiveBoard\(/, "Pairing boundary needs a canonical activation lookup");
 
 const equipmentApplication = readFileSync("apps/api/src/EquipmentApplication.php", "utf8");
 assert.match(equipmentApplication, /v1\/clubs\/\(\\d\+\)\/equipment\/boards/);
 assert.match(equipmentApplication, /equipment\/boards[\s\S]*requireAdmin\(\$request, \$users, \$clubId\)[\s\S]*inventory->listBoards/, "Inactive inventory must require admin access");
+assert.match(equipmentApplication, /!\$inventory->isActiveBoard\(\$clubId, \$physicalId\)/, "Pairing must reject inactive physical boards server-side");
+assert.match(equipmentApplication, /board_inactive/);
 
 const v2Equipment = readFileSync("apps/platform-v2/src/equipment/EquipmentWorkspace.tsx", "utf8");
 assert.match(v2Equipment, /equipment\/boards/);
