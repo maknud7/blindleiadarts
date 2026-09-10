@@ -1,11 +1,12 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../shared/api";
 import { read, write } from "../shared/storage";
-import type { Board, Club, EquipmentScope, Health, PairingRequest, ScreenDevice, User } from "../shared/types";
+import type { Board, Club, EquipmentScope, Health, ScreenDevice, User } from "../shared/types";
 import { BoardEditor } from "./BoardEditor";
+import { GlobalPairingClaim } from "./GlobalPairingClaim";
 import { ScoliaPanel } from "./ScoliaPanel";
 
-type LoadErrors = { inventory?: string; boards?: string; pairing?: string; screens?: string };
+type LoadErrors = { inventory?: string; boards?: string; screens?: string };
 type BoardResponse = EquipmentScope & { club_id: number; items: Board[] };
 type AuthResponse = { access_token: string; user: User };
 type CreateBoardResponse = EquipmentScope & { kiosk: Board };
@@ -19,7 +20,7 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 function isActive(board: Board): boolean { return Number(board.is_active ?? 1) === 1; }
-function pairingCode(value?: string | null): string { return String(value || "").trim().toUpperCase(); }
+function pairingCode(value?: string | null): string { return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase(); }
 
 function Login({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -48,8 +49,6 @@ export function EquipmentWorkspace() {
   const [clubId, setClubId] = useState(() => Number(read("selectedClub") || 0));
   const [inventoryBoards, setInventoryBoards] = useState<Board[]>([]);
   const [activeBoards, setActiveBoards] = useState<Board[]>([]);
-  const [pairing, setPairing] = useState<PairingRequest[]>([]);
-  const [pairingLoaded, setPairingLoaded] = useState(false);
   const [requestedPairing, setRequestedPairing] = useState(() => pairingCode(new URLSearchParams(window.location.search).get("pairing")));
   const [screens, setScreens] = useState<ScreenDevice[]>([]);
   const [scope, setScope] = useState<EquipmentScope>({});
@@ -64,16 +63,13 @@ export function EquipmentWorkspace() {
   const selectedClub = useMemo(() => clubs.find((club) => Number(club.id) === clubId) || null, [clubs, clubId]);
   const masterReadOnly = health?.environment === "test" && scope.configuration_scope === "production_hardware";
   const inactiveCount = inventoryBoards.filter((board) => !isActive(board)).length;
-  const targetPairing = useMemo(() => requestedPairing ? pairing.find((request) => pairingCode(request.request_code) === requestedPairing) || null : null, [pairing, requestedPairing]);
-  const orderedPairing = useMemo(() => requestedPairing ? [...pairing].sort((left, right) => Number(pairingCode(right.request_code) === requestedPairing) - Number(pairingCode(left.request_code) === requestedPairing)) : pairing, [pairing, requestedPairing]);
 
   const loadEquipment = useCallback(async (activeClubId: number, activeToken: string) => {
     if (!activeClubId) return;
-    setLoading(true); setPairingLoaded(false);
+    setLoading(true);
     const result = await Promise.allSettled([
       api<BoardResponse>(`/clubs/${activeClubId}/equipment/boards`, { token: activeToken }),
       api<BoardResponse>(`/clubs/${activeClubId}/kiosks`),
-      api<{ items: PairingRequest[] }>(`/clubs/${activeClubId}/kiosk-pairing-requests`, { token: activeToken }),
       api<{ items: ScreenDevice[] }>(`/clubs/${activeClubId}/screen-devices`, { token: activeToken }),
     ]);
     const next: LoadErrors = {};
@@ -85,11 +81,17 @@ export function EquipmentWorkspace() {
     } else { setActiveBoards([]); next.boards = text(result[1].reason); }
     if (result[0].status === "fulfilled") setInventoryBoards(result[0].value.items || []);
     else { setInventoryBoards(activeItems); next.inventory = text(result[0].reason); }
-    if (result[2].status === "fulfilled") setPairing(result[2].value.items || []); else { setPairing([]); next.pairing = text(result[2].reason); }
-    setPairingLoaded(true);
-    if (result[3].status === "fulfilled") setScreens(result[3].value.items || []); else { setScreens([]); next.screens = text(result[3].reason); }
+    if (result[2].status === "fulfilled") setScreens(result[2].value.items || []); else { setScreens([]); next.screens = text(result[2].reason); }
     setErrors(next); setLoading(false);
   }, []);
+
+  const changeClub = useCallback(async (id: number) => {
+    if (!id) return;
+    setEditingBoard(null);
+    setClubId(id);
+    write("selectedClub", id);
+    await loadEquipment(id, token);
+  }, [loadEquipment, token]);
 
   useEffect(() => {
     if (!token) { setBooting(false); return; }
@@ -121,9 +123,12 @@ export function EquipmentWorkspace() {
     if (!["club_admin", "super_admin"].includes(data.user.role)) throw new Error("Denne kontoen har ikke administratortilgang.");
     write("adminToken", data.access_token); setToken(data.access_token);
   }
-  function logout() { write("adminToken", null); setToken(""); setInventoryBoards([]); setActiveBoards([]); setPairing([]); setScreens([]); setEditingBoard(null); }
+  function logout() { write("adminToken", null); setToken(""); setInventoryBoards([]); setActiveBoards([]); setScreens([]); setEditingBoard(null); }
   function clearPairingDeepLink() {
-    const url = new URL(window.location.href); url.searchParams.delete("pairing"); history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`); setRequestedPairing("");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("pairing");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    setRequestedPairing("");
   }
 
   async function mutate(label: string, action: () => Promise<unknown>, success: string): Promise<boolean> {
@@ -167,8 +172,23 @@ export function EquipmentWorkspace() {
       <div className="v2-top-actions"><span className="pill dark">{health?.environment?.toUpperCase() || "—"}</span><button className="button small" onClick={logout}>Logg ut</button></div>
     </header>
     <main className="v2-main">
+      {requestedPairing && <GlobalPairingClaim
+        code={requestedPairing}
+        token={token}
+        clubs={clubs}
+        currentClubId={clubId}
+        boards={activeBoards}
+        onClubChange={changeClub}
+        onClaimed={async (board) => {
+          clearPairingDeepLink();
+          await loadEquipment(Number(board.id) ? clubId : clubId, token);
+          setNotice(`Nettbrettet er koblet til skive ${board.board_number}.`);
+        }}
+        onCancel={clearPairingDeepLink}
+      />}
+
       <div className="v2-heading"><div><h1>Utstyr</h1><p>Skiva er den faste enheten. Nettbrett og Scolia er måter å registrere scoring på den samme skiva.</p></div><div className="v2-top-actions">
-        {clubs.length > 1 && <select value={clubId} onChange={(event) => { const id = Number(event.target.value); setEditingBoard(null); setClubId(id); write("selectedClub", id); void loadEquipment(id, token); }}>{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select>}
+        {clubs.length > 1 && <select value={clubId} onChange={(event) => void changeClub(Number(event.target.value))}>{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select>}
         <button className="button secondary" disabled={loading} onClick={() => void loadEquipment(clubId, token)}>{loading ? "Oppdaterer …" : "Oppdater"}</button>
       </div></div>
       {masterReadOnly && <div className="notice warn"><strong>TEST bruker samme fysiske skiveoppsett som PROD.</strong> Du kan teste pairing og kampflyt, men ikke endre det fysiske oppsettet her.</div>}
@@ -177,17 +197,7 @@ export function EquipmentWorkspace() {
       <section className="panel"><div className="panel-head"><div><h2>Skiver</h2><p>{selectedClub?.name || "Klubb"} · {activeBoards.length} aktive{inactiveCount ? ` · ${inactiveCount} deaktiverte` : ""}</p></div><span className={`pill ${errors.boards || errors.inventory ? "warn" : "good"}`}>{errors.boards ? "Feil" : errors.inventory ? "Delvis lastet" : "Klar"}</span></div>
         {errors.boards && <div className="notice bad">Kunne ikke laste aktive skiver: {errors.boards}</div>}
         {errors.inventory && <div className="notice warn">Kunne ikke laste hele skivelisten. Viser aktive skiver: {errors.inventory}</div>}
-
-        {(errors.pairing || pairing.length > 0 || requestedPairing) && <div className="pairing-task">
-          <div className="pairing-task-head"><div><span className="section-label">Nettbrett</span><h3>Koble nettbrett til skive</h3><p>Velg skiva nettbrettet fysisk står ved. Nettbrettet blir en tilkobling til skiva – ikke en egen skive.</p></div><span className={`pill ${errors.pairing ? "bad" : pairing.length ? "warn" : "good"}`}>{errors.pairing ? "Utilgjengelig" : `${pairing.length} venter`}</span></div>
-          {errors.pairing && <div className="notice bad">{errors.pairing}</div>}
-          {requestedPairing && pairingLoaded && targetPairing && <div className="notice good"><strong>Terminal {requestedPairing} er gjenkjent.</strong> Velg skiva og trykk Koble.</div>}
-          {requestedPairing && pairingLoaded && !targetPairing && !errors.pairing && <div className="notice warn"><strong>Terminal {requestedPairing} finnes ikke lenger i pairingkøen.</strong> Lag en ny kode på Kiosk hvis terminalen ikke allerede er koblet.</div>}
-          <div className="equipment-list">{orderedPairing.map((request) => <PairingRow key={request.request_code} request={request} boards={activeBoards} busy={Boolean(mutation)} focused={pairingCode(request.request_code) === requestedPairing} onApprove={async (boardId) => {
-            const success = await mutate(`pair-${request.request_code}`, () => api(`/clubs/${clubId}/kiosk-pairing-requests/${encodeURIComponent(request.request_code)}/approve`, { method: "POST", token, body: { kiosk_id: boardId } }), `Nettbrettet er koblet til skive ${activeBoards.find((board) => board.id === boardId)?.board_number || ""}.`);
-            if (success && pairingCode(request.request_code) === requestedPairing) clearPairingDeepLink();
-          }} />)}</div>
-        </div>}
+        <div className="notice subtle"><strong>Koble nettbrett:</strong> Åpne skiva og skriv inn koden som vises på nettbrettet, eller scan QR-koden på nettbrettet med telefonen.</div>
 
         {!masterReadOnly && <form className="inline-create board-create" onSubmit={createBoard}><label className="field"><span>Skivenummer</span><input name="board_number" type="number" min="1" required /></label><label className="field"><span>Scoring</span><select name="scoring_mode" value={newBoardScoring} onChange={(event) => setNewBoardScoring(event.target.value === "scolia" ? "scolia" : "manual")}><option value="manual">Manuell</option><option value="scolia">Scolia</option></select></label><label className="field grow"><span>Navn</span><input name="name" placeholder="Skive 1" /></label>{newBoardScoring === "scolia" && <label className="field grow"><span>Scolia-ID / serienummer</span><input name="scolia_serial_number" maxLength={120} required placeholder="ID fra Scolia" /></label>}<button className="button" disabled={mutation === "create-board"}>+ Ny skive</button></form>}
 
@@ -204,12 +214,4 @@ export function EquipmentWorkspace() {
       setNotice(`Skive ${editingBoard.board_number} er oppdatert.`);
     }} />}
   </div>;
-}
-
-function PairingRow({ request, boards, busy, focused, onApprove }: { request: PairingRequest; boards: Board[]; busy: boolean; focused: boolean; onApprove: (boardId: number) => Promise<unknown> }) {
-  const [boardId, setBoardId] = useState(Number(boards[0]?.id || 0));
-  const row = useRef<HTMLElement | null>(null);
-  useEffect(() => { if (!boards.some((board) => board.id === boardId)) setBoardId(Number(boards[0]?.id || 0)); }, [boards, boardId]);
-  useEffect(() => { if (focused) row.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [focused]);
-  return <article ref={row} className={`pair-row ${focused ? "is-focused" : ""}`}><div className="board-number">↔</div><div className="row-main"><strong>{request.device_name || "Nettbrett"}</strong><div className="row-meta"><span>Kode: {request.request_code}</span><span>Utløper: {formatDate(request.expires_at)}</span></div></div><div className="row-actions"><select value={boardId} disabled={!boards.length} onChange={(event) => setBoardId(Number(event.target.value))}>{boards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select><button className="button small" autoFocus={focused} disabled={busy || !boardId} onClick={() => void onApprove(boardId)}>Koble</button></div></article>;
 }
