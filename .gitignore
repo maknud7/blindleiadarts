@@ -1,3 +1,5 @@
 dist/
+node_modules/
+apps/platform-v2-dist/
 /sqlconnect.php
 
