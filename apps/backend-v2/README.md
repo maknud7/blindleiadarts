@@ -2,7 +2,7 @@
 
 Backend v2 is the TypeScript migration path for the Blindleia Darts application backend.
 
-This directory starts in **shadow mode**. It does not receive kiosk, Scolia, admin or production traffic yet. The existing PHP API remains canonical until each migrated domain has proven behavioral parity and has been exercised in TEST.
+Backend v2 is introduced incrementally beside the existing PHP API. PHP remains canonical for user traffic until migrated domains have proven behavioral parity, real TEST database compatibility and end-to-end behavior.
 
 ## Migration contract
 
@@ -22,7 +22,7 @@ Backend v2 must therefore follow these rules:
 
 1. Do not introduce a conventional large Node connection pool. Connection capacity must be explicitly configured and kept within the existing hosted budget.
 2. Keep transactions short and preserve row-lock semantics such as `SELECT ... FOR UPDATE` where the current scoring transaction relies on them.
-3. Do not perform shadow reads or writes against the live database merely to compare implementations. Parity belongs in CI/TEST fixtures first.
+3. Do not perform shadow writes against production merely to compare implementations. Behavioral parity belongs in CI and isolated TEST fixtures; production compatibility probes are read-only until an explicit canary is approved.
 4. Keep database `BIGINT UNSIGNED` identifiers as decimal strings at the TypeScript boundary. Never assume every database id is a safe JavaScript `number`.
 5. Preserve the existing runtime, identity and hardware table-prefix boundaries. TEST runtime data must not accidentally mutate canonical PROD hardware/Scolia master data.
 6. Keep SQL compatible with the deployed MySQL feature set. Do not introduce PostgreSQL syntax or unverified MySQL-8-only features as migration shortcuts.
@@ -66,4 +66,23 @@ The third slice ports the current PHP `recordVisit` repository/transaction seman
 - repository SQL uses only the runtime table prefix; identity and hardware prefixes are not reachable from this layer,
 - all SQL calls are serial on one transaction session; there is no nested acquisition and no background/shadow database traffic.
 
-The repository still owns no MySQL driver or pool and is not wired to HTTP, kiosk or Scolia runtime traffic. CI uses a recording session provider to lock query order, idempotency behavior, row-lock placement, prefix isolation and connection usage before any TEST database adapter is introduced.
+## Slice 4: guarded Node/MySQL runtime
+
+The fourth slice makes backend-v2 runnable as a separate Node service without routing any user traffic to it:
+
+- `mysql2` is isolated behind one `MySqlSessionProvider`; there is no pool,
+- one physical connection is opened per admitted unit of work and closed immediately afterwards,
+- coexistence with PHP defaults to one backend-v2 connection and is hard-capped at two,
+- `/health` is local runtime state while `/ready` performs a real read-only scoring-schema compatibility probe,
+- runtime modes are `readonly`, `test-write` and `prod-canary`,
+- TEST writes require both the TEST environment and `bd_test_` runtime prefix,
+- PROD compatibility testing is read-only by default; a separate explicit confirmation is required before the provider can ever become writable,
+- mutation HTTP routes require an internal token.
+
+## Slice 5: scoring lifecycle E2E and production preflight
+
+The fifth slice extends the same canonical repository to `startMatch`, `recordVisit` and `undoLastVisit`, preserving PHP transaction and row-lock behavior. The internal HTTP runtime exposes the full scoring lifecycle without changing kiosk or Scolia routing.
+
+A real TEST E2E workflow runs only after a successful `Deploy Test` and checks out that exact SHA. It creates an isolated `bd_test_` fixture, starts backend-v2 with a one-connection budget, runs start → scoring → idempotent retry → checkout → statistics → undo through HTTP, verifies persisted MySQL state and removes the fixture.
+
+A separate production preflight starts the same backend-v2 runtime against `bd_prod_` in `readonly` mode with a one-connection budget. It validates the production scoring schema through `/ready` and proves the mutation endpoint is rejected before any write. This is the first preproduction use of real production data; production scoring remains owned by PHP until canonical side effects and source routing have also moved behind backend-v2.
