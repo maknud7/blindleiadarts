@@ -74,10 +74,13 @@ function fixture(overrides = {}) {
     revertMatch: async () => calls.push("elo.revertMatch"),
     ...overrides.elo,
   };
-  const projections = {
-    syncTournamentElo: async () => calls.push("projections.syncTournamentElo"),
-    reconcileLinearRanking: async () => calls.push("projections.reconcileLinearRanking"),
-    ...overrides.projections,
+  const tournamentElo = {
+    syncTournamentElo: async () => calls.push("tournamentElo.syncTournamentElo"),
+    ...overrides.tournamentElo,
+  };
+  const ranking = {
+    reconcileLinearRanking: async () => calls.push("ranking.reconcileLinearRanking"),
+    ...overrides.ranking,
   };
   const realtime = {
     publishRefresh: async ({ reason }) => calls.push(`realtime.publishRefresh:${reason}`),
@@ -85,7 +88,7 @@ function fixture(overrides = {}) {
   };
   return {
     calls,
-    service: new CanonicalScoringService(repository, state, playoffs, elo, projections, realtime),
+    service: new CanonicalScoringService(repository, state, playoffs, elo, tournamentElo, ranking, realtime),
   };
 }
 
@@ -113,7 +116,7 @@ test("repeated start on an in-progress open leg stops after the canonical idempo
   assert.deepEqual(calls, ["state.startState", "repository.startMatch"]);
 });
 
-test("recordVisit applies completed-match ELO before playoff and projections exactly like PHP", async () => {
+test("recordVisit applies completed-match ELO before playoff and explicit projections exactly like PHP", async () => {
   const { service, calls } = fixture({
     state: {
       matchIsCompleted: async () => {
@@ -133,13 +136,13 @@ test("recordVisit applies completed-match ELO before playoff and projections exa
     "state.matchIsCompleted",
     "elo.applyCompletedMatch",
     "playoffs.afterMutation:forward",
-    "projections.syncTournamentElo",
-    "projections.reconcileLinearRanking",
+    "tournamentElo.syncTournamentElo",
+    "ranking.reconcileLinearRanking",
     "realtime.publishRefresh:visit_recorded",
   ]);
 });
 
-test("undo guard runs before the repository mutation, then ELO is reverted before reconciliation", async () => {
+test("undo guard runs before mutation, then ELO revert, playoff and explicit projections", async () => {
   const { service, calls } = fixture();
   await service.undoLastVisit({ kiosk_id: ids.kiosk, source: "manual" });
   assert.deepEqual(calls, [
@@ -147,8 +150,8 @@ test("undo guard runs before the repository mutation, then ELO is reverted befor
     "repository.undoLastVisit",
     "elo.revertMatch",
     "playoffs.afterMutation:undo",
-    "projections.syncTournamentElo",
-    "projections.reconcileLinearRanking",
+    "tournamentElo.syncTournamentElo",
+    "ranking.reconcileLinearRanking",
     "realtime.publishRefresh:visit_undone",
   ]);
 });
