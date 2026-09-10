@@ -1,0 +1,19 @@
+{
+  "name": "blindleia-darts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "v2:build": "vite build --config apps/platform-v2/vite.config.mjs",
+    "v2:typecheck": "tsc -p apps/platform-v2/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}

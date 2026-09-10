@@ -1,0 +1,73 @@
+name: Platform v2
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'package.json'
+      - 'apps/platform-v2/**'
+      - 'infra/deploy/build-release.sh'
+      - '.github/workflows/platform-v2.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'package.json'
+      - 'apps/platform-v2/**'
+      - 'infra/deploy/build-release.sh'
+      - '.github/workflows/platform-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck platform v2
+        run: npm run v2:typecheck
+
+      - name: Enforce v2 architecture boundaries
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if grep -R -n -F 'MutationObserver' apps/platform-v2/src --include='*.ts' --include='*.tsx'; then
+            echo 'Platform v2 must not compose features through MutationObserver.' >&2
+            exit 1
+          fi
+
+          direct_fetch="$(grep -R -n -F 'fetch(' apps/platform-v2/src --include='*.ts' --include='*.tsx' \
+            | grep -v '^apps/platform-v2/src/shared/api.ts:' || true)"
+          if [[ -n "$direct_fetch" ]]; then
+            printf '%s\n' "$direct_fetch"
+            echo 'Platform v2 HTTP traffic must go through src/shared/api.ts.' >&2
+            exit 1
+          fi
+
+      - name: Build platform v2
+        run: npm run v2:build
+
+      - name: Verify v2 release surface
+        run: |
+          set -Eeuo pipefail
+          test -f apps/platform-v2-dist/equipment/index.html
+          test -f apps/platform-v2-dist/kiosk/index.html
+          test -d apps/platform-v2-dist/assets
+          grep -Fq '/v2/assets/' apps/platform-v2-dist/equipment/index.html
+          grep -Fq '/v2/assets/' apps/platform-v2-dist/kiosk/index.html
+          if find apps/platform-v2-dist -type f \( -name '*.ts' -o -name '*.tsx' \) | grep -q .; then
+            echo 'TypeScript source leaked into built v2 release.' >&2
+            exit 1
+          fi

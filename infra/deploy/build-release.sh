@@ -26,6 +26,20 @@ if [[ -z "$RELEASE_SHA" ]]; then
   RELEASE_SHA="unknown"
 fi
 
+# Platform v2 is built from typed React source as part of the same immutable
+# release package as the PHP API. Keeping this here guarantees TEST and PROD can
+# never deploy stale compiled v2 assets beside a newer backend release.
+if [[ -f "$ROOT_DIR/package.json" && -d "$ROOT_DIR/apps/platform-v2" ]]; then
+  command -v npm >/dev/null 2>&1 || {
+    echo "npm is required to build Platform v2." >&2
+    exit 1
+  }
+  if [[ ! -d "$ROOT_DIR/node_modules" ]]; then
+    (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
+  fi
+  (cd "$ROOT_DIR" && npm run v2:typecheck && npm run v2:build)
+fi
+
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
@@ -47,6 +61,7 @@ copy_dir "$ROOT_DIR/apps/admin" "$OUT_DIR/admin"
 copy_dir "$ROOT_DIR/apps/player" "$OUT_DIR/player"
 copy_dir "$ROOT_DIR/apps/live" "$OUT_DIR/live"
 copy_dir "$ROOT_DIR/apps/onboarding" "$OUT_DIR/onboarding"
+copy_dir "$ROOT_DIR/apps/platform-v2-dist" "$OUT_DIR/v2"
 copy_dir "$ROOT_DIR/packages" "$OUT_DIR/packages"
 
 # Historical source probes are deliberately available in TEST while history is
