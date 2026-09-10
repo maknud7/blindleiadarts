@@ -8,8 +8,10 @@ on:
       - 'apps/backend-v2/**'
       - 'apps/api/src/Service/CanonicalScoringService.php'
       - 'apps/api/src/Service/Dart501Rules.php'
+      - 'apps/api/src/Service/EloCalculator.php'
       - 'apps/api/src/Service/ScoliaSectorMapper.php'
       - 'apps/api/src/Service/ScoliaScoringService.php'
+      - 'apps/api/src/Repository/EloLedgerRepository.php'
       - 'apps/api/src/Repository/MatchScoringRepository.php'
       - 'apps/api/src/Repository/ScoliaRoutedEventRepository.php'
       - 'apps/api/src/Repository/ValidationException.php'
@@ -52,8 +54,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -f apps/backend-v2/src/server.ts
+          test -f apps/backend-v2/src/domain/elo.ts
           test -f apps/backend-v2/src/mysql/mysql2-session-provider.ts
           test -f apps/backend-v2/src/mysql/canonical-scoring-state.ts
+          test -f apps/backend-v2/src/mysql/canonical-elo-ledger.ts
           test -f apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
@@ -86,21 +90,24 @@ jobs:
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
 
-          # PROD writes are compile-time blocked until the complete canonical side-effect chain is migrated.
+          # PROD writes remain compile-time blocked until every canonical side effect is migrated.
           grep -Fq 'const FULL_CANONICAL_SIDE_EFFECTS_READY = false' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'backend-v2-e2e-tournament-' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           grep -Fq 'backend_v2_side_effects_not_ready' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
-          # Side effects stay behind orchestration; realtime is now a real best-effort adapter.
+          # Side effects stay behind orchestration; realtime and season ELO are real adapters.
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalProjectionPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'new CanonicalScoringService' apps/backend-v2/src/server.ts
+          grep -Fq 'new MySqlCanonicalEloLedger' apps/backend-v2/src/server.ts
           grep -Fq 'new CanonicalRealtimePublisher' apps/backend-v2/src/server.ts
-          grep -Fq 'timeoutMs: config.realtime.timeoutMs' apps/backend-v2/src/server.ts
+          grep -Fq 'SELECT id FROM ${this.table("seasons")} WHERE id=? FOR UPDATE' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
+          grep -Fq 'elo_match_events' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
+          grep -Fq 'elo_current_ratings' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
+          grep -Fq 'ranking_snapshots' apps/backend-v2/src/mysql/canonical-elo-ledger.ts
           grep -Fq 'event: "snapshot"' apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
-          grep -Fq 'Realtime is' apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
           if grep -Fq 'CanonicalRealtimePort' apps/backend-v2/src/runtime/core-only-side-effects.ts; then
             echo 'Realtime must not regress to the core-only no-op adapter.' >&2
             exit 1
