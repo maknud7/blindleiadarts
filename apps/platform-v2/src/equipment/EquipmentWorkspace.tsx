@@ -179,9 +179,13 @@ export function EquipmentWorkspace() {
         currentClubId={clubId}
         boards={activeBoards}
         onClubChange={changeClub}
-        onClaimed={async (board) => {
+        onClaimed={async (board, claimedClubId) => {
           clearPairingDeepLink();
-          await loadEquipment(Number(board.id) ? clubId : clubId, token);
+          if (claimedClubId !== clubId) {
+            setClubId(claimedClubId);
+            write("selectedClub", claimedClubId);
+          }
+          await loadEquipment(claimedClubId, token);
           setNotice(`Nettbrettet er koblet til skive ${board.board_number}.`);
         }}
         onCancel={clearPairingDeepLink}
