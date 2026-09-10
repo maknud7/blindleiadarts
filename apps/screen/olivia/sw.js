@@ -1,4 +1,4 @@
-const CACHE='family-children-v7';
+const CACHE='family-children-v8';
 const LEGACY_PREFIXES=['family-children-','olivia-school-'];
 const ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest','./icon.svg'];
 
