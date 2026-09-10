@@ -1,0 +1,57 @@
+.inline-create { display: flex; align-items: end; gap: 10px; margin: 0 0 14px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #f8fbfc; }
+.inline-create .grow { flex: 1; }
+.inline-create .field { min-width: 130px; }
+.inline-create .button { flex: 0 0 auto; }
+
+.panel-head.compact { margin-bottom: 10px; }
+.panel-head.compact h3 { margin: 0; }
+.panel-head.compact p { margin: 3px 0 0; color: var(--muted); }
+
+.scolia-workspace { overflow: hidden; }
+.scolia-settings-card { border: 1px solid var(--line); border-radius: 15px; padding: 16px; background: #f9fbfc; }
+.check-field { display: flex; align-items: center; gap: 9px; align-content: center; }
+.check-field input { width: auto; flex: 0 0 auto; }
+.check-field span { color: var(--ink); }
+
+.scolia-board-list { margin-top: 20px; }
+.scolia-board-card { border: 1px solid var(--line); border-radius: 15px; padding: 15px; background: #fff; }
+.scolia-board-card + .scolia-board-card { margin-top: 10px; }
+.scolia-board-card.configured { box-shadow: inset 4px 0 0 #b9dff1; }
+.scolia-board-head { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 12px; align-items: center; }
+.scolia-board-controls { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto; gap: 10px; align-items: end; margin-top: 12px; }
+.bridge-state { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 12px; padding: 11px 12px; border: 1px solid #b8ead5; border-radius: 12px; background: #ecfdf5; }
+.bridge-state.released { border-color: #eed89a; background: #fff8e5; }
+.bridge-state strong, .bridge-state p { margin: 0; }
+.bridge-state p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.runtime-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.runtime-strip > div { padding: 9px 10px; border: 1px solid var(--line); border-radius: 11px; background: #f7fafb; }
+.runtime-strip span, .runtime-strip strong { display: block; }
+.runtime-strip span { color: var(--muted); font-size: 11px; }
+.runtime-strip strong { margin-top: 2px; font-size: 13px; }
+.runtime-actions-v2 { margin-top: 10px; justify-content: flex-start; }
+.scolia-footnote { margin: 9px 0 0; color: var(--muted); font-size: 12px; }
+
+.scolia-advanced { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.scolia-advanced > summary { cursor: pointer; font-weight: 800; }
+.queue-grid-v2 { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 8px; margin-top: 14px; }
+.queue-chip-v2 { padding: 11px; border: 1px solid var(--line); border-radius: 12px; text-align: center; background: #f8fbfc; }
+.queue-chip-v2 strong, .queue-chip-v2 span { display: block; }
+.queue-chip-v2 strong { font-size: 21px; }
+.queue-chip-v2 span { color: var(--muted); font-size: 11px; }
+.form-actions.left { justify-content: flex-start; }
+.scolia-ops-grid { margin-top: 14px; }
+.scolia-op-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.scolia-op-card h3 { margin: 0 0 10px; }
+.incident-v2 { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 11px; }
+.incident-v2 p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+.muted-copy { color: var(--muted); }
+
+@media (max-width: 760px) {
+  .inline-create { display: grid; align-items: stretch; }
+  .scolia-board-head { grid-template-columns: auto minmax(0,1fr); }
+  .scolia-board-head > .pill { grid-column: 1 / -1; justify-self: start; }
+  .scolia-board-controls { grid-template-columns: 1fr; }
+  .runtime-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .queue-grid-v2 { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .bridge-state { display: grid; }
+}
