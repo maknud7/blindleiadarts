@@ -49,10 +49,18 @@ assert.match(v2Equipment, /equipment\/boards/);
 assert.match(v2Equipment, /const \[inventoryBoards,/);
 assert.match(v2Equipment, /const \[activeBoards,/);
 assert.match(v2Equipment, /ScoliaPanel[\s\S]*boards=\{activeBoards\}/, "Inactive boards must not enter Scolia runtime controls");
-assert.match(v2Equipment, /PairingRow[\s\S]*boards=\{activeBoards\}/, "Inactive boards must not enter pairing choices");
+assert.match(v2Equipment, /GlobalPairingClaim[\s\S]*boards=\{activeBoards\}/, "QR pairing must only receive active runtime boards");
+assert.doesNotMatch(v2Equipment, /kiosk-pairing-requests/, "Platform v2 must not expose unclaimed terminals as a club-scoped inbox");
+
+const globalPairing = readFileSync("apps/platform-v2/src/equipment/GlobalPairingClaim.tsx", "utf8");
+assert.match(globalPairing, /Number\(board\.is_active \?\? 1\) === 1 && !board\.is_paired/, "QR pairing choices must exclude inactive and already paired boards");
+assert.match(globalPairing, /1\. Klubb/);
+assert.match(globalPairing, /kiosk-pairing\.php\?action=claim&club_id=/, "The club must be assigned only when the global terminal code is claimed");
 
 const boardEditor = readFileSync("apps/platform-v2/src/equipment/BoardEditor.tsx", "utf8");
 assert.match(boardEditor, /name="is_active"/);
 assert.match(boardEditor, /is_active: active \? 1 : 0/);
+assert.match(boardEditor, /Kode fra nettbrett/, "Manual pairing belongs on the board itself");
+assert.match(boardEditor, /Number\(board\.is_active \?\? 1\) !== 1/, "Inactive boards must not accept manual tablet pairing");
 
-console.log("Board admin canonical Scolia, resilient loading, and equipment inventory checks passed.");
+console.log("Board admin canonical Scolia, resilient loading, equipment inventory, and global pairing checks passed.");
