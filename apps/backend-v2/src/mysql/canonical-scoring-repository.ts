@@ -1,4 +1,8 @@
-import type { RecordVisitCommand } from "../contracts/canonical-scoring.js";
+import type {
+  RecordVisitCommand,
+  StartMatchCommand,
+  UndoVisitCommand,
+} from "../contracts/canonical-scoring.js";
 import { asDbId, type DbId, type EvaluatedVisit, type VisitInput } from "../contracts/scoring.js";
 import { evaluateVisit } from "../domain/dart501.js";
 import { DomainValidationError } from "../domain/errors.js";
@@ -20,6 +24,19 @@ export type RecordVisitWriteResult =
       readonly match_completed: boolean;
     };
 
+export type StartMatchWriteResult =
+  | { readonly kind: "no_match" }
+  | { readonly kind: "started"; readonly match_id: DbId; readonly leg_id: DbId };
+
+export type UndoVisitWriteResult =
+  | { readonly kind: "no_visit" }
+  | {
+      readonly kind: "undone";
+      readonly match_id: DbId;
+      readonly leg_id: DbId;
+      readonly visit_id: DbId;
+    };
+
 interface MatchDbRow extends QueryResultRow {
   readonly id: unknown;
   readonly status: unknown;
@@ -36,6 +53,16 @@ interface LegDbRow extends QueryResultRow {
   readonly status: unknown;
   readonly start_score: unknown;
   readonly winner_player_id?: unknown;
+}
+
+interface LatestVisitDbRow extends QueryResultRow {
+  readonly id: unknown;
+  readonly leg_id: unknown;
+  readonly player_id: unknown;
+  readonly score: unknown;
+  readonly darts_used: unknown;
+  readonly is_bust: unknown;
+  readonly remaining_after: unknown;
 }
 
 interface CurrentPlayerDbRow extends QueryResultRow {
@@ -70,17 +97,37 @@ interface AggregateDbRow extends QueryResultRow {
 
 /**
  * MySQL-backed canonical scoring repository, expressed only through the scarce-
- * connection session contract. No driver or pool is owned here.
+ * connection session contract. No pool is owned here.
  *
- * This intentionally mirrors today's PHP MatchScoringRepository transaction
- * boundary. The cheap request-key retry check happens before the transaction,
- * then is repeated inside the transaction before any match row is locked.
+ * The transaction and row-lock behavior intentionally mirrors today's PHP
+ * MatchScoringRepository. Canonical state stays compatible while the runtime is
+ * migrated source by source.
  */
 export class MySqlCanonicalScoringRepository {
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly runtimePrefix: TablePrefix,
   ) {}
+
+  async startMatch(command: StartMatchCommand): Promise<StartMatchWriteResult> {
+    return this.sessions.withTransaction(async (transaction) => {
+      const match = await this.findActiveMatchForKiosk(transaction, command.kiosk_id, false);
+      if (match === null) {
+        return { kind: "no_match" };
+      }
+
+      if (match.status === "assigned") {
+        await transaction.execute(
+          `UPDATE ${this.table("matches")} SET status="in_progress", starts_at=COALESCE(starts_at, NOW()) WHERE id=?`,
+          [match.id],
+        );
+        match.status = "in_progress";
+      }
+
+      const leg = await this.ensureCurrentLeg(transaction, match);
+      return { kind: "started", match_id: match.id, leg_id: leg.id };
+    });
+  }
 
   async recordVisit(command: RecordVisitCommand): Promise<RecordVisitWriteResult> {
     const requestKey = normalizeRequestKey(command.payload);
@@ -102,7 +149,7 @@ export class MySqlCanonicalScoringRepository {
         return { kind: "duplicate" };
       }
 
-      const match = await this.findActiveMatchForKiosk(transaction, command.kiosk_id);
+      const match = await this.findActiveMatchForKiosk(transaction, command.kiosk_id, false);
       if (match === null) {
         throw new DomainValidationError(
           "match_not_available",
@@ -154,15 +201,67 @@ export class MySqlCanonicalScoringRepository {
     });
   }
 
+  async undoLastVisit(command: UndoVisitCommand): Promise<UndoVisitWriteResult> {
+    return this.sessions.withTransaction(async (transaction) => {
+      const match = await this.findActiveMatchForKiosk(transaction, command.kiosk_id, true);
+      if (match === null) {
+        return { kind: "no_visit" };
+      }
+
+      await this.removeTrailingEmptyLegs(transaction, match.id);
+      const leg = await this.findLatestLeg(transaction, match.id);
+      if (leg === null) {
+        return { kind: "no_visit" };
+      }
+
+      const visit = await this.findLatestVisit(transaction, leg.id);
+      if (visit === null) {
+        return { kind: "no_visit" };
+      }
+
+      if (leg.status === "completed") {
+        await transaction.execute(
+          `UPDATE ${this.table("legs")} SET winner_player_id=NULL, status="in_progress", finished_at=NULL WHERE id=?`,
+          [leg.id],
+        );
+      }
+
+      if (match.status === "completed") {
+        await transaction.execute(
+          `UPDATE ${this.table("matches")} SET status="in_progress", winner_player_id=NULL, finished_at=NULL WHERE id=?`,
+          [match.id],
+        );
+        match.status = "in_progress";
+      }
+
+      await transaction.execute(
+        `DELETE FROM ${this.table("visits")} WHERE id=?`,
+        [visit.id],
+      );
+
+      await this.rebuildMatchStatistics(transaction, match.id);
+      return {
+        kind: "undone",
+        match_id: match.id,
+        leg_id: leg.id,
+        visit_id: visit.id,
+      };
+    });
+  }
+
   private async findActiveMatchForKiosk(
     sql: SqlExecutor,
     kioskId: DbId,
+    includeCompleted: boolean,
   ): Promise<MutableMatch | null> {
+    const statuses = includeCompleted
+      ? '("in_progress","assigned","completed")'
+      : '("in_progress","assigned")';
     const rows = await sql.query<MatchDbRow>(
       `SELECT id, tournament_id, kiosk_id, status, best_of_legs, legs_to_win,
               player_a_id, player_b_id, winner_player_id, starts_at, finished_at
        FROM ${this.table("matches")}
-       WHERE kiosk_id=? AND status IN ("in_progress","assigned")
+       WHERE kiosk_id=? AND status IN ${statuses}
        ORDER BY
           FIELD(status,"in_progress","assigned","completed"),
           CASE WHEN status="completed" THEN id END DESC,
@@ -174,8 +273,11 @@ export class MySqlCanonicalScoringRepository {
     if (!row) return null;
 
     const status = dbString(row.status);
-    if (status !== "assigned" && status !== "in_progress") {
+    if (status !== "assigned" && status !== "in_progress" && status !== "completed") {
       throw new Error(`Unexpected active match status: ${status}`);
+    }
+    if (!includeCompleted && status === "completed") {
+      throw new Error("Completed match escaped the active-match status filter.");
     }
 
     return {
@@ -247,6 +349,20 @@ export class MySqlCanonicalScoringRepository {
       [matchId],
     );
     return rows[0] ? normalizeLeg(rows[0]) : null;
+  }
+
+  private async findLatestVisit(sql: SqlExecutor, legId: DbId): Promise<CanonicalVisit | null> {
+    const rows = await sql.query<LatestVisitDbRow>(
+      `SELECT id, leg_id, player_id, score, darts_used, is_bust, remaining_after
+       FROM ${this.table("visits")} WHERE leg_id=? ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      [legId],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: dbId(row.id, "visits.id"),
+      leg_id: dbId(row.leg_id, "visits.leg_id"),
+    };
   }
 
   private async determineCurrentPlayerId(
@@ -353,6 +469,7 @@ export class MySqlCanonicalScoringRepository {
         `UPDATE ${this.table("matches")} SET status="completed", winner_player_id=?, finished_at=NOW() WHERE id=?`,
         [winnerPlayerId, match.id],
       );
+      match.status = "completed";
       return true;
     }
 
@@ -366,6 +483,25 @@ export class MySqlCanonicalScoringRepository {
       [matchId, playerId],
     );
     return dbInt(rows[0]?.c ?? 0, "leg_wins");
+  }
+
+  private async removeTrailingEmptyLegs(sql: SqlExecutor, matchId: DbId): Promise<void> {
+    while (true) {
+      const leg = await this.findLatestLeg(sql, matchId);
+      if (leg === null) return;
+
+      const countRows = await sql.query<NumberDbRow>(
+        `SELECT COUNT(*) AS c FROM ${this.table("visits")} WHERE leg_id=?`,
+        [leg.id],
+      );
+      const count = dbInt(countRows[0]?.c ?? 0, "visits_count");
+      if (count > 0) return;
+
+      await sql.execute(
+        `DELETE FROM ${this.table("legs")} WHERE id=?`,
+        [leg.id],
+      );
+    }
   }
 
   private async visitRequestAlreadyExists(sql: SqlExecutor, requestKey: string): Promise<boolean> {
@@ -446,7 +582,7 @@ export class MySqlCanonicalScoringRepository {
 
 interface MutableMatch {
   readonly id: DbId;
-  status: "assigned" | "in_progress";
+  status: "assigned" | "in_progress" | "completed";
   readonly legs_to_win: number;
   readonly player_a_id: DbId;
   readonly player_b_id: DbId;
@@ -459,6 +595,11 @@ interface CanonicalLeg {
   readonly starting_player_id: DbId;
   readonly status: "pending" | "in_progress" | "completed";
   readonly start_score: number;
+}
+
+interface CanonicalVisit {
+  readonly id: DbId;
+  readonly leg_id: DbId;
 }
 
 function normalizeLeg(row: LegDbRow): CanonicalLeg {
