@@ -10,7 +10,7 @@
 
   const ROUTES = Object.freeze({
     equipment: "/v2/equipment/",
-    kiosk: "/v2/kiosk/",
+    kiosk: "/v2/kiosk/?testmode=1",
   });
 
   function wireLinks() {
