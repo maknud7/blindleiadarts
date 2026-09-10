@@ -8,6 +8,8 @@ const KEYS = {
   testMode: "bd:kioskTestMode",
   testPhysicalBoardId: "bd:kioskTestPhysicalBoardId",
   testBoardLabel: "bd:kioskTestBoardLabel",
+  testReturnUrl: "bd:kioskTestReturnUrl",
+  testEmbedded: "bd:kioskTestEmbedded",
   testLeaseActive: "bd:kioskScoliaLeaseActive",
   testLeaseCode: "bd:kioskScoliaLeaseKioskCode",
   testLeasePhysicalId: "bd:kioskScoliaLeasePhysicalId",
