@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 import type { ScoringSource } from "./contracts/canonical-scoring.js";
-import { asDbId, type VisitInput } from "./contracts/scoring.js";
+import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
@@ -67,6 +67,13 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     return;
   }
 
+  if (method === "POST" && url.pathname === "/internal/v1/scoring/start-match") {
+    const { kioskId, source } = await scoringCommandContext(request);
+    const result = await scoring.startMatch({ kiosk_id: kioskId, source });
+    sendJson(response, 200, { ok: true, result });
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/internal/v1/scoring/visit") {
     assertInternalToken(config, header(request, "x-bd-backend-v2-token"));
     assertMutationAllowed(config);
@@ -87,16 +94,32 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     return;
   }
 
+  if (method === "POST" && url.pathname === "/internal/v1/scoring/undo") {
+    const { kioskId, source } = await scoringCommandContext(request);
+    const result = await scoring.undoLastVisit({ kiosk_id: kioskId, source });
+    sendJson(response, 200, { ok: true, result });
+    return;
+  }
+
   sendJson(response, 404, {
     ok: false,
     error: { code: "route_not_found", message: "Backend v2 route was not found." },
   });
 }
 
+async function scoringCommandContext(request: IncomingMessage): Promise<{ kioskId: DbId; source: ScoringSource }> {
+  assertInternalToken(config, header(request, "x-bd-backend-v2-token"));
+  assertMutationAllowed(config);
+  const body = await readJsonObject(request);
+  return {
+    kioskId: asDbId(requiredString(body, "kiosk_id")),
+    source: scoringSource(body.source),
+  };
+}
+
 function sendError(response: ServerResponse, error: unknown): void {
   if (error instanceof RuntimeAccessError || error instanceof DomainValidationError) {
-    const statusCode = error instanceof RuntimeAccessError ? error.statusCode : error.statusCode;
-    sendJson(response, statusCode, {
+    sendJson(response, error.statusCode, {
       ok: false,
       error: { code: error.code, message: error.message },
     });
