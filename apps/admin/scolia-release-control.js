@@ -1,6 +1,8 @@
 const CONTROL_API = "../api/scolia-bridge-control.php";
 const stateCache = new Map();
 let syncTimer = null;
+let syncRunning = false;
+let syncQueued = false;
 
 function authToken() {
   return localStorage.getItem("bd:token") || "";
@@ -62,8 +64,9 @@ function ensureStyles() {
 function editorMessage(text, tone = "good") {
   const message = document.getElementById("boardEditorMessage");
   if (!message) return;
-  message.className = `board-editor-message ${tone}`;
-  message.textContent = text;
+  const className = `board-editor-message ${tone}`;
+  if (message.className !== className) message.className = className;
+  if (message.textContent !== text) message.textContent = text;
 }
 
 function actionCopy(state) {
@@ -127,11 +130,13 @@ function renderQuickButton(row, kioskId, state) {
     controls.appendChild(button);
   }
   const action = actionCopy(state);
-  button.textContent = action.label;
-  button.dataset.released = state.bridge_released ? "1" : "0";
-  button.title = state.bridge_released
+  const released = state.bridge_released ? "1" : "0";
+  const title = state.bridge_released
     ? "Skiva er frikoblet og kan brukes direkte i Scolia."
     : "Slipp Blindleia sin Scolia-forbindelse slik at skiva kan brukes direkte i Scolia.";
+  if (button.textContent !== action.label) button.textContent = action.label;
+  if (button.dataset.released !== released) button.dataset.released = released;
+  if (button.title !== title) button.title = title;
 }
 
 function renderEditor(kioskId, state) {
@@ -161,12 +166,15 @@ function renderEditor(kioskId, state) {
   }
 
   const action = actionCopy(state);
-  button.textContent = state.can_change_bridge ? action.label : (state.bridge_released ? "Koble til i PROD" : "Frikoble i PROD");
-  button.disabled = !state.can_change_bridge;
-  button.title = state.can_change_bridge ? action.confirm : "Fysisk Scolia-frikobling styres fra PROD Utstyr.";
+  const buttonText = state.can_change_bridge ? action.label : (state.bridge_released ? "Koble til i PROD" : "Frikoble i PROD");
+  const buttonTitle = state.can_change_bridge ? action.confirm : "Fysisk Scolia-frikobling styres fra PROD Utstyr.";
+  if (button.textContent !== buttonText) button.textContent = buttonText;
+  if (button.disabled !== !state.can_change_bridge) button.disabled = !state.can_change_bridge;
+  if (button.title !== buttonTitle) button.title = buttonTitle;
 
   actions.querySelectorAll("[data-scolia-action]").forEach((existing) => {
-    existing.hidden = Boolean(state.bridge_released);
+    const hidden = Boolean(state.bridge_released);
+    if (existing.hidden !== hidden) existing.hidden = hidden;
   });
 
   let status = runtime.querySelector(".scolia-bridge-control-status");
@@ -175,17 +183,21 @@ function renderEditor(kioskId, state) {
     status.className = "scolia-bridge-control-status";
     runtime.appendChild(status);
   }
-  status.classList.toggle("released", Boolean(state.bridge_released));
-  status.innerHTML = state.bridge_released
+  const released = Boolean(state.bridge_released);
+  if (status.classList.contains("released") !== released) status.classList.toggle("released", released);
+  const statusHtml = released
     ? `<strong>Frikoblet fra Blindleia</strong><span class="muted">Skiva kan brukes direkte i Scolia. Serienummer og skiveoppsett er beholdt.</span>${state.can_change_bridge ? `<span class="muted">Koble til Blindleia igjen med knappen under.</span>` : `<span class="scolia-bridge-prod-note">Endres i PROD Utstyr.</span>`}`
     : `<strong>Blindleia kan bruke Scolia</strong><span class="muted">Frikoble skiva her før den skal brukes direkte i Scolia-appen.</span>`;
+  if (status.innerHTML !== statusHtml) status.innerHTML = statusHtml;
 
   // The ordinary board-save path intentionally activates live Scolia. Prevent an
   // unrelated sponsor/name edit from silently reclaiming a deliberately released
   // board; reconnect first, then edit.
   if (save) {
-    save.disabled = Boolean(state.bridge_released);
-    save.title = state.bridge_released ? "Koble Scolia til Blindleia før du lagrer skiveendringer." : "";
+    const saveDisabled = Boolean(state.bridge_released);
+    const saveTitle = saveDisabled ? "Koble Scolia til Blindleia før du lagrer skiveendringer." : "";
+    if (save.disabled !== saveDisabled) save.disabled = saveDisabled;
+    if (save.title !== saveTitle) save.title = saveTitle;
   }
 }
 
@@ -226,17 +238,43 @@ async function syncEditor() {
   }
 }
 
+async function runSync() {
+  if (syncRunning) {
+    syncQueued = true;
+    return;
+  }
+  syncRunning = true;
+  try {
+    await syncRows();
+    await syncEditor();
+  } finally {
+    syncRunning = false;
+    if (syncQueued) {
+      syncQueued = false;
+      scheduleSync(80);
+    }
+  }
+}
+
 function scheduleSync(delay = 80) {
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    void syncRows();
-    void syncEditor();
-  }, delay);
+  syncTimer = setTimeout(() => void runSync(), delay);
+}
+
+function mutationIsInternal(mutation) {
+  const target = mutation.target;
+  if (target instanceof Element && target.closest(".scolia-release-quick, .scolia-bridge-control-status")) return true;
+  if (mutation.type !== "childList") return false;
+  const changedElements = [...mutation.addedNodes, ...mutation.removedNodes].filter((node) => node.nodeType === Node.ELEMENT_NODE);
+  return changedElements.length > 0 && changedElements.every((node) => node.matches?.(".scolia-release-quick, .scolia-bridge-control-status"));
 }
 
 function boot() {
   ensureStyles();
-  const observer = new MutationObserver(() => scheduleSync());
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.length && mutations.every(mutationIsInternal)) return;
+    scheduleSync();
+  });
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-kiosk-id"] });
   document.getElementById("refreshAllButton")?.addEventListener("click", () => {
     stateCache.clear();

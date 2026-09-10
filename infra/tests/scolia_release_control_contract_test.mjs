@@ -18,6 +18,11 @@ assert.match(ui, /Koble til Blindleia/);
 assert.match(ui, /kan brukes direkte i Scolia/);
 assert.match(ui, /release_effective_within_seconds/);
 assert.match(ui, /data-scolia-action/);
+assert.match(ui, /let syncRunning = false/);
+assert.match(ui, /if \(syncRunning\)/);
+assert.match(ui, /mutations\.every\(mutationIsInternal\)/);
+assert.match(ui, /if \(button\.textContent !== action\.label\)/);
+assert.match(ui, /if \(status\.innerHTML !== statusHtml\)/);
 assert.match(admin, /scolia-release-control\.js\?v=/);
 
 console.log("Scolia release control contract: OK");
