@@ -14,14 +14,16 @@ if (isTestEnvironment) {
       #kiosks.test-hardware-readonly #kioskForm,
       #kiosks.test-hardware-readonly #newBoardButton,
       #kiosks.test-hardware-readonly #boardCreateReveal,
-      #kiosks.test-hardware-readonly .board-edit-button,
       #kiosks.test-hardware-readonly .equipment-delete-button[data-kind='board'] {
         display: none !important;
       }
       #kiosks.test-hardware-readonly .kiosk-layout {
         grid-template-columns: minmax(0, 1fr) !important;
       }
-      #kiosks.test-hardware-readonly .scoring-mode:disabled {
+      #kiosks.test-hardware-readonly .scoring-mode:disabled,
+      #boardEditorForm input:disabled,
+      #boardEditorForm select:disabled,
+      #boardEditorForm textarea:disabled {
         opacity: 1;
         cursor: default;
       }
@@ -40,6 +42,31 @@ if (isTestEnvironment) {
     notice.style.margin = "0 0 16px";
     notice.innerHTML = `<strong>TEST · utstyr er skrivebeskyttet</strong><br><span>${readonlyMessage}</span>`;
     panelHead.insertAdjacentElement("afterend", notice);
+  }
+
+  function lockBoardEditor() {
+    const form = document.getElementById("boardEditorForm");
+    if (!form) return;
+
+    form.querySelectorAll("input, select, textarea, button[type='submit']").forEach((control) => {
+      if (!control.disabled) control.disabled = true;
+    });
+    form.querySelectorAll("#boardScoliaActions button").forEach((button) => {
+      if (!button.disabled) button.disabled = true;
+    });
+
+    const save = document.getElementById("boardEditorSave");
+    if (save) {
+      save.disabled = true;
+      save.title = "Fysiske skiveinnstillinger endres kun i PROD.";
+    }
+
+    const message = document.getElementById("boardEditorMessage");
+    if (message && message.dataset.testReadonlyApplied !== "1") {
+      message.dataset.testReadonlyApplied = "1";
+      message.className = "board-editor-message good";
+      message.textContent = "TEST viser skivedetaljene fra PROD. Endringer i fysisk skive- og Scolia-oppsett gjøres i PROD.";
+    }
   }
 
   function lockMasterControls() {
@@ -61,6 +88,8 @@ if (isTestEnvironment) {
       });
     });
 
+    lockBoardEditor();
+
     const prodBanner = document.querySelector("#scoliaEquipmentPanel .prod-scope-banner p");
     if (prodBanner && prodBanner.dataset.testReadonlyApplied !== "1") {
       prodBanner.dataset.testReadonlyApplied = "1";
@@ -75,14 +104,14 @@ if (isTestEnvironment) {
   }
 
   document.addEventListener("submit", (event) => {
-    if (["kioskForm", "scoliaGeneralForm", "scoliaAdvancedForm"].includes(event.target?.id || "")) {
+    if (["kioskForm", "scoliaGeneralForm", "scoliaAdvancedForm", "boardEditorForm"].includes(event.target?.id || "")) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
   }, true);
 
   document.addEventListener("click", (event) => {
-    const target = event.target?.closest?.("#newBoardButton, .board-edit-button, .equipment-delete-button[data-kind='board']");
+    const target = event.target?.closest?.("#newBoardButton, .equipment-delete-button[data-kind='board']");
     if (!target) return;
     event.preventDefault();
     event.stopImmediatePropagation();

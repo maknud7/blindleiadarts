@@ -7,6 +7,7 @@ on:
     paths:
       - 'apps/api/scolia-bridge-control.php'
       - 'apps/admin/scolia-release-control.js'
+      - 'apps/admin/test-hardware-readonly.js'
       - 'apps/admin/index.html'
       - 'infra/tests/scolia_release_control_contract_test.mjs'
       - '.github/workflows/scolia-release-control-contract.yml'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'apps/api/scolia-bridge-control.php'
       - 'apps/admin/scolia-release-control.js'
+      - 'apps/admin/test-hardware-readonly.js'
       - 'apps/admin/index.html'
       - 'infra/tests/scolia_release_control_contract_test.mjs'
       - '.github/workflows/scolia-release-control-contract.yml'
@@ -37,4 +39,5 @@ jobs:
           set -Eeuo pipefail
           php -l apps/api/scolia-bridge-control.php
           node --check apps/admin/scolia-release-control.js
+          node --check apps/admin/test-hardware-readonly.js
           node infra/tests/scolia_release_control_contract_test.mjs

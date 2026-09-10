@@ -121,7 +121,7 @@ function renderQuickButton(row, kioskId, state) {
   if (!button) {
     button = document.createElement("button");
     button.type = "button";
-    button.className = "board-edit-button scolia-release-quick";
+    button.className = "button secondary scolia-release-quick";
     button.addEventListener("click", async () => {
       const latest = await getState(kioskId, true).catch(() => null);
       if (latest) await changeOwnership(kioskId, button, latest);
