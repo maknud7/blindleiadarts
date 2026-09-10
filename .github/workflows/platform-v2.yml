@@ -68,6 +68,20 @@ jobs:
           grep -Fq 'searchParams.delete("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
           grep -Fq 'get("pairing")' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
 
+      - name: Verify club-independent tablet pairing contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'GlobalPairingClaim' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx
+          grep -Fq '1. Klubb' apps/platform-v2/src/equipment/GlobalPairingClaim.tsx
+          grep -Fq 'kiosk-pairing.php?action=admin-info' apps/platform-v2/src/equipment/GlobalPairingClaim.tsx
+          grep -Fq 'kiosk-pairing.php?action=claim' apps/platform-v2/src/equipment/GlobalPairingClaim.tsx
+          grep -Fq 'Kode fra nettbrett' apps/platform-v2/src/equipment/BoardEditor.tsx
+          if grep -Fq '/kiosk-pairing-requests' apps/platform-v2/src/equipment/EquipmentWorkspace.tsx; then
+            echo 'Equipment v2 must not expose the club-scoped pending tablet queue.' >&2
+            exit 1
+          fi
+
       - name: Build platform v2
         run: npm run v2:build
 
