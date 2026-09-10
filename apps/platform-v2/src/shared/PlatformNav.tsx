@@ -22,6 +22,9 @@ function isTestHost(): boolean {
 }
 
 export function PlatformNav({ active }: { active: Surface }) {
+  const testHost = isTestHost();
+  const kioskHref = testHost ? `${routes.kiosk}?testmode=1` : routes.kiosk;
+
   useEffect(() => {
     const body = document.body;
     body.dataset.portalDefault = "overview";
@@ -57,12 +60,12 @@ export function PlatformNav({ active }: { active: Surface }) {
   }, []);
 
   return <nav className="platform-nav portal-menu" aria-label="Plattformmeny">
-    <div className="platform-nav-brand"><strong>BD</strong><span>{isTestHost() ? "TEST · Plattform v2" : "Plattform v2"}</span></div>
+    <div className="platform-nav-brand"><strong>BD</strong><span>{testHost ? "TEST · Plattform v2" : "Plattform v2"}</span></div>
     <div className="platform-nav-links">
       <a href={routes.admin}>Administrasjon</a>
       <a href={routes.tournament} className={active === "tournament" ? "active" : ""}>Turneringer</a>
       <a href={routes.equipment} className={active === "equipment" ? "active" : ""} aria-current={active === "equipment" ? "page" : undefined}>Utstyr</a>
-      <a href={routes.kiosk} className={active === "kiosk" ? "active" : ""} aria-current={active === "kiosk" ? "page" : undefined}>Kiosk</a>
+      <a href={kioskHref} className={active === "kiosk" ? "active" : ""} aria-current={active === "kiosk" ? "page" : undefined}>{testHost ? "Kiosk · TEST" : "Kiosk"}</a>
     </div>
   </nav>;
 }
