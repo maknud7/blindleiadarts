@@ -66,7 +66,7 @@
     if (document.getElementById("prodTestRuntimeOverlay")) return true;
 
     sessionStorage.setItem(EMBEDDED_OPEN_KEY, "1");
-    const target = new URL("/kiosk/", testOrigin());
+    const target = new URL("/v2/kiosk/", testOrigin());
     target.searchParams.set("testmode", "1");
     target.searchParams.set("return_url", window.location.href);
     target.searchParams.set("embedded", "1");
