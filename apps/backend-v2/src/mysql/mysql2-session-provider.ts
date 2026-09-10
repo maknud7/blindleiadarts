@@ -115,7 +115,10 @@ class MySql2Executor implements SqlExecutor {
     if (!isReadStatement(sql)) {
       throw new Error("SqlExecutor.query only permits SELECT/SHOW/EXPLAIN statements.");
     }
-    const [rows] = await this.connection.execute<RowDataPacket[]>(sql, Array.from(params));
+    // mysql2 accepts a mutable values array. Keep readonly/unknown at our domain
+    // boundary and adapt only at this driver edge.
+    const values = Array.from(params) as any[];
+    const [rows] = await this.connection.execute<RowDataPacket[]>(sql, values);
     if (!Array.isArray(rows)) {
       throw new Error("MySQL query did not return row data.");
     }
@@ -133,7 +136,8 @@ class MySql2Executor implements SqlExecutor {
       throw new Error("Backend v2 MySQL executor does not permit multiple statements.");
     }
 
-    const [result] = await this.connection.execute<ResultSetHeader>(sql, Array.from(params));
+    const values = Array.from(params) as any[];
+    const [result] = await this.connection.execute<ResultSetHeader>(sql, values);
     const response: { affectedRows: number; insertId?: ReturnType<typeof asDbId> } = {
       affectedRows: result.affectedRows,
     };
