@@ -1,0 +1,181 @@
+.recent-visits-v1-parity {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.recent-visits-v1-parity .visit:nth-child(n+4) {
+  display: grid;
+}
+
+button.visit.visit-editable {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 6px 20px 6px 8px;
+  border: 1px solid var(--line);
+  background: #f7fafc;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button.visit.visit-editable:active {
+  background: #eaf2f8;
+}
+
+button.visit.visit-editable:disabled {
+  cursor: default;
+  opacity: .65;
+}
+
+.visit-edit-icon {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: auto;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.recent-visits-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+}
+
+.visit-edit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(8, 37, 68, .52);
+  backdrop-filter: blur(2px);
+}
+
+.visit-edit-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid #cad8e3;
+  border-radius: 22px;
+  background: #fff;
+  color: #082544;
+  box-shadow: 0 28px 90px rgba(8, 37, 68, .28);
+}
+
+.visit-edit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.visit-edit-head > div > span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.visit-edit-head h2 {
+  margin: 2px 0 0;
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.visit-edit-meta,
+.visit-edit-note {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.visit-edit-meta {
+  margin: 8px 0 0;
+}
+
+.visit-edit-display {
+  min-height: 72px;
+  margin: 14px 0 10px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d7e2eb;
+  border-radius: 16px;
+  background: #f4f8fb;
+  color: #082544;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.visit-edit-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.visit-edit-keypad button {
+  min-height: 58px;
+  border: 1px solid #d7e2eb;
+  border-radius: 12px;
+  background: #eef4f8;
+  color: #082544;
+  font-size: 22px;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.visit-edit-keypad button.secondary {
+  background: #f7fafc;
+}
+
+.visit-edit-keypad button.confirm {
+  background: #2875ea;
+  color: #fff;
+  font-size: 28px;
+}
+
+.visit-edit-error {
+  min-height: 20px;
+  margin: 9px 0 0;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0;
+}
+
+.visit-edit-error.visible {
+  opacity: 1;
+}
+
+.visit-edit-note {
+  margin: 4px 0 0;
+}
+
+.visit-edit-dialog.is-busy button {
+  pointer-events: none;
+  opacity: .55;
+}
+
+@media (orientation: portrait) and (max-width: 600px) {
+  .recent-visits-v1-parity {
+    gap: 4px;
+  }
+
+  button.visit.visit-editable,
+  .recent-visits-v1-parity .visit {
+    padding-left: 5px;
+    padding-right: 15px;
+    font-size: 9px;
+  }
+
+  .recent-visits-v1-parity .visit strong {
+    font-size: 12px;
+  }
+}

@@ -97,6 +97,8 @@ jobs:
           test -f apps/platform-v2/src/kiosk/kiosk-tablet.css
           test -f apps/platform-v2/src/kiosk/kiosk-interactions.css
           test -f apps/platform-v2/src/kiosk/KioskErrorBoundary.tsx
+          test -f apps/platform-v2/src/kiosk/RecentVisitsEditor.tsx
+          test -f apps/platform-v2/src/kiosk/recent-visit-edit.css
           grep -Fq 'overflow: hidden' apps/platform-v2/src/kiosk/kiosk-tablet.css
           grep -Fq 'grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr)' apps/platform-v2/src/kiosk/kiosk-tablet.css
           grep -Fq 'aspect-ratio: 3 / 4' apps/platform-v2/src/kiosk/kiosk-tablet.css
@@ -110,6 +112,12 @@ jobs:
           grep -Fq 'readPlayerInputModes' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq 'manualRemainingPreview' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq 'Bust · scoren står' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'slice(0, 4)' apps/platform-v2/src/kiosk/RecentVisitsEditor.tsx
+          grep -Fq 'Kastene etter dette regnes om automatisk.' apps/platform-v2/src/kiosk/RecentVisitsEditor.tsx
+          grep -Fq '/undo' apps/platform-v2/src/kiosk/RecentVisitsEditor.tsx
+          grep -Fq '/visit' apps/platform-v2/src/kiosk/RecentVisitsEditor.tsx
+          grep -Fq 'recentVisitsEditable={kiosk.scoring_mode === "manual"}' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'repeat(4, minmax(0, 1fr))' apps/platform-v2/src/kiosk/recent-visit-edit.css
           if grep -Fq 'PlatformNav' apps/platform-v2/src/kiosk/main.tsx; then
             echo 'Kiosk v2 must be a full-screen terminal surface, not a portal page.' >&2
             exit 1
