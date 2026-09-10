@@ -1,0 +1,55 @@
+name: Platform v2
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'package.json'
+      - 'apps/platform-v2/**'
+      - 'infra/deploy/build-release.sh'
+      - '.github/workflows/platform-v2.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'package.json'
+      - 'apps/platform-v2/**'
+      - 'infra/deploy/build-release.sh'
+      - '.github/workflows/platform-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck platform v2
+        run: npm run v2:typecheck
+
+      - name: Build platform v2
+        run: npm run v2:build
+
+      - name: Verify v2 release surface
+        run: |
+          set -Eeuo pipefail
+          test -f apps/platform-v2-dist/equipment/index.html
+          test -f apps/platform-v2-dist/kiosk/index.html
+          test -d apps/platform-v2-dist/assets
+          grep -Fq '/v2/assets/' apps/platform-v2-dist/equipment/index.html
+          grep -Fq '/v2/assets/' apps/platform-v2-dist/kiosk/index.html
+          if find apps/platform-v2-dist -type f \( -name '*.ts' -o -name '*.tsx' \) | grep -q .; then
+            echo 'TypeScript source leaked into built v2 release.' >&2
+            exit 1
+          fi
