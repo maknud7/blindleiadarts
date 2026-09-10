@@ -24,6 +24,7 @@ export interface BackendRuntimeConfig {
     username: string;
     password: string;
     connectTimeoutMs: number;
+    idleConnectionTimeoutMs: number;
     budget: MySqlConnectionBudget;
   };
 }
@@ -45,6 +46,10 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
   const maxConcurrentConnections = integer(env.BD_BACKEND_V2_MAX_CONNECTIONS ?? "1", "BD_BACKEND_V2_MAX_CONNECTIONS");
   const acquireTimeoutMs = integer(env.BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS ?? "2500", "BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS");
   const connectTimeoutMs = integer(env.BD_BACKEND_V2_CONNECT_TIMEOUT_MS ?? "5000", "BD_BACKEND_V2_CONNECT_TIMEOUT_MS");
+  const idleConnectionTimeoutMs = integer(
+    env.BD_BACKEND_V2_DB_IDLE_MS ?? "15000",
+    "BD_BACKEND_V2_DB_IDLE_MS",
+  );
 
   // Backend-v2 deliberately owns only a tiny slice of hosted DB capacity while
   // PHP remains live. Raising this ceiling requires an explicit architecture change.
@@ -105,6 +110,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
       username: required(env, "DB_USERNAME"),
       password: required(env, "DB_PASSWORD"),
       connectTimeoutMs,
+      idleConnectionTimeoutMs,
       budget,
     },
   };
