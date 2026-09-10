@@ -9,7 +9,6 @@ on:
       - 'apps/api/src/Service/Dart501Rules.php'
       - 'apps/api/src/Repository/ValidationException.php'
       - 'package.json'
-      - 'package-lock.json'
       - '.github/workflows/backend-v2.yml'
   workflow_dispatch:
 
@@ -33,10 +32,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
 
       - name: Install existing JavaScript toolchain
-        run: npm ci
+        run: npm install --no-package-lock --ignore-scripts
 
       - name: Typecheck backend v2
         run: npm run backend-v2:typecheck
