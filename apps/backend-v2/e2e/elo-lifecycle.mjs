@@ -37,9 +37,13 @@ const elo = new MySqlCanonicalEloLedger(provider, prefix);
 const tournamentElo = new MySqlTournamentEloProjection(provider, prefix);
 
 try {
-  const memberIds = await existingMemberIds();
-  assert.equal(memberIds.length, 2, "ELO E2E requires two distinct existing TEST member-linked identities");
-  await createFixture(memberIds);
+  const players = await existingMemberPlayers();
+  assert.equal(players.length, 2, "ELO E2E requires two existing member-linked TEST players in the same club");
+  assert.equal(players[0].club_id, players[1].club_id, "ELO E2E players must belong to the same TEST club");
+  fixture.club = players[0].club_id;
+  fixture.playerA = players[0].player_id;
+  fixture.playerB = players[1].player_id;
+  await createFixture();
 
   await elo.applyCompletedMatch(fixture.match);
 
@@ -160,43 +164,34 @@ try {
   await provider.close();
 }
 
-async function existingMemberIds() {
-  return provider.withConnection(async (sql) => {
-    const rows = await sql.query(
-      `SELECT DISTINCT CAST(member_id AS CHAR) AS member_id
-       FROM \`${prefix}players\`
-       WHERE member_id IS NOT NULL AND member_id>0
-       ORDER BY member_id ASC LIMIT 2`,
-    );
-    return rows.map((row) => String(row.member_id));
-  });
+async function existingMemberPlayers() {
+  return provider.withConnection(async (sql) => sql.query(
+    `SELECT CAST(p.id AS CHAR) AS player_id,
+            CAST(p.club_id AS CHAR) AS club_id,
+            CAST(p.member_id AS CHAR) AS member_id
+     FROM \`${prefix}players\` p
+     WHERE p.club_id=(
+       SELECT candidate.club_id
+       FROM \`${prefix}players\` candidate
+       WHERE candidate.member_id IS NOT NULL AND candidate.member_id>0 AND candidate.club_id IS NOT NULL
+       GROUP BY candidate.club_id
+       HAVING COUNT(*)>=2
+       ORDER BY COUNT(*) DESC,candidate.club_id ASC
+       LIMIT 1
+     )
+       AND p.member_id IS NOT NULL AND p.member_id>0
+     ORDER BY p.id ASC
+     LIMIT 2`,
+  ));
 }
 
-async function createFixture(memberIds) {
+async function createFixture() {
   await provider.withConnection(async (sql) => {
-    const club = await sql.execute(
-      `INSERT INTO \`${prefix}clubs\` (name,slug) VALUES (?,?)`,
-      [`Backend v2 ELO E2E ${suffix}`, `backend-v2-elo-e2e-${suffix}`],
-    );
-    fixture.club = requireInsertId(club, "club");
-
     const season = await sql.execute(
-      `INSERT INTO \`${prefix}seasons\` (club_id,name,starts_on,is_active) VALUES (?,?,CURRENT_DATE,1)`,
+      `INSERT INTO \`${prefix}seasons\` (club_id,name,starts_on,is_active) VALUES (?,?,CURRENT_DATE,0)`,
       [fixture.club, `Backend v2 ELO E2E Season ${suffix}`],
     );
     fixture.season = requireInsertId(season, "season");
-
-    const playerA = await sql.execute(
-      `INSERT INTO \`${prefix}players\` (club_id,member_id,display_name) VALUES (?,?,?)`,
-      [fixture.club, memberIds[0], `Backend v2 ELO A ${suffix}`],
-    );
-    fixture.playerA = requireInsertId(playerA, "player A");
-
-    const playerB = await sql.execute(
-      `INSERT INTO \`${prefix}players\` (club_id,member_id,display_name) VALUES (?,?,?)`,
-      [fixture.club, memberIds[1], `Backend v2 ELO B ${suffix}`],
-    );
-    fixture.playerB = requireInsertId(playerB, "player B");
 
     const tournament = await sql.execute(
       `INSERT INTO \`${prefix}tournaments\`
@@ -222,16 +217,15 @@ async function createFixture(memberIds) {
 }
 
 async function cleanupFixture() {
-  if (!fixture.club) return;
+  if (!fixture.season) return;
   try {
     await provider.withConnection(async (sql) => {
       if (fixture.tournament) {
         await sql.execute(`DELETE FROM \`${prefix}tournament_elo_snapshots\` WHERE tournament_id=?`, [fixture.tournament]);
+        await sql.execute(`DELETE FROM \`${prefix}season_ranking_events\` WHERE tournament_id=?`, [fixture.tournament]);
       }
-      if (fixture.season) {
-        await sql.execute(`DELETE FROM \`${prefix}ranking_snapshots\` WHERE season_id=?`, [fixture.season]);
-        await sql.execute(`DELETE FROM \`${prefix}elo_current_ratings\` WHERE season_id=?`, [fixture.season]);
-      }
+      await sql.execute(`DELETE FROM \`${prefix}ranking_snapshots\` WHERE season_id=?`, [fixture.season]);
+      await sql.execute(`DELETE FROM \`${prefix}elo_current_ratings\` WHERE season_id=?`, [fixture.season]);
       if (fixture.match) {
         await sql.execute(`DELETE FROM \`${prefix}elo_match_events\` WHERE match_id=?`, [fixture.match]);
         await sql.execute(`DELETE FROM \`${prefix}matches\` WHERE id=?`, [fixture.match]);
@@ -241,10 +235,7 @@ async function cleanupFixture() {
         await sql.execute(`DELETE FROM \`${prefix}tournament_summaries\` WHERE tournament_id=?`, [fixture.tournament]);
         await sql.execute(`DELETE FROM \`${prefix}tournaments\` WHERE id=?`, [fixture.tournament]);
       }
-      if (fixture.playerA) await sql.execute(`DELETE FROM \`${prefix}players\` WHERE id=?`, [fixture.playerA]);
-      if (fixture.playerB) await sql.execute(`DELETE FROM \`${prefix}players\` WHERE id=?`, [fixture.playerB]);
-      if (fixture.season) await sql.execute(`DELETE FROM \`${prefix}seasons\` WHERE id=?`, [fixture.season]);
-      await sql.execute(`DELETE FROM \`${prefix}clubs\` WHERE id=?`, [fixture.club]);
+      await sql.execute(`DELETE FROM \`${prefix}seasons\` WHERE id=?`, [fixture.season]);
     });
   } catch (error) {
     console.error("backend-v2 ELO E2E cleanup failed", error);
