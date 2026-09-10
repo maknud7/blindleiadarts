@@ -26,7 +26,7 @@ Backend v2 must therefore follow these rules:
 4. Keep database `BIGINT UNSIGNED` identifiers as decimal strings at the TypeScript boundary. Never assume every database id is a safe JavaScript `number`.
 5. Preserve the existing runtime, identity and hardware table-prefix boundaries. TEST runtime data must not accidentally mutate canonical PROD hardware/Scolia master data.
 6. Keep SQL compatible with the deployed MySQL feature set. Do not introduce PostgreSQL syntax or unverified MySQL-8-only features as migration shortcuts.
-7. Prefer existing InnoDB tables, indexes, unique constraints and idempotency keys over new infrastructure. The first backend-v2 slice makes no schema changes.
+7. Prefer existing InnoDB tables, indexes, unique constraints and idempotency keys over new infrastructure. Early backend-v2 slices make no schema changes.
 
 ## Slice 1: 501 domain parity
 
@@ -39,3 +39,17 @@ The first slice contains:
 - a parity suite that executes the TypeScript implementation and the existing PHP implementation against the same vectors.
 
 There is intentionally no HTTP server and no MySQL driver in this slice. That keeps the first architectural step zero-risk for runtime traffic and database connection capacity.
+
+## Slice 2: Scolia adapter boundary
+
+The second slice keeps the existing Scolia bridge and PHP queue operational, but makes the future TypeScript boundary explicit:
+
+- Scolia ingress has typed event, buffer and routing identities.
+- Serial normalization, event priority and dedupe identity are deterministic before persistence.
+- Scolia sector mapping is ported to TypeScript and parity-tested against the existing PHP mapper.
+- An assembled Scolia visit becomes one source-agnostic canonical `recordVisit` command.
+- The current `scolia-<sha256(event ids)>` request key remains the idempotency contract.
+- Connection/status/takeout events stay adapter concerns; only completed dart visits cross into canonical scoring.
+- The canonical scoring port contains no Scolia-specific hardware or WebSocket concepts.
+
+This slice still opens no MySQL connections and exposes no HTTP server. The live PHP implementation remains authoritative for queue persistence, TEST lease routing, reconciliation, ELO/playoff side effects and realtime publication.
