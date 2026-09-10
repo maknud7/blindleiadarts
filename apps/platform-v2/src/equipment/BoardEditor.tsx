@@ -35,6 +35,7 @@ export function BoardEditor({ board, clubId, token, readOnly, onClose, onSaved }
     const form = new FormData(event.currentTarget);
     const boardNumber = Number(form.get("board_number") || 0);
     const name = String(form.get("name") || "").trim();
+    const active = form.get("is_active") === "on";
     if (!Number.isInteger(boardNumber) || boardNumber < 1) {
       setError("Skivenummer må være et heltall større enn 0.");
       return;
@@ -42,6 +43,10 @@ export function BoardEditor({ board, clubId, token, readOnly, onClose, onSaved }
     if (!name) {
       setError("Skiva må ha et visningsnavn.");
       return;
+    }
+    if (!active && Number(board.is_active ?? 1) === 1) {
+      const confirmed = window.confirm(`Deaktivere skive ${board.board_number}? Den forsvinner fra kiosk, pairingvalg og nye kamper, men beholdes i Utstyr slik at den kan aktiveres igjen.`);
+      if (!confirmed) return;
     }
 
     setBusy(true);
@@ -55,6 +60,7 @@ export function BoardEditor({ board, clubId, token, readOnly, onClose, onSaved }
           name,
           sponsor_label: String(form.get("sponsor_label") || "").trim() || null,
           sponsor_logo_url: String(form.get("sponsor_logo_url") || "").trim() || null,
+          is_active: active ? 1 : 0,
         },
       });
       await onSaved();
@@ -72,7 +78,7 @@ export function BoardEditor({ board, clubId, token, readOnly, onClose, onSaved }
     <section className="board-editor-card" role="dialog" aria-modal="true" aria-labelledby="board-editor-title">
       <div className="panel-head board-editor-head">
         <div>
-          <span className="pill">Skive {board.board_number}</span>
+          <span className={`pill ${Number(board.is_active ?? 1) === 1 ? "good" : "warn"}`}>Skive {board.board_number} · {Number(board.is_active ?? 1) === 1 ? "Aktiv" : "Deaktivert"}</span>
           <h2 id="board-editor-title">{readOnly ? "Skivedetaljer" : "Rediger skive"}</h2>
           <p>Fysisk masterdata. Scolia-serienummer, scoring og bridge-eierskap styres i Scolia-panelet.</p>
         </div>
@@ -89,6 +95,7 @@ export function BoardEditor({ board, clubId, token, readOnly, onClose, onSaved }
           <label className="field wide"><span>Visningsnavn</span><input name="name" maxLength={120} defaultValue={board.name || `Skive ${board.board_number}`} disabled={readOnly || busy} required /></label>
           <label className="field wide"><span>Sponsor / presentert av</span><input name="sponsor_label" maxLength={150} defaultValue={board.sponsor_label || ""} disabled={readOnly || busy} /></label>
           <label className="field wide"><span>Sponsorlogo (URL)</span><input name="sponsor_logo_url" type="url" maxLength={255} defaultValue={board.sponsor_logo_url || ""} disabled={readOnly || busy} placeholder="https://…" /></label>
+          <label className="field wide check-field"><input name="is_active" type="checkbox" defaultChecked={Number(board.is_active ?? 1) === 1} disabled={readOnly || busy} /><span>Aktiv – tilgjengelig for kiosk, pairing og nye kamper</span></label>
         </div>
 
         <div className="board-editor-summary">
