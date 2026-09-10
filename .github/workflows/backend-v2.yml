@@ -1,4 +1,4 @@
-name: Backend v2 Shadow
+name: Backend v2 Runtime
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  scoring-parity:
+  scoring-runtime:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install existing JavaScript toolchain
+      - name: Install JavaScript toolchain
         run: npm install --no-package-lock --ignore-scripts
 
       - name: Typecheck backend v2
@@ -46,12 +46,22 @@ jobs:
       - name: Verify PHP and TypeScript scoring parity
         run: npm run backend-v2:test
 
-      - name: Verify shadow-only architecture boundary
+      - name: Verify guarded runtime architecture
         run: |
           set -Eeuo pipefail
-          test ! -e apps/backend-v2/src/server.ts
-          test ! -e apps/backend-v2/src/server.js
-          if grep -R -n -E "from ['\"](mysql2|mysql|mariadb|pg)['\"]|require\(['\"](mysql2|mysql|mariadb|pg)['\"]\)" apps/backend-v2/src; then
-            echo 'Backend v2 shadow slices must not open database connections.'
-            exit 1
-          fi
+          test -f apps/backend-v2/src/server.ts
+          test -f apps/backend-v2/src/mysql/mysql2-session-provider.ts
+          test -f apps/backend-v2/src/runtime/config.ts
+          test -f apps/backend-v2/src/runtime/preflight.ts
+
+          # One deliberately tiny provider owns mysql2. No pool is permitted while PHP coexists.
+          mysql_imports="$(grep -R -l -E 'from ["'"']mysql2(/promise)?["'"']|require\(["'"']mysql2' apps/backend-v2/src || true)"
+          [[ "$mysql_imports" == "apps/backend-v2/src/mysql/mysql2-session-provider.ts" ]]
+          ! grep -R -n -E '\bcreatePool\b|\.getConnection\(' apps/backend-v2/src/mysql
+
+          # The coexistence ceiling and explicit PROD arming phrase are architecture invariants.
+          grep -Fq 'may not exceed 2 during coexistence with PHP' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'ALLOW_PROD_SCORING_WRITES' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'DB_TABLE_PREFIX=bd_test_' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
