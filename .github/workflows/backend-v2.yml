@@ -1,0 +1,55 @@
+name: Backend v2 Shadow
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/**'
+      - 'apps/api/src/Service/Dart501Rules.php'
+      - 'apps/api/src/Repository/ValidationException.php'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/backend-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scoring-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install existing JavaScript toolchain
+        run: npm ci
+
+      - name: Typecheck backend v2
+        run: npm run backend-v2:typecheck
+
+      - name: Verify PHP and TypeScript scoring parity
+        run: npm run backend-v2:test
+
+      - name: Verify shadow-only architecture boundary
+        run: |
+          set -Eeuo pipefail
+          test ! -e apps/backend-v2/src/server.ts
+          test ! -e apps/backend-v2/src/server.js
+          if grep -R -n -E "from ['\"](mysql2|mysql|mariadb|pg)['\"]|require\(['\"](mysql2|mysql|mariadb|pg)['\"]\)" apps/backend-v2/src; then
+            echo 'Backend v2 slice 1 must not open database connections.'
+            exit 1
+          fi
