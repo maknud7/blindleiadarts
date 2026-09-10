@@ -1,12 +1,13 @@
 name: Backend v2 TEST E2E
 
 on:
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - '.github/prod-release-request'
+      - '.github/prod-snapshot-request'
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Deploy Test
-    types:
-      - completed
 
 permissions:
   contents: read
@@ -17,13 +18,31 @@ concurrency:
 
 jobs:
   scoring-lifecycle:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    environment: test
     steps:
-      - name: Checkout exact tested release
+      - name: Checkout exact candidate release
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
+
+      - name: Wait for this SHA to be live in TEST
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for attempt in $(seq 1 60); do
+            release="$(curl -fsS --max-time 15 "$base/release.json?cb=$RANDOM" || true)"
+            if grep -Fq '"environment":"test"' <<<"$release" && grep -Fq "$EXPECTED_SHA" <<<"$release"; then
+              echo "TEST release matches $EXPECTED_SHA"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "TEST never exposed expected release SHA $EXPECTED_SHA; refusing backend-v2 write E2E." >&2
+          exit 1
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -49,7 +68,7 @@ jobs:
           BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '10000'
           HOST: 127.0.0.1
           PORT: '18082'
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RELEASE_SHA: ${{ github.sha }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT || '3306' }}
           DB_NAME: ${{ secrets.DB_NAME }}
