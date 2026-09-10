@@ -96,12 +96,16 @@ jobs:
           set -Eeuo pipefail
           test -f apps/platform-v2/src/kiosk/kiosk-tablet.css
           test -f apps/platform-v2/src/kiosk/kiosk-interactions.css
+          test -f apps/platform-v2/src/kiosk/KioskErrorBoundary.tsx
           grep -Fq 'overflow: hidden' apps/platform-v2/src/kiosk/kiosk-tablet.css
           grep -Fq 'grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr)' apps/platform-v2/src/kiosk/kiosk-tablet.css
           grep -Fq 'aspect-ratio: 3 / 4' apps/platform-v2/src/kiosk/kiosk-tablet.css
           grep -Fq '"per_dart"' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq '>Per pil<' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq 'kiosk-settings-button' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'KioskErrorBoundary' apps/platform-v2/src/kiosk/main.tsx
+          grep -Fq 'leg_number' apps/platform-v2/src/shared/api.ts
+          grep -Fq 'normalizeKioskSnapshot' apps/platform-v2/src/shared/api.ts
           if grep -Fq 'PlatformNav' apps/platform-v2/src/kiosk/main.tsx; then
             echo 'Kiosk v2 must be a full-screen terminal surface, not a portal page.' >&2
             exit 1
