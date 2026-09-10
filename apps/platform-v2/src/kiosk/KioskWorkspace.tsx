@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, legacyApi } from "../shared/api";
 import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/storage";
-import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard } from "../shared/types";
+import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard, Visit } from "../shared/types";
 import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
@@ -13,6 +13,7 @@ type InputModeMap = Record<string, InputMode>;
 type Multiplier = "S" | "D" | "T";
 type ManualDart = { multiplier: Multiplier; value: number | "BULL" };
 type RemainingPreview = { remaining: number; state: "live" | "bust" | "checkout" };
+type EditableVisit = Visit & { id?: number; player_id?: number; darts_used?: number };
 
 function text(error: unknown): string { return error instanceof Error ? error.message : "Ukjent feil"; }
 function matchIsAssigned(match: KioskMatch | null | undefined): boolean { return Boolean(match && ["assigned", "ready", "pending"].includes(String(match.status || "").toLowerCase())); }
@@ -102,6 +103,10 @@ export function KioskWorkspace() {
   const [multiplier, setMultiplier] = useState<Multiplier>("S");
   const [checkoutScore, setCheckoutScore] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [visitEditIndex, setVisitEditIndex] = useState<number | null>(null);
+  const [visitEditId, setVisitEditId] = useState<number | null>(null);
+  const [visitEditValue, setVisitEditValue] = useState("");
+  const [visitEditError, setVisitEditError] = useState("");
   const mounted = useRef(true);
 
   const kiosk = snapshot?.kiosk || null;
@@ -122,6 +127,10 @@ export function KioskWorkspace() {
     setDarts([]);
     setMultiplier("S");
     setCheckoutScore(null);
+  }
+
+  function recentEditableVisits(snapshotValue: KioskSnapshot | null = snapshot): EditableVisit[] {
+    return ((snapshotValue?.match?.recent_visits || []) as EditableVisit[]).slice(0, 4);
   }
 
   const loadState = useCallback(async (code = kioskCode, token = kioskToken) => {
@@ -344,6 +353,89 @@ export function KioskWorkspace() {
     setDarts((current) => [...current, { multiplier: nextMultiplier, value }]);
   }
 
+  function openVisitEditor(index: number) {
+    if (busy || String(kiosk?.scoring_mode || "manual") === "scolia") return;
+    const visit = recentEditableVisits()[index];
+    if (!visit?.id) return;
+    setVisitEditIndex(index);
+    setVisitEditId(Number(visit.id));
+    setVisitEditValue(String(Number(visit.score || 0)));
+    setVisitEditError("");
+  }
+
+  function editVisitKey(key: string) {
+    if (busy) return;
+    setVisitEditError("");
+    if (key === "del") {
+      setVisitEditValue((current) => current.slice(0, -1));
+      return;
+    }
+    setVisitEditValue((current) => current.length >= 3 ? current : (current === "0" ? key : `${current}${key}`));
+  }
+
+  function closeVisitEditor() {
+    if (busy) return;
+    setVisitEditIndex(null);
+    setVisitEditId(null);
+    setVisitEditValue("");
+    setVisitEditError("");
+  }
+
+  async function saveVisitEdit() {
+    if (busy || visitEditIndex === null || visitEditId === null || !kioskCode) return;
+    const correctedScore = Number(visitEditValue || 0);
+    if (!POSSIBLE_VISIT_SCORES.has(correctedScore)) {
+      setVisitEditError("Denne summen kan ikke oppnås med tre piler.");
+      return;
+    }
+
+    setBusy(true);
+    setVisitEditError("Oppdaterer kast …");
+    try {
+      const fresh = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/state`, { kioskToken });
+      const freshVisits = recentEditableVisits(fresh);
+      const selected = freshVisits[visitEditIndex];
+      if (!selected || Number(selected.id || 0) !== visitEditId) {
+        setVisitEditError("Kampen har endret seg. Lukk og åpne kastet på nytt.");
+        return;
+      }
+
+      const affected = freshVisits.slice(0, visitEditIndex + 1);
+      const newerChronological = affected.slice(0, visitEditIndex).reverse();
+      let next = fresh;
+
+      for (let index = 0; index <= visitEditIndex; index += 1) {
+        next = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/undo`, { method: "POST", kioskToken });
+      }
+
+      next = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/visit`, {
+        method: "POST",
+        kioskToken,
+        body: { input_mode: "sum", score: correctedScore, darts_used: Number(selected.darts_used || 3) },
+      });
+
+      for (const visit of newerChronological) {
+        next = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/visit`, {
+          method: "POST",
+          kioskToken,
+          body: { input_mode: "sum", score: Number(visit.score || 0), darts_used: Number(visit.darts_used || 3) },
+        });
+      }
+
+      setSnapshot(next);
+      resetInput();
+      setVisitEditIndex(null);
+      setVisitEditId(null);
+      setVisitEditValue("");
+      setVisitEditError("");
+    } catch (cause) {
+      setVisitEditError(text(cause));
+      await loadState().catch(() => undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function resetTerminal() {
     setBusy(true);
     setError("");
@@ -420,12 +512,18 @@ export function KioskWorkspace() {
       {view === "pairing" && <PairingView code={pairingCode} expires={pairingExpires} busy={busy} onNew={() => void createPairing(true)} />}
       {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1><p>Venter på neste kamp · {effectiveScoringMode.startsWith("scolia") ? "Scolia scoring" : "manuell scoring"}</p></div>}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
-      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy)} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} />}
+      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy)} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
 
     {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
 
     {checkoutScore !== null && <div className="login-shell kiosk-dialog-overlay"><div className="login-card kiosk-dialog-card"><span className="pill good">Checkout</span><h1>Hvor mange piler?</h1><p>Registrer hvor mange piler som ble brukt på checkouten.</p><div className="grid three">{[1, 2, 3].map((used) => <button key={used} className="button" disabled={busy} onClick={() => void submitSumVisit(checkoutScore, used)}>{used} pil{used > 1 ? "er" : ""}</button>)}</div><button className="button secondary" onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
+
+    {visitEditIndex !== null && (() => {
+      const selected = recentEditableVisits().find((visit) => Number(visit.id || 0) === visitEditId);
+      if (!selected) return null;
+      return <div className="visit-edit-overlay-v2" role="presentation"><section className="visit-edit-dialog-v2" role="dialog" aria-modal="true" aria-label="Rediger kast"><div className="visit-edit-head-v2"><div><span>Rediger kast</span><h2>{selected.player_name || "Spiller"}</h2></div><button type="button" className="kiosk-settings-button" disabled={busy} onClick={closeVisitEditor}>×</button></div><p>Kast #{Number(selected.visit_number || 0)} · {Number(selected.score || 0)} poeng · gjenstod {Number(selected.remaining_after ?? 0)}</p><div className="visit-edit-display-v2">{visitEditValue || "0"}</div><div className="visit-edit-keypad-v2">{["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "save"].map((key) => <button type="button" key={key} className={key === "save" ? "primary" : ""} disabled={busy} onClick={() => key === "save" ? void saveVisitEdit() : editVisitKey(key)}>{key === "del" ? "⌫" : key === "save" ? "✓" : key}</button>)}</div><p className={visitEditError && visitEditError !== "Oppdaterer kast …" ? "visit-edit-error-v2" : "visit-edit-note-v2"}>{visitEditError || "Kastene etter dette regnes om automatisk."}</p></section></div>;
+    })()}
   </div>;
 }
 
@@ -486,7 +584,7 @@ function AssignedView({ match, board, busy, onStart }: { match: KioskMatch; boar
   return <div className="assigned-view"><div className="match-tools"><span className="pill good">Skive {board} · kamp klar</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"} · best of {match.best_of_legs}</span></div><div className="versus assigned-versus"><div className="player-tile"><p>Spiller 1</p><h2>{match.player_a.display_name}</h2></div><div className="vs-mark">VS</div><div className="player-tile"><p>Spiller 2</p><h2>{match.player_b.display_name}</h2></div></div><button className="button start-match-button" disabled={busy} onClick={onStart}>{busy ? "Starter …" : "Start kamp"}</button></div>;
 }
 
-function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo }: {
+function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo, onEditVisit, visitEditingAllowed }: {
   match: KioskMatch;
   board: number;
   scoringMode: string;
@@ -505,13 +603,16 @@ function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, in
   onScore: (value: string) => void;
   onSubmit: () => void;
   onUndo: () => void;
+  onEditVisit: (index: number) => void;
+  visitEditingAllowed: boolean;
 }) {
   const throwing = currentPlayer(match);
   const automatic = scoringMode === "scolia" || scoringMode === "scolia-pending";
   const preview = automatic ? null : manualRemainingPreview(throwing, inputMode, score, darts);
   const playerAActive = Number(match.current_player_id) === Number(match.player_a.id);
   const playerBActive = Number(match.current_player_id) === Number(match.player_b.id);
-  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} preview={preview} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits">{(match.recent_visits || []).slice(0, 5).map((visit, index) => <div className="visit" key={`${visit.visit_number || index}-${index}`}><span>{visit.player_name || "Spiller"}</span><strong>{Number(visit.score || 0)} {Number(visit.is_bust) === 1 ? "· Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</strong></div>)}</div></div>;
+  const recentVisits = ((match.recent_visits || []) as EditableVisit[]).slice(0, 4);
+  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} preview={preview} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits"><div className="editable-visits-v2" aria-label="Siste fire kast">{recentVisits.length ? recentVisits.map((visit, index) => { const bust = Number(visit.is_bust) === 1; const editable = visitEditingAllowed && Boolean(visit.id); return <button type="button" className="visit visit-editable-v2" key={`${visit.id || visit.visit_number || index}-${index}`} disabled={!editable || busy} onClick={() => onEditVisit(index)} aria-label={editable ? `Rediger kast ${Number(visit.score || 0)} av ${visit.player_name || "spiller"}` : undefined}><span><strong>{visit.player_name || "Spiller"}</strong><small>#{Number(visit.visit_number || 0)}</small></span><span><strong>{Number(visit.score || 0)}</strong><small>{bust ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</small></span>{editable && <span className="visit-edit-icon-v2" aria-hidden="true">✎</span>}</button>; }) : <div className="empty">Ingen kast registrert ennå.</div>}</div></div></div>;
 }
 
 function ManualScoreSurface({ inputMode, multiplier, darts, score, preview, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit }: {

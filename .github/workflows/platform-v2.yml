@@ -113,6 +113,12 @@ jobs:
           grep -Fq '<h3>Registrer kast</h3>' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq 'Etter kast' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq 'grid-template-columns: repeat(4, minmax(0, 1fr))' apps/platform-v2/src/kiosk/recent-visit-editor.css
+          grep -Fq 'saveVisitEdit' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'Siste fire kast' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          if test -f apps/platform-v2/src/kiosk/RecentVisitEditor.tsx || grep -Fq 'RecentVisitEditor' apps/platform-v2/src/kiosk/main.tsx; then
+            echo 'Kiosk v2 recent visit editing must share KioskWorkspace state; companion polling is forbidden.' >&2
+            exit 1
+          fi
           if grep -Fq 'PlatformNav' apps/platform-v2/src/kiosk/main.tsx; then
             echo 'Kiosk v2 must be a full-screen terminal surface, not a portal page.' >&2
             exit 1
