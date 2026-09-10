@@ -21,7 +21,7 @@
 }
 
 .board-editor-head h2 { margin: 9px 0 0; }
-.board-editor-head p { max-width: 560px; }
+.board-editor-head p { max-width: 590px; }
 
 .board-row.is-inactive {
   background: #f7f8f9;
@@ -33,31 +33,65 @@
   color: var(--muted);
 }
 
-.board-editor-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-.board-editor-summary > div {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 11px 12px;
+.pairing-task {
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 1px solid #d6e4ec;
+  border-radius: 14px;
   background: #f7fafb;
 }
-.board-editor-summary span,
-.board-editor-summary strong { display: block; }
-.board-editor-summary span {
+.pairing-task-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.pairing-task-head h3 { margin: 3px 0 2px; }
+.pairing-task-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.pairing-task .pair-row { background: white; }
+.board-create { margin-bottom: 16px; }
+.board-list { margin-top: 4px; }
+
+.board-connection-card {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #f7fafb;
+}
+.board-connection-card.test-terminal {
+  border-color: #e5c45d;
+  background: #fff8df;
+}
+.board-connection-card.needs-attention {
+  border-color: #eed89a;
+  background: #fff8e5;
+}
+.board-connection-card strong { display: block; margin-top: 3px; }
+.board-connection-card small { color: var(--muted); line-height: 1.45; }
+.board-connection-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.section-label {
+  display: block;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: .06em;
+  letter-spacing: .07em;
 }
-.board-editor-summary strong { margin-top: 4px; font-size: 14px; }
+.board-runtime-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.field small { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+/* Per-board Scolia belongs in the board editor, like v1. Keep this panel for club-level connection and operations only. */
+.scolia-workspace .scolia-board-list { display: none; }
+.scolia-workspace > .panel-head > div > p { max-width: 680px; }
 
 @media (max-width: 640px) {
   .board-editor-backdrop { padding: 8px; place-items: end center; }
   .board-editor-card { width: 100%; max-height: calc(100dvh - 16px); border-radius: 20px 20px 14px 14px; }
-  .board-editor-summary { grid-template-columns: 1fr; }
+  .pairing-task-head, .board-connection-head { display: grid; }
+  .board-runtime-actions { display: grid; }
+  .board-runtime-actions .button { width: 100%; }
 }
