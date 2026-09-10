@@ -55,7 +55,7 @@ jobs:
           test -f apps/backend-v2/src/runtime/preflight.ts
 
           # One deliberately tiny provider owns mysql2. No pool is permitted while PHP coexists.
-          mysql_imports="$(grep -R -l -E 'from ["'"']mysql2(/promise)?["'"']|require\(["'"']mysql2' apps/backend-v2/src || true)"
+          mysql_imports="$(grep -R -l -E 'mysql2(/promise)?' apps/backend-v2/src || true)"
           [[ "$mysql_imports" == "apps/backend-v2/src/mysql/mysql2-session-provider.ts" ]]
           ! grep -R -n -E '\bcreatePool\b|\.getConnection\(' apps/backend-v2/src/mysql
 
