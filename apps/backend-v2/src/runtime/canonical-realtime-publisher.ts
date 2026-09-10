@@ -94,8 +94,9 @@ export class CanonicalRealtimePublisher implements CanonicalRealtimePort {
     if (this.publishUrl === null || this.publishSecret === null) return;
 
     const controller = new AbortController();
+    // Do not unref this timer. It is the authoritative upper bound for a relay
+    // exchange, including in short-lived workers where no other handle is active.
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    timer.unref();
     try {
       const response = await this.fetchImpl(this.publishUrl, {
         method: "POST",
