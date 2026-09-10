@@ -8,6 +8,12 @@ const KEYS = {
   testMode: "bd:kioskTestMode",
   testPhysicalBoardId: "bd:kioskTestPhysicalBoardId",
   testBoardLabel: "bd:kioskTestBoardLabel",
+  testLeaseActive: "bd:kioskScoliaLeaseActive",
+  testLeaseCode: "bd:kioskScoliaLeaseKioskCode",
+  testLeasePhysicalId: "bd:kioskScoliaLeasePhysicalId",
+  testLeasePending: "bd:kioskScoliaLeasePending",
+  testLeaseNotApplicablePhysicalId: "bd:kioskScoliaLeaseNotApplicablePhysicalId",
+  testLeaseError: "bd:kioskScoliaLeaseError",
 } as const;
 
 export type StorageKey = keyof typeof KEYS;
@@ -31,6 +37,15 @@ export function ensureKioskToken(): string {
   const token = globalThis.crypto?.randomUUID?.() || `board-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   write("kioskToken", token);
   return token;
+}
+
+export function clearTestLeaseMarkers(): void {
+  write("testLeaseActive", null);
+  write("testLeaseCode", null);
+  write("testLeasePhysicalId", null);
+  write("testLeasePending", null);
+  write("testLeaseNotApplicablePhysicalId", null);
+  write("testLeaseError", null);
 }
 
 export function clearKioskRuntime(): void {
