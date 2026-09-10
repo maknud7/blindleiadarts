@@ -1,6 +1,6 @@
-release_sha=ed7a3c5c91b33faadae0415032c1484b9bb88943
+release_sha=d556f2791158e25ed79fad416a66b6770efdc4e9
 backup_confirmed=YES
 migration_review_confirmed=NO
-requested_at=2026-09-10T07:26:00+02:00
-purpose=hotfix_scolia_admin_sync_loop
-backup_prefix=bd_backup_20260910_052117_
+requested_at=2026-09-10T08:20:00+02:00
+purpose=equipment_click_selector_hotfix
+backup_prefix=bd_backup_20260910_061900_
