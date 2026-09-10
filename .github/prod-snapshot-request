@@ -1,3 +1,3 @@
 create_fresh_prod_snapshot=YES
-requested_at=2026-09-10T07:21:00+02:00
-purpose=hotfix_scolia_admin_sync_loop_ed7a3c5c
+requested_at=2026-09-10T08:18:45+02:00
+purpose=prod_equipment_click_selector_hotfix_d556f279
