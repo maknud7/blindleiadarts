@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../shared/api";
 import { read, write } from "../shared/storage";
 import type { Board, Club, EquipmentScope, Health, PairingRequest, ScreenDevice, User } from "../shared/types";
@@ -16,6 +16,7 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 function isActive(board: Board): boolean { return Number(board.is_active ?? 1) === 1; }
+function pairingCode(value?: string | null): string { return String(value || "").trim().toUpperCase(); }
 
 function Login({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -45,6 +46,8 @@ export function EquipmentWorkspace() {
   const [inventoryBoards, setInventoryBoards] = useState<Board[]>([]);
   const [activeBoards, setActiveBoards] = useState<Board[]>([]);
   const [pairing, setPairing] = useState<PairingRequest[]>([]);
+  const [pairingLoaded, setPairingLoaded] = useState(false);
+  const [requestedPairing, setRequestedPairing] = useState(() => pairingCode(new URLSearchParams(window.location.search).get("pairing")));
   const [screens, setScreens] = useState<ScreenDevice[]>([]);
   const [scope, setScope] = useState<EquipmentScope>({});
   const [errors, setErrors] = useState<LoadErrors>({});
@@ -57,10 +60,12 @@ export function EquipmentWorkspace() {
   const selectedClub = useMemo(() => clubs.find((club) => Number(club.id) === clubId) || null, [clubs, clubId]);
   const masterReadOnly = health?.environment === "test" && scope.configuration_scope === "production_hardware";
   const inactiveCount = inventoryBoards.filter((board) => !isActive(board)).length;
+  const targetPairing = useMemo(() => requestedPairing ? pairing.find((request) => pairingCode(request.request_code) === requestedPairing) || null : null, [pairing, requestedPairing]);
+  const orderedPairing = useMemo(() => requestedPairing ? [...pairing].sort((left, right) => Number(pairingCode(right.request_code) === requestedPairing) - Number(pairingCode(left.request_code) === requestedPairing)) : pairing, [pairing, requestedPairing]);
 
   const loadEquipment = useCallback(async (activeClubId: number, activeToken: string) => {
     if (!activeClubId) return;
-    setLoading(true);
+    setLoading(true); setPairingLoaded(false);
     const result = await Promise.allSettled([
       api<BoardResponse>(`/clubs/${activeClubId}/equipment/boards`, { token: activeToken }),
       api<BoardResponse>(`/clubs/${activeClubId}/kiosks`),
@@ -77,6 +82,7 @@ export function EquipmentWorkspace() {
     if (result[0].status === "fulfilled") setInventoryBoards(result[0].value.items || []);
     else { setInventoryBoards(activeItems); next.inventory = text(result[0].reason); }
     if (result[2].status === "fulfilled") setPairing(result[2].value.items || []); else { setPairing([]); next.pairing = text(result[2].reason); }
+    setPairingLoaded(true);
     if (result[3].status === "fulfilled") setScreens(result[3].value.items || []); else { setScreens([]); next.screens = text(result[3].reason); }
     setErrors(next); setLoading(false);
   }, []);
@@ -112,11 +118,14 @@ export function EquipmentWorkspace() {
     write("adminToken", data.access_token); setToken(data.access_token);
   }
   function logout() { write("adminToken", null); setToken(""); setInventoryBoards([]); setActiveBoards([]); setPairing([]); setScreens([]); setEditingBoard(null); }
+  function clearPairingDeepLink() {
+    const url = new URL(window.location.href); url.searchParams.delete("pairing"); history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`); setRequestedPairing("");
+  }
 
-  async function mutate(label: string, action: () => Promise<unknown>, success: string) {
+  async function mutate(label: string, action: () => Promise<unknown>, success: string): Promise<boolean> {
     setMutation(label); setNotice("");
-    try { await action(); setNotice(success); await loadEquipment(clubId, token); }
-    catch (cause) { setNotice(text(cause)); }
+    try { await action(); setNotice(success); await loadEquipment(clubId, token); return true; }
+    catch (cause) { setNotice(text(cause)); return false; }
     finally { setMutation(""); }
   }
 
@@ -158,7 +167,15 @@ export function EquipmentWorkspace() {
 
       <ScoliaPanel clubId={clubId} token={token} environment={health?.environment} boards={activeBoards} onEquipmentRefresh={() => loadEquipment(clubId, token)} />
 
-      <section className="panel"><div className="panel-head"><div><h2>Nettbrett som venter</h2><p>Pairing kan bare kobles til aktive skiver.</p></div><span className={`pill ${errors.pairing ? "bad" : pairing.length ? "warn" : "good"}`}>{errors.pairing ? "Utilgjengelig" : `${pairing.length} venter`}</span></div>{errors.pairing && <div className="notice bad">{errors.pairing}</div>}<div className="equipment-list">{!errors.pairing && pairing.length === 0 && <div className="empty">Ingen nettbrett venter på pairing.</div>}{pairing.map((request) => <PairingRow key={request.request_code} request={request} boards={activeBoards} busy={Boolean(mutation)} onApprove={(boardId) => mutate(`pair-${request.request_code}`, () => api(`/clubs/${clubId}/kiosk-pairing-requests/${encodeURIComponent(request.request_code)}/approve`, { method: "POST", token, body: { kiosk_id: boardId } }), `Nettbrettet er koblet til skive ${activeBoards.find((board) => board.id === boardId)?.board_number || ""}.`)} />)}</div></section>
+      <section className="panel pairing-panel"><div className="panel-head"><div><h2>Nettbrett som venter</h2><p>Pairing kan bare kobles til aktive skiver.</p></div><span className={`pill ${errors.pairing ? "bad" : pairing.length ? "warn" : "good"}`}>{errors.pairing ? "Utilgjengelig" : `${pairing.length} venter`}</span></div>
+        {errors.pairing && <div className="notice bad">{errors.pairing}</div>}
+        {requestedPairing && pairingLoaded && targetPairing && <div className="notice good"><strong>Terminal {requestedPairing} er gjenkjent.</strong> Velg skiva nettbrettet står ved og trykk Koble.</div>}
+        {requestedPairing && pairingLoaded && !targetPairing && !errors.pairing && <div className="notice warn"><strong>Terminal {requestedPairing} finnes ikke lenger i pairingkøen.</strong> Lag en ny kode på Kiosk hvis terminalen ikke allerede er koblet.</div>}
+        <div className="equipment-list">{!errors.pairing && pairing.length === 0 && <div className="empty">Ingen nettbrett venter på pairing.</div>}{orderedPairing.map((request) => <PairingRow key={request.request_code} request={request} boards={activeBoards} busy={Boolean(mutation)} focused={pairingCode(request.request_code) === requestedPairing} onApprove={async (boardId) => {
+          const success = await mutate(`pair-${request.request_code}`, () => api(`/clubs/${clubId}/kiosk-pairing-requests/${encodeURIComponent(request.request_code)}/approve`, { method: "POST", token, body: { kiosk_id: boardId } }), `Nettbrettet er koblet til skive ${activeBoards.find((board) => board.id === boardId)?.board_number || ""}.`);
+          if (success && pairingCode(request.request_code) === requestedPairing) clearPairingDeepLink();
+        }} />)}</div>
+      </section>
 
       <section className="panel"><div className="panel-head"><div><h2>Venue-skjermer</h2><p>Egen livssyklus, uavhengig av skivene.</p></div><span className={`pill ${errors.screens ? "bad" : "good"}`}>{errors.screens ? "Feil" : `${screens.length} stk`}</span></div>{errors.screens && <div className="notice bad">{errors.screens}</div>}<form onSubmit={createScreen} className="inline-create"><label className="field grow"><span>Ny venue-skjerm</span><input name="label" placeholder="Bar-TV" required /></label><button className="button" disabled={mutation === "create-screen"}>Lag skjermkode</button></form><div className="equipment-list">{screens.map((screen) => <article className="screen-row" key={screen.id}><div className="board-number">TV</div><div className="row-main"><strong>{screen.label}</strong><div className="row-meta"><span>Kode: {screen.access_code}</span><span>Sist tilkoblet: {formatDate(screen.last_connected_at)}</span></div></div><span className={`pill ${Number(screen.is_active ?? 1) === 1 ? "good" : "bad"}`}>{Number(screen.is_active ?? 1) === 1 ? "Aktiv" : "Inaktiv"}</span></article>)}</div></section>
     </main>
@@ -170,8 +187,10 @@ export function EquipmentWorkspace() {
   </div>;
 }
 
-function PairingRow({ request, boards, busy, onApprove }: { request: PairingRequest; boards: Board[]; busy: boolean; onApprove: (boardId: number) => Promise<unknown> }) {
+function PairingRow({ request, boards, busy, focused, onApprove }: { request: PairingRequest; boards: Board[]; busy: boolean; focused: boolean; onApprove: (boardId: number) => Promise<unknown> }) {
   const [boardId, setBoardId] = useState(Number(boards[0]?.id || 0));
+  const row = useRef<HTMLElement | null>(null);
   useEffect(() => { if (!boards.some((board) => board.id === boardId)) setBoardId(Number(boards[0]?.id || 0)); }, [boards, boardId]);
-  return <article className="pair-row"><div className="board-number">↔</div><div className="row-main"><strong>{request.device_name || "Nettbrett"}</strong><div className="row-meta"><span>Kode: {request.request_code}</span><span>Utløper: {formatDate(request.expires_at)}</span></div></div><div className="row-actions"><select value={boardId} disabled={!boards.length} onChange={(event) => setBoardId(Number(event.target.value))}>{boards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select><button className="button small" disabled={busy || !boardId} onClick={() => void onApprove(boardId)}>Koble</button></div></article>;
+  useEffect(() => { if (focused) row.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [focused]);
+  return <article ref={row} className={`pair-row ${focused ? "is-focused" : ""}`}><div className="board-number">↔</div><div className="row-main"><strong>{request.device_name || "Nettbrett"}</strong><div className="row-meta"><span>Kode: {request.request_code}</span><span>Utløper: {formatDate(request.expires_at)}</span></div></div><div className="row-actions"><select value={boardId} disabled={!boards.length} onChange={(event) => setBoardId(Number(event.target.value))}>{boards.map((board) => <option key={board.id} value={board.id}>Skive {board.board_number} · {board.name}</option>)}</select><button className="button small" autoFocus={focused} disabled={busy || !boardId} onClick={() => void onApprove(boardId)}>Koble</button></div></article>;
 }
