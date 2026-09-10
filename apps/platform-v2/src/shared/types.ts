@@ -174,9 +174,12 @@ export type PlayerScore = {
 };
 
 export type Visit = {
+  id?: number;
+  player_id?: number;
   player_name?: string;
   visit_number?: number;
   score?: number;
+  darts_used?: number;
   remaining_after?: number | null;
   is_bust?: number;
 };
