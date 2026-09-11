@@ -72,6 +72,7 @@ jobs:
           test -f apps/backend-v2/src/runtime/preflight.ts
           test -f apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
           test -f apps/backend-v2/src/service/canonical-scoring-service.ts
+          test -f apps/backend-v2/scripts/verify-host-readiness.mjs
           ! test -e apps/backend-v2/src/runtime/core-only-side-effects.ts
           ! test -e apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
@@ -102,6 +103,16 @@ jobs:
           grep -Fq 'const CANONICAL_SIDE_EFFECTS_READY = true' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'prodWriteConfirmationPresent && CANONICAL_SIDE_EFFECTS_READY && PROD_CANARY_WRITES_READY' apps/backend-v2/src/runtime/config.ts
+
+          # A persistent host is only acceptable when the exact release is
+          # prod/read-only, writes are disarmed, one DB slot is used, and the
+          # production scoring schema has passed the read-only preflight.
+          grep -Fq 'backend-v2:verify-host' package.json
+          grep -Fq 'health.writes_armed' apps/backend-v2/scripts/verify-host-readiness.mjs
+          grep -Fq 'health.max_connections' apps/backend-v2/scripts/verify-host-readiness.mjs
+          grep -Fq 'health.connection_mode' apps/backend-v2/scripts/verify-host-readiness.mjs
+          grep -Fq 'ready.checked_tables' apps/backend-v2/scripts/verify-host-readiness.mjs
+          grep -Fq 'bd_prod_match_statistics' apps/backend-v2/scripts/verify-host-readiness.mjs
 
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
