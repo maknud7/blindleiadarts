@@ -36,16 +36,7 @@ export interface BackendRuntimeConfig {
 }
 
 const PROD_WRITE_CONFIRMATION = "ALLOW_PROD_SCORING_WRITES";
-
-// Canonical scoring storage and every canonical post-mutation side effect have
-// passed the hosted TEST lifecycle against the real bd_test_ schema.
 const CANONICAL_SIDE_EFFECTS_READY = true;
-
-// The persistent host, rollback path and full public PHP -> backend-v2 -> MySQL
-// single-writer route have now passed an isolated end-to-end TEST canary. PROD
-// writes remain double-gated: this compile-time readiness flag is not enough on
-// its own; prod-canary mode plus the exact confirmation phrase and internal
-// authentication are still required before any mutation is accepted.
 const PROD_CANARY_WRITES_READY = true;
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): BackendRuntimeConfig {
@@ -57,14 +48,8 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
   const maxConcurrentConnections = integer(env.BD_BACKEND_V2_MAX_CONNECTIONS ?? "1", "BD_BACKEND_V2_MAX_CONNECTIONS");
   const acquireTimeoutMs = integer(env.BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS ?? "2500", "BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS");
   const connectTimeoutMs = integer(env.BD_BACKEND_V2_CONNECT_TIMEOUT_MS ?? "5000", "BD_BACKEND_V2_CONNECT_TIMEOUT_MS");
-  const idleConnectionTimeoutMs = integer(
-    env.BD_BACKEND_V2_DB_IDLE_MS ?? "15000",
-    "BD_BACKEND_V2_DB_IDLE_MS",
-  );
-  const realtimeTimeoutMs = integer(
-    env.BD_BACKEND_V2_REALTIME_TIMEOUT_MS ?? "1500",
-    "BD_BACKEND_V2_REALTIME_TIMEOUT_MS",
-  );
+  const idleConnectionTimeoutMs = integer(env.BD_BACKEND_V2_DB_IDLE_MS ?? "15000", "BD_BACKEND_V2_DB_IDLE_MS");
+  const realtimeTimeoutMs = integer(env.BD_BACKEND_V2_REALTIME_TIMEOUT_MS ?? "1500", "BD_BACKEND_V2_REALTIME_TIMEOUT_MS");
   if (realtimeTimeoutMs > 10_000) {
     throw new TypeError("BD_BACKEND_V2_REALTIME_TIMEOUT_MS may not exceed 10000.");
   }
@@ -72,33 +57,20 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
   const realtimePublishSecret = optional(env.REALTIME_PUBLISH_SECRET);
   const realtimePublishEnabled = realtimePublishUrl !== null && realtimePublishSecret !== null;
 
-  // Backend-v2 deliberately owns only a tiny slice of hosted DB capacity while
-  // PHP remains live. Raising this ceiling requires an explicit architecture change.
   if (maxConcurrentConnections > 2) {
     throw new TypeError("BD_BACKEND_V2_MAX_CONNECTIONS may not exceed 2 during coexistence with PHP.");
   }
 
-  const budget = validateConnectionBudget({
-    maxConcurrentConnections,
-    acquireTimeoutMs,
-  });
+  const budget = validateConnectionBudget({ maxConcurrentConnections, acquireTimeoutMs });
 
   if (mode === "test-write") {
-    if (environment !== "test") {
-      throw new TypeError("test-write mode requires BD_APP_ENV=test.");
-    }
-    if (runtimePrefix !== "bd_test_") {
-      throw new TypeError("test-write mode requires DB_TABLE_PREFIX=bd_test_.");
-    }
+    if (environment !== "test") throw new TypeError("test-write mode requires BD_APP_ENV=test.");
+    if (runtimePrefix !== "bd_test_") throw new TypeError("test-write mode requires DB_TABLE_PREFIX=bd_test_.");
   }
 
   if (mode === "prod-canary") {
-    if (environment !== "prod") {
-      throw new TypeError("prod-canary mode requires BD_APP_ENV=prod.");
-    }
-    if (runtimePrefix !== "bd_prod_") {
-      throw new TypeError("prod-canary mode requires DB_TABLE_PREFIX=bd_prod_.");
-    }
+    if (environment !== "prod") throw new TypeError("prod-canary mode requires BD_APP_ENV=prod.");
+    if (runtimePrefix !== "bd_prod_") throw new TypeError("prod-canary mode requires DB_TABLE_PREFIX=bd_prod_.");
   }
 
   const prodWriteConfirmationPresent =
@@ -120,11 +92,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
     internalToken,
     prodCanaryWritesEnabled,
     canonicalSideEffectsReady: CANONICAL_SIDE_EFFECTS_READY,
-    prefixes: {
-      runtime: runtimePrefix,
-      identity: identityPrefix,
-      hardware: hardwarePrefix,
-    },
+    prefixes: { runtime: runtimePrefix, identity: identityPrefix, hardware: hardwarePrefix },
     mysql: {
       host: required(env, "DB_HOST"),
       port: integer(env.DB_PORT ?? "3306", "DB_PORT"),
@@ -164,6 +132,34 @@ export function assertMutationAllowed(config: BackendRuntimeConfig): void {
   }
 }
 
+/**
+ * Identity writes have a stricter boundary than scoring while environments share
+ * canonical production identities. TEST may read bd_prod_ identities, but it must
+ * never create/touch PROD auth sessions. A writable TEST auth canary therefore
+ * requires identity data to be explicitly redirected to bd_test_.
+ */
+export function assertIdentityMutationAllowed(config: BackendRuntimeConfig): void {
+  const safeTestIdentity =
+    config.environment === "test" &&
+    config.mode === "test-write" &&
+    config.prefixes.runtime === "bd_test_" &&
+    config.prefixes.identity === "bd_test_";
+  const safeProdIdentity =
+    config.environment === "prod" &&
+    config.mode === "prod-canary" &&
+    config.prodCanaryWritesEnabled &&
+    config.prefixes.runtime === "bd_prod_" &&
+    config.prefixes.identity === "bd_prod_";
+
+  if (!safeTestIdentity && !safeProdIdentity) {
+    throw new RuntimeAccessError(
+      403,
+      "backend_v2_identity_write_blocked",
+      "Backend v2 identity writes are blocked for this environment/prefix combination.",
+    );
+  }
+}
+
 export function assertInternalToken(config: BackendRuntimeConfig, supplied: string | undefined): void {
   if (config.internalToken === null || supplied === undefined || !constantTimeEqual(config.internalToken, supplied)) {
     throw new RuntimeAccessError(401, "backend_v2_auth_required", "Backend v2 internal authentication failed.");
@@ -191,9 +187,7 @@ function parseEnvironment(value: string): RuntimeEnvironment {
 
 function parseMode(value: string): RuntimeMode {
   const normalized = value.trim().toLowerCase();
-  if (normalized === "readonly" || normalized === "test-write" || normalized === "prod-canary") {
-    return normalized;
-  }
+  if (normalized === "readonly" || normalized === "test-write" || normalized === "prod-canary") return normalized;
   throw new TypeError("BD_BACKEND_V2_MODE must be readonly, test-write or prod-canary.");
 }
 

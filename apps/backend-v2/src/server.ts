@@ -3,15 +3,19 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { ScoringSource } from "./contracts/canonical-scoring.js";
 import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
+import { MySqlAccountProfileRepository } from "./mysql/account-profile-repository.js";
 import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalPlayoffReconciliation } from "./mysql/canonical-playoff-reconciliation.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
+import { MySqlIdentityAuthRepository, type IdentityUser } from "./mysql/identity-auth-repository.js";
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
+import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
+  assertIdentityMutationAllowed,
   assertInternalToken,
   assertMutationAllowed,
   loadRuntimeConfig,
@@ -20,6 +24,7 @@ import {
 } from "./runtime/config.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
+import { IdentityAuthService } from "./service/identity-auth-service.js";
 
 const config = loadRuntimeConfig();
 const sessions = new MySql2SessionProvider({
@@ -60,10 +65,23 @@ const scoring = new CanonicalScoringService(
   ranking,
   realtime,
 );
+const identityRepository = new MySqlIdentityAuthRepository(
+  sessions,
+  config.prefixes.runtime,
+  config.prefixes.identity,
+);
+const identityAuth = new IdentityAuthService(identityRepository);
+const accountProfiles = new MySqlAccountProfileRepository(
+  sessions,
+  config.prefixes.runtime,
+  config.prefixes.identity,
+);
+const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
   try {
+    if (handleCors(request, response)) return;
     await dispatch(request, response);
   } catch (error) {
     sendError(response, error);
@@ -73,6 +91,7 @@ const server = createServer(async (request, response) => {
 async function dispatch(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", "http://backend-v2.internal");
+  const publicPath = normalizePublicPath(url.pathname);
 
   if (method === "GET" && url.pathname === "/health") {
     sendJson(response, 200, {
@@ -85,6 +104,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
       runtime_prefix: config.prefixes.runtime,
+      identity_prefix: config.prefixes.identity,
       max_connections: config.mysql.budget.maxConcurrentConnections,
       connection_mode: "idle-reuse",
       db_idle_ms: config.mysql.idleConnectionTimeoutMs,
@@ -104,6 +124,84 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
     });
+    return;
+  }
+
+  if (method === "POST" && publicPath === "/v1/auth/login") {
+    assertIdentityMutationAllowed(config);
+    const body = await readJsonObject(request);
+    const result = await identityAuth.login(body.email ?? body.username, body.password);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/auth/me") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    sendJson(response, 200, { ok: true, user: formatPublicUser(user) });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/me/profile") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    sendJson(response, 200, { ok: true, profile: await accountProfiles.profileForUser(user) });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/me/payments") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    sendJson(response, 200, { ok: true, ...(await accountProfiles.membershipAndPayments(user)) });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/me/eligibility") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const playerId = safeIdString(user.player_id);
+    if (playerId === null) {
+      throw new DomainValidationError("player_profile_missing", "Denne kontoen er ikke koblet til en spillerprofil.");
+    }
+    const eligibility = await membership.forPlayer(playerId);
+    eligibility.payment_options = await accountProfiles.publicPaymentOptions(eligibility.club_id, eligibility.member_id);
+    sendJson(response, 200, { ok: true, eligibility });
+    return;
+  }
+
+  if ((method === "PUT" || method === "PATCH") && publicPath === "/v1/me/profile") {
+    assertIdentityMutationAllowed(config);
+    const user = await requireIdentityUser(request, true);
+    const body = await readJsonObject(request);
+    const profile = await accountProfiles.updateProfile(user, body.display_name, body.nickname);
+    sendJson(response, 200, { ok: true, profile, message: "Profilen er oppdatert." });
+    return;
+  }
+
+  if (method === "POST" && publicPath === "/v1/me/password") {
+    assertIdentityMutationAllowed(config);
+    const user = await requireIdentityUser(request, true);
+    const body = await readJsonObject(request);
+    await accountProfiles.changePassword(user, body.current_password, body.new_password);
+    sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const registrationMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/register$/.exec(publicPath);
+  if (method === "POST" && registrationMatch) {
+    assertMutationAllowed(config);
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const playerId = safeIdString(user.player_id);
+    if (playerId === null) {
+      throw new DomainValidationError("player_profile_missing", "Denne kontoen er ikke koblet til en spillerprofil.");
+    }
+    const eligibility = await membership.forPlayer(playerId);
+    eligibility.payment_options = await accountProfiles.publicPaymentOptions(eligibility.club_id, eligibility.member_id);
+    if (eligibility.can_register !== true) {
+      throw new DomainValidationError(
+        "membership_payment_required",
+        typeof eligibility.message === "string" ? eligibility.message : "Kontingenten må ordnes før du kan melde deg på nye turneringer.",
+        403,
+      );
+    }
+    const registration = await membership.registerPlayer(registrationMatch[1], playerId);
+    sendJson(response, 201, { ok: true, registration, eligibility });
     return;
   }
 
@@ -155,6 +253,53 @@ async function scoringCommandContext(request: IncomingMessage): Promise<{ kioskI
     kioskId: asDbId(requiredString(body, "kiosk_id")),
     source: scoringSource(body.source),
   };
+}
+
+async function requireIdentityUser(request: IncomingMessage, touchSession: boolean): Promise<IdentityUser> {
+  const token = bearerToken(request);
+  if (token === null) throw new RuntimeAccessError(401, "authentication_required", "Innlogging kreves.");
+  const user = await identityRepository.findBySessionToken(token, touchSession);
+  if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Innloggingen er utløpt eller ugyldig.");
+  return user;
+}
+
+function identityTouchAllowed(): boolean {
+  return (
+    (config.environment === "prod" && config.prefixes.identity === "bd_prod_" && mutationsAllowed(config)) ||
+    (config.environment === "test" && config.prefixes.identity === "bd_test_" && mutationsAllowed(config))
+  );
+}
+
+function formatPublicUser(user: IdentityUser): Record<string, unknown> {
+  const email = typeof user.email === "string" ? user.email : null;
+  const role = typeof user.role === "string" ? user.role : null;
+  return {
+    id: safePublicNumber(user.id),
+    email,
+    username: email,
+    display_name: user.display_name ?? null,
+    role,
+    is_super_admin: role === "super_admin",
+    contact_email: email,
+    contact_phone: user.contact_phone ?? null,
+    player: {
+      id: safePublicNumber(user.player_id),
+      display_name: user.player_display_name ?? null,
+      club_id: safePublicNumber(user.player_club_id),
+    },
+  };
+}
+
+function safeIdString(value: unknown): string | null {
+  const normalized = String(value ?? "").trim();
+  return /^[1-9][0-9]*$/.test(normalized) ? normalized : null;
+}
+
+function safePublicNumber(value: unknown): number | null {
+  const normalized = safeIdString(value);
+  if (normalized === null) return null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 function sendError(response: ServerResponse, error: unknown): void {
@@ -229,6 +374,45 @@ function header(request: IncomingMessage, name: string): string | undefined {
   const value = request.headers[name];
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+function bearerToken(request: IncomingMessage): string | null {
+  const authorization = header(request, "authorization")?.trim() ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(authorization);
+  const token = match?.[1]?.trim() ?? "";
+  return token === "" ? null : token;
+}
+
+function normalizePublicPath(pathname: string): string {
+  if (pathname.startsWith("/api/v1/")) return pathname.slice(4);
+  return pathname;
+}
+
+function handleCors(request: IncomingMessage, response: ServerResponse): boolean {
+  const origin = header(request, "origin")?.trim() ?? "";
+  const allowed = new Set([
+    "https://blindleiadart.ingenting.org",
+    "https://test.blindleiadart.ingenting.org",
+    "https://test.blindleiadarts.ingenting.org",
+    "https://dart.ingenting.org",
+  ]);
+  if (origin !== "" && allowed.has(origin)) {
+    response.setHeader("access-control-allow-origin", origin);
+    response.setHeader("vary", "Origin");
+    response.setHeader("access-control-allow-headers", "Content-Type, Authorization, X-Kiosk-Pairing-Token, X-Scolia-Bridge-Secret");
+    response.setHeader("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  }
+  if ((request.method ?? "GET") === "OPTIONS") {
+    if (!allowed.has(origin)) {
+      response.statusCode = 403;
+      response.end();
+      return true;
+    }
+    response.statusCode = 204;
+    response.end();
+    return true;
+  }
+  return false;
 }
 
 server.listen(config.port, config.host, () => {

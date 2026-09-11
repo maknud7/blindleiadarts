@@ -43,6 +43,17 @@ $isTest = strtolower($appEnv) === 'test';
 $isProd = strtolower($appEnv) === 'production' || strtolower($appEnv) === 'prod';
 $defaultDbConnectionLimit = $isTest ? '2' : ($isProd ? '6' : '0');
 $defaultDbConnectionSlotStart = $isTest ? '6' : '0';
+$bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
+
+// Scoring was cut over to backend-v2 for the four canonical PROD boards after
+// successful TEST and synthetic PROD single-writer canaries. PROD config builds
+// must therefore preserve that routing by default; otherwise an ordinary deploy
+// would silently revert scoring to the PHP writer. TEST/development remain PHP
+// by default and can still opt into explicit canaries through environment vars.
+$defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
+$defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
+$defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
+$defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
 
 $config = [
     'app_env' => $appEnv,
@@ -58,15 +69,13 @@ $config = [
         'publish_secret' => getenv('REALTIME_PUBLISH_SECRET') ?: '',
     ],
     'scolia' => [
-        'bridge_secret' => env_required('SCOLIA_BRIDGE_SECRET'),
+        'bridge_secret' => $bridgeSecret,
     ],
     'backend_v2' => [
-        // Safe default is PHP. Candidate routing is useful only when host, token and
-        // explicit kiosk allowlist are all present; the runtime policy fails closed.
-        'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', 'php') ?? 'php',
-        'base_url' => env_optional('BACKEND_V2_BASE_URL', '') ?? '',
-        'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', '') ?? '',
-        'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', '') ?? '',
+        'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', $defaultBackendV2RoutingMode) ?? $defaultBackendV2RoutingMode,
+        'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
+        'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
+        'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', $defaultBackendV2InternalToken) ?? $defaultBackendV2InternalToken,
     ],
     'db' => [
         'host' => env_required('DB_HOST'),
