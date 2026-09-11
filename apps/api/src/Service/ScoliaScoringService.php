@@ -12,7 +12,7 @@ final class ScoliaScoringService
 {
     public function __construct(
         private readonly ScoliaRepository $scolia,
-        private readonly CanonicalScoringService $scoring,
+        private readonly ScoringMutationPort $scoring,
         private readonly Dart501Rules $rules = new Dart501Rules(),
         private readonly ScoliaSectorMapper $mapper = new ScoliaSectorMapper()
     ) {
