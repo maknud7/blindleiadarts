@@ -34,7 +34,7 @@ jobs:
       - name: Validate deployment configuration
         env:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
-          TEST_BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
+          TEST_BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL || 'https://blindleia-backend-v2-test.onrender.com' }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_NAME: ${{ secrets.DB_NAME }}
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
@@ -43,7 +43,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -n "$BASE_URL"
-          test -n "$TEST_BACKEND_V2_BASE_URL" || { echo 'TEST_BACKEND_V2_BASE_URL is required for the equipment Node frontdoor.' >&2; exit 1; }
+          test -n "$TEST_BACKEND_V2_BASE_URL"
           test -n "$DB_HOST"
           test -n "$DB_NAME"
           test -n "$SFTP_HOST"
@@ -51,7 +51,7 @@ jobs:
           test -n "$SFTP_PASSWORD"
 
           health="$(curl -fsS --max-time 20 "${TEST_BACKEND_V2_BASE_URL%/}/health")"
-          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
+          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
 
       - name: Migrate test database
         run: php infra/sql/migrate.php
@@ -78,7 +78,7 @@ jobs:
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
           SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
           BACKEND_V2_EQUIPMENT_ROUTING_MODE: node
-          BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
+          BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL || 'https://blindleia-backend-v2-test.onrender.com' }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -106,7 +106,7 @@ jobs:
 
       - name: Package sanity check
         env:
-          TEST_BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
+          TEST_BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL || 'https://blindleia-backend-v2-test.onrender.com' }}
         run: |
           set -Eeuo pipefail
           test -f dist/test/release.json
