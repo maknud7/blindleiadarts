@@ -1,0 +1,64 @@
+name: Backend v2 Single Writer Client
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/src/Service/BackendV2ScoringClient.php'
+      - 'apps/api/src/Service/BackendV2ScoringAttemptException.php'
+      - 'apps/api/tests/backend_v2_scoring_client_test.php'
+      - '.github/workflows/backend-v2-single-writer-client.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-client-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl
+          coverage: none
+
+      - name: PHP syntax
+        run: |
+          php -l apps/api/src/Service/BackendV2ScoringClient.php
+          php -l apps/api/src/Service/BackendV2ScoringAttemptException.php
+          php -l apps/api/tests/backend_v2_scoring_client_test.php
+
+      - name: Verify single-writer client contract
+        run: php apps/api/tests/backend_v2_scoring_client_test.php
+
+      - name: Verify client remains isolated from scoring entrypoints
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          client='apps/api/src/Service/BackendV2ScoringClient.php'
+          error='apps/api/src/Service/BackendV2ScoringAttemptException.php'
+
+          grep -Fq 'allowsPhpFallback(): bool' "$error"
+          grep -Fq 'return false;' "$error"
+          grep -Fq 'Backend-v2 scoring outcome is unknown after transport failure.' "$client"
+          grep -Fq 'CURLOPT_FOLLOWLOCATION => false' "$client"
+          grep -Fq 'CURLOPT_TIMEOUT_MS' "$client"
+
+          # A later PR must perform the routing integration atomically. Merely adding
+          # the transport client must not move manual or Scolia traffic by accident.
+          if grep -En 'BackendV2ScoringClient|BackendV2ScoringAttemptException' \
+            apps/api/src/MatchScoringApplication.php \
+            apps/api/src/ScoliaApplication.php \
+            apps/api/src/Service/ScoliaScoringService.php; then
+            echo 'Backend-v2 client was wired into a live scoring entrypoint too early.' >&2
+            exit 1
+          fi
+
+          grep -Fq "'scoring_routing_mode' => 'php'" apps/api/config.example.php
+          grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
