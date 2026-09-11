@@ -1,1 +1,1 @@
-reconcile guest ELO in bd_test_ only
+canonical replay bd_test_ after guest reconcile
