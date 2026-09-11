@@ -1,3 +1,3 @@
 create_fresh_prod_snapshot=YES
-requested_at=2026-09-11T18:07:50+02:00
-purpose=backend_v2_equipment_prod_cutover_3f4e3c3c
+requested_at=2026-09-11T23:22:00+02:00
+purpose=backend_v2_realtime_config_prod_cutover_156547c3
