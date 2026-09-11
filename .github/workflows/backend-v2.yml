@@ -101,11 +101,12 @@ jobs:
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
 
-          # Hosted TEST has proven the complete canonical side-effect chain.
-          # PROD remains independently compile-time blocked until a persistent
-          # runtime and explicit canary routing/rollback plan are approved.
+          # Hosted TEST has proven the complete canonical side-effect chain and
+          # the public PHP -> backend-v2 -> MySQL single-writer canary with rollback.
+          # PROD write capability is now compile-time ready, but still requires
+          # prod-canary mode, exact confirmation and internal authentication.
           grep -Fq 'const CANONICAL_SIDE_EFFECTS_READY = true' apps/backend-v2/src/runtime/config.ts
-          grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'const PROD_CANARY_WRITES_READY = true' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'prodWriteConfirmationPresent && CANONICAL_SIDE_EFFECTS_READY && PROD_CANARY_WRITES_READY' apps/backend-v2/src/runtime/config.ts
 
           # A persistent host is only acceptable when the exact release is
