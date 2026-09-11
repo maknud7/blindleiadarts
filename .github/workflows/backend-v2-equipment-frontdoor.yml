@@ -130,7 +130,7 @@ jobs:
             -H 'Accept: application/json' \
             -H 'Content-Type: application/json' \
             --data "$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
-          test -n "$(jq -r '.id // empty' "$response")"
+          test -n "$(jq -r '.id // .deploy.id // empty' "$response")"
 
       - name: Verify persistent TEST backend-v2 target
         run: |
