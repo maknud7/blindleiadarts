@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Repository\PlayerPortalRepository;
+use Blindleia\Dartkiosk\Api\Service\BackendV2ApiAttemptException;
+use Blindleia\Dartkiosk\Api\Service\BackendV2ApiClient;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 
@@ -24,8 +26,45 @@ if (!$playerId) {
     exit;
 }
 
+$config = Config::load(__DIR__);
+
+// Transitional compatibility endpoint for the current player frontend. TEST
+// moves the actual read to backend-v2 while the legacy URL remains stable.
+// PROD stays on the legacy read until the separate player/live production gate.
+if ($config->backendV2PlayerLiveRoutingMode() === 'node') {
+    header('X-BD-Backend-V2: player-live');
+    try {
+        $client = new BackendV2ApiClient(
+            $config->backendV2BaseUrl(),
+            $config->backendV2InternalToken()
+        );
+        $result = $client->request('GET', '/v1/players/' . (int) $playerId . '/elo-tournaments');
+        http_response_code($result['status'] > 0 ? $result['status'] : 502);
+        echo json_encode($result['payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (BackendV2ApiAttemptException $error) {
+        http_response_code(502);
+        echo json_encode([
+            'ok' => false,
+            'error' => [
+                'code' => $error->errorCode,
+                'message' => 'Backend-v2 player ELO request failed after dispatch; PHP fallback is disabled.',
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable) {
+        http_response_code(503);
+        echo json_encode([
+            'ok' => false,
+            'error' => [
+                'code' => 'backend_v2_player_live_unconfigured',
+                'message' => 'Backend-v2 player/live routing is selected but unavailable.',
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
 try {
-    $database = new Database(Config::load(__DIR__));
+    $database = new Database($config);
     $portal = new PlayerPortalRepository($database);
     $profile = $portal->getPlayerProfile((int) $playerId);
     if ($profile === null) {
@@ -58,9 +97,6 @@ try {
     );
     $rows = $connection->query($sql)->fetch_all(MYSQLI_ASSOC);
 
-    // Identity aliases can exist after historical imports. Collapse them into one
-    // tournament boundary by using the earliest matches_before and latest
-    // matches_after values, which correspond to the canonical ledger timeline.
     $grouped = [];
     foreach ($rows as $row) {
         $tournamentId = (int) $row['tournament_id'];
@@ -122,7 +158,7 @@ try {
             'items' => $items,
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-} catch (Throwable $error) {
+} catch (Throwable) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => ['code' => 'player_tournament_elo_failed', 'message' => 'Could not load tournament ELO history.']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
