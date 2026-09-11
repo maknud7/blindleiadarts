@@ -1,0 +1,161 @@
+name: Deploy DartsAtlas Screen Production 2026-08-24
+
+on:
+  push:
+    branches:
+      - release/dartsatlas-screen-prod-20260824
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: deploy-dartsatlas-screen-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Mark deploy pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d '{"state":"pending","context":"prod/dartsatlas-screen","description":"Starting production screen deploy"}'
+
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, curl, dom
+          coverage: none
+
+      - name: Verify scraper code
+        id: code
+        run: |
+          php -l apps/api/dartsatlas-screen.php
+          php -d zend.assertions=1 -d assert.exception=1 packages/connectors/DartsAtlas/tests/parser_smoke.php
+
+      - name: Build screen-only production package
+        id: build
+        run: |
+          rm -rf dist/prod-screen
+          mkdir -p dist/prod-screen/screen dist/prod-screen/api dist/prod-screen/packages/connectors/DartsAtlas
+          cp apps/screen/index.html apps/screen/live.css apps/screen/live.js dist/prod-screen/screen/
+          cp apps/api/dartsatlas-screen.php dist/prod-screen/api/
+          cp packages/connectors/DartsAtlas/DartsAtlasHttpClient.php dist/prod-screen/packages/connectors/DartsAtlas/
+          cp packages/connectors/DartsAtlas/DartsAtlasHtmlParser.php dist/prod-screen/packages/connectors/DartsAtlas/
+          sed -i "s#../api/live.php#../api/dartsatlas-screen.php#g" dist/prod-screen/screen/live.js
+          sed -i "s#live.js?v=1#live.js?v=20260824-1#g" dist/prod-screen/screen/index.html
+          grep -q "dartsatlas-screen.php" dist/prod-screen/screen/live.js
+          php -l dist/prod-screen/api/dartsatlas-screen.php
+
+      - name: Mark upload phase
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d '{"state":"pending","context":"prod/dartsatlas-screen","description":"Build OK; uploading screen by SFTP"}'
+
+      - name: Deploy screen-only package via SFTP
+        id: sftp
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./dist/prod-screen/*
+          remote_path: /www/blindleiadarts/prod
+          sftp_only: true
+          rsyncArgs: --exclude=.git
+
+      - name: Mark verification phase
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d '{"state":"pending","context":"prod/dartsatlas-screen","description":"Upload OK; verifying production screen"}'
+
+      - name: Verify production screen files
+        id: files
+        env:
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
+        run: |
+          ROOT="${PROD_BASE_URL%/}"
+          if [ -z "$ROOT" ]; then
+            echo "PROD_BASE_URL is not configured."
+            exit 1
+          fi
+          echo "Production root: $ROOT"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "$ROOT/screen/" -o screen.html
+          grep -q "BLINDLEIA" screen.html
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --max-time 30 "$ROOT/screen/live.js?v=20260824-1" -o live.js
+          grep -q "dartsatlas-screen.php" live.js
+
+      - name: Verify production DartsAtlas scraper
+        id: scraper
+        env:
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
+        run: |
+          ROOT="${PROD_BASE_URL%/}"
+          STATUS=$(curl --silent --show-error --retry 2 --retry-delay 3 --max-time 90 --output dartsatlas-screen.json --write-out "%{http_code}" "$ROOT/api/dartsatlas-screen.php")
+          echo "DartsAtlas screen endpoint HTTP: $STATUS"
+          cat dartsatlas-screen.json
+          echo
+          if [ "$STATUS" != "200" ]; then
+            exit 1
+          fi
+          php -r '$d=json_decode(file_get_contents("dartsatlas-screen.json"),true); if (!is_array($d) || !($d["ok"] ?? false) || empty($d["tournament"])) { fwrite(STDERR,"Production DartsAtlas screen payload is not ready.\n"); exit(1); } echo "Production screen ready: ".($d["tournament"]["name"] ?? "unknown")."\n";'
+
+      - name: Publish deploy result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          CODE_STATUS: ${{ steps.code.outcome }}
+          BUILD_STATUS: ${{ steps.build.outcome }}
+          SFTP_STATUS: ${{ steps.sftp.outcome }}
+          FILE_STATUS: ${{ steps.files.outcome }}
+          SCRAPER_STATUS: ${{ steps.scraper.outcome }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            STATE="success"
+            DESCRIPTION="Standalone DartsAtlas screen is live in production"
+          elif [ "$CODE_STATUS" = "failure" ] || [ "$BUILD_STATUS" = "failure" ]; then
+            STATE="failure"
+            DESCRIPTION="Failed while building production screen"
+          elif [ "$SFTP_STATUS" = "failure" ]; then
+            STATE="failure"
+            DESCRIPTION="Failed while uploading production screen by SFTP"
+          elif [ "$FILE_STATUS" = "failure" ]; then
+            STATE="failure"
+            DESCRIPTION="Upload finished, but production screen files failed verification"
+          elif [ "$SCRAPER_STATUS" = "failure" ]; then
+            STATE="failure"
+            DESCRIPTION="Screen files are live, but DartsAtlas scraper failed verification"
+          else
+            STATE="failure"
+            DESCRIPTION="Production screen deploy failed before verification"
+          fi
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/dartsatlas-screen\",\"description\":\"${DESCRIPTION}\"}"
