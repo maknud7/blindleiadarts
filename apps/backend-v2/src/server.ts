@@ -10,6 +10,7 @@ import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repos
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
 import { MySqlIdentityAuthRepository, type IdentityUser } from "./mysql/identity-auth-repository.js";
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
+import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
@@ -75,6 +76,7 @@ const accountProfiles = new MySqlAccountProfileRepository(
   config.prefixes.runtime,
   config.prefixes.identity,
 );
+const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
@@ -151,6 +153,18 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     return;
   }
 
+  if (method === "GET" && publicPath === "/v1/me/eligibility") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const playerId = safeIdString(user.player_id);
+    if (playerId === null) {
+      throw new DomainValidationError("player_profile_missing", "Denne kontoen er ikke koblet til en spillerprofil.");
+    }
+    const eligibility = await membership.forPlayer(playerId);
+    eligibility.payment_options = await accountProfiles.publicPaymentOptions(eligibility.club_id, eligibility.member_id);
+    sendJson(response, 200, { ok: true, eligibility });
+    return;
+  }
+
   if ((method === "PUT" || method === "PATCH") && publicPath === "/v1/me/profile") {
     assertIdentityMutationAllowed(config);
     const user = await requireIdentityUser(request, true);
@@ -166,6 +180,28 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const registrationMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/register$/.exec(publicPath);
+  if (method === "POST" && registrationMatch) {
+    assertMutationAllowed(config);
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const playerId = safeIdString(user.player_id);
+    if (playerId === null) {
+      throw new DomainValidationError("player_profile_missing", "Denne kontoen er ikke koblet til en spillerprofil.");
+    }
+    const eligibility = await membership.forPlayer(playerId);
+    eligibility.payment_options = await accountProfiles.publicPaymentOptions(eligibility.club_id, eligibility.member_id);
+    if (eligibility.can_register !== true) {
+      throw new DomainValidationError(
+        "membership_payment_required",
+        typeof eligibility.message === "string" ? eligibility.message : "Kontingenten må ordnes før du kan melde deg på nye turneringer.",
+        403,
+      );
+    }
+    const registration = await membership.registerPlayer(registrationMatch[1], playerId);
+    sendJson(response, 201, { ok: true, registration, eligibility });
     return;
   }
 
@@ -254,9 +290,14 @@ function formatPublicUser(user: IdentityUser): Record<string, unknown> {
   };
 }
 
-function safePublicNumber(value: unknown): number | null {
+function safeIdString(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
-  if (!/^[1-9][0-9]*$/.test(normalized)) return null;
+  return /^[1-9][0-9]*$/.test(normalized) ? normalized : null;
+}
+
+function safePublicNumber(value: unknown): number | null {
+  const normalized = safeIdString(value);
+  if (normalized === null) return null;
   const parsed = Number(normalized);
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
