@@ -50,9 +50,9 @@ $bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
 // production deploy could silently return an already-proven domain to PHP.
 $defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
 $defaultBackendV2EquipmentRoutingMode = $isProd ? 'node' : 'php';
-// Player/public/live starts fail-closed on PHP in PROD and is explicitly enabled
-// on TEST while parity is proven. Promote this default only after the PROD gate.
-$defaultBackendV2PlayerLiveRoutingMode = 'php';
+// Player/public/live is enabled by default only in TEST while parity is proven.
+// PROD remains fail-closed on PHP until the separate production release gate.
+$defaultBackendV2PlayerLiveRoutingMode = $isTest ? 'node' : 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
