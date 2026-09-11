@@ -7,6 +7,7 @@ import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
 import { MySqlCoreOnlyMutationGuard } from "./mysql/core-only-mutation-guard.js";
+import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
@@ -38,6 +39,7 @@ const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.p
 const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
 const elo = new MySqlCanonicalEloLedger(sessions, config.prefixes.runtime);
 const tournamentElo = new MySqlTournamentEloProjection(sessions, config.prefixes.runtime);
+const ranking = new MySqlLinearRankingProjection(sessions, config.prefixes.runtime);
 const coreOnlyMutationGuard = new MySqlCoreOnlyMutationGuard(sessions, config.prefixes.runtime);
 const coreOnlySideEffects = new CoreOnlyCanonicalSideEffects(scoringState);
 const realtime = new CanonicalRealtimePublisher(
@@ -57,7 +59,7 @@ const scoring = new CanonicalScoringService(
   coreOnlySideEffects,
   elo,
   tournamentElo,
-  coreOnlySideEffects,
+  ranking,
   realtime,
 );
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);

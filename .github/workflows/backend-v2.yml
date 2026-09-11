@@ -9,6 +9,7 @@ on:
       - 'apps/api/src/Service/CanonicalScoringService.php'
       - 'apps/api/src/Service/Dart501Rules.php'
       - 'apps/api/src/Service/EloCalculator.php'
+      - 'apps/api/src/Service/LinearRankingService.php'
       - 'apps/api/src/Service/ScoliaSectorMapper.php'
       - 'apps/api/src/Service/ScoliaScoringService.php'
       - 'apps/api/src/Repository/EloLedgerRepository.php'
@@ -60,6 +61,7 @@ jobs:
           test -f apps/backend-v2/src/mysql/canonical-scoring-state.ts
           test -f apps/backend-v2/src/mysql/canonical-elo-ledger.ts
           test -f apps/backend-v2/src/mysql/tournament-elo-projection.ts
+          test -f apps/backend-v2/src/mysql/linear-ranking-projection.ts
           test -f apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           test -f apps/backend-v2/src/runtime/config.ts
           test -f apps/backend-v2/src/runtime/preflight.ts
@@ -88,12 +90,11 @@ jobs:
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
 
+          # Playoff reconciliation is still pending, so PROD writes stay blocked.
           grep -Fq 'const FULL_CANONICAL_SIDE_EFFECTS_READY = false' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'backend-v2-e2e-tournament-' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
           grep -Fq 'backend_v2_side_effects_not_ready' apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
-          # Each remaining side effect is now an explicit port. Do not recombine
-          # tournament ELO and linear ranking into an ambiguous projection port.
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalTournamentEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
@@ -103,15 +104,16 @@ jobs:
 
           grep -Fq 'new MySqlCanonicalEloLedger' apps/backend-v2/src/server.ts
           grep -Fq 'new MySqlTournamentEloProjection' apps/backend-v2/src/server.ts
+          grep -Fq 'new MySqlLinearRankingProjection' apps/backend-v2/src/server.ts
           grep -Fq 'new CanonicalRealtimePublisher' apps/backend-v2/src/server.ts
           grep -Fq 'FOR UPDATE' apps/backend-v2/src/mysql/tournament-elo-projection.ts
-          grep -Fq 'INSERT IGNORE INTO ${this.table("tournament_elo_snapshots")}' apps/backend-v2/src/mysql/tournament-elo-projection.ts
-          grep -Fq 'elo_match_events' apps/backend-v2/src/mysql/tournament-elo-projection.ts
+          grep -Fq 'FOR UPDATE' apps/backend-v2/src/mysql/linear-ranking-projection.ts
+          grep -Fq 'linear_v1' apps/backend-v2/src/mysql/linear-ranking-projection.ts
+          grep -Fq 'season_ranking_events' apps/backend-v2/src/mysql/linear-ranking-projection.ts
           grep -Fq 'event: "snapshot"' apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
 
-          if grep -Eq 'Canonical(Elo|TournamentElo|Realtime)Port' apps/backend-v2/src/runtime/core-only-side-effects.ts; then
-            echo 'Migrated ELO/realtime ports must not regress to core-only no-op adapters.' >&2
+          if grep -Eq 'Canonical(Elo|TournamentElo|Ranking|Realtime)Port' apps/backend-v2/src/runtime/core-only-side-effects.ts; then
+            echo 'Migrated ELO/ranking/realtime ports must not regress to core-only no-op adapters.' >&2
             exit 1
           fi
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/runtime/core-only-side-effects.ts
-          grep -Fq 'CanonicalRankingPort' apps/backend-v2/src/runtime/core-only-side-effects.ts

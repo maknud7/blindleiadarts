@@ -60,9 +60,8 @@ jobs:
         run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       # ELO is intentionally first. It is the most connection-sensitive fixture
-      # and should not start immediately after the HTTP scoring server has exercised
-      # the hosted low-capacity MySQL account. This is test orchestration only;
-      # canonical write units are never automatically retried.
+      # and should not start immediately after another DB-heavy E2E scenario.
+      # Canonical write units are never automatically retried.
       - name: Run canonical ELO lifecycle against TEST MySQL
         env:
           BD_APP_ENV: test
@@ -83,7 +82,30 @@ jobs:
           HARDWARE_TABLE_PREFIX: bd_prod_
         run: node apps/backend-v2/e2e/elo-lifecycle.mjs
 
-      - name: Release hosted MySQL connection budget
+      - name: Release hosted MySQL connection budget after ELO
+        run: sleep 5
+
+      - name: Run canonical linear ranking lifecycle against TEST MySQL
+        env:
+          BD_APP_ENV: test
+          BD_BACKEND_V2_MODE: test-write
+          BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+          BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+          BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '30000'
+          HOST: 127.0.0.1
+          PORT: '18084'
+          RELEASE_SHA: ${{ github.sha }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: node apps/backend-v2/e2e/linear-ranking-lifecycle.mjs
+
+      - name: Release hosted MySQL connection budget after ranking
         run: sleep 5
 
       - name: Run canonical scoring lifecycle against TEST MySQL

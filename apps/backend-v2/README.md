@@ -130,3 +130,17 @@ Tournament ELO is now a separate explicit projection from linear season ranking:
 - the PHP read/decorate surface remains available during coexistence; this slice moves only the canonical scoring-side sync mutation.
 
 The former combined projection port is split into `CanonicalTournamentEloPort` and `CanonicalRankingPort`. At this point season ELO, tournament ELO and realtime use real backend-v2 adapters; only playoff reconciliation and linear ranking remain temporary core-only side effects. PROD scoring writes remain compile-time disabled.
+
+## Slice 9: linear season ranking
+
+The scoring-side `linear_v1` ranking projection now mirrors the current PHP `LinearRankingService` behind its own canonical port:
+
+- only tournaments attached to a season with `ranking_method=linear` produce applied ranking events,
+- reopening or undoing a tournament reverts its currently applied `linear_v1` events,
+- every entrant starts at one point and the field-size ceiling remains `1 + ceil(log2(entrants))`,
+- tournaments with native playoff data use the highest knockout stage reached, while completed tournaments without playoff rows retain the completed-win fallback,
+- the champion receives the field-size maximum and other playoff entrants are capped below the champion,
+- existing player events are idempotently upserted and stale players are reverted with parameterized ids,
+- tournament lookup and ranking reconciliation execute in one transaction with a row lock and keep every database id as a decimal string.
+
+Realtime, season ELO, tournament ELO and linear ranking now use real backend-v2 adapters. `CoreOnlyCanonicalSideEffects` is intentionally reduced to playoff reconciliation only. Production scoring writes remain compile-time disabled until that final side effect is migrated and proven in TEST.
