@@ -1,6 +1,7 @@
-release_sha=d556f2791158e25ed79fad416a66b6770efdc4e9
+release_sha=12e07f42aab801dbedc0f1766e9fe78469055ec4
 backup_confirmed=YES
 migration_review_confirmed=NO
-requested_at=2026-09-10T08:20:00+02:00
-purpose=equipment_click_selector_hotfix
-backup_prefix=bd_backup_20260910_061900_
+requested_at=2026-09-11T11:00:00+02:00
+purpose=backend_v2_scoring_modernization_pre_canary
+backup_prefix=bd_backup_20260911_105700_
+rollback_sha=d556f2791158e25ed79fad416a66b6770efdc4e9
