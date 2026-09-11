@@ -2,11 +2,6 @@ name: Backend v2 Render Bootstrap
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - ops/backend-v2-render-bootstrap-once
-    paths:
-      - '.ops-bootstrap-marker'
 
 permissions:
   contents: read
