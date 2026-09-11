@@ -50,6 +50,9 @@ $bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
 // production deploy could silently return an already-proven domain to PHP.
 $defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
 $defaultBackendV2EquipmentRoutingMode = $isProd ? 'node' : 'php';
+// Player/public/live starts fail-closed on PHP in PROD and is explicitly enabled
+// on TEST while parity is proven. Promote this default only after the PROD gate.
+$defaultBackendV2PlayerLiveRoutingMode = 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
@@ -73,6 +76,7 @@ $config = [
     'backend_v2' => [
         'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', $defaultBackendV2RoutingMode) ?? $defaultBackendV2RoutingMode,
         'equipment_routing_mode' => env_optional('BACKEND_V2_EQUIPMENT_ROUTING_MODE', $defaultBackendV2EquipmentRoutingMode) ?? $defaultBackendV2EquipmentRoutingMode,
+        'player_live_routing_mode' => env_optional('BACKEND_V2_PLAYER_LIVE_ROUTING_MODE', $defaultBackendV2PlayerLiveRoutingMode) ?? $defaultBackendV2PlayerLiveRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
         'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
         'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', $defaultBackendV2InternalToken) ?? $defaultBackendV2InternalToken,
