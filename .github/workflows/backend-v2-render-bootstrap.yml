@@ -1,0 +1,142 @@
+name: Backend v2 Render Bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-v2-render-bootstrap
+  cancel-in-progress: false
+
+env:
+  RENDER_SERVICE_ID: srv-dahq6o142hec73a1dr10
+  HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
+  RELEASE_SHA: b6d9862ff7644ae43701668b8e0adf0f16064645
+
+jobs:
+  configure-readonly-host:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate required secrets
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$RENDER_API_KEY" || { echo 'RENDER_API_KEY secret is required.' >&2; exit 1; }
+          test -n "$DB_HOST" || { echo 'DB_HOST secret is required.' >&2; exit 1; }
+          test -n "$DB_PORT" || { echo 'DB_PORT is required.' >&2; exit 1; }
+          test -n "$DB_NAME" || { echo 'DB_NAME secret is required.' >&2; exit 1; }
+          test -n "$DB_USERNAME" || { echo 'DB_USERNAME secret is required.' >&2; exit 1; }
+          test -n "$DB_PASSWORD" || { echo 'DB_PASSWORD secret is required.' >&2; exit 1; }
+
+      - name: Inject production DB secrets into locked Render service
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+
+          update_env() {
+            local key="$1"
+            local value="$2"
+            local payload
+            payload="$(jq -nc --arg value "$value" '{value:$value}')"
+            curl --fail --silent --show-error --output /dev/null \
+              -X PUT "$api/$key" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H 'Accept: application/json' \
+              -H 'Content-Type: application/json' \
+              --data "$payload"
+          }
+
+          update_env DB_HOST "$DB_HOST"
+          update_env DB_PORT "$DB_PORT"
+          update_env DB_NAME "$DB_NAME"
+          update_env DB_USERNAME "$DB_USERNAME"
+          update_env DB_PASSWORD "$DB_PASSWORD"
+
+          echo 'Render DB environment variables updated without printing their values.'
+
+      - name: Deploy exact locked release
+        id: deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          payload="$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
+
+          curl --fail --silent --show-error --output "$response_file" \
+            -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H 'Accept: application/json' \
+            -H 'Content-Type: application/json' \
+            --data "$payload"
+
+          deploy_id="$(jq -r '.id // empty' "$response_file")"
+          test -n "$deploy_id" || { echo 'Render did not return a deploy id.' >&2; exit 1; }
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+          echo "Triggered Render deploy $deploy_id for locked release $RELEASE_SHA."
+
+      - name: Wait for exact read-only host readiness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          output="$(mktemp)"
+          trap 'rm -f "$output"' EXIT
+
+          for attempt in $(seq 1 60); do
+            if node apps/backend-v2/scripts/verify-host-readiness.mjs \
+              --url "$HOST_URL" \
+              --release-sha "$RELEASE_SHA" >"$output" 2>&1; then
+              cat "$output"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo 'Persistent Render host never reached strict read-only readiness.' >&2
+          cat "$output" >&2
+          exit 1
+
+      - name: Record bootstrap result
+        if: success()
+        env:
+          DEPLOY_ID: ${{ steps.deploy.outputs.deploy_id }}
+        shell: bash
+        run: |
+          {
+            echo '### Backend v2 Render host bootstrapped'
+            echo
+            echo "Host: \`$HOST_URL\`"
+            echo "Release: \`$RELEASE_SHA\`"
+            echo "Render deploy: \`$DEPLOY_ID\`"
+            echo
+            echo 'The host is prod/read-only, writes remain disarmed, one MySQL slot is configured, and the required bd_prod_ scoring tables passed readiness.'
+            echo
+            echo '**No user, kiosk or Scolia traffic is routed to this host by this workflow.**'
+          } >> "$GITHUB_STEP_SUMMARY"
