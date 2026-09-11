@@ -45,13 +45,11 @@ $defaultDbConnectionLimit = $isTest ? '2' : ($isProd ? '6' : '0');
 $defaultDbConnectionSlotStart = $isTest ? '6' : '0';
 $bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
 
-// Scoring was cut over to backend-v2 for the four canonical PROD boards after
-// successful TEST and synthetic PROD single-writer canaries. PROD config builds
-// must therefore preserve that routing by default; otherwise an ordinary deploy
-// would silently revert scoring to the PHP writer. Equipment has an independent
-// gate so TEST can prove the same-origin PHP -> Node path before PROD is changed.
+// Scoring and equipment have both completed hosted TEST single-writer cutovers.
+// PROD config must preserve those cutovers by default; otherwise an ordinary
+// production deploy could silently return an already-proven domain to PHP.
 $defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
-$defaultBackendV2EquipmentRoutingMode = 'php';
+$defaultBackendV2EquipmentRoutingMode = $isProd ? 'node' : 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
@@ -98,7 +96,7 @@ $config = [
     'challonge' => [
         'api_base_url' => getenv('CHALLONGE_API_BASE_URL') ?: 'https://api.challonge.com/v2.1',
         'oauth_authorize_url' => getenv('CHALLONGE_OAUTH_AUTHORIZE_URL') ?: 'https://api.challonge.com/oauth/authorize',
-        'oauth_token_url' => getenv('CHALLONGE_OAUTH_TOKEN_URL') ?: 'https://api.challonge.com/oauth/token',
+        'oauth_token_url' => getenv('CHALLONGE_OAUTH_TOKEN_URL') ?: '',
         'redirect_uri' => getenv('CHALLONGE_REDIRECT_URI') ?: '',
         'client_id' => getenv('CHALLONGE_CLIENT_ID') ?: '',
         'client_secret' => getenv('CHALLONGE_CLIENT_SECRET') ?: '',
