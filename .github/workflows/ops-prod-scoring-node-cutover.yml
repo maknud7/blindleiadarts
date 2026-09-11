@@ -1,0 +1,198 @@
+name: Ops PROD Scoring Node Cutover Once
+
+on:
+  push:
+    branches:
+      - ops/prod-scoring-node-cutover
+    paths:
+      - '.github/prod-scoring-node-cutover-trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-prod-scoring-node-cutover
+  cancel-in-progress: false
+
+env:
+  PROD_BASE_URL: https://blindleiadart.ingenting.org
+  NODE_BASE_URL: https://blindleia-backend-v2-readonly.onrender.com
+  RENDER_SERVICE_ID: srv-dahq6o142hec73a1dr10
+  RELEASE_SHA: 12e07f42aab801dbedc0f1766e9fe78469055ec4
+  PROD_KIOSK_IDS: 1,2,3,4
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify current PROD release and safe starting state
+        run: |
+          set -Eeuo pipefail
+          release="$(curl -fsS --max-time 20 "$PROD_BASE_URL/release.json?cb=$RANDOM")"
+          test "$(jq -r '.sha // empty' <<<"$release")" = "$RELEASE_SHA"
+          health="$(curl -fsS --max-time 20 "$NODE_BASE_URL/health")"
+          test "$(jq -r '.environment' <<<"$health")" = prod
+          test "$(jq -r '.runtime_prefix' <<<"$health")" = bd_prod_
+          test "$(jq -r '.max_connections' <<<"$health")" = 1
+
+      - name: Generate persistent Node routing config and PHP rollback config
+        id: configs
+        env:
+          APP_ENV: prod
+          BASE_URL: https://blindleiadart.ingenting.org
+          IDENTITY_BASE_URL: https://blindleiadart.ingenting.org
+          STATIC_BASE_URL: https://blindleiadart.ingenting.org
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
+          CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
+          CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
+          CHALLONGE_REDIRECT_URI: https://blindleiadart.ingenting.org/api/v1/connectors/challonge/callback
+          BACKEND_V2_BASE_URL: https://blindleia-backend-v2-readonly.onrender.com
+          BACKEND_V2_INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          BACKEND_V2_CANARY_KIOSK_IDS: 1,2,3,4
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate/api rollback/api
+          BACKEND_V2_SCORING_ROUTING_MODE=candidate php infra/deploy/generate_api_config.php --output=candidate/api/config.php
+          BACKEND_V2_SCORING_ROUTING_MODE=php BACKEND_V2_BASE_URL='' BACKEND_V2_INTERNAL_TOKEN='' BACKEND_V2_CANARY_KIOSK_IDS='' php infra/deploy/generate_api_config.php --output=rollback/api/config.php
+          grep -Fq "'scoring_routing_mode' => 'candidate'" candidate/api/config.php
+          grep -Fq "'canary_kiosk_ids' => '1,2,3,4'" candidate/api/config.php
+          grep -Fq "'scoring_routing_mode' => 'php'" rollback/api/config.php
+
+      - name: Arm persistent PROD Node scoring writer
+        id: arm
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+          update_env(){ local key="$1" value="$2"; curl --fail --silent --show-error --output /dev/null -X PUT "$api/$key" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg value "$value" '{value:$value}')"; }
+          update_env BD_APP_ENV prod
+          update_env BD_BACKEND_V2_MODE prod-canary
+          update_env BD_BACKEND_V2_PROD_WRITE_CONFIRMATION ALLOW_PROD_SCORING_WRITES
+          update_env BD_BACKEND_V2_INTERNAL_TOKEN "$INTERNAL_TOKEN"
+          update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
+          update_env DB_TABLE_PREFIX bd_prod_
+          update_env IDENTITY_TABLE_PREFIX bd_prod_
+          update_env HARDWARE_TABLE_PREFIX bd_prod_
+          update_env DB_HOST "$DB_HOST"
+          update_env DB_PORT "$DB_PORT"
+          update_env DB_NAME "$DB_NAME"
+          update_env DB_USERNAME "$DB_USERNAME"
+          update_env DB_PASSWORD "$DB_PASSWORD"
+          update_env RELEASE_SHA "$RELEASE_SHA"
+          if [ -n "${REALTIME_PUBLISH_URL:-}" ] && [ -n "${REALTIME_PUBLISH_SECRET:-}" ]; then
+            update_env REALTIME_PUBLISH_URL "$REALTIME_PUBLISH_URL"
+            update_env REALTIME_PUBLISH_SECRET "$REALTIME_PUBLISH_SECRET"
+          fi
+          response="$(mktemp)"
+          curl --fail --silent --show-error --output "$response" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
+          test -n "$(jq -r '.id // empty' "$response")"
+          rm -f "$response"
+
+      - name: Wait for exact armed writer readiness
+        run: |
+          set -Eeuo pipefail
+          body="$(mktemp)"
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 10 "$NODE_BASE_URL/health" >"$body" && \
+               [ "$(jq -r '.release_sha' "$body")" = "$RELEASE_SHA" ] && \
+               [ "$(jq -r '.mode' "$body")" = prod-canary ] && \
+               [ "$(jq -r '.writes_armed' "$body")" = true ]; then
+              break
+            fi
+            sleep 5
+          done
+          test "$(jq -r '.release_sha' "$body")" = "$RELEASE_SHA"
+          test "$(jq -r '.mode' "$body")" = prod-canary
+          test "$(jq -r '.writes_armed' "$body")" = true
+          test "$(jq -r '.runtime_prefix' "$body")" = bd_prod_
+          test "$(jq -r '.max_connections' "$body")" = 1
+          ready="$(curl -fsS --max-time 20 "$NODE_BASE_URL/ready")"
+          test "$(jq -r '.ok' <<<"$ready")" = true
+          rm -f "$body"
+
+      - name: Route all real PROD kiosks to Node single writer
+        id: activate
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./candidate/*
+          remote_path: /www/blindleiadarts/prod
+          sftp_only: true
+
+      - name: Verify cutover remains healthy
+        id: verify
+        run: |
+          set -Eeuo pipefail
+          health="$(curl -fsS --max-time 20 "$NODE_BASE_URL/health")"
+          test "$(jq -r '.mode' <<<"$health")" = prod-canary
+          test "$(jq -r '.writes_armed' <<<"$health")" = true
+          test "$(jq -r '.runtime_prefix' <<<"$health")" = bd_prod_
+          ready="$(curl -fsS --max-time 20 "$NODE_BASE_URL/ready")"
+          test "$(jq -r '.ok' <<<"$ready")" = true
+          release="$(curl -fsS --max-time 20 "$PROD_BASE_URL/release.json?cb=$RANDOM")"
+          test "$(jq -r '.sha' <<<"$release")" = "$RELEASE_SHA"
+
+      - name: Roll back PHP routing on cutover failure
+        if: failure() && steps.configs.outcome == 'success'
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./rollback/*
+          remote_path: /www/blindleiadarts/prod
+          sftp_only: true
+
+      - name: Disarm Render on cutover failure
+        if: failure() && steps.arm.outcome == 'success'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -Eeuo pipefail
+          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+          update_env(){ local key="$1" value="$2"; curl --fail --silent --show-error --output /dev/null -X PUT "$api/$key" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg value "$value" '{value:$value}')"; }
+          update_env BD_BACKEND_V2_MODE readonly
+          update_env BD_BACKEND_V2_PROD_WRITE_CONFIRMATION DISARMED
+          curl --fail --silent --show-error --output /dev/null -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
+
+      - name: Record persistent scoring cutover
+        if: success()
+        run: |
+          {
+            echo '### PROD scoring cutover complete'
+            echo
+            echo 'All real PROD kiosk ids 1,2,3,4 now route scoring mutations through Domeneshop PHP gateway to backend-v2 on Render.'
+            echo 'Render remains one-slot idle-reuse and writes only bd_prod_.'
+            echo 'Domeneshop continues to host frontend/static and MySQL.'
+          } >> "$GITHUB_STEP_SUMMARY"
