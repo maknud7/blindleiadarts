@@ -32,7 +32,10 @@ final class BackendV2PlayerLiveProxyApplication
         if (!$this->handles($method, $path)) return false;
 
         $config = Config::load($this->rootPath);
-        if ($config->backendV2PlayerLiveRoutingMode() !== 'node') return false;
+        $routingMode = $path === '/v1/realtime/config'
+            ? $config->backendV2RealtimeConfigRoutingMode()
+            : $config->backendV2PlayerLiveRoutingMode();
+        if ($routingMode !== 'node') return false;
 
         try {
             $client = new BackendV2ApiClient(

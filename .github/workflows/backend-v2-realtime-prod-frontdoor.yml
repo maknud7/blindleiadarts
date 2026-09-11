@@ -1,0 +1,67 @@
+name: Backend v2 Realtime Config PROD Frontdoor
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/src/BackendV2PlayerLiveProxyApplication.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-realtime-prod-frontdoor.yml'
+      - '.github/workflows/backend-v2-realtime-prod-postdeploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prod-routing-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Verify isolated PROD routing contract
+        env:
+          APP_ENV: prod
+          BASE_URL: https://blindleiadart.ingenting.org
+          DB_HOST: example.invalid
+          DB_PORT: '3306'
+          DB_NAME: blindleia
+          DB_USERNAME: blindleia
+          DB_PASSWORD: not-used-by-config-generation
+          DB_TABLE_PREFIX: bd_prod_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+          SCOLIA_BRIDGE_SECRET: routing-contract-only
+          REALTIME_WEBSOCKET_URL: ''
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/src/Support/Config.php
+          php -l apps/api/src/BackendV2PlayerLiveProxyApplication.php
+          php infra/deploy/generate_api_config.php --output=/tmp/prod-api-config.php
+          php -r '
+            $c = require "/tmp/prod-api-config.php";
+            $b = $c["backend_v2"] ?? [];
+            if (($b["realtime_config_routing_mode"] ?? null) !== "node") exit(1);
+            if (($b["player_live_routing_mode"] ?? null) !== "php") exit(2);
+            if (($b["equipment_routing_mode"] ?? null) !== "node") exit(3);
+            if (($b["scoring_routing_mode"] ?? null) !== "candidate") exit(4);
+          '
+
+      - name: Verify current PROD backend exposes realtime config
+        env:
+          HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
+        run: |
+          set -Eeuo pipefail
+          health="$(curl -fsS --max-time 30 "${HOST_URL%/}/health")"
+          jq -e '.ok == true and .environment == "prod" and .mode == "prod-canary" and .runtime_prefix == "bd_prod_"' <<<"$health" >/dev/null
+          payload="$(curl -fsS --max-time 30 "${HOST_URL%/}/v1/realtime/config")"
+          jq -e '.ok == true and (.websocket_url | type == "string") and (.enabled | type == "boolean") and (.transport == "websocket" or .transport == "sse") and (.enabled == (.websocket_url != "")) and (.transport == (if .websocket_url != "" then "websocket" else "sse" end))' <<<"$payload" >/dev/null
