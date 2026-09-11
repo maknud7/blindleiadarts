@@ -68,7 +68,7 @@ jobs:
           update_env DB_USERNAME "$DB_USERNAME"
           update_env DB_PASSWORD "$DB_PASSWORD"
           update_env DB_TABLE_PREFIX bd_test_
-          update_env IDENTITY_TABLE_PREFIX bd_test_
+          update_env IDENTITY_TABLE_PREFIX bd_prod_
           update_env HARDWARE_TABLE_PREFIX bd_prod_
           update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
           update_env BD_BACKEND_V2_DB_IDLE_MS 15000
@@ -97,7 +97,7 @@ jobs:
           set -Eeuo pipefail
           for attempt in $(seq 1 60); do
             health="$(curl -fsS --max-time 20 "${HOST_URL%/}/health" || true)"
-            if jq -e --arg sha "$GITHUB_SHA" '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .identity_prefix == "bd_test_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse" and .release_sha == $sha' <<<"$health" >/dev/null 2>&1; then
+            if jq -e --arg sha "$GITHUB_SHA" '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse" and .release_sha == $sha' <<<"$health" >/dev/null 2>&1; then
               echo 'Persistent TEST backend-v2 host is ready.'
               exit 0
             fi
