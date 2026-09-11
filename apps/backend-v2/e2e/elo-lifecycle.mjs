@@ -21,6 +21,8 @@ const provider = new MySql2SessionProvider({
   connectTimeoutMs: config.mysql.connectTimeoutMs,
   budget: config.mysql.budget,
   writable: true,
+  connectionReuse: "idle-reuse",
+  idleConnectionTimeoutMs: 60_000,
 });
 const prefix = config.prefixes.runtime;
 const suffix = randomBytes(6).toString("hex");
@@ -37,6 +39,12 @@ const elo = new MySqlCanonicalEloLedger(provider, prefix);
 const tournamentElo = new MySqlTournamentEloProjection(provider, prefix);
 
 try {
+  // GitHub-hosted runners occasionally fail the initial TCP handshake to the
+  // hosted MySQL account. Retrying is allowed only here, before any fixture or
+  // canonical mutation exists. Once this read-only probe succeeds the E2E keeps
+  // the same single physical connection for its entire lifecycle.
+  await establishReadOnlyConnection();
+
   const players = await existingMemberPlayers();
   assert.equal(players.length, 2, "ELO E2E requires two existing member-linked TEST players in the same club");
   assert.equal(players[0].club_id, players[1].club_id, "ELO E2E players must belong to the same TEST club");
@@ -164,6 +172,23 @@ try {
   await provider.close();
 }
 
+async function establishReadOnlyConnection() {
+  const attempts = 3;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await provider.withConnection(async (sql) => {
+        const rows = await sql.query("SELECT 1 AS ok");
+        assert.equal(Number(rows[0]?.ok), 1, "TEST MySQL connectivity probe returned an unexpected value");
+      });
+      return;
+    } catch (error) {
+      if (attempt === attempts || !isInitialConnectivityError(error)) throw error;
+      console.warn(`TEST MySQL initial connectivity failed (${connectionErrorCode(error)}); retrying read-only probe ${attempt + 1}/${attempts}`);
+      await sleep(attempt * 3_000);
+    }
+  }
+}
+
 async function existingMemberPlayers() {
   return provider.withConnection(async (sql) => sql.query(
     `SELECT CAST(p.id AS CHAR) AS player_id,
@@ -265,6 +290,19 @@ async function one(sqlText, params) {
 async function scalar(sqlText, params) {
   const row = await one(sqlText, params);
   return row.value;
+}
+
+function isInitialConnectivityError(error) {
+  return ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH"].includes(connectionErrorCode(error));
+}
+
+function connectionErrorCode(error) {
+  if (!error || typeof error !== "object" || !("code" in error)) return "unknown";
+  return String(error.code ?? "unknown");
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function approx(actual, expected, label) {
