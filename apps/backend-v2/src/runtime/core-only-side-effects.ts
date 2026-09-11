@@ -1,19 +1,17 @@
 import type { DbId } from "../contracts/scoring.js";
 import type {
   CanonicalPlayoffPort,
-  CanonicalRankingPort,
   CanonicalScoringStatePort,
 } from "../service/canonical-scoring-service.js";
 
 /**
- * Temporary adapters used only behind MySqlCoreOnlyMutationGuard.
+ * Temporary adapter used only behind MySqlCoreOnlyMutationGuard.
  *
- * Season ELO, tournament ELO and realtime now have real adapters. The remaining
- * no-op surface is intentionally limited to playoff reconciliation and linear
- * ranking until those final side-effect migrations are complete.
+ * Realtime, season ELO, tournament ELO and linear ranking now have real
+ * adapters. Playoff reconciliation is the final remaining canonical no-op and
+ * keeps production scoring writes compile-time blocked until it is migrated.
  */
-export class CoreOnlyCanonicalSideEffects
-implements CanonicalPlayoffPort, CanonicalRankingPort {
+export class CoreOnlyCanonicalSideEffects implements CanonicalPlayoffPort {
   constructor(private readonly state: CanonicalScoringStatePort) {}
 
   async assertUndoAllowed(kioskId: DbId): Promise<DbId | null> {
@@ -21,6 +19,4 @@ implements CanonicalPlayoffPort, CanonicalRankingPort {
   }
 
   async afterMutation(_matchId: DbId | null, _wasUndo: boolean): Promise<void> {}
-
-  async reconcileLinearRanking(_matchId: DbId | null): Promise<void> {}
 }
