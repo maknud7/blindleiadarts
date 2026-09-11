@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - 'apps/api/**'
+      - 'apps/backend-v2/**'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-scoring-cutover.yml'
   workflow_dispatch:
@@ -52,17 +53,18 @@ jobs:
             exit 1
           fi
 
-      - name: Verify safe deploy defaults and PROD write lock
+      - name: Verify persistent PROD Node routing and single-writer safety
         shell: bash
         run: |
           set -Eeuo pipefail
           grep -Fq "'scoring_routing_mode' => 'php'" apps/api/config.example.php
-          grep -Fq "BACKEND_V2_SCORING_ROUTING_MODE', 'php'" infra/deploy/generate_api_config.php
-          grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
+          grep -Fq "defaultBackendV2RoutingMode = \$isProd ? 'candidate' : 'php'" infra/deploy/generate_api_config.php
+          grep -Fq "defaultBackendV2CanaryKioskIds = \$isProd ? '1,2,3,4' : ''" infra/deploy/generate_api_config.php
+          grep -Fq 'const PROD_CANARY_WRITES_READY = true' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'allowsPhpFallback(): bool' apps/api/src/Service/BackendV2ScoringAttemptException.php
           grep -Fq 'return false;' apps/api/src/Service/BackendV2ScoringAttemptException.php
 
-      - name: Verify generated config remains PHP by default
+      - name: Verify generated TEST config remains PHP by default
         shell: bash
         env:
           APP_ENV: test
@@ -77,5 +79,25 @@ jobs:
           DB_TABLE_PREFIX: bd_test_
         run: |
           set -Eeuo pipefail
-          php infra/deploy/generate_api_config.php --output=/tmp/backend-v2-cutover-config.php
-          php -r '$c=require "/tmp/backend-v2-cutover-config.php"; if (($c["backend_v2"]["scoring_routing_mode"] ?? null) !== "php") exit(1); if (($c["backend_v2"]["internal_token"] ?? null) !== "") exit(1);'
+          php infra/deploy/generate_api_config.php --output=/tmp/backend-v2-cutover-test.php
+          php -r '$c=require "/tmp/backend-v2-cutover-test.php"; if (($c["backend_v2"]["scoring_routing_mode"] ?? null) !== "php") exit(1); if (($c["backend_v2"]["internal_token"] ?? null) !== "") exit(1);'
+
+      - name: Verify generated PROD config preserves Node scoring cutover
+        shell: bash
+        env:
+          APP_ENV: prod
+          BASE_URL: https://blindleiadart.ingenting.org
+          STATIC_BASE_URL: https://blindleiadart.ingenting.org
+          SCOLIA_BRIDGE_SECRET: unit-test-prod-token
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: prod
+          DB_USERNAME: prod
+          DB_PASSWORD: prod
+          DB_TABLE_PREFIX: bd_prod_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: |
+          set -Eeuo pipefail
+          php infra/deploy/generate_api_config.php --output=/tmp/backend-v2-cutover-prod.php
+          php -r '$c=require "/tmp/backend-v2-cutover-prod.php"; $b=$c["backend_v2"]??[]; if (($b["scoring_routing_mode"]??null)!=="candidate") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(1); if (($b["canary_kiosk_ids"]??null)!=="1,2,3,4") exit(1); if (($b["internal_token"]??null)!=="unit-test-prod-token") exit(1);'
