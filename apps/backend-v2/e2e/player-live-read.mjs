@@ -109,6 +109,13 @@ try {
   server = startServer();
   await waitForReady();
 
+  const expectedRealtimeWebsocketUrl = (process.env.REALTIME_WEBSOCKET_URL ?? "").trim();
+  const realtimeConfig = await requestJson("/v1/realtime/config");
+  assert.equal(realtimeConfig.ok, true);
+  assert.equal(realtimeConfig.enabled, expectedRealtimeWebsocketUrl !== "");
+  assert.equal(realtimeConfig.transport, expectedRealtimeWebsocketUrl !== "" ? "websocket" : "sse");
+  assert.equal(realtimeConfig.websocket_url, expectedRealtimeWebsocketUrl);
+
   const clubs = await requestJson("/v1/clubs");
   assert.equal(clubs.ok, true);
   assert.ok(Array.isArray(clubs.items));
@@ -195,6 +202,8 @@ try {
     tournament_id: tournamentId,
     season_id: seasonId,
     season_club_id: seasonClubId,
+    realtime_config_verified: true,
+    realtime_websocket_enabled: expectedRealtimeWebsocketUrl !== "",
     club_directory_verified: true,
     club_elo_verified: true,
     player_matches_verified: true,

@@ -82,6 +82,7 @@ final class BackendV2PlayerLiveProxyApplication
     public function handles(string $method, string $path): bool
     {
         if (strtoupper($method) !== 'GET') return false;
+        if ($path === '/v1/realtime/config') return true;
         if ($path === '/v1/me/dashboard') return true;
         if ($path === '/v1/clubs') return true;
         if (preg_match('#^/v1/clubs/\d+/(?:player-directory|elo|seasons|summaries)$#', $path) === 1) return true;

@@ -43,6 +43,21 @@ jobs:
           npm run backend-v2:typecheck
           npm run backend-v2:build
 
+      - name: Verify current TEST realtime client source
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+        run: |
+          set -Eeuo pipefail
+          current="$(curl -fsS --max-time 15 "${BASE_URL%/}/api/v1/realtime/config")"
+          jq -e --arg expected "$REALTIME_WEBSOCKET_URL" '
+            .ok == true
+            and .data.websocket_url == $expected
+            and .data.enabled == ($expected != "")
+            and .data.transport == (if $expected != "" then "websocket" else "sse" end)
+          ' <<<"$current" >/dev/null
+          echo "REALTIME_WEBSOCKET_URL=$REALTIME_WEBSOCKET_URL"
+
       - name: Generate loopback-only E2E token
         shell: bash
         run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
@@ -58,6 +73,7 @@ jobs:
           HOST: 127.0.0.1
           PORT: '18089'
           RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT || '3306' }}
           DB_NAME: ${{ secrets.DB_NAME }}

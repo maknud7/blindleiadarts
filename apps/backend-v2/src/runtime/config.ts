@@ -28,6 +28,7 @@ export interface BackendRuntimeConfig {
     budget: MySqlConnectionBudget;
   };
   realtime: {
+    websocketUrl: string | null;
     publishUrl: string | null;
     publishSecret: string | null;
     timeoutMs: number;
@@ -53,6 +54,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
   if (realtimeTimeoutMs > 10_000) {
     throw new TypeError("BD_BACKEND_V2_REALTIME_TIMEOUT_MS may not exceed 10000.");
   }
+  const realtimeWebsocketUrl = optional(env.REALTIME_WEBSOCKET_URL);
   const realtimePublishUrl = optional(env.REALTIME_PUBLISH_URL);
   const realtimePublishSecret = optional(env.REALTIME_PUBLISH_SECRET);
   const realtimePublishEnabled = realtimePublishUrl !== null && realtimePublishSecret !== null;
@@ -104,6 +106,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
       budget,
     },
     realtime: {
+      websocketUrl: realtimeWebsocketUrl,
       publishUrl: realtimePublishUrl,
       publishSecret: realtimePublishSecret,
       timeoutMs: realtimeTimeoutMs,
