@@ -13,6 +13,7 @@ import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.
 import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
+import { MySqlTournamentFlowRepository } from "./mysql/tournament-flow-repository.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
   assertIdentityMutationAllowed,
@@ -77,6 +78,7 @@ const accountProfiles = new MySqlAccountProfileRepository(
   config.prefixes.identity,
 );
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
+const tournamentFlow = new MySqlTournamentFlowRepository(sessions, config.prefixes.runtime);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
@@ -205,6 +207,24 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     return;
   }
 
+  const startTournamentMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/start$/.exec(publicPath);
+  if (method === "POST" && startTournamentMatch) {
+    assertMutationAllowed(config);
+    const tournamentId = startTournamentMatch[1];
+    const tournament = await tournamentFlow.findTournament(tournamentId);
+    if (tournament === null) {
+      throw new DomainValidationError("tournament_not_found", "Turneringen ble ikke funnet.", 404);
+    }
+    const clubId = safeIdString(tournament.club_id);
+    if (clubId === null) {
+      throw new DomainValidationError("tournament_club_missing", "Turneringen mangler klubbtilknytning.", 409);
+    }
+    await requireClubAdmin(request, clubId);
+    const start = await tournamentFlow.startTournament(tournamentId);
+    sendJson(response, 200, { ok: true, start });
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/internal/v1/scoring/start-match") {
     const { kioskId, source } = await scoringCommandContext(request);
     const result = await scoring.startMatch({ kiosk_id: kioskId, source });
@@ -260,6 +280,23 @@ async function requireIdentityUser(request: IncomingMessage, touchSession: boole
   if (token === null) throw new RuntimeAccessError(401, "authentication_required", "Innlogging kreves.");
   const user = await identityRepository.findBySessionToken(token, touchSession);
   if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Innloggingen er utløpt eller ugyldig.");
+  return user;
+}
+
+async function requireClubAdmin(request: IncomingMessage, clubId: string): Promise<IdentityUser> {
+  const user = await requireIdentityUser(request, identityTouchAllowed());
+  const role = String(user.role ?? "");
+  if (role === "super_admin") return user;
+  if (role !== "club_admin") {
+    throw new RuntimeAccessError(403, "admin_required", "Club administrator access is required.");
+  }
+  const clubIds = String(user.admin_club_ids ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => /^[1-9][0-9]*$/.test(value));
+  if (!clubIds.includes(clubId)) {
+    throw new RuntimeAccessError(403, "club_access_denied", "You cannot manage this club.");
+  }
   return user;
 }
 
