@@ -69,7 +69,7 @@ test("TEST writes require test environment, test prefix and internal token", () 
   );
 });
 
-test("PROD canary remains read-only until persistent runtime and canary routing are approved", () => {
+test("PROD canary still requires explicit confirmation after readiness is armed", () => {
   const safeCanary = loadRuntimeConfig(baseEnv({
     BD_APP_ENV: "prod",
     BD_BACKEND_V2_MODE: "prod-canary",
@@ -87,13 +87,15 @@ test("PROD canary remains read-only until persistent runtime and canary routing 
     BD_APP_ENV: "prod",
     BD_BACKEND_V2_MODE: "prod-canary",
     DB_TABLE_PREFIX: "bd_prod_",
+    IDENTITY_TABLE_PREFIX: "bd_prod_",
+    HARDWARE_TABLE_PREFIX: "bd_prod_",
     BD_BACKEND_V2_INTERNAL_TOKEN: "canary-token",
     BD_BACKEND_V2_PROD_WRITE_CONFIRMATION: "ALLOW_PROD_SCORING_WRITES",
   }));
   assert.equal(confirmedCanary.canonicalSideEffectsReady, true);
-  assert.equal(confirmedCanary.prodCanaryWritesEnabled, false);
-  assert.equal(mutationsAllowed(confirmedCanary), false);
-  assert.throws(() => assertMutationAllowed(confirmedCanary), /writes are not armed/);
+  assert.equal(confirmedCanary.prodCanaryWritesEnabled, true);
+  assert.equal(mutationsAllowed(confirmedCanary), true);
+  assert.doesNotThrow(() => assertMutationAllowed(confirmedCanary));
 });
 
 test("coexistence hard caps backend-v2 at two database connections", () => {

@@ -38,13 +38,15 @@ export interface BackendRuntimeConfig {
 const PROD_WRITE_CONFIRMATION = "ALLOW_PROD_SCORING_WRITES";
 
 // Canonical scoring storage and every canonical post-mutation side effect have
-// now passed the hosted TEST lifecycle against the real bd_test_ schema.
+// passed the hosted TEST lifecycle against the real bd_test_ schema.
 const CANONICAL_SIDE_EFFECTS_READY = true;
 
-// Keep PROD writes compile-time blocked until backend-v2 has an approved,
-// persistent runtime and an explicit canary routing/rollback plan. The legacy
-// confirmation phrase alone must never be able to turn this gate on.
-const PROD_CANARY_WRITES_READY = false;
+// The persistent host, rollback path and full public PHP -> backend-v2 -> MySQL
+// single-writer route have now passed an isolated end-to-end TEST canary. PROD
+// writes remain double-gated: this compile-time readiness flag is not enough on
+// its own; prod-canary mode plus the exact confirmation phrase and internal
+// authentication are still required before any mutation is accepted.
+const PROD_CANARY_WRITES_READY = true;
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): BackendRuntimeConfig {
   const environment = parseEnvironment(env.BD_APP_ENV ?? env.APP_ENV ?? "development");
