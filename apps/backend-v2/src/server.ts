@@ -3,11 +3,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { ScoringSource } from "./contracts/canonical-scoring.js";
 import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
+import { MySqlAccountProfileRepository } from "./mysql/account-profile-repository.js";
 import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalPlayoffReconciliation } from "./mysql/canonical-playoff-reconciliation.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
-import { MySqlIdentityAuthRepository } from "./mysql/identity-auth-repository.js";
+import { MySqlIdentityAuthRepository, type IdentityUser } from "./mysql/identity-auth-repository.js";
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
@@ -69,6 +70,11 @@ const identityRepository = new MySqlIdentityAuthRepository(
   config.prefixes.identity,
 );
 const identityAuth = new IdentityAuthService(identityRepository);
+const accountProfiles = new MySqlAccountProfileRepository(
+  sessions,
+  config.prefixes.runtime,
+  config.prefixes.identity,
+);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
@@ -128,11 +134,38 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   }
 
   if (method === "GET" && publicPath === "/v1/auth/me") {
-    const identityTouchAllowed =
-      (config.environment === "prod" && config.prefixes.identity === "bd_prod_" && mutationsAllowed(config)) ||
-      (config.environment === "test" && config.prefixes.identity === "bd_test_" && mutationsAllowed(config));
-    const result = await identityAuth.me(bearerToken(request), identityTouchAllowed);
-    sendJson(response, 200, { ok: true, ...result });
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    sendJson(response, 200, { ok: true, user: formatPublicUser(user) });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/me/profile") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    sendJson(response, 200, { ok: true, profile: await accountProfiles.profileForUser(user) });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/me/payments") {
+    const user = await requireIdentityUser(request, identityTouchAllowed());
+    sendJson(response, 200, { ok: true, ...(await accountProfiles.membershipAndPayments(user)) });
+    return;
+  }
+
+  if ((method === "PUT" || method === "PATCH") && publicPath === "/v1/me/profile") {
+    assertIdentityMutationAllowed(config);
+    const user = await requireIdentityUser(request, true);
+    const body = await readJsonObject(request);
+    const profile = await accountProfiles.updateProfile(user, body.display_name, body.nickname);
+    sendJson(response, 200, { ok: true, profile, message: "Profilen er oppdatert." });
+    return;
+  }
+
+  if (method === "POST" && publicPath === "/v1/me/password") {
+    assertIdentityMutationAllowed(config);
+    const user = await requireIdentityUser(request, true);
+    const body = await readJsonObject(request);
+    await accountProfiles.changePassword(user, body.current_password, body.new_password);
+    sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
     return;
   }
 
@@ -184,6 +217,48 @@ async function scoringCommandContext(request: IncomingMessage): Promise<{ kioskI
     kioskId: asDbId(requiredString(body, "kiosk_id")),
     source: scoringSource(body.source),
   };
+}
+
+async function requireIdentityUser(request: IncomingMessage, touchSession: boolean): Promise<IdentityUser> {
+  const token = bearerToken(request);
+  if (token === null) throw new RuntimeAccessError(401, "authentication_required", "Innlogging kreves.");
+  const user = await identityRepository.findBySessionToken(token, touchSession);
+  if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Innloggingen er utløpt eller ugyldig.");
+  return user;
+}
+
+function identityTouchAllowed(): boolean {
+  return (
+    (config.environment === "prod" && config.prefixes.identity === "bd_prod_" && mutationsAllowed(config)) ||
+    (config.environment === "test" && config.prefixes.identity === "bd_test_" && mutationsAllowed(config))
+  );
+}
+
+function formatPublicUser(user: IdentityUser): Record<string, unknown> {
+  const email = typeof user.email === "string" ? user.email : null;
+  const role = typeof user.role === "string" ? user.role : null;
+  return {
+    id: safePublicNumber(user.id),
+    email,
+    username: email,
+    display_name: user.display_name ?? null,
+    role,
+    is_super_admin: role === "super_admin",
+    contact_email: email,
+    contact_phone: user.contact_phone ?? null,
+    player: {
+      id: safePublicNumber(user.player_id),
+      display_name: user.player_display_name ?? null,
+      club_id: safePublicNumber(user.player_club_id),
+    },
+  };
+}
+
+function safePublicNumber(value: unknown): number | null {
+  const normalized = String(value ?? "").trim();
+  if (!/^[1-9][0-9]*$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 function sendError(response: ServerResponse, error: unknown): void {
