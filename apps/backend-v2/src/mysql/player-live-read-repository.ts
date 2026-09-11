@@ -253,7 +253,7 @@ export class MySqlPlayerLiveReadRepository {
       const items = [...grouped.values()].sort((a, b) => {
         const byDate = String(a.start_at ?? "").localeCompare(String(b.start_at ?? ""));
         if (byDate !== 0) return byDate;
-        return integer(a.tournament_id) - integer(b.tournament_id);
+        return compareDecimalIds(String(a.tournament_id ?? "0"), String(b.tournament_id ?? "0"));
       }).map((item) => {
         const before = numberValue(item.rating_before, 1000);
         const after = nullableNumber(item.rating_after);
@@ -315,6 +315,7 @@ export class MySqlPlayerLiveReadRepository {
         return {
           ...row,
           player_id: publicId(decimalId(row.player_id)),
+          display_name: String(row.display_name ?? ""),
           played,
           wins,
           draws,
@@ -326,7 +327,7 @@ export class MySqlPlayerLiveReadRepository {
           leg_diff: legsWon - legsLost,
         };
       }).filter((row) => row.played > 0).sort((a, b) =>
-        b.points - a.points || b.leg_diff - a.leg_diff || b.three_dart_average - a.three_dart_average || String(a.display_name).localeCompare(String(b.display_name)),
+        b.points - a.points || b.leg_diff - a.leg_diff || b.three_dart_average - a.three_dart_average || a.display_name.localeCompare(b.display_name),
       ).slice(0, 8).map((row, index) => ({ ...row, position: index + 1 }));
 
       const topVisits = await db.query<QueryResultRow>(
@@ -398,7 +399,7 @@ export class MySqlPlayerLiveReadRepository {
       ids.push(rowId);
     }
     if (!ids.includes(id)) ids.push(id);
-    return [...new Set(ids)].sort((a, b) => Number(a) - Number(b));
+    return [...new Set(ids)].sort(compareDecimalIds);
   }
 
   private table(name: string): string {
@@ -416,6 +417,11 @@ function publicId(value: string | null): number | string | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : value;
+}
+
+function compareDecimalIds(a: string, b: string): number {
+  if (a.length !== b.length) return a.length - b.length;
+  return a.localeCompare(b);
 }
 
 function integer(value: unknown): number {
