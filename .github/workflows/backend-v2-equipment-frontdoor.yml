@@ -1,0 +1,70 @@
+name: Backend v2 Equipment Frontdoor
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/**'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-equipment-frontdoor.yml'
+      - '.github/workflows/deploy-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontdoor-contract:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Syntax and fail-closed proxy contracts
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/src/Service/BackendV2ApiAttemptException.php
+          php -l apps/api/src/Service/BackendV2ApiClient.php
+          php -l apps/api/src/BackendV2EquipmentProxyApplication.php
+          php -l apps/api/kiosk-pairing.php
+          php apps/api/tests/backend_v2_api_client_test.php
+          php apps/api/tests/backend_v2_equipment_proxy_routing_test.php
+          grep -Fq 'allowsPhpFallback(): bool' apps/api/src/Service/BackendV2ApiAttemptException.php
+          grep -Fq 'return false;' apps/api/src/Service/BackendV2ApiAttemptException.php
+          grep -Fq 'Never fall through to PHP after a remote attempt' apps/api/src/BackendV2EquipmentProxyApplication.php
+          grep -Fq "!\$proxy->handles('DELETE', '/v1/clubs/1/kiosks/9')" apps/api/tests/backend_v2_equipment_proxy_routing_test.php
+
+      - name: Verify independent TEST and PROD routing config
+        env:
+          SCOLIA_BRIDGE_SECRET: unit-test-secret
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: test
+          DB_USERNAME: test
+          DB_PASSWORD: test
+        run: |
+          set -Eeuo pipefail
+          APP_ENV=test BASE_URL=https://example.test STATIC_BASE_URL=https://example.test DB_TABLE_PREFIX=bd_test_ \
+            BACKEND_V2_EQUIPMENT_ROUTING_MODE=node BACKEND_V2_BASE_URL=https://backend-test.example \
+            php infra/deploy/generate_api_config.php --output=/tmp/equipment-test.php
+          php -r '$c=require "/tmp/equipment-test.php"; $b=$c["backend_v2"]??[]; if (($b["equipment_routing_mode"]??null)!=="node") exit(1); if (($b["scoring_routing_mode"]??null)!=="php") exit(1); if (($b["base_url"]??null)!=="https://backend-test.example") exit(1);'
+
+          APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            php infra/deploy/generate_api_config.php --output=/tmp/equipment-prod.php
+          php -r '$c=require "/tmp/equipment-prod.php"; $b=$c["backend_v2"]??[]; if (($b["equipment_routing_mode"]??null)!=="php") exit(1); if (($b["scoring_routing_mode"]??null)!=="candidate") exit(1);'
+
+      - name: Verify persistent TEST backend-v2 target
+        env:
+          HOST_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$HOST_URL" || { echo 'TEST_BACKEND_V2_BASE_URL environment variable is required before frontdoor cutover.' >&2; exit 1; }
+          health="$(curl -fsS --max-time 20 "${HOST_URL%/}/health")"
+          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
+          echo 'Persistent TEST backend-v2 host is writable only in bd_test_ with one idle-reuse DB slot.'
