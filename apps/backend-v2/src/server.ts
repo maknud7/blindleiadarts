@@ -14,6 +14,7 @@ import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.
 import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlPlayerLiveReadRepository } from "./mysql/player-live-read-repository.js";
+import { MySqlSeasonPublicReadRepository } from "./mysql/season-public-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
 import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
@@ -33,6 +34,7 @@ import {
 import { EquipmentAdminRouter } from "./runtime/equipment-admin-router.js";
 import { PlayerLiveReadRouter } from "./runtime/player-live-read-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
+import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
 import { TournamentRuntimeRouter } from "./runtime/tournament-runtime-router.js";
@@ -91,6 +93,8 @@ const accountProfiles = new MySqlAccountProfileRepository(
 );
 const playerLiveReads = new MySqlPlayerLiveReadRepository(sessions, config.prefixes.runtime);
 const playerLiveRuntime = new PlayerLiveReadRouter(config, identityRepository, playerLiveReads);
+const seasonPublicReads = new MySqlSeasonPublicReadRepository(sessions, config.prefixes.runtime);
+const seasonPublicRuntime = new SeasonPublicReadRouter(seasonPublicReads);
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
 const equipment = new MySqlEquipmentAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
@@ -235,6 +239,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   const playerLiveRoute = await playerLiveRuntime.handle(method, publicPath, request);
   if (playerLiveRoute !== null) {
     sendJson(response, playerLiveRoute.statusCode, playerLiveRoute.payload);
+    return;
+  }
+
+  const seasonPublicRoute = await seasonPublicRuntime.handle(method, publicPath);
+  if (seasonPublicRoute !== null) {
+    sendJson(response, seasonPublicRoute.statusCode, seasonPublicRoute.payload);
     return;
   }
 

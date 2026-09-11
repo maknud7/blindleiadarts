@@ -93,13 +93,47 @@ jobs:
           }
 
           request "clubs" "$base/api/v1/clubs"
-          club_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); echo (int)($j["data"]["items"][0]["id"] ?? 0);')"
+          cp /tmp/player-portal-last.json /tmp/player-portal-clubs.json
+          club_ids="$(php -r '
+            $j=json_decode(file_get_contents("/tmp/player-portal-clubs.json"),true);
+            foreach(($j["data"]["items"]??[]) as $r){$id=(int)($r["id"]??0);if($id>0)echo $id.PHP_EOL;}
+          ')"
+          test -n "$club_ids"
+
+          # Do not assume the first TEST club owns season data. Pick the first
+          # club that has both a player directory entry and at least one season.
+          club_id=0
+          player_id=0
+          season_id=0
+          while IFS= read -r candidate_club; do
+            test -n "$candidate_club" || continue
+            request "player directory candidate $candidate_club" "$base/api/v1/clubs/$candidate_club/player-directory"
+            candidate_player="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); echo (int)($j["data"]["items"][0]["id"] ?? 0);')"
+            test "$candidate_player" -gt 0 || continue
+
+            request "seasons candidate $candidate_club" "$base/api/v1/clubs/$candidate_club/seasons"
+            candidate_season="$(php -r '
+              $j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true);
+              $items=$j["data"]["items"]??[];
+              $id=0;
+              foreach($items as $r){if(($r["is_active"]??false)){$id=(int)($r["id"]??0);break;}}
+              if(!$id)$id=(int)($items[0]["id"]??0);
+              echo $id;
+            ')"
+            test "$candidate_season" -gt 0 || continue
+
+            club_id="$candidate_club"
+            player_id="$candidate_player"
+            season_id="$candidate_season"
+            break
+          done <<< "$club_ids"
+
           test "$club_id" -gt 0
+          test "$player_id" -gt 0
+          test "$season_id" -gt 0
+          echo "Using club=$club_id player=$player_id season=$season_id"
 
           request "player directory" "$base/api/v1/clubs/$club_id/player-directory"
-          player_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); echo (int)($j["data"]["items"][0]["id"] ?? 0);')"
-          test "$player_id" -gt 0
-
           request "elo" "$base/api/v1/clubs/$club_id/elo"
           elo_rows="$(php -r '
             $j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true);
@@ -111,8 +145,13 @@ jobs:
           echo "Club ELO rows with valid schema: $elo_rows"
 
           request "seasons" "$base/api/v1/clubs/$club_id/seasons"
-          season_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); $items=$j["data"]["items"]??[]; $id=0; foreach($items as $r){ if(($r["is_active"]??false)){ $id=(int)($r["id"]??0); break; } } if(!$id) $id=(int)($items[0]["id"]??0); echo $id;')"
-          test "$season_id" -gt 0
+          php -r '
+            $j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true);
+            $items=$j["data"]["items"]??[];
+            $wanted=(int)$argv[1];
+            foreach($items as $r){if((int)($r["id"]??0)===$wanted)exit(0);}
+            fwrite(STDERR,"Selected season disappeared from club list\n");exit(1);
+          ' "$season_id"
 
           request "season standings" "$base/api/v1/seasons/$season_id/standings"
           standings_rows="$(php -r '
