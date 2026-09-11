@@ -1,0 +1,78 @@
+name: Backend v2 Container
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/**'
+      - 'package.json'
+      - '.dockerignore'
+      - '.github/workflows/backend-v2-container.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build backend v2 image
+        run: docker build --file apps/backend-v2/Dockerfile --tag blindleia-backend-v2:ci .
+
+      - name: Start read-only container
+        run: |
+          set -Eeuo pipefail
+          docker run --detach --rm \
+            --name blindleia-backend-v2-ci \
+            --publish 127.0.0.1:18086:8082 \
+            --env BD_APP_ENV=development \
+            --env BD_BACKEND_V2_MODE=readonly \
+            --env RELEASE_SHA="${GITHUB_SHA}" \
+            --env DB_HOST=127.0.0.1 \
+            --env DB_PORT=3306 \
+            --env DB_NAME=darts \
+            --env DB_USERNAME=unused \
+            --env DB_PASSWORD=unused \
+            --env DB_TABLE_PREFIX=bd_test_ \
+            --env IDENTITY_TABLE_PREFIX=bd_prod_ \
+            --env HARDWARE_TABLE_PREFIX=bd_prod_ \
+            blindleia-backend-v2:ci
+
+      - name: Verify container health contract
+        run: |
+          set -Eeuo pipefail
+          trap 'docker logs blindleia-backend-v2-ci || true; docker stop blindleia-backend-v2-ci >/dev/null 2>&1 || true' EXIT
+
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error http://127.0.0.1:18086/health > health.json; then
+              break
+            fi
+            if ! docker inspect blindleia-backend-v2-ci >/dev/null 2>&1; then
+              echo 'backend-v2 container exited before health check.' >&2
+              exit 1
+            fi
+            sleep 0.25
+          done
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const health = JSON.parse(fs.readFileSync('health.json', 'utf8'));
+          if (!health.ok || health.service !== 'blindleia-backend-v2') {
+            throw new Error(`Unexpected container health payload: ${JSON.stringify(health)}`);
+          }
+          if (health.canonical_side_effects_ready !== true || health.writes_armed !== false) {
+            throw new Error(`Container safety boundary is wrong: ${JSON.stringify(health)}`);
+          }
+          if (health.connection_mode !== 'idle-reuse' || health.max_connections !== 1) {
+            throw new Error(`Container connection budget is wrong: ${JSON.stringify(health)}`);
+          }
+          NODE
+
+          test "$(docker inspect --format='{{.Config.User}}' blindleia-backend-v2-ci)" = 'node'
+          docker stop blindleia-backend-v2-ci >/dev/null
+          trap - EXIT
