@@ -43,7 +43,7 @@ test("bracket geometry mirrors PHP single elimination rules", () => {
   assert.equal(roundLabel(8, 3), "Finale");
 });
 
-test("qualifiers are tiered by group position then group-table performance", () => {
+test("qualification tiers are preserved while same-tier seeds may move to avoid rematches", () => {
   const seeded = seedQualifiers([
     qualifier(101, 1, 2, 7, 3, 8, 2, "Beta"),
     qualifier(102, 2, 1, 6, 2, 7, 1, "Alpha"),
@@ -51,8 +51,13 @@ test("qualifiers are tiered by group position then group-table performance", () 
     qualifier(104, 2, 2, 9, 5, 10, 4, "Delta"),
   ]);
 
-  assert.deepEqual(seeded.map((row) => row.player_id), [id(103), id(102), id(104), id(101)]);
+  // PHP first ranks the winners and runners-up by performance, then it may
+  // swap seeds inside the same qualification tier to avoid an immediate
+  // rematch from the same group. Here runners-up 104/101 therefore swap.
+  assert.deepEqual(seeded.map((row) => row.player_id), [id(103), id(102), id(101), id(104)]);
   assert.deepEqual(seeded.map((row) => row.playoff_seed), [1, 2, 3, 4]);
+  assert.deepEqual(seeded.slice(0, 2).map((row) => row.source_group_position), [1, 1]);
+  assert.deepEqual(seeded.slice(2).map((row) => row.source_group_position), [2, 2]);
 });
 
 test("same qualification tier may swap seeds to avoid first-round same-group rematches", () => {
