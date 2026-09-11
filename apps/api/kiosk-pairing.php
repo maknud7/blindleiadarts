@@ -7,7 +7,6 @@ use Blindleia\Dartkiosk\Api\Service\BackendV2ApiAttemptException;
 use Blindleia\Dartkiosk\Api\Service\BackendV2ApiClient;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
-use Throwable;
 
 require __DIR__ . '/bootstrap.php';
 
