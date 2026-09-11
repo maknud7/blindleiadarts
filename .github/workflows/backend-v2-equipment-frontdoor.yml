@@ -64,7 +64,7 @@ jobs:
 
           APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/equipment-prod.php
-          php -r '$c=require "/tmp/equipment-prod.php"; $b=$c["backend_v2"]??[]; if (($b["equipment_routing_mode"]??null)!=="php") exit(1); if (($b["scoring_routing_mode"]??null)!=="candidate") exit(1);'
+          php -r '$c=require "/tmp/equipment-prod.php"; $b=$c["backend_v2"]??[]; if (($b["equipment_routing_mode"]??null)!=="node") exit(1); if (($b["scoring_routing_mode"]??null)!=="candidate") exit(1);'
 
       - name: Validate TEST Render bootstrap secrets
         env:
