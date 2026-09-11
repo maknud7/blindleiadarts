@@ -13,6 +13,7 @@ import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.
 import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
+import { MySqlTournamentRuntimeRepository } from "./mysql/tournament-runtime-repository.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
   assertIdentityMutationAllowed,
@@ -23,6 +24,7 @@ import {
   RuntimeAccessError,
 } from "./runtime/config.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
+import { TournamentRuntimeRouter } from "./runtime/tournament-runtime-router.js";
 import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
 import { IdentityAuthService } from "./service/identity-auth-service.js";
 
@@ -77,6 +79,14 @@ const accountProfiles = new MySqlAccountProfileRepository(
   config.prefixes.identity,
 );
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
+const tournaments = new MySqlTournamentRuntimeRepository(sessions, config.prefixes.runtime);
+const tournamentRuntime = new TournamentRuntimeRouter(
+  config,
+  identityRepository,
+  accountProfiles,
+  membership,
+  tournaments,
+);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
@@ -180,6 +190,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const tournamentRoute = await tournamentRuntime.handle(method, publicPath, request);
+  if (tournamentRoute !== null) {
+    sendJson(response, tournamentRoute.statusCode, tournamentRoute.payload);
     return;
   }
 
