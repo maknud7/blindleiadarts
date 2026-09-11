@@ -1,0 +1,70 @@
+name: Ops PROD Backup Inventory Once
+
+on:
+  push:
+    branches:
+      - ops/prod-backup-inventory-12e07
+    paths:
+      - '.github/prod-backup-inventory-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Inspect PROD tables read-only
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db = new mysqli(getenv("DB_HOST"), getenv("DB_USERNAME"), getenv("DB_PASSWORD"), getenv("DB_NAME"), (int)(getenv("DB_PORT") ?: 3306));
+            $db->set_charset("utf8mb4");
+            $schema = getenv("DB_NAME");
+            $stmt = $db->prepare("SELECT COUNT(*) AS table_count, COALESCE(SUM(data_length + index_length),0) AS bytes FROM information_schema.tables WHERE table_schema=? AND table_type=\"BASE TABLE\" AND table_name LIKE \"bd_prod\\_%\" ESCAPE \"\\\\\"");
+            $stmt->bind_param("s", $schema);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $count = (int)($row["table_count"] ?? 0);
+            $bytes = (int)($row["bytes"] ?? 0);
+            printf("PROD_TABLES=%d\n", $count);
+            printf("PROD_BYTES=%d\n", $bytes);
+            printf("PROD_MIB=%.2f\n", $bytes / 1048576);
+            if ($count < 1) { fwrite(STDERR, "No bd_prod_ base tables found.\n"); exit(1); }
+          '
+
+      - name: Inspect current public PROD release read-only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          body="$(curl -fsS --max-time 20 'https://blindleiadart.ingenting.org/release.json?cb='"$RANDOM")"
+          echo "$body" | jq -e '.environment == "prod"' >/dev/null
+          sha="$(echo "$body" | jq -r '.sha // .commit // .release_sha // empty')"
+          test -n "$sha" || { echo 'Could not resolve current PROD release SHA.' >&2; echo "$body" >&2; exit 1; }
+          echo "CURRENT_PROD_SHA=$sha"
+          {
+            echo '### PROD backup inventory'
+            echo
+            echo "Current PROD release: \`$sha\`"
+            echo
+            echo 'Read-only inventory completed; no database rows or schema were changed.'
+          } >> "$GITHUB_STEP_SUMMARY"
