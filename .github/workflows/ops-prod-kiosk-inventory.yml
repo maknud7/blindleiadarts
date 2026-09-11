@@ -1,0 +1,45 @@
+name: Ops PROD Kiosk Inventory Once
+
+on:
+  push:
+    branches:
+      - ops/prod-kiosk-inventory
+    paths:
+      - '.github/prod-kiosk-inventory-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: List current PROD kiosks read-only
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $db->set_charset("utf8mb4");
+            $res=$db->query("SELECT id,code,name,board_number,paired_at,last_seen_at FROM bd_prod_kiosks ORDER BY board_number,id");
+            $ids=[];
+            while($r=$res->fetch_assoc()){
+              $ids[]=(string)$r["id"];
+              printf("KIOSK id=%s board=%s code=%s name=%s paired=%s last_seen=%s\n",$r["id"],$r["board_number"]??"",$r["code"]??"",$r["name"]??"",$r["paired_at"]??"",$r["last_seen_at"]??"");
+            }
+            echo "CANARY_IDS=".implode(",",$ids)."\n";
+          '
