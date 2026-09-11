@@ -29,36 +29,39 @@ export class TournamentRuntimeRouter {
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentRouteResult | null> {
     const listMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/registration-tournaments$/.exec(path);
     if (method === "GET" && listMatch) {
+      const clubId = requiredCapture(listMatch, 1);
       return ok({
-        club_id: publicId(listMatch[1]),
-        items: await this.tournaments.listRegistrationTournamentsByClubId(listMatch[1]),
+        club_id: publicId(clubId),
+        items: await this.tournaments.listRegistrationTournamentsByClubId(clubId),
       });
     }
 
     const groupsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/groups$/.exec(path);
     if (method === "GET" && groupsMatch) {
-      return ok(await this.tournaments.getGroups(groupsMatch[1]));
+      return ok(await this.tournaments.getGroups(requiredCapture(groupsMatch, 1)));
     }
 
     const settingsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/registration-settings$/.exec(path);
     if ((method === "PUT" || method === "PATCH") && settingsMatch) {
+      const tournamentId = requiredCapture(settingsMatch, 1);
       assertMutationAllowed(this.config);
-      const tournament = await this.requireTournament(settingsMatch[1]);
+      const tournament = await this.requireTournament(tournamentId);
       const user = await this.requireUser(request);
       this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
       const body = await readJsonObject(request);
-      return ok({ tournament: await this.tournaments.updateRegistrationSettings(settingsMatch[1], body) });
+      return ok({ tournament: await this.tournaments.updateRegistrationSettings(tournamentId, body) });
     }
 
     const drawMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/groups\/draw$/.exec(path);
     if (method === "POST" && drawMatch) {
+      const tournamentId = requiredCapture(drawMatch, 1);
       assertMutationAllowed(this.config);
-      const tournament = await this.requireTournament(drawMatch[1]);
+      const tournament = await this.requireTournament(tournamentId);
       const user = await this.requireUser(request);
       this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
       const body = await readJsonObject(request);
       const result = await this.tournaments.drawGroups(
-        drawMatch[1],
+        tournamentId,
         body.group_count,
         typeof body.mode === "string" ? body.mode : "elo_snake",
         Object.prototype.hasOwnProperty.call(body, "draw_seed") ? body.draw_seed : null,
@@ -68,16 +71,18 @@ export class TournamentRuntimeRouter {
 
     const roundRobinMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/groups\/round-robin$/.exec(path);
     if (method === "POST" && roundRobinMatch) {
+      const tournamentId = requiredCapture(roundRobinMatch, 1);
       assertMutationAllowed(this.config);
-      const tournament = await this.requireTournament(roundRobinMatch[1]);
+      const tournament = await this.requireTournament(tournamentId);
       const user = await this.requireUser(request);
       this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
       const body = await readJsonObject(request);
-      return ok(await this.tournaments.generateRoundRobin(roundRobinMatch[1], body.best_of_legs), 201);
+      return ok(await this.tournaments.generateRoundRobin(tournamentId, body.best_of_legs), 201);
     }
 
     const selfRegistrationMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/register$/.exec(path);
     if (method === "POST" && selfRegistrationMatch) {
+      const tournamentId = requiredCapture(selfRegistrationMatch, 1);
       assertMutationAllowed(this.config);
       const user = await this.requireUser(request);
       const playerId = requiredPlayerId(user);
@@ -95,47 +100,52 @@ export class TournamentRuntimeRouter {
           403,
         );
       }
-      const registration = await this.tournaments.registerPlayer(selfRegistrationMatch[1], playerId, "player");
+      const registration = await this.tournaments.registerPlayer(tournamentId, playerId, "player");
       return ok({ registration, eligibility }, 201);
     }
 
     if (method === "DELETE" && selfRegistrationMatch) {
+      const tournamentId = requiredCapture(selfRegistrationMatch, 1);
       assertMutationAllowed(this.config);
       const user = await this.requireUser(request);
       const playerId = requiredPlayerId(user);
-      return ok({ registration: await this.tournaments.withdrawPlayer(selfRegistrationMatch[1], playerId) });
+      return ok({ registration: await this.tournaments.withdrawPlayer(tournamentId, playerId) });
     }
 
     const checkInMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/check-in$/.exec(path);
     if (method === "POST" && checkInMatch) {
+      const tournamentId = requiredCapture(checkInMatch, 1);
       assertMutationAllowed(this.config);
       const user = await this.requireUser(request);
       const playerId = requiredPlayerId(user);
-      return ok({ registration: await this.tournaments.checkInPlayer(checkInMatch[1], playerId) });
+      return ok({ registration: await this.tournaments.checkInPlayer(tournamentId, playerId) });
     }
 
     const adminRegistrationsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/registrations$/.exec(path);
     if (method === "POST" && adminRegistrationsMatch) {
+      const tournamentId = requiredCapture(adminRegistrationsMatch, 1);
       assertMutationAllowed(this.config);
-      const tournament = await this.requireTournament(adminRegistrationsMatch[1]);
+      const tournament = await this.requireTournament(tournamentId);
       const user = await this.requireUser(request);
       this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
       const body = await readJsonObject(request);
       const playerId = requiredId(body.player_id, "player_id");
       return ok(
-        { registration: await this.tournaments.registerPlayer(adminRegistrationsMatch[1], playerId, "admin") },
+        { registration: await this.tournaments.registerPlayer(tournamentId, playerId, "admin") },
         201,
       );
     }
 
     const adminWithdrawMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/registrations\/([1-9][0-9]*)$/.exec(path);
     if (method === "DELETE" && adminWithdrawMatch) {
+      const tournamentId = requiredCapture(adminWithdrawMatch, 1);
+      const playerId = requiredCapture(adminWithdrawMatch, 2);
       assertMutationAllowed(this.config);
-      const tournament = await this.requireTournament(adminWithdrawMatch[1]);
+      const tournament = await this.requireTournament(tournamentId);
       const user = await this.requireUser(request);
       this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
       return ok({
-        registration: await this.tournaments.withdrawPlayer(adminWithdrawMatch[1], adminWithdrawMatch[2]),
+        registration: await this.tournaments.withdrawPlayer(tournamentId, playerId),
       });
     }
 
@@ -192,6 +202,12 @@ function requiredPlayerId(user: IdentityUser): string {
     );
   }
   return playerId;
+}
+
+function requiredCapture(match: RegExpExecArray, index: number): string {
+  const value = match[index];
+  if (value === undefined) throw new RuntimeAccessError(400, "invalid_route", "Route parameter is missing.");
+  return value;
 }
 
 function requiredId(value: unknown, name: string): string {
