@@ -86,6 +86,9 @@ final class BackendV2PlayerLiveProxyApplication
         if (preg_match('#^/v1/players/\d+/profile$#', $path) === 1) return true;
         if (preg_match('#^/v1/players/\d+/elo-tournaments$#', $path) === 1) return true;
         if (preg_match('#^/v1/tournaments/\d+/live-highlights$#', $path) === 1) return true;
+        if (preg_match('#^/v1/clubs/\d+/seasons$#', $path) === 1) return true;
+        if (preg_match('#^/v1/seasons/\d+$#', $path) === 1) return true;
+        if (preg_match('#^/v1/seasons/\d+/standings$#', $path) === 1) return true;
         return false;
     }
 }
