@@ -3,8 +3,6 @@
 return [
     'app_env' => 'test',
     'base_url' => 'https://example.test/blindleiadarts/test',
-    // Member-account invitations belong to the shared identity namespace and
-    // should resolve on the canonical production origin even from test admin.
     'identity_base_url' => 'https://blindleiadarts.ingenting.org',
     'static_base_url' => 'https://example.test/blindleiadarts/test/static',
     'screen' => [
@@ -16,16 +14,15 @@ return [
         'publish_secret' => 'replace-me',
     ],
     'scolia' => [
-        // Shared secret used only between apps/scolia-bridge and the internal PHP API.
-        // The Scolia service-account access token itself is configured in Admin per club.
         'bridge_secret' => 'replace-with-a-long-random-secret',
     ],
     'backend_v2' => [
-        // Policy-only canary guard. PHP remains the sole writer until a later,
-        // separately reviewed single-writer backend-v2 client is introduced.
+        // Safe default: every scoring mutation remains on PHP unless candidate mode,
+        // HTTPS host, token and explicit kiosk allowlist are all configured.
         'scoring_routing_mode' => 'php',
         'base_url' => '',
         'canary_kiosk_ids' => '',
+        'internal_token' => '',
     ],
     'db' => [
         'host' => '127.0.0.1',
@@ -33,22 +30,13 @@ return [
         'database' => 'dart_database_name',
         'username' => 'dart_database_user',
         'password' => 'dart_database_password',
-        // Tournament/scoring/runtime data stays environment-specific.
         'table_prefix' => 'bd_test_',
-        // Accounts, sessions and permissions are shared with production in the
-        // deployed test environment. CI can omit/override this to remain isolated.
         'identity_table_prefix' => 'bd_prod_',
-        // Physical boards and their permanent configuration are one real registry.
-        // Test mode uses these boards but keeps test matches/scoring isolated.
         'hardware_table_prefix' => 'bd_prod_',
-        // 0 disables the gate. Hosted TEST uses 6 to keep margin below a
-        // provider max-connections ceiling while requests wait outside MySQL.
         'max_concurrent_connections' => 0,
         'connection_wait_ms' => 3000,
     ],
     'members_db' => [
-        // The member registry is shared for test and production and uses the same
-        // physical source as Blindleia admin. There is no copied test member base.
         'sqlconnect_path' => '/home/1/i/ingenting/dart/sqlconnect.php',
     ],
     'challonge' => [
