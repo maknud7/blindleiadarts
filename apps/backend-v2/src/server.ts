@@ -14,6 +14,8 @@ import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibi
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { MySqlTournamentFlowRepository } from "./mysql/tournament-flow-repository.js";
+import { MySqlTournamentOperationsRepository } from "./mysql/tournament-operations-repository.js";
+import { MySqlTournamentPlayoffRepository } from "./mysql/tournament-playoff-repository.js";
 import { MySqlTournamentRuntimeRepository } from "./mysql/tournament-runtime-repository.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
@@ -25,6 +27,8 @@ import {
   RuntimeAccessError,
 } from "./runtime/config.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
+import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
+import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
 import { TournamentRuntimeRouter } from "./runtime/tournament-runtime-router.js";
 import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
 import { IdentityAuthService } from "./service/identity-auth-service.js";
@@ -82,12 +86,26 @@ const accountProfiles = new MySqlAccountProfileRepository(
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
 const tournaments = new MySqlTournamentRuntimeRepository(sessions, config.prefixes.runtime);
 const tournamentFlow = new MySqlTournamentFlowRepository(sessions, config.prefixes.runtime);
+const tournamentOperations = new MySqlTournamentOperationsRepository(sessions, config.prefixes.runtime);
+const tournamentPlayoffs = new MySqlTournamentPlayoffRepository(sessions, config.prefixes.runtime);
+const tournamentRealtime = new TournamentRealtimePublisher({
+  publishUrl: config.realtime.publishUrl,
+  publishSecret: config.realtime.publishSecret,
+  timeoutMs: config.realtime.timeoutMs,
+});
 const tournamentRuntime = new TournamentRuntimeRouter(
   config,
   identityRepository,
   accountProfiles,
   membership,
   tournaments,
+);
+const tournamentOperationsRuntime = new TournamentOperationsRouter(
+  config,
+  identityRepository,
+  tournamentOperations,
+  tournamentPlayoffs,
+  tournamentRealtime,
 );
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
@@ -198,6 +216,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   const tournamentRoute = await tournamentRuntime.handle(method, publicPath, request);
   if (tournamentRoute !== null) {
     sendJson(response, tournamentRoute.statusCode, tournamentRoute.payload);
+    return;
+  }
+
+  const tournamentOperationsRoute = await tournamentOperationsRuntime.handle(method, publicPath, request);
+  if (tournamentOperationsRoute !== null) {
+    sendJson(response, tournamentOperationsRoute.statusCode, tournamentOperationsRoute.payload);
     return;
   }
 

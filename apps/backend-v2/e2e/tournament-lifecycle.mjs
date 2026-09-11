@@ -33,6 +33,7 @@ const fixture = {
   club: null,
   tournament: null,
   players: [],
+  kiosks: [],
   user: null,
   session: null,
 };
@@ -113,13 +114,110 @@ try {
   });
   assert.equal(locked.error.code, "registration_locked_by_matches");
 
+  await provider.withConnection(async (sql) => {
+    await sql.execute(
+      `UPDATE \`${prefix}tournament_players\` SET status='checked_in' WHERE tournament_id=? AND status='registered'`,
+      [fixture.tournament],
+    );
+  });
+
+  const defaultBoards = await getJson(`/v1/tournaments/${fixture.tournament}/operations/boards`);
+  assert.equal(defaultBoards.selection_initialized, false);
+  assert.equal(defaultBoards.boards.length, 3);
+  assert.ok(defaultBoards.boards.every((board) => board.selected === true));
+  assert.ok(defaultBoards.boards.every((board) => typeof board.id === "string"));
+
+  const selectedBoards = await putJson(`/v1/tournaments/${fixture.tournament}/operations/boards`, {
+    kiosk_ids: fixture.kiosks,
+  });
+  assert.equal(selectedBoards.selection_initialized, true);
+  assert.equal(selectedBoards.selected_count, 3);
+  assert.deepEqual(selectedBoards.boards.filter((board) => board.selected).map((board) => board.id), fixture.kiosks);
+
+  const firstPendingMatchId = String(await scalar(
+    `SELECT id AS value FROM \`${prefix}matches\` WHERE tournament_id=? AND status='pending' ORDER BY id LIMIT 1`,
+    [fixture.tournament],
+  ));
+  assert.match(firstPendingMatchId, /^[1-9][0-9]*$/);
+
+  const moved = await postJson(
+    `/v1/tournaments/${fixture.tournament}/operations/matches/${firstPendingMatchId}/move`,
+    { kiosk_id: fixture.kiosks[0] },
+  );
+  assert.equal(moved.move.moved, true);
+  assert.equal(moved.move.match_id, firstPendingMatchId);
+  assert.equal(moved.move.kiosk_id, fixture.kiosks[0]);
+  assert.equal(moved.move.status, "assigned");
+
+  const reconciled = await postJson(`/v1/tournaments/${fixture.tournament}/operations/reconcile`, {});
+  assert.equal(reconciled.assignment.assigned_count, 2);
+  assert.ok(reconciled.assignment.items.every((item) => typeof item.match_id === "string"));
+  assert.equal(reconciled.boards.filter((board) => board.active_match_id !== null).length, 3);
+
+  await provider.withConnection(async (sql) => {
+    await sql.execute(
+      `UPDATE \`${prefix}matches\`
+          SET status='completed',winner_player_id=player_a_id,kiosk_id=NULL,starts_at=COALESCE(starts_at,NOW()),finished_at=NOW()
+        WHERE tournament_id=? AND tournament_group_id IS NOT NULL`,
+      [fixture.tournament],
+    );
+  });
+
+  const playoffGenerated = await requestJson(`/v1/tournaments/${fixture.tournament}/playoffs/generate`, {
+    method: "POST",
+    body: { qualifiers_per_group: 2, best_of_legs: 3 },
+    expectedStatus: 201,
+  });
+  assert.equal(playoffGenerated.bracket.playoff.bracket_size, 4);
+  assert.equal(playoffGenerated.bracket.entries.length, 4);
+  assert.equal(playoffGenerated.bracket.rounds.length, 2);
+  assert.equal(playoffGenerated.bracket.rounds[0].nodes.length, 2);
+  assert.ok(playoffGenerated.bracket.entries.every((entry) => typeof entry.player_id === "string"));
+
+  const playoffRead = await getJson(`/v1/tournaments/${fixture.tournament}/playoffs`);
+  assert.equal(playoffRead.bracket.playoff.status, "ready");
+  assert.equal(playoffRead.bracket.rounds[0].label, "Semifinale");
+  assert.equal(playoffRead.bracket.rounds[1].label, "Finale");
+
+  await provider.withConnection(async (sql) => {
+    await sql.execute(
+      `UPDATE \`${prefix}matches\`
+          SET status='completed',winner_player_id=player_a_id,starts_at=COALESCE(starts_at,NOW()),finished_at=NOW()
+        WHERE tournament_id=? AND bracket_label='Sluttspill' AND round_number=101`,
+      [fixture.tournament],
+    );
+  });
+
+  const semifinalReconcile = await postJson(`/v1/tournaments/${fixture.tournament}/playoffs/reconcile`, {});
+  assert.equal(semifinalReconcile.bracket.rounds[0].nodes.every((node) => node.status === "completed"), true);
+  assert.equal(semifinalReconcile.bracket.rounds[1].nodes.length, 1);
+  assert.equal(semifinalReconcile.bracket.rounds[1].nodes[0].status, "pending");
+  assert.match(String(semifinalReconcile.bracket.rounds[1].nodes[0].match_id), /^[1-9][0-9]*$/);
+
+  await provider.withConnection(async (sql) => {
+    await sql.execute(
+      `UPDATE \`${prefix}matches\`
+          SET status='completed',winner_player_id=player_a_id,starts_at=COALESCE(starts_at,NOW()),finished_at=NOW()
+        WHERE tournament_id=? AND bracket_label='Sluttspill' AND round_number=102`,
+      [fixture.tournament],
+    );
+  });
+
+  const finalReconcile = await postJson(`/v1/tournaments/${fixture.tournament}/playoffs/reconcile`, {});
+  assert.equal(finalReconcile.bracket.playoff.status, "completed");
+  assert.match(String(finalReconcile.bracket.playoff.champion_player_id), /^[1-9][0-9]*$/);
+  assert.equal(finalReconcile.bracket.tournament.status, "completed");
+
   console.log(JSON.stringify({
     ok: true,
     scenario: "backend-v2-tournament-lifecycle",
     release_sha: config.releaseSha,
     runtime_prefix: prefix,
     tournament_id: fixture.tournament,
-    generated_matches: 12,
+    generated_group_matches: 12,
+    selected_boards: fixture.kiosks.length,
+    playoff_bracket_size: 4,
+    playoff_completed: true,
   }));
 } catch (error) {
   if (serverOutput) process.stderr.write(`\n--- backend-v2 server output ---\n${serverOutput}\n`);
@@ -144,6 +242,14 @@ async function createFixture() {
       [`Tournament E2E ${suffix}`, `tournament-e2e-${suffix}`],
     );
     fixture.club = requireInsertId(club, "club");
+
+    for (let index = 0; index < 3; index += 1) {
+      const kiosk = await sql.execute(
+        `INSERT INTO \`${prefix}kiosks\` (club_id,code,name,board_number,is_active) VALUES (?,?,?,?,1)`,
+        [fixture.club, `e2e-${suffix}-${index + 1}`, `Tournament E2E Board ${index + 1}`, index + 1],
+      );
+      fixture.kiosks.push(requireInsertId(kiosk, `kiosk ${index + 1}`));
+    }
 
     for (let index = 0; index < 9; index += 1) {
       const inserted = await sql.execute(
@@ -190,6 +296,19 @@ async function cleanupFixture() {
   try {
     await provider.withConnection(async (sql) => {
       if (fixture.tournament) {
+        await sql.execute(
+          `DELETE n FROM \`${prefix}tournament_playoff_nodes\` n
+            INNER JOIN \`${prefix}tournament_playoffs\` p ON p.id=n.playoff_id WHERE p.tournament_id=?`,
+          [fixture.tournament],
+        );
+        await sql.execute(
+          `DELETE e FROM \`${prefix}tournament_playoff_entries\` e
+            INNER JOIN \`${prefix}tournament_playoffs\` p ON p.id=e.playoff_id WHERE p.tournament_id=?`,
+          [fixture.tournament],
+        );
+        await sql.execute(`DELETE FROM \`${prefix}tournament_playoffs\` WHERE tournament_id=?`, [fixture.tournament]);
+        await sql.execute(`DELETE FROM \`${prefix}tournament_board_reservations\` WHERE tournament_id=?`, [fixture.tournament]);
+        await sql.execute(`DELETE FROM \`${prefix}tournament_kiosks\` WHERE tournament_id=?`, [fixture.tournament]);
         await sql.execute(`DELETE FROM \`${prefix}matches\` WHERE tournament_id=?`, [fixture.tournament]);
         await sql.execute(
           `DELETE gp FROM \`${prefix}tournament_group_players\` gp
@@ -201,6 +320,10 @@ async function cleanupFixture() {
         await sql.execute(`DELETE FROM \`${prefix}tournament_players\` WHERE tournament_id=?`, [fixture.tournament]);
         await sql.execute(`DELETE FROM \`${prefix}tournament_summaries\` WHERE tournament_id=?`, [fixture.tournament]);
       }
+      for (const kioskId of fixture.kiosks) {
+        await sql.execute(`DELETE FROM \`${prefix}scolia_visit_buffers\` WHERE kiosk_id=?`, [kioskId]);
+        await sql.execute(`DELETE FROM \`${prefix}scolia_board_runtime\` WHERE kiosk_id=?`, [kioskId]);
+      }
       if (fixture.session) await sql.execute(`DELETE FROM \`${prefix}auth_sessions\` WHERE id=?`, [fixture.session]);
       if (fixture.user) {
         await sql.execute(`DELETE FROM \`${prefix}global_user_roles\` WHERE user_account_id=?`, [fixture.user]);
@@ -210,6 +333,9 @@ async function cleanupFixture() {
       if (fixture.tournament) await sql.execute(`DELETE FROM \`${prefix}tournaments\` WHERE id=?`, [fixture.tournament]);
       for (const playerId of fixture.players) {
         await sql.execute(`DELETE FROM \`${prefix}players\` WHERE id=?`, [playerId]);
+      }
+      for (const kioskId of fixture.kiosks) {
+        await sql.execute(`DELETE FROM \`${prefix}kiosks\` WHERE id=?`, [kioskId]);
       }
       await sql.execute(`DELETE FROM \`${prefix}clubs\` WHERE id=?`, [fixture.club]);
     });
@@ -256,6 +382,10 @@ async function getJson(path) {
 
 async function postJson(path, body) {
   return requestJson(path, { method: "POST", body });
+}
+
+async function putJson(path, body) {
+  return requestJson(path, { method: "PUT", body });
 }
 
 async function deleteJson(path) {
