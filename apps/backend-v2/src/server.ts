@@ -13,6 +13,7 @@ import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
 import {
+  assertIdentityMutationAllowed,
   assertInternalToken,
   assertMutationAllowed,
   loadRuntimeConfig,
@@ -119,7 +120,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   }
 
   if (method === "POST" && publicPath === "/v1/auth/login") {
-    assertMutationAllowed(config);
+    assertIdentityMutationAllowed(config);
     const body = await readJsonObject(request);
     const result = await identityAuth.login(body.email ?? body.username, body.password);
     sendJson(response, 200, { ok: true, ...result });
@@ -127,7 +128,10 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   }
 
   if (method === "GET" && publicPath === "/v1/auth/me") {
-    const result = await identityAuth.me(bearerToken(request), mutationsAllowed(config));
+    const identityTouchAllowed =
+      (config.environment === "prod" && config.prefixes.identity === "bd_prod_" && mutationsAllowed(config)) ||
+      (config.environment === "test" && config.prefixes.identity === "bd_test_" && mutationsAllowed(config));
+    const result = await identityAuth.me(bearerToken(request), identityTouchAllowed);
     sendJson(response, 200, { ok: true, ...result });
     return;
   }
