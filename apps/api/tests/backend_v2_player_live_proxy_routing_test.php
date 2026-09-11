@@ -14,7 +14,11 @@ $proxy = new BackendV2PlayerLiveProxyApplication(dirname(__DIR__));
 
 foreach ([
     ['GET', '/v1/me/dashboard'],
+    ['GET', '/v1/clubs'],
+    ['GET', '/v1/clubs/1/player-directory'],
+    ['GET', '/v1/clubs/1/elo'],
     ['GET', '/v1/players/17/profile'],
+    ['GET', '/v1/players/17/matches'],
     ['GET', '/v1/players/17/elo-tournaments'],
     ['GET', '/v1/tournaments/429/live-highlights'],
     ['GET', '/v1/clubs/1/seasons'],
@@ -24,9 +28,12 @@ foreach ([
     $assert($proxy->handles($method, $path), "$method $path should route to backend-v2 player/live reads.");
 }
 
-// This front door is deliberately read-only. Season lifecycle mutations must
-// remain with the existing PHP writer until a dedicated single-writer cutover.
+// This front door is deliberately read-only. Club/player/season mutations must
+// remain with their existing writers until a dedicated single-writer cutover.
 foreach ([
+    ['POST', '/v1/clubs'],
+    ['POST', '/v1/clubs/1/players'],
+    ['PATCH', '/v1/players/17/profile'],
     ['POST', '/v1/clubs/1/seasons'],
     ['PATCH', '/v1/seasons/1'],
     ['PUT', '/v1/seasons/1'],
@@ -39,5 +46,6 @@ foreach ([
 
 $assert(!$proxy->handles('GET', '/v1/seasons/1/activate'), 'Unsupported season read path must not be captured.');
 $assert(!$proxy->handles('GET', '/v1/clubs/1/tournaments'), 'Unmigrated public reads must not be captured accidentally.');
+$assert(!$proxy->handles('GET', '/v1/matches/1/detail'), 'Match detail remains outside this read slice.');
 
 echo "BackendV2PlayerLiveProxy routing OK\n";

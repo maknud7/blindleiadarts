@@ -17,6 +17,7 @@ const baseUrl = `http://127.0.0.1:${config.port}`;
 let server = null;
 let serverOutput = "";
 let playerId = null;
+let playerClubId = null;
 let tournamentId = null;
 let seasonId = null;
 let seasonClubId = null;
@@ -25,9 +26,9 @@ const provider = makeProvider(false);
 try {
   await provider.withConnection(async (sql) => {
     const players = await sql.query(
-      `SELECT p.id
+      `SELECT p.id,p.club_id
          FROM \`${config.prefixes.runtime}players\` p
-        WHERE p.is_active=1
+        WHERE p.is_active=1 AND p.club_id IS NOT NULL
         ORDER BY (
           SELECT COUNT(*) FROM \`${config.prefixes.runtime}matches\` m
            WHERE m.player_a_id=p.id OR m.player_b_id=p.id
@@ -35,7 +36,9 @@ try {
         LIMIT 1`,
     );
     playerId = String(players[0]?.id ?? "");
+    playerClubId = String(players[0]?.club_id ?? "");
     assert.match(playerId, /^[1-9][0-9]*$/, "TEST runtime has no active player fixture");
+    assert.match(playerClubId, /^[1-9][0-9]*$/, "TEST player fixture has no club id");
 
     // Pick canonical historical data rather than the newest active tournament.
     // Other hosted E2Es create/delete active fixtures concurrently, so choosing
@@ -90,7 +93,7 @@ try {
     contact_phone: null,
     player_id: playerId,
     player_display_name: "Player Live E2E",
-    player_club_id: null,
+    player_club_id: playerClubId,
     member_id: null,
     admin_club_ids: "",
     global_roles: "",
@@ -106,6 +109,30 @@ try {
   server = startServer();
   await waitForReady();
 
+  const clubs = await requestJson("/v1/clubs");
+  assert.equal(clubs.ok, true);
+  assert.ok(Array.isArray(clubs.items));
+  assert.ok(clubs.items.some((club) => String(club.id) === playerClubId));
+  assert.ok(clubs.items.every((club) => Number.isInteger(Number(club.player_count))));
+
+  const directory = await requestJson(`/v1/clubs/${playerClubId}/player-directory`);
+  assert.equal(directory.ok, true);
+  assert.equal(String(directory.club_id), playerClubId);
+  assert.ok(Array.isArray(directory.items));
+  assert.ok(directory.items.length > 0, "Player club should expose a player directory");
+  assert.ok(directory.items.every((row) => typeof row.elo_rating === "number"));
+  assert.ok(directory.items.every((row) => typeof row.three_dart_average === "number"));
+
+  const clubElo = await requestJson(`/v1/clubs/${playerClubId}/elo`);
+  assert.equal(clubElo.ok, true);
+  assert.equal(String(clubElo.club_id), playerClubId);
+  assert.ok(Array.isArray(clubElo.items));
+  assert.equal(clubElo.items.length, directory.items.length);
+  assert.ok(clubElo.items.every((row, index) => Number(row.position) === index + 1));
+  for (let index = 1; index < clubElo.items.length; index += 1) {
+    assert.ok(Number(clubElo.items[index - 1].elo_rating) >= Number(clubElo.items[index].elo_rating));
+  }
+
   const profile = await requestJson(`/v1/players/${playerId}/profile`);
   assert.equal(profile.ok, true);
   assert.equal(String(profile.player.id), playerId);
@@ -113,6 +140,12 @@ try {
   assert.ok(profile.stats && typeof profile.stats === "object");
   assert.ok(Array.isArray(profile.recent_matches));
   assert.ok(Array.isArray(profile.elo_history));
+
+  const playerMatches = await requestJson(`/v1/players/${playerId}/matches`);
+  assert.equal(playerMatches.ok, true);
+  assert.equal(String(playerMatches.player_id), playerId);
+  assert.ok(Array.isArray(playerMatches.items));
+  assert.ok(playerMatches.items.every((match) => ["win", "loss", "draw"].includes(match.result)));
 
   const elo = await requestJson(`/v1/players/${playerId}/elo-tournaments`);
   assert.equal(elo.ok, true);
@@ -158,9 +191,13 @@ try {
     runtime_prefix: config.prefixes.runtime,
     identity_prefix: config.prefixes.identity,
     player_id: playerId,
+    player_club_id: playerClubId,
     tournament_id: tournamentId,
     season_id: seasonId,
     season_club_id: seasonClubId,
+    club_directory_verified: true,
+    club_elo_verified: true,
+    player_matches_verified: true,
     profile_verified: true,
     tournament_elo_verified: true,
     live_highlights_verified: true,

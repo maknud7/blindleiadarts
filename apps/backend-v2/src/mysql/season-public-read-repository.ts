@@ -1,3 +1,4 @@
+import { MySqlClubPlayerReadRepository } from "./club-player-read-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
 interface SeasonRow extends QueryResultRow {
@@ -30,10 +31,30 @@ type Standing = Record<string, unknown> & {
 };
 
 export class MySqlSeasonPublicReadRepository {
+  private readonly clubPlayers: MySqlClubPlayerReadRepository;
+
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly runtimePrefix: TablePrefix,
-  ) {}
+  ) {
+    this.clubPlayers = new MySqlClubPlayerReadRepository(sessions, runtimePrefix);
+  }
+
+  async listClubs(): Promise<Record<string, unknown>[]> {
+    return this.clubPlayers.listClubs();
+  }
+
+  async listPlayerDirectory(clubId: string): Promise<Record<string, unknown>[]> {
+    return this.clubPlayers.listPlayerDirectory(clubId);
+  }
+
+  async listEloTable(clubId: string): Promise<Record<string, unknown>[]> {
+    return this.clubPlayers.listEloTable(clubId);
+  }
+
+  async listPlayerMatches(playerId: string, limit = 200): Promise<Record<string, unknown>[] | null> {
+    return this.clubPlayers.listPlayerMatches(playerId, limit);
+  }
 
   async listByClub(clubId: string): Promise<Record<string, unknown>[]> {
     return this.sessions.withConnection(async (db) => {
