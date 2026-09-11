@@ -1,7 +1,7 @@
-release_sha=3f4e3c3c1bf78c5123741d564dd95e5e7598b79c
+release_sha=156547c382bb07d6541d145a07331e9e5fc73409
 backup_confirmed=YES
 migration_review_confirmed=NO
-requested_at=2026-09-11T18:13:05+02:00
-purpose=backend_v2_equipment_prod_cutover
-backup_prefix=bd_backup_20260911_160819_
-rollback_sha=12e07f42aab801dbedc0f1766e9fe78469055ec4
+requested_at=2026-09-11T23:24:00+02:00
+purpose=backend_v2_realtime_config_prod_cutover
+backup_prefix=bd_backup_20260911_212222_
+rollback_sha=3f4e3c3c1bf78c5123741d564dd95e5e7598b79c
