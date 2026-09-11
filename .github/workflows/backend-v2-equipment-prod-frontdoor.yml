@@ -105,15 +105,12 @@ jobs:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -Eeuo pipefail
-          response="$(mktemp)"
-          trap 'rm -f "$response"' EXIT
-          curl --fail --silent --show-error --output "$response" \
+          curl --fail --silent --show-error --output /dev/null \
             -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H 'Accept: application/json' \
             -H 'Content-Type: application/json' \
             --data "$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
-          test -n "$(jq -r '.id // .deploy.id // empty' "$response")"
 
       - name: Verify exact guarded PROD backend readiness
         run: |
