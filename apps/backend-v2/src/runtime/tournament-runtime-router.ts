@@ -50,6 +50,32 @@ export class TournamentRuntimeRouter {
       return ok({ tournament: await this.tournaments.updateRegistrationSettings(settingsMatch[1], body) });
     }
 
+    const drawMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/groups\/draw$/.exec(path);
+    if (method === "POST" && drawMatch) {
+      assertMutationAllowed(this.config);
+      const tournament = await this.requireTournament(drawMatch[1]);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
+      const body = await readJsonObject(request);
+      const result = await this.tournaments.drawGroups(
+        drawMatch[1],
+        body.group_count,
+        typeof body.mode === "string" ? body.mode : "elo_snake",
+        Object.prototype.hasOwnProperty.call(body, "draw_seed") ? body.draw_seed : null,
+      );
+      return ok(result);
+    }
+
+    const roundRobinMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/groups\/round-robin$/.exec(path);
+    if (method === "POST" && roundRobinMatch) {
+      assertMutationAllowed(this.config);
+      const tournament = await this.requireTournament(roundRobinMatch[1]);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
+      const body = await readJsonObject(request);
+      return ok(await this.tournaments.generateRoundRobin(roundRobinMatch[1], body.best_of_legs), 201);
+    }
+
     const selfRegistrationMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/register$/.exec(path);
     if (method === "POST" && selfRegistrationMatch) {
       assertMutationAllowed(this.config);
