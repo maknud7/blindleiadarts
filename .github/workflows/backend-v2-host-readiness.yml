@@ -1,0 +1,78 @@
+name: Backend v2 Host Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      host_url:
+        description: 'Public HTTPS base URL for the persistent backend-v2 host'
+        required: true
+        type: string
+      release_sha:
+        description: 'Exact 40-character Git SHA expected from /health and /ready'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-v2-host-readiness-${{ inputs.host_url }}
+  cancel-in-progress: false
+
+jobs:
+  verify-readonly-host:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate workflow inputs
+        env:
+          HOST_URL: ${{ inputs.host_url }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          case "$HOST_URL" in
+            https://*) ;;
+            *) echo 'host_url must use HTTPS.' >&2; exit 1 ;;
+          esac
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo 'release_sha must be a full 40-character Git SHA.' >&2
+            exit 1
+          fi
+
+      - name: Verify persistent host is exact release and read-only
+        env:
+          HOST_URL: ${{ inputs.host_url }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node apps/backend-v2/scripts/verify-host-readiness.mjs \
+            --url "$HOST_URL" \
+            --release-sha "$RELEASE_SHA" \
+            | tee backend-v2-host-readiness.json
+
+      - name: Record verified host
+        if: success()
+        env:
+          HOST_URL: ${{ inputs.host_url }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        shell: bash
+        run: |
+          {
+            echo '### Backend v2 persistent host verified'
+            echo
+            echo "Host: \`$HOST_URL\`"
+            echo "Release: \`$RELEASE_SHA\`"
+            echo
+            echo 'Verified: prod + readonly, writes disarmed, canonical side effects ready, bd_prod_ schema, one MySQL slot, idle-reuse, and required scoring tables readable.'
+            echo
+            echo '**This verification does not enable PROD writes or route any user/kiosk/Scolia traffic.**'
+          } >> "$GITHUB_STEP_SUMMARY"
