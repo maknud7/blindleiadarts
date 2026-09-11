@@ -12,7 +12,7 @@ export interface PlayoffQualifier {
   readonly points: number;
   readonly leg_diff: number;
   readonly legs_won: number;
-  readonly playoff_seed?: number;
+  playoff_seed?: number;
 }
 
 export function bracketSize(qualifierCount: number): number {
@@ -80,7 +80,7 @@ function compareQualifierTier(a: PlayoffQualifier, b: PlayoffQualifier): number 
     result = (a.seed_number ?? Number.MAX_SAFE_INTEGER) - (b.seed_number ?? Number.MAX_SAFE_INTEGER);
     if (result !== 0) return result;
   }
-  return a.display_name.localeCompare(b.display_name, undefined, { sensitivity: "accent" });
+  return compareNames(a.display_name, b.display_name);
 }
 
 function reduceSameGroupFirstRoundConflicts(qualifiers: PlayoffQualifier[]): void {
@@ -137,6 +137,12 @@ function requiredSeed(qualifier: PlayoffQualifier): number {
     throw new TypeError("playoff_seed must be assigned before bracket materialization");
   }
   return qualifier.playoff_seed!;
+}
+
+function compareNames(a: string, b: string): number {
+  const left = a.toLocaleLowerCase("nb-NO");
+  const right = b.toLocaleLowerCase("nb-NO");
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function assertPowerOfTwo(size: number): void {
