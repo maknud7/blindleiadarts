@@ -1,4 +1,5 @@
 import { DomainValidationError } from "../domain/errors.js";
+import { TournamentGroupService, type TournamentSeedCandidate } from "../service/tournament-group-service.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
 type RegistrationSource = "player" | "admin";
@@ -22,10 +23,17 @@ interface TournamentRow extends QueryResultRow {
   registration_state?: unknown;
 }
 
+interface InternalGroup {
+  id: string;
+  name: string;
+  players: Array<{ player_id: string }>;
+}
+
 export class MySqlTournamentRuntimeRepository {
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly prefix: TablePrefix,
+    private readonly groupService = new TournamentGroupService(),
   ) {}
 
   async findTournament(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
@@ -78,7 +86,7 @@ export class MySqlTournamentRuntimeRepository {
         : nullableString(tournament.registration_closes_at);
       const maxPlayers = Object.prototype.hasOwnProperty.call(payload, "max_players")
         ? nullablePositiveInt(payload.max_players)
-        : nullablePositiveInt(tournament.max_players, true);
+        : nullablePositiveInt(tournament.max_players);
 
       if (opensAt !== null && closesAt !== null && opensAt >= closesAt) {
         throw new DomainValidationError(
@@ -120,7 +128,7 @@ export class MySqlTournamentRuntimeRepository {
       const clubId = requiredId(tournament.club_id, "club_id");
       await this.assertPlayerBelongsToTournamentClubWith(db, playerId, clubId);
 
-      const maxPlayers = nullablePositiveInt(tournament.max_players, true);
+      const maxPlayers = nullablePositiveInt(tournament.max_players);
       let status = "registered";
       if (maxPlayers !== null) {
         const confirmed = await this.confirmedRegistrationCountWith(db, tournamentId, playerId);
@@ -218,55 +226,257 @@ export class MySqlTournamentRuntimeRepository {
     });
   }
 
-  async getGroups(tournamentIdInput: unknown): Promise<Record<string, unknown>> {
+  async drawGroups(
+    tournamentIdInput: unknown,
+    groupCountInput: unknown,
+    modeInput: unknown,
+    drawSeedInput: unknown = null,
+  ): Promise<Record<string, unknown>> {
     const tournamentId = requiredId(tournamentIdInput, "tournament_id");
-    return this.sessions.withConnection(async (db) => {
+    const groupCount = positiveInt(groupCountInput, "group_count");
+    const mode = typeof modeInput === "string" ? modeInput : "elo_snake";
+
+    return this.sessions.withTransaction(async (db) => {
       const tournament = await this.requireTournamentWith(db, tournamentId);
-      const rows = await db.query<QueryResultRow>(
-        `SELECT g.id AS group_id, g.name AS group_name, g.sort_order, g.draw_mode, g.draw_seed, g.generated_at,
-                gp.position, gp.seed_number, gp.seed_rating, gp.seed_rating_source,
-                tp.id AS tournament_player_id, tp.status AS registration_status,
-                p.id AS player_id, p.display_name, p.nickname
-           FROM \`${this.prefix}tournament_groups\` g
-           LEFT JOIN \`${this.prefix}tournament_group_players\` gp ON gp.group_id=g.id
-           LEFT JOIN \`${this.prefix}tournament_players\` tp ON tp.id=gp.tournament_player_id
-           LEFT JOIN \`${this.prefix}players\` p ON p.id=tp.player_id
-          WHERE g.tournament_id=?
-          ORDER BY g.sort_order ASC, gp.position ASC`,
+      if ((await this.matchCountWith(db, tournamentId)) > 0) {
+        throw new DomainValidationError(
+          "groups_locked_by_matches",
+          "Groups cannot be redrawn after matches have been created.",
+        );
+      }
+      const seasonId = decimalId(tournament.season_id);
+      const registrations = await this.listSeedCandidatesWith(db, tournamentId, seasonId);
+      const allocation = this.groupService.allocate(registrations, groupCount, mode, drawSeedInput);
+
+      await db.execute(`DELETE FROM \`${this.prefix}tournament_groups\` WHERE tournament_id=?`, [tournamentId]);
+      await db.execute(
+        `UPDATE \`${this.prefix}tournament_players\`
+            SET seed=NULL, seed_rating=NULL, seed_rating_source=NULL
+          WHERE tournament_id=?`,
         [tournamentId],
       );
-      const groups = new Map<string, Record<string, unknown>>();
-      for (const row of rows) {
-        const groupId = requiredId(row.group_id, "group_id");
-        let group = groups.get(groupId);
-        if (!group) {
-          group = {
-            id: publicId(groupId),
-            name: row.group_name ?? null,
-            sort_order: numberValue(row.sort_order),
-            draw_mode: row.draw_mode ?? null,
-            draw_seed: numberValue(row.draw_seed),
-            generated_at: row.generated_at ?? null,
-            players: [],
-          };
-          groups.set(groupId, group);
-        }
-        const playerId = decimalId(row.player_id);
-        if (playerId !== null) {
-          (group.players as Record<string, unknown>[]).push({
-            tournament_player_id: publicId(requiredId(row.tournament_player_id, "tournament_player_id")),
-            player_id: publicId(playerId),
-            display_name: row.display_name ?? null,
-            nickname: row.nickname ?? null,
-            registration_status: row.registration_status ?? null,
-            position: numberValue(row.position),
-            seed_number: row.seed_number == null ? null : numberValue(row.seed_number),
-            seed_rating: row.seed_rating == null ? null : Number(row.seed_rating),
-            seed_rating_source: row.seed_rating_source ?? null,
-          });
+
+      for (const group of allocation.groups) {
+        const inserted = await db.execute(
+          `INSERT INTO \`${this.prefix}tournament_groups\` (tournament_id, name, sort_order, draw_mode, draw_seed)
+           VALUES (?, ?, ?, ?, ?)`,
+          [tournamentId, group.name, group.sort_order, allocation.mode, allocation.draw_seed],
+        );
+        const groupId = requiredId(inserted.insertId, "group_id");
+        for (const player of group.players) {
+          await db.execute(
+            `INSERT INTO \`${this.prefix}tournament_group_players\`
+              (group_id, tournament_player_id, position, seed_number, seed_rating, seed_rating_source)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              groupId,
+              player.tournament_player_id,
+              player.group_position,
+              player.seed_number,
+              player.seed_rating,
+              player.elo_rating_source,
+            ],
+          );
+          await db.execute(
+            `UPDATE \`${this.prefix}tournament_players\`
+                SET seed=?, seed_rating=?, seed_rating_source=?
+              WHERE tournament_id=? AND id=?`,
+            [
+              player.seed_number,
+              player.seed_rating,
+              player.elo_rating_source,
+              tournamentId,
+              player.tournament_player_id,
+            ],
+          );
         }
       }
-      return { tournament: publicTournament(tournament), groups: [...groups.values()] };
+
+      await db.execute(
+        `UPDATE \`${this.prefix}tournaments\`
+            SET group_count=?, group_draw_mode=?, group_draw_seed=?, group_drawn_at=NOW()
+          WHERE id=?`,
+        [groupCount, allocation.mode, allocation.draw_seed, tournamentId],
+      );
+      return this.getGroupsWith(db, tournamentId);
+    });
+  }
+
+  async generateRoundRobin(tournamentIdInput: unknown, bestOfLegsInput: unknown): Promise<Record<string, unknown>> {
+    const tournamentId = requiredId(tournamentIdInput, "tournament_id");
+    const bestOfLegs = positiveInt(bestOfLegsInput, "best_of_legs");
+    if (bestOfLegs > 21 || bestOfLegs % 2 === 0) {
+      throw new DomainValidationError(
+        "invalid_best_of_legs",
+        "best_of_legs must be an odd number between 1 and 21.",
+      );
+    }
+
+    return this.sessions.withTransaction(async (db) => {
+      await this.requireTournamentWith(db, tournamentId);
+      if ((await this.matchCountWith(db, tournamentId)) > 0) {
+        throw new DomainValidationError(
+          "matches_already_exist",
+          "Round robin cannot be generated because this tournament already has matches.",
+        );
+      }
+      const groups = await this.internalGroupsWith(db, tournamentId);
+      if (groups.length === 0) {
+        throw new DomainValidationError("groups_required", "Draw groups before generating round robin matches.");
+      }
+      const legsToWin = Math.floor(bestOfLegs / 2) + 1;
+      let created = 0;
+      for (const group of groups) {
+        const rounds = this.groupService.roundRobin(group.players);
+        for (let roundIndex = 0; roundIndex < rounds.length; roundIndex += 1) {
+          const round = rounds[roundIndex] ?? [];
+          for (const pair of round) {
+            await db.execute(
+              `INSERT INTO \`${this.prefix}matches\`
+                (tournament_id, tournament_group_id, round_label, round_number, bracket_label, status,
+                 best_of_legs, legs_to_win, player_a_id, player_b_id)
+               VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+              [
+                tournamentId,
+                group.id,
+                `${group.name} · Runde ${roundIndex + 1}`,
+                roundIndex + 1,
+                group.name,
+                bestOfLegs,
+                legsToWin,
+                pair.player_a_id,
+                pair.player_b_id,
+              ],
+            );
+            created += 1;
+          }
+        }
+      }
+      return {
+        tournament_id: publicId(tournamentId),
+        created_match_count: created,
+        best_of_legs: bestOfLegs,
+      };
+    });
+  }
+
+  async getGroups(tournamentIdInput: unknown): Promise<Record<string, unknown>> {
+    const tournamentId = requiredId(tournamentIdInput, "tournament_id");
+    return this.sessions.withConnection((db) => this.getGroupsWith(db, tournamentId));
+  }
+
+  private async getGroupsWith(db: SqlExecutor, tournamentId: string): Promise<Record<string, unknown>> {
+    const tournament = await this.requireTournamentWith(db, tournamentId);
+    const rows = await db.query<QueryResultRow>(
+      `SELECT g.id AS group_id, g.name AS group_name, g.sort_order, g.draw_mode, g.draw_seed, g.generated_at,
+              gp.position, gp.seed_number, gp.seed_rating, gp.seed_rating_source,
+              tp.id AS tournament_player_id, tp.status AS registration_status,
+              p.id AS player_id, p.display_name, p.nickname
+         FROM \`${this.prefix}tournament_groups\` g
+         LEFT JOIN \`${this.prefix}tournament_group_players\` gp ON gp.group_id=g.id
+         LEFT JOIN \`${this.prefix}tournament_players\` tp ON tp.id=gp.tournament_player_id
+         LEFT JOIN \`${this.prefix}players\` p ON p.id=tp.player_id
+        WHERE g.tournament_id=?
+        ORDER BY g.sort_order ASC, gp.position ASC`,
+      [tournamentId],
+    );
+    const groups = new Map<string, Record<string, unknown>>();
+    for (const row of rows) {
+      const groupId = requiredId(row.group_id, "group_id");
+      let group = groups.get(groupId);
+      if (!group) {
+        const drawSeed = decimalId(row.draw_seed);
+        group = {
+          id: publicId(groupId),
+          name: row.group_name ?? null,
+          sort_order: numberValue(row.sort_order),
+          draw_mode: row.draw_mode ?? null,
+          draw_seed: drawSeed === null ? null : publicId(drawSeed),
+          generated_at: row.generated_at ?? null,
+          players: [],
+        };
+        groups.set(groupId, group);
+      }
+      const playerId = decimalId(row.player_id);
+      if (playerId !== null) {
+        (group.players as Record<string, unknown>[]).push({
+          tournament_player_id: publicId(requiredId(row.tournament_player_id, "tournament_player_id")),
+          player_id: publicId(playerId),
+          display_name: row.display_name ?? null,
+          nickname: row.nickname ?? null,
+          registration_status: row.registration_status ?? null,
+          position: numberValue(row.position),
+          seed_number: row.seed_number == null ? null : numberValue(row.seed_number),
+          seed_rating: row.seed_rating == null ? null : Number(row.seed_rating),
+          seed_rating_source: row.seed_rating_source ?? null,
+        });
+      }
+    }
+    return { tournament: publicTournament(tournament), groups: [...groups.values()] };
+  }
+
+  private async internalGroupsWith(db: SqlExecutor, tournamentId: string): Promise<InternalGroup[]> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT g.id AS group_id, g.name AS group_name, p.id AS player_id
+         FROM \`${this.prefix}tournament_groups\` g
+         LEFT JOIN \`${this.prefix}tournament_group_players\` gp ON gp.group_id=g.id
+         LEFT JOIN \`${this.prefix}tournament_players\` tp ON tp.id=gp.tournament_player_id
+         LEFT JOIN \`${this.prefix}players\` p ON p.id=tp.player_id
+        WHERE g.tournament_id=?
+        ORDER BY g.sort_order ASC, gp.position ASC`,
+      [tournamentId],
+    );
+    const groups = new Map<string, InternalGroup>();
+    for (const row of rows) {
+      const groupId = requiredId(row.group_id, "group_id");
+      let group = groups.get(groupId);
+      if (!group) {
+        group = { id: groupId, name: String(row.group_name ?? ""), players: [] };
+        groups.set(groupId, group);
+      }
+      const playerId = decimalId(row.player_id);
+      if (playerId !== null) group.players.push({ player_id: playerId });
+    }
+    return [...groups.values()];
+  }
+
+  private async listSeedCandidatesWith(
+    db: SqlExecutor,
+    tournamentId: string,
+    seasonId: string | null,
+  ): Promise<TournamentSeedCandidate[]> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT tp.id AS tournament_player_id, tp.player_id, p.display_name, p.nickname,
+              (SELECT rs.points FROM \`${this.prefix}ranking_snapshots\` rs
+                WHERE rs.player_id=p.id AND rs.ranking_type='elo'
+                  AND (? IS NULL OR rs.season_id=? OR rs.season_id IS NULL)
+                ORDER BY CASE WHEN rs.season_id <=> ? THEN 0 ELSE 1 END, rs.calculated_at DESC, rs.id DESC
+                LIMIT 1) AS elo_rating
+         FROM \`${this.prefix}tournament_players\` tp
+         INNER JOIN \`${this.prefix}players\` p ON p.id=tp.player_id
+        WHERE tp.tournament_id=? AND tp.status IN ('registered','checked_in')
+        ORDER BY p.display_name ASC`,
+      [seasonId, seasonId, seasonId, tournamentId],
+    );
+    return rows.map((row) => {
+      const displayName = String(row.display_name ?? "");
+      const snapshotRating = row.elo_rating == null ? null : Number(row.elo_rating);
+      const baseline = ELO_BASELINE.get(displayName.trim().toLocaleLowerCase("nb-NO"));
+      const rating = snapshotRating !== null && Number.isFinite(snapshotRating)
+        ? snapshotRating
+        : baseline ?? 1000;
+      return {
+        tournament_player_id: requiredId(row.tournament_player_id, "tournament_player_id"),
+        player_id: requiredId(row.player_id, "player_id"),
+        display_name: displayName,
+        nickname: row.nickname == null ? null : String(row.nickname),
+        elo_rating: rating,
+        elo_rating_source: snapshotRating !== null && Number.isFinite(snapshotRating)
+          ? "ranking_snapshot"
+          : baseline !== undefined
+            ? "mandagsserien_2026_08_24"
+            : "default_1000",
+      };
     });
   }
 
@@ -309,8 +519,8 @@ export class MySqlTournamentRuntimeRepository {
   private async confirmedRegistrationCountWith(db: SqlExecutor, tournamentId: string, excludePlayerId: string): Promise<number> {
     const rows = await db.query<QueryResultRow>(
       `SELECT COUNT(*) AS cnt FROM \`${this.prefix}tournament_players\`
-        WHERE tournament_id=? AND status IN ('registered','checked_in','paused') AND player_id<>?`,
-      [tournamentId, excludePlayerId],
+        WHERE tournament_id=? AND status IN ('registered','checked_in','paused') AND (?='0' OR player_id<>?)`,
+      [tournamentId, excludePlayerId, excludePlayerId],
     );
     return numberValue(rows[0]?.cnt);
   }
@@ -330,7 +540,7 @@ export class MySqlTournamentRuntimeRepository {
 
   private async promoteWaitlistedPlayerWith(db: SqlExecutor, tournamentId: string): Promise<string | null> {
     const tournament = await this.requireTournamentWith(db, tournamentId);
-    const maxPlayers = nullablePositiveInt(tournament.max_players, true);
+    const maxPlayers = nullablePositiveInt(tournament.max_players);
     if (maxPlayers === null || (await this.confirmedRegistrationCountWith(db, tournamentId, "0")) >= maxPlayers) {
       return null;
     }
@@ -368,6 +578,26 @@ export class MySqlTournamentRuntimeRepository {
   }
 }
 
+const ELO_BASELINE = new Map<string, number>([
+  ["andre kendrick", 1077.3],
+  ["jon-henning næss", 1067.3],
+  ["vetle ribe davidsen", 1035.2],
+  ["thomas kildal", 1031.5],
+  ["arild eidesund", 1024.9],
+  ["hans øyvind reiersen", 1019.3],
+  ["magnus knudsen", 1018.3],
+  ["steffen madsen", 1001.7],
+  ["kjell moyle", 1001.4],
+  ["tormod haga", 992.3],
+  ["andreas hasselgård", 986.3],
+  ["tor egil olsen", 983.0],
+  ["andreas tingstveit hansen", 974.3],
+  ["leif atle franksson", 966.7],
+  ["sven einar davidsen", 953.7],
+  ["dan christian birkeland", 939.5],
+  ["boye buckingham", 921.0],
+]);
+
 function registrationStateSql(alias: string): string {
   return `CASE
     WHEN ${alias}.status IN ('completed','archived') THEN 'closed'
@@ -393,7 +623,7 @@ function publicTournament(row: TournamentRow): Record<string, unknown> {
     group_count: row.group_count == null ? null : numberValue(row.group_count),
     group_draw_mode: row.group_draw_mode ?? null,
     ...(Object.prototype.hasOwnProperty.call(row, "group_draw_seed")
-      ? { group_draw_seed: row.group_draw_seed == null ? null : numberValue(row.group_draw_seed) }
+      ? { group_draw_seed: optionalPublicId(row.group_draw_seed) }
       : {}),
     group_drawn_at: row.group_drawn_at ?? null,
     registration_state: row.registration_state ?? null,
@@ -410,16 +640,27 @@ function nullableDateTime(value: unknown): string | null {
   return new Date(parsed).toISOString().slice(0, 19).replace("T", " ");
 }
 
-function nullablePositiveInt(value: unknown, allowExistingNull = false): number | null {
+function nullablePositiveInt(value: unknown): number | null {
   if (value === null || value === undefined || String(value).trim() === "") return null;
   const normalized = String(value).trim();
   if (!/^[0-9]+$/.test(normalized)) {
-    if (allowExistingNull && value == null) return null;
     throw new DomainValidationError("invalid_max_players", "max_players must be at least 2 when set.");
   }
   const number = Number(normalized);
   if (!Number.isSafeInteger(number) || number < 2) {
     throw new DomainValidationError("invalid_max_players", "max_players must be at least 2 when set.");
+  }
+  return number;
+}
+
+function positiveInt(value: unknown, name: string): number {
+  const normalized = String(value ?? "").trim();
+  if (!/^[1-9][0-9]*$/.test(normalized)) {
+    throw new DomainValidationError(`invalid_${name}`, `${name} must be a positive integer.`);
+  }
+  const number = Number(normalized);
+  if (!Number.isSafeInteger(number)) {
+    throw new DomainValidationError(`invalid_${name}`, `${name} is too large.`);
   }
   return number;
 }
