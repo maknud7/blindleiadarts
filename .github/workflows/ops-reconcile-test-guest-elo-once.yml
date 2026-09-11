@@ -1,0 +1,50 @@
+name: Ops Reconcile TEST Guest ELO Once
+
+on:
+  push:
+    branches:
+      - ops/reconcile-test-guest-elo-once
+    paths:
+      - '.ops-reconcile-test-guest-elo-marker'
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+      - name: Generate TEST config
+        run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
+        env:
+          APP_ENV: test
+          BASE_URL: https://test.blindleiadarts.ingenting.org
+          STATIC_BASE_URL: https://test.blindleiadarts.ingenting.org
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          SCOLIA_BRIDGE_SECRET: test-only
+      - name: Reconcile TEST guest ELO only
+        run: php infra/sql/elo_guest_reconcile.php
+      - name: Verify ELO ledger invariant
+        run: php infra/sql/elo_ledger_doctor.php
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
