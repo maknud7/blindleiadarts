@@ -6,6 +6,7 @@ use Blindleia\Dartkiosk\Api\AccountProfileApplication;
 use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
+use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
@@ -103,6 +104,14 @@ if ($membershipEligibility->run()) {
 
 $paymentSettings = new PaymentSettingsApplication(__DIR__);
 if ($paymentSettings->run()) {
+    return;
+}
+
+// Player/public/live reads keep the Domeneshop same-origin API contract while
+// the implementation is migrated to backend-v2. The proxy is GET-only and
+// fail-closed after a Node attempt.
+$playerLiveV2 = new BackendV2PlayerLiveProxyApplication(__DIR__);
+if ($playerLiveV2->run()) {
     return;
 }
 
