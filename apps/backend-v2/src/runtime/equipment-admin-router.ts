@@ -58,6 +58,31 @@ export class EquipmentAdminRouter {
       return ok({ kiosk: updated });
     }
 
+    const screens = /^\/v1\/clubs\/([1-9][0-9]*)\/screen-devices$/.exec(path);
+    if (screens && method === "GET") {
+      const clubId = capture(screens, 1);
+      await this.requireAdmin(request, clubId);
+      return ok({ club_id: clubId, items: await this.scoliaDashboard.listScreenDevices(clubId) });
+    }
+    if (screens && method === "POST") {
+      const clubId = capture(screens, 1);
+      await this.requireAdmin(request, clubId);
+      assertMutationAllowed(this.config);
+      const body = await readJsonObject(request);
+      return ok({ device: await this.scoliaDashboard.createScreenDevice(clubId, body.label) }, 201);
+    }
+
+    const screen = /^\/v1\/clubs\/([1-9][0-9]*)\/screen-devices\/([1-9][0-9]*)$/.exec(path);
+    if (screen && method === "DELETE") {
+      const clubId = capture(screen, 1);
+      const screenId = capture(screen, 2);
+      await this.requireSuperAdmin(request);
+      assertMutationAllowed(this.config);
+      const deleted = await this.scoliaDashboard.deleteScreenDevice(clubId, screenId);
+      if (!deleted) throw new DomainValidationError("screen_not_found", "Venue-skjermen ble ikke funnet i valgt klubb.", 404);
+      return ok({ deleted: true, kind: "screen", id: screenId });
+    }
+
     const resetPairing = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks\/([1-9][0-9]*)\/reset-pairing$/.exec(path);
     if (method === "POST" && resetPairing) {
       const clubId = capture(resetPairing, 1);
@@ -230,6 +255,17 @@ export class EquipmentAdminRouter {
         .filter((value) => /^[1-9][0-9]*$/.test(value)),
     );
     if (!clubIds.has(clubId)) throw new RuntimeAccessError(403, "club_access_denied", "You cannot manage this club.");
+    return user;
+  }
+
+  private async requireSuperAdmin(request: IncomingMessage): Promise<IdentityUser> {
+    const token = bearerToken(request);
+    if (token === null) throw new RuntimeAccessError(401, "authentication_required", "Authentication is required.");
+    const user = await this.identityRepository.findBySessionToken(token, this.identityTouchAllowed());
+    if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Session is invalid or expired.");
+    if (String(user.role ?? "") !== "super_admin") {
+      throw new RuntimeAccessError(403, "super_admin_required", "Bare superadmin kan slette klubbutstyr.");
+    }
     return user;
   }
 
