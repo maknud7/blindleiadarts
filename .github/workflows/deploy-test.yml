@@ -34,6 +34,7 @@ jobs:
       - name: Validate deployment configuration
         env:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          TEST_BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_NAME: ${{ secrets.DB_NAME }}
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
@@ -42,11 +43,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -n "$BASE_URL"
+          test -n "$TEST_BACKEND_V2_BASE_URL" || { echo 'TEST_BACKEND_V2_BASE_URL is required for the equipment Node frontdoor.' >&2; exit 1; }
           test -n "$DB_HOST"
           test -n "$DB_NAME"
           test -n "$SFTP_HOST"
           test -n "$SFTP_USERNAME"
           test -n "$SFTP_PASSWORD"
+
+          health="$(curl -fsS --max-time 20 "${TEST_BACKEND_V2_BASE_URL%/}/health")"
+          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
 
       - name: Migrate test database
         run: php infra/sql/migrate.php
@@ -72,6 +77,8 @@ jobs:
           REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
           SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          BACKEND_V2_EQUIPMENT_ROUTING_MODE: node
+          BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -98,6 +105,8 @@ jobs:
           IDENTITY_TABLE_PREFIX: bd_prod_
 
       - name: Package sanity check
+        env:
+          TEST_BACKEND_V2_BASE_URL: ${{ vars.TEST_BACKEND_V2_BASE_URL }}
         run: |
           set -Eeuo pipefail
           test -f dist/test/release.json
@@ -109,6 +118,9 @@ jobs:
           test -f dist/test/api/src/SeasonApplication.php
           test -f dist/test/api/src/Repository/SeasonRepository.php
           test -f dist/test/api/src/TournamentCheckinApplication.php
+          test -f dist/test/api/src/BackendV2EquipmentProxyApplication.php
+          test -f dist/test/api/src/Service/BackendV2ApiClient.php
+          test -f dist/test/api/src/Service/BackendV2ApiAttemptException.php
           test -f dist/test/api/test-player-candidates.php
           test -f dist/test/api/kiosk-scolia-ui.php
           test -f dist/test/admin/scolia-admin.js
@@ -142,6 +154,8 @@ jobs:
           test -f dist/test/kiosk/scolia-live-ux.js
           test -f dist/test/kiosk/scolia-live-ux.css
           php -l dist/test/api/kiosk-scolia-ui.php >/dev/null
+          php -l dist/test/api/src/BackendV2EquipmentProxyApplication.php >/dev/null
+          php -l dist/test/api/src/Service/BackendV2ApiClient.php >/dev/null
           grep -Fq 'viewport-fit=cover' dist/test/onboarding/index.html
           grep -Fq 'data-toggle-password' dist/test/onboarding/index.html
           grep -Fq 'portal-brand.css' dist/test/packages/ui-assets/portal-menu.js
@@ -180,6 +194,8 @@ jobs:
           grep -Fq "'table_prefix' => 'bd_test_'" dist/test/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/test/api/config.php
           grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/test/api/config.php
+          grep -Fq "'equipment_routing_mode' => 'node'" dist/test/api/config.php
+          php -r '$c=require "dist/test/api/config.php"; $b=$c["backend_v2"]??[]; if (($b["base_url"]??null)!==getenv("TEST_BACKEND_V2_BASE_URL")) exit(1); if (($b["scoring_routing_mode"]??null)!=="php") exit(1);'
           grep -Fq "'test_player' ELSE 'prod_identity'" dist/test/api/test-player-candidates.php
           grep -Fq 'alle aktive spillere i TEST' dist/test/admin/test-tournament-tools.js
 
@@ -276,6 +292,18 @@ jobs:
           check_contains "Scolia live kiosk JS" "$base/kiosk/scolia-live-ux.js" "Angre siste Scolia-kast"
           check_contains "Scolia live kiosk CSS" "$base/kiosk/scolia-live-ux.css" ".scolia-darts-grid"
           check_status_contains "Scolia kiosk UI endpoint guard" "$base/api/kiosk-scolia-ui.php" "422" "kiosk_context_required"
+
+          echo "VERIFY: equipment same-origin Node frontdoor"
+          clubs="$(curl -fsS --max-time 15 "$base/api/v1/clubs")"
+          club_id="$(jq -r '.data.items[] | select(.slug == "blindleia-dartklubb") | .id' <<<"$clubs" | head -n1)"
+          test -n "$club_id" && [[ "$club_id" != "null" ]]
+          headers_file="$(mktemp)"
+          body_file="$(mktemp)"
+          equipment_status="$(curl -sS --max-time 20 -D "$headers_file" -o "$body_file" -w '%{http_code}' "$base/api/v1/clubs/$club_id/kiosks")"
+          grep -Eiq '^x-bd-backend-v2:[[:space:]]*equipment' "$headers_file"
+          [[ "$equipment_status" == "200" ]]
+          jq -e '.ok == true and (.data.items | type == "array")' "$body_file" >/dev/null
+          rm -f "$headers_file" "$body_file"
 
           echo "VERIFY: activity endpoint write"
           activity_ok="no"
