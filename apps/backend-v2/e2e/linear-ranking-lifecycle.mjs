@@ -20,6 +20,8 @@ const provider = new MySql2SessionProvider({
   connectTimeoutMs: config.mysql.connectTimeoutMs,
   budget: config.mysql.budget,
   writable: true,
+  connectionReuse: "idle-reuse",
+  idleConnectionTimeoutMs: 60_000,
 });
 const prefix = config.prefixes.runtime;
 const suffix = randomBytes(6).toString("hex");
@@ -27,6 +29,10 @@ const fixture = { club: null, season: null, playerA: null, playerB: null, tourna
 const ranking = new MySqlLinearRankingProjection(provider, prefix);
 
 try {
+  // Only the initial read-only connectivity probe may retry. After the first
+  // fixture write every ranking operation is single-attempt canonical work.
+  await establishReadOnlyConnection();
+
   const players = await existingPlayers();
   assert.equal(players.length, 2, "ranking E2E requires two existing TEST players in the same club");
   fixture.club = players[0].club_id;
@@ -72,6 +78,23 @@ try {
 } finally {
   await cleanupFixture();
   await provider.close();
+}
+
+async function establishReadOnlyConnection() {
+  const attempts = 3;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await provider.withConnection(async (sql) => {
+        const rows = await sql.query("SELECT 1 AS ok");
+        assert.equal(Number(rows[0]?.ok), 1, "TEST MySQL connectivity probe returned an unexpected value");
+      });
+      return;
+    } catch (error) {
+      if (attempt === attempts || !isInitialConnectivityError(error)) throw error;
+      console.warn(`TEST MySQL initial connectivity failed (${connectionErrorCode(error)}); retrying read-only probe ${attempt + 1}/${attempts}`);
+      await sleep(attempt * 3_000);
+    }
+  }
 }
 
 async function existingPlayers() {
@@ -140,6 +163,19 @@ async function cleanupFixture() {
   } catch (error) {
     console.error("backend-v2 ranking E2E cleanup failed", error);
   }
+}
+
+function isInitialConnectivityError(error) {
+  return ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH"].includes(connectionErrorCode(error));
+}
+
+function connectionErrorCode(error) {
+  if (!error || typeof error !== "object" || !("code" in error)) return "unknown";
+  return String(error.code ?? "unknown");
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function requireInsertId(result, name) {
