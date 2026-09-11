@@ -9,7 +9,8 @@ use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
-use Blindleia\Dartkiosk\Api\Service\CanonicalScoringService;
+use Blindleia\Dartkiosk\Api\Service\BackendV2ScoringAttemptException;
+use Blindleia\Dartkiosk\Api\Service\RoutedScoringMutationService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use mysqli_sql_exception;
@@ -41,6 +42,16 @@ final class MatchScoringApplication
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
+        } catch (BackendV2ScoringAttemptException $error) {
+            // A backend-v2 mutation was attempted or may have committed. Never repeat
+            // the mutation through PHP. Return the failure and require reconciliation.
+            $status = $error->httpStatus();
+            if ($status === null || $status < 400 || $status > 599) $status = 502;
+            $response = JsonResponse::error(
+                $status,
+                $error->backendErrorCode() ?: 'backend_v2_scoring_failed',
+                $error->getMessage()
+            );
         } catch (mysqli_sql_exception $error) {
             $response = JsonResponse::error(
                 500,
@@ -72,7 +83,8 @@ final class MatchScoringApplication
         $pairingToken = $request->header('x-kiosk-pairing-token');
         $kiosks = new KioskRepository($database);
 
-        // Pairing/access is transport-specific. The actual scoring mutation is not.
+        // Pairing/access is transport-specific. The actual scoring mutation is routed
+        // exactly once after the canonical kiosk id is resolved.
         $before = $kiosks->findKioskStateByCode($kioskCode, $pairingToken);
         if ($before === null) {
             return JsonResponse::error(404, 'kiosk_not_found', 'No kiosk exists for the supplied kiosk code.');
@@ -84,7 +96,7 @@ final class MatchScoringApplication
             return JsonResponse::error(409, 'kiosk_state_invalid', 'Kiosk state is missing its canonical id.');
         }
 
-        $scoring = new CanonicalScoringService($database, $config);
+        $scoring = RoutedScoringMutationService::fromRuntime($database, $config);
         if ($action === 'start-match') {
             $scoring->startMatch($kioskId, 'manual');
         } elseif ($action === 'visit') {
@@ -93,6 +105,8 @@ final class MatchScoringApplication
             $scoring->undoLastVisit($kioskId, 'manual');
         }
 
+        // PHP and backend-v2 share the canonical database, so the public response
+        // remains the existing kiosk snapshot regardless of which writer was chosen.
         $state = $kiosks->findKioskStateByCode($kioskCode, $pairingToken);
         if ($state === null) {
             return JsonResponse::error(404, 'kiosk_not_found', 'Kiosk disappeared after the scoring mutation.');
