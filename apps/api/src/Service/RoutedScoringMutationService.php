@@ -35,7 +35,7 @@ final class RoutedScoringMutationService implements ScoringMutationPort
 
         return new self(
             BackendV2ScoringRoutingPolicy::fromConfig($config),
-            new CanonicalScoringService($database, $config),
+            new PhpCanonicalScoringAdapter(new CanonicalScoringService($database, $config)),
             $client
         );
     }
