@@ -48,9 +48,10 @@ $bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
 // Scoring was cut over to backend-v2 for the four canonical PROD boards after
 // successful TEST and synthetic PROD single-writer canaries. PROD config builds
 // must therefore preserve that routing by default; otherwise an ordinary deploy
-// would silently revert scoring to the PHP writer. TEST/development remain PHP
-// by default and can still opt into explicit canaries through environment vars.
+// would silently revert scoring to the PHP writer. Equipment has an independent
+// gate so TEST can prove the same-origin PHP -> Node path before PROD is changed.
 $defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
+$defaultBackendV2EquipmentRoutingMode = 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
@@ -73,6 +74,7 @@ $config = [
     ],
     'backend_v2' => [
         'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', $defaultBackendV2RoutingMode) ?? $defaultBackendV2RoutingMode,
+        'equipment_routing_mode' => env_optional('BACKEND_V2_EQUIPMENT_ROUTING_MODE', $defaultBackendV2EquipmentRoutingMode) ?? $defaultBackendV2EquipmentRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
         'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
         'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', $defaultBackendV2InternalToken) ?? $defaultBackendV2InternalToken,
