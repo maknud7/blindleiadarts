@@ -1,0 +1,246 @@
+name: Ops Backend v2 HTTP Canary Once
+
+on:
+  push:
+    branches:
+      - ops/backend-v2-http-canary
+    paths:
+      - '.github/workflows/ops-backend-v2-http-canary.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-backend-v2-http-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    environment: test
+    env:
+      TEST_BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+      NODE_BASE_URL: https://blindleia-backend-v2-test.onrender.com
+    steps:
+      - name: Checkout exact deployed scoring cutover
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Verify TEST Node host is armed only for TEST
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 10 "$NODE_BASE_URL/health" >"$body"; then
+              break
+            fi
+            sleep 5
+          done
+          grep -Eq '"environment"[[:space:]]*:[[:space:]]*"test"' "$body"
+          grep -Eq '"mode"[[:space:]]*:[[:space:]]*"test-write"' "$body"
+          grep -Eq '"writes_armed"[[:space:]]*:[[:space:]]*true' "$body"
+          grep -Eq '"runtime_prefix"[[:space:]]*:[[:space:]]*"bd_test_"' "$body"
+          grep -Eq '"max_connections"[[:space:]]*:[[:space:]]*1' "$body"
+
+      - name: Create isolated TEST fixture
+        id: fixture
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > /tmp/create_fixture.php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $db = new mysqli(getenv('DB_HOST'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'), getenv('DB_NAME'), (int) getenv('DB_PORT'));
+          $db->set_charset('utf8mb4');
+          $p = 'bd_test_';
+          $suffix = strtolower(bin2hex(random_bytes(6)));
+          $clubName = 'HTTP Canary ' . $suffix;
+          $clubSlug = 'http-canary-' . $suffix;
+          $stmt = $db->prepare("INSERT INTO `{$p}clubs` (name,slug) VALUES (?,?)");
+          $stmt->bind_param('ss', $clubName, $clubSlug); $stmt->execute(); $clubId=(int)$stmt->insert_id; $stmt->close();
+          $players=[];
+          foreach (['HTTP Canary A','HTTP Canary B'] as $name) {
+            $stmt=$db->prepare("INSERT INTO `{$p}players` (club_id,display_name) VALUES (?,?)");
+            $stmt->bind_param('is',$clubId,$name); $stmt->execute(); $players[]=(int)$stmt->insert_id; $stmt->close();
+          }
+          $tn='HTTP Canary Tournament '.$suffix; $ts='http-canary-tournament-'.$suffix;
+          $stmt=$db->prepare("INSERT INTO `{$p}tournaments` (club_id,name,slug,provider_system,status,start_at) VALUES (?,?,?,'local','ready',NOW())");
+          $stmt->bind_param('iss',$clubId,$tn,$ts); $stmt->execute(); $tournamentId=(int)$stmt->insert_id; $stmt->close();
+          $code='BV2HTTP-'.strtoupper(substr($suffix,0,8));
+          $pairingToken=bin2hex(random_bytes(24)); $pairingHash=password_hash($pairingToken,PASSWORD_DEFAULT);
+          $board=997;
+          $stmt=$db->prepare("INSERT INTO `{$p}kiosks` (club_id,code,name,board_number,pairing_token_hash,paired_device_name,paired_at,last_seen_at) VALUES (?,?, 'Backend v2 HTTP Canary', ?, ?, 'GitHub canary', NOW(), NOW())");
+          $stmt->bind_param('isis',$clubId,$code,$board,$pairingHash); $stmt->execute(); $kioskId=(int)$stmt->insert_id; $stmt->close();
+          $stmt=$db->prepare("INSERT INTO `{$p}matches` (tournament_id,kiosk_id,status,best_of_legs,legs_to_win,player_a_id,player_b_id) VALUES (?,?,'assigned',1,1,?,?)");
+          $stmt->bind_param('iiii',$tournamentId,$kioskId,$players[0],$players[1]); $stmt->execute(); $matchId=(int)$stmt->insert_id; $stmt->close();
+          $out=getenv('GITHUB_OUTPUT');
+          file_put_contents($out, "club_id={$clubId}\nplayer_a={$players[0]}\nplayer_b={$players[1]}\ntournament_id={$tournamentId}\nkiosk_id={$kioskId}\nkiosk_code={$code}\npairing_token={$pairingToken}\nmatch_id={$matchId}\n", FILE_APPEND);
+          echo "Created isolated TEST canary fixture kiosk={$kioskId} match={$matchId}\n";
+          PHP
+          php /tmp/create_fixture.php
+
+      - name: Generate temporary candidate and rollback configs
+        env:
+          APP_ENV: test
+          BASE_URL: ${{ env.TEST_BASE_URL }}
+          STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
+          CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
+          CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
+          CHALLONGE_REDIRECT_URI: ${{ vars.TEST_CHALLONGE_REDIRECT_URI || 'https://test.blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback' }}
+          BACKEND_V2_BASE_URL: https://blindleia-backend-v2-test.onrender.com
+          BACKEND_V2_INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          BACKEND_V2_CANARY_KIOSK_IDS: ${{ steps.fixture.outputs.kiosk_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate/api rollback/api
+          BACKEND_V2_SCORING_ROUTING_MODE=candidate php infra/deploy/generate_api_config.php --output=candidate/api/config.php
+          BACKEND_V2_SCORING_ROUTING_MODE=php BACKEND_V2_BASE_URL='' BACKEND_V2_INTERNAL_TOKEN='' BACKEND_V2_CANARY_KIOSK_IDS='' \
+            php infra/deploy/generate_api_config.php --output=rollback/api/config.php
+          grep -Fq "'scoring_routing_mode' => 'candidate'" candidate/api/config.php
+          grep -Fq "'canary_kiosk_ids' => '${{ steps.fixture.outputs.kiosk_id }}'" candidate/api/config.php
+          grep -Fq "'scoring_routing_mode' => 'php'" rollback/api/config.php
+
+      - name: Activate isolated TEST canary config
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./candidate/*
+          remote_path: /www/blindleiadarts/test
+          sftp_only: true
+
+      - name: Exercise public PHP to Node single-writer path
+        env:
+          KIOSK_CODE: ${{ steps.fixture.outputs.kiosk_code }}
+          PAIRING_TOKEN: ${{ steps.fixture.outputs.pairing_token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${TEST_BASE_URL%/}/api/v1/kiosks/$KIOSK_CODE"
+          call() {
+            local action="$1" payload="$2"
+            curl --fail --silent --show-error --max-time 20 \
+              -X POST -H 'Content-Type: application/json' \
+              -H "X-Kiosk-Pairing-Token: $PAIRING_TOKEN" \
+              --data "$payload" "$base/$action"
+          }
+          call start-match '{}' >/tmp/start.json
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' /tmp/start.json
+          call visit '{"input_mode":"sum","score":60,"darts_used":3,"request_id":"http-canary-${{ github.run_id }}"}' >/tmp/visit.json
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' /tmp/visit.json
+          call undo '{}' >/tmp/undo.json
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' /tmp/undo.json
+          echo 'Public PHP scoring endpoint completed start -> visit -> undo while candidate routing was active.'
+
+      - name: Verify canonical DB result after Node round trip
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MATCH_ID: ${{ steps.fixture.outputs.match_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $id=(int)getenv("MATCH_ID");
+            $r=$db->query("SELECT status FROM bd_test_matches WHERE id={$id}")->fetch_assoc();
+            if (($r["status"]??"") !== "in_progress") throw new RuntimeException("Match was not started through canary route.");
+            $c=(int)$db->query("SELECT COUNT(*) c FROM bd_test_visits WHERE match_id={$id}")->fetch_assoc()["c"];
+            if ($c !== 0) throw new RuntimeException("Undo did not leave zero visits after canary round trip.");
+            $legs=(int)$db->query("SELECT COUNT(*) c FROM bd_test_legs WHERE match_id={$id}")->fetch_assoc()["c"];
+            if ($legs < 1) throw new RuntimeException("Node did not create/retain canonical leg state.");
+            echo "Canonical TEST state verified after HTTP canary.\n";
+          '
+
+      - name: Restore normal PHP TEST routing
+        if: always()
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./rollback/*
+          remote_path: /www/blindleiadarts/test
+          sftp_only: true
+
+      - name: Cleanup isolated TEST fixture
+        if: always()
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          CLUB_ID: ${{ steps.fixture.outputs.club_id }}
+          PLAYER_A: ${{ steps.fixture.outputs.player_a }}
+          PLAYER_B: ${{ steps.fixture.outputs.player_b }}
+          TOURNAMENT_ID: ${{ steps.fixture.outputs.tournament_id }}
+          KIOSK_ID: ${{ steps.fixture.outputs.kiosk_id }}
+          MATCH_ID: ${{ steps.fixture.outputs.match_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $match=(int)getenv("MATCH_ID"); $kiosk=(int)getenv("KIOSK_ID"); $t=(int)getenv("TOURNAMENT_ID"); $club=(int)getenv("CLUB_ID");
+            if ($match) {
+              foreach (["match_statistics","live_match_states","visits","legs"] as $table) $db->query("DELETE FROM bd_test_{$table} WHERE match_id={$match}");
+              $db->query("DELETE FROM bd_test_matches WHERE id={$match}");
+            }
+            if ($kiosk) $db->query("DELETE FROM bd_test_kiosks WHERE id={$kiosk}");
+            if ($t) { $db->query("DELETE FROM bd_test_tournament_summaries WHERE tournament_id={$t}"); $db->query("DELETE FROM bd_test_tournaments WHERE id={$t}"); }
+            foreach ([(int)getenv("PLAYER_A"),(int)getenv("PLAYER_B")] as $player) if ($player) $db->query("DELETE FROM bd_test_players WHERE id={$player}");
+            if ($club) $db->query("DELETE FROM bd_test_clubs WHERE id={$club}");
+            echo "Isolated TEST canary fixture removed.\n";
+          '
+
+      - name: Record result
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo '### Backend v2 HTTP canary passed'
+            echo
+            echo 'Public TEST PHP endpoint routed one isolated scoring fixture to the persistent backend-v2 TEST host.'
+            echo 'The canonical start -> visit -> undo lifecycle passed and TEST routing was restored to PHP afterwards.'
+            echo 'No physical board and no PROD table was mutated.'
+          } >> "$GITHUB_STEP_SUMMARY"
