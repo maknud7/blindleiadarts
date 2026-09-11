@@ -1,0 +1,4 @@
+release_sha=12e07f42aab801dbedc0f1766e9fe78469055ec4
+kiosks=1,2,3,4
+requested_at=2026-09-11T11:58:00+02:00
+purpose=persistent_prod_scoring_node_cutover
