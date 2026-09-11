@@ -25,6 +25,7 @@ on:
       - 'package.json'
       - '.github/workflows/backend-v2.yml'
       - '.github/workflows/backend-v2-host-readiness.yml'
+      - '.github/workflows/backend-v2-render-bootstrap.yml'
   workflow_dispatch:
 
 permissions:
@@ -75,6 +76,7 @@ jobs:
           test -f apps/backend-v2/src/service/canonical-scoring-service.ts
           test -f apps/backend-v2/scripts/verify-host-readiness.mjs
           test -f .github/workflows/backend-v2-host-readiness.yml
+          test -f .github/workflows/backend-v2-render-bootstrap.yml
           ! test -e apps/backend-v2/src/runtime/core-only-side-effects.ts
           ! test -e apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
@@ -122,6 +124,16 @@ jobs:
           grep -Fq 'Verify persistent host is exact release and read-only' .github/workflows/backend-v2-host-readiness.yml
           ! grep -Fq 'pull_request:' .github/workflows/backend-v2-host-readiness.yml
           ! grep -Fq 'push:' .github/workflows/backend-v2-host-readiness.yml
+
+          # Render secret bootstrap must remain explicit, pinned and read-only.
+          grep -Fq 'workflow_dispatch:' .github/workflows/backend-v2-render-bootstrap.yml
+          grep -Fq 'contents: read' .github/workflows/backend-v2-render-bootstrap.yml
+          grep -Fq 'RENDER_API_KEY' .github/workflows/backend-v2-render-bootstrap.yml
+          grep -Fq 'srv-dahq6o142hec73a1dr10' .github/workflows/backend-v2-render-bootstrap.yml
+          grep -Fq 'b6d9862ff7644ae43701668b8e0adf0f16064645' .github/workflows/backend-v2-render-bootstrap.yml
+          grep -Fq 'Wait for exact read-only host readiness' .github/workflows/backend-v2-render-bootstrap.yml
+          ! grep -Fq 'pull_request:' .github/workflows/backend-v2-render-bootstrap.yml
+          ! grep -Fq 'push:' .github/workflows/backend-v2-render-bootstrap.yml
 
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
