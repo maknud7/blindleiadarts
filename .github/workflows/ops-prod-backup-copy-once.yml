@@ -1,0 +1,111 @@
+name: Ops PROD Backup Copy Once
+
+on:
+  push:
+    branches:
+      - ops/prod-backup-inventory-12e07
+    paths:
+      - '.github/prod-backup-copy-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      BACKUP_PREFIX: bd_backup_20260911_105700_
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Copy and verify every PROD base table
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $db = new mysqli(getenv('DB_HOST'), getenv('DB_USERNAME'), getenv('DB_PASSWORD'), getenv('DB_NAME'), (int)(getenv('DB_PORT') ?: 3306));
+          $db->set_charset('utf8mb4');
+          $schema = getenv('DB_NAME');
+          $backupPrefix = getenv('BACKUP_PREFIX');
+          if (!preg_match('/^bd_backup_[0-9]{8}_[0-9]{6}_$/', $backupPrefix)) {
+              throw new RuntimeException('Unsafe BACKUP_PREFIX.');
+          }
+
+          $stmt = $db->prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=? AND table_type='BASE TABLE' AND table_name LIKE 'bd_prod\\_%' ESCAPE '\\\\' ORDER BY table_name");
+          $stmt->bind_param('s', $schema);
+          $stmt->execute();
+          $tables = array_map(static fn(array $r): string => (string)$r['table_name'], $stmt->get_result()->fetch_all(MYSQLI_ASSOC));
+          $stmt->close();
+          if (count($tables) !== 55) {
+              throw new RuntimeException('Expected 55 bd_prod_ base tables from verified inventory, found ' . count($tables) . '.');
+          }
+
+          $existingStmt = $db->prepare("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema=? AND table_name LIKE CONCAT(?, '%')");
+          $existingStmt->bind_param('ss', $schema, $backupPrefix);
+          $existingStmt->execute();
+          $existing = (int)($existingStmt->get_result()->fetch_assoc()['c'] ?? 0);
+          $existingStmt->close();
+          if ($existing !== 0) {
+              throw new RuntimeException('Backup prefix already exists; refusing to overwrite.');
+          }
+
+          $copied = 0;
+          foreach ($tables as $source) {
+              if (!preg_match('/^bd_prod_[A-Za-z0-9_]+$/', $source)) {
+                  throw new RuntimeException('Unsafe source table name: ' . $source);
+              }
+              $suffix = substr($source, strlen('bd_prod_'));
+              $target = $backupPrefix . $suffix;
+              if (!preg_match('/^[A-Za-z0-9_]+$/', $target)) {
+                  throw new RuntimeException('Unsafe target table name: ' . $target);
+              }
+
+              $db->query("CREATE TABLE `{$target}` LIKE `{$source}`");
+              $db->query("INSERT INTO `{$target}` SELECT * FROM `{$source}`");
+              $sourceCount = (int)($db->query("SELECT COUNT(*) AS c FROM `{$source}`")->fetch_assoc()['c'] ?? -1);
+              $targetCount = (int)($db->query("SELECT COUNT(*) AS c FROM `{$target}`")->fetch_assoc()['c'] ?? -2);
+              if ($sourceCount !== $targetCount) {
+                  throw new RuntimeException("Row-count mismatch {$source}={$sourceCount} {$target}={$targetCount}");
+              }
+              $copied++;
+              echo "VERIFIED {$source} rows={$sourceCount}\n";
+          }
+
+          $verifyStmt = $db->prepare("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema=? AND table_type='BASE TABLE' AND table_name LIKE CONCAT(?, '%')");
+          $verifyStmt->bind_param('ss', $schema, $backupPrefix);
+          $verifyStmt->execute();
+          $backupTables = (int)($verifyStmt->get_result()->fetch_assoc()['c'] ?? 0);
+          $verifyStmt->close();
+          if ($copied !== 55 || $backupTables !== 55) {
+              throw new RuntimeException("Incomplete snapshot: copied={$copied} tables={$backupTables}");
+          }
+          echo "BACKUP_COMPLETE prefix={$backupPrefix} tables={$backupTables}\n";
+          PHP
+
+      - name: Record verified backup
+        shell: bash
+        run: |
+          {
+            echo '### Verified PROD snapshot complete'
+            echo
+            echo "Prefix: \`$BACKUP_PREFIX\`"
+            echo 'Tables: `55/55`'
+            echo
+            echo 'Every copied table matched its source row count at snapshot time.'
+          } >> "$GITHUB_STEP_SUMMARY"
