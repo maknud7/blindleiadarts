@@ -37,8 +37,8 @@ jobs:
           HARDWARE_TABLE_PREFIX: bd_prod_
           MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
           SCOLIA_BRIDGE_SECRET: test-only
-      - name: Reconcile TEST guest ELO only
-        run: php infra/sql/elo_guest_reconcile.php
+      - name: Replay canonical TEST ELO
+        run: php infra/sql/elo_canonical_replay.php
       - name: Verify ELO ledger invariant
         run: php infra/sql/elo_ledger_doctor.php
         env:
