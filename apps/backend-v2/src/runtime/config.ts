@@ -220,6 +220,8 @@ function constantTimeEqual(expected: string, actual: string): boolean {
   const actualBytes = Buffer.from(actual);
   if (expectedBytes.length !== actualBytes.length) return false;
   let mismatch = 0;
-  for (let index = 0; index < expectedBytes.length; index += 1) mismatch |= expectedBytes[index] ^ actualBytes[index];
+  for (let index = 0; index < expectedBytes.length; index += 1) {
+    mismatch |= (expectedBytes[index] ?? 0) ^ (actualBytes[index] ?? 0);
+  }
   return mismatch === 0;
 }
