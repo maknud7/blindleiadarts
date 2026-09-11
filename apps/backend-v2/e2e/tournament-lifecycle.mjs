@@ -52,14 +52,18 @@ try {
   assert.equal(Number(listed.max_players), 8);
 
   for (const playerId of fixture.players.slice(0, 8)) {
-    const response = await postJson(`/v1/tournaments/${fixture.tournament}/registrations`, {
-      player_id: playerId,
+    const response = await requestJson(`/v1/tournaments/${fixture.tournament}/registrations`, {
+      method: "POST",
+      body: { player_id: playerId },
+      expectedStatus: 201,
     });
     assert.equal(response.registration.status, "registered");
   }
 
-  const waitlisted = await postJson(`/v1/tournaments/${fixture.tournament}/registrations`, {
-    player_id: fixture.players[8],
+  const waitlisted = await requestJson(`/v1/tournaments/${fixture.tournament}/registrations`, {
+    method: "POST",
+    body: { player_id: fixture.players[8] },
+    expectedStatus: 201,
   });
   assert.equal(waitlisted.registration.status, "waitlisted");
 
@@ -83,8 +87,10 @@ try {
   assert.equal(groups.groups.length, 2);
   assert.deepEqual(groups.groups.map((group) => group.players.length), [4, 4]);
 
-  const generated = await postJson(`/v1/tournaments/${fixture.tournament}/groups/round-robin`, {
-    best_of_legs: 3,
+  const generated = await requestJson(`/v1/tournaments/${fixture.tournament}/groups/round-robin`, {
+    method: "POST",
+    body: { best_of_legs: 3 },
+    expectedStatus: 201,
   });
   assert.equal(generated.created_match_count, 12);
   assert.equal(generated.best_of_legs, 3);
