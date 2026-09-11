@@ -20,6 +20,15 @@ export class PlayerLiveReadRouter {
   async handle(method: string, path: string, request: IncomingMessage): Promise<PlayerLiveReadRouteResult | null> {
     if (method !== "GET") return null;
 
+    if (path === "/v1/realtime/config") {
+      const websocketUrl = this.config.realtime.websocketUrl ?? "";
+      return ok({
+        enabled: websocketUrl !== "",
+        transport: websocketUrl !== "" ? "websocket" : "sse",
+        websocket_url: websocketUrl,
+      });
+    }
+
     if (path === "/v1/me/dashboard") {
       const user = await this.requireUser(request);
       return ok({
