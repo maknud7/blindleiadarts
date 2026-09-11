@@ -1,5 +1,6 @@
 import { MySqlClubPlayerReadRepository } from "./club-player-read-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
+import { MySqlTournamentPublicReadRepository } from "./tournament-public-read-repository.js";
 
 interface SeasonRow extends QueryResultRow {
   readonly id?: unknown;
@@ -32,12 +33,14 @@ type Standing = Record<string, unknown> & {
 
 export class MySqlSeasonPublicReadRepository {
   private readonly clubPlayers: MySqlClubPlayerReadRepository;
+  private readonly tournamentReads: MySqlTournamentPublicReadRepository;
 
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly runtimePrefix: TablePrefix,
   ) {
     this.clubPlayers = new MySqlClubPlayerReadRepository(sessions, runtimePrefix);
+    this.tournamentReads = new MySqlTournamentPublicReadRepository(sessions, runtimePrefix);
   }
 
   async listClubs(): Promise<Record<string, unknown>[]> {
@@ -54,6 +57,26 @@ export class MySqlSeasonPublicReadRepository {
 
   async listPlayerMatches(playerId: string, limit = 200): Promise<Record<string, unknown>[] | null> {
     return this.clubPlayers.listPlayerMatches(playerId, limit);
+  }
+
+  async tournamentTables(tournamentId: string): Promise<Record<string, unknown> | null> {
+    return this.tournamentReads.tournamentTables(tournamentId);
+  }
+
+  async tournamentResults(tournamentId: string): Promise<Record<string, unknown> | null> {
+    return this.tournamentReads.tournamentResults(tournamentId);
+  }
+
+  async matchDetail(matchId: string): Promise<Record<string, unknown> | null> {
+    return this.tournamentReads.matchDetail(matchId);
+  }
+
+  async publishedSummaries(clubId: string, limit = 12): Promise<Record<string, unknown>[]> {
+    return this.tournamentReads.publishedSummaries(clubId, limit);
+  }
+
+  async tournamentSummary(tournamentId: string): Promise<Record<string, unknown> | null> {
+    return this.tournamentReads.tournamentSummary(tournamentId);
   }
 
   async listByClub(clubId: string): Promise<Record<string, unknown>[]> {

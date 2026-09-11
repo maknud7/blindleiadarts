@@ -48,7 +48,7 @@ jobs:
         run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Run player/live reads against hosted TEST MySQL
-        env:
+        env: &test-runtime
           BD_APP_ENV: test
           BD_BACKEND_V2_MODE: test-write
           BD_BACKEND_V2_MAX_CONNECTIONS: '1'
@@ -67,3 +67,7 @@ jobs:
           IDENTITY_TABLE_PREFIX: bd_prod_
           HARDWARE_TABLE_PREFIX: bd_prod_
         run: node apps/backend-v2/e2e/player-live-read.mjs
+
+      - name: Run tournament public reads against hosted TEST MySQL
+        env: *test-runtime
+        run: node apps/backend-v2/e2e/tournament-public-read.mjs

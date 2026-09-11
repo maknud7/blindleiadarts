@@ -28,6 +28,12 @@ export class SeasonPublicReadRouter {
       return ok({ club_id: publicId(clubId), items: await this.seasons.listEloTable(clubId) });
     }
 
+    const summariesMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/summaries$/.exec(path);
+    if (summariesMatch) {
+      const clubId = requiredCapture(summariesMatch, 1);
+      return ok({ club_id: publicId(clubId), items: await this.seasons.publishedSummaries(clubId) });
+    }
+
     const matchesMatch = /^\/v1\/players\/([1-9][0-9]*)\/matches$/.exec(path);
     if (matchesMatch) {
       const playerId = requiredCapture(matchesMatch, 1);
@@ -36,6 +42,40 @@ export class SeasonPublicReadRouter {
         throw new DomainValidationError("player_not_found", "Player was not found.", 404);
       }
       return ok({ player_id: publicId(playerId), items });
+    }
+
+    const matchDetailMatch = /^\/v1\/matches\/([1-9][0-9]*)\/detail$/.exec(path);
+    if (matchDetailMatch) {
+      const matchId = requiredCapture(matchDetailMatch, 1);
+      const detail = await this.seasons.matchDetail(matchId);
+      if (detail === null) throw new DomainValidationError("match_not_found", "Match was not found.", 404);
+      return ok(detail);
+    }
+
+    const tournamentTablesMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/tables$/.exec(path);
+    if (tournamentTablesMatch) {
+      const tournamentId = requiredCapture(tournamentTablesMatch, 1);
+      const result = await this.seasons.tournamentTables(tournamentId);
+      if (result === null) throw tournamentNotFound();
+      return ok(result);
+    }
+
+    const tournamentResultsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/results$/.exec(path);
+    if (tournamentResultsMatch) {
+      const tournamentId = requiredCapture(tournamentResultsMatch, 1);
+      const result = await this.seasons.tournamentResults(tournamentId);
+      if (result === null) throw tournamentNotFound();
+      return ok(result);
+    }
+
+    const tournamentSummaryMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/summary$/.exec(path);
+    if (tournamentSummaryMatch) {
+      const tournamentId = requiredCapture(tournamentSummaryMatch, 1);
+      const summary = await this.seasons.tournamentSummary(tournamentId);
+      if (summary === null) {
+        throw new DomainValidationError("summary_not_found", "Published tournament summary was not found.", 404);
+      }
+      return ok({ summary });
     }
 
     const listMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/seasons$/.exec(path);
@@ -66,6 +106,10 @@ export class SeasonPublicReadRouter {
 
 function seasonNotFound(): DomainValidationError {
   return new DomainValidationError("season_not_found", "Sesongen ble ikke funnet.", 404);
+}
+
+function tournamentNotFound(): DomainValidationError {
+  return new DomainValidationError("tournament_not_found", "Tournament was not found.", 404);
 }
 
 function requiredCapture(match: RegExpExecArray, index: number): string {
