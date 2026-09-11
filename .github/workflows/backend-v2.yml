@@ -24,6 +24,7 @@ on:
       - 'apps/api/src/Support/Config.php'
       - 'package.json'
       - '.github/workflows/backend-v2.yml'
+      - '.github/workflows/backend-v2-host-readiness.yml'
   workflow_dispatch:
 
 permissions:
@@ -73,6 +74,7 @@ jobs:
           test -f apps/backend-v2/src/runtime/canonical-realtime-publisher.ts
           test -f apps/backend-v2/src/service/canonical-scoring-service.ts
           test -f apps/backend-v2/scripts/verify-host-readiness.mjs
+          test -f .github/workflows/backend-v2-host-readiness.yml
           ! test -e apps/backend-v2/src/runtime/core-only-side-effects.ts
           ! test -e apps/backend-v2/src/mysql/core-only-mutation-guard.ts
 
@@ -113,6 +115,13 @@ jobs:
           grep -Fq 'health.connection_mode' apps/backend-v2/scripts/verify-host-readiness.mjs
           grep -Fq 'ready.checked_tables' apps/backend-v2/scripts/verify-host-readiness.mjs
           grep -Fq 'bd_prod_match_statistics' apps/backend-v2/scripts/verify-host-readiness.mjs
+
+          # Host verification must remain an explicit manual, read-only gate.
+          grep -Fq 'workflow_dispatch:' .github/workflows/backend-v2-host-readiness.yml
+          grep -Fq 'contents: read' .github/workflows/backend-v2-host-readiness.yml
+          grep -Fq 'Verify persistent host is exact release and read-only' .github/workflows/backend-v2-host-readiness.yml
+          ! grep -Fq 'pull_request:' .github/workflows/backend-v2-host-readiness.yml
+          ! grep -Fq 'push:' .github/workflows/backend-v2-host-readiness.yml
 
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
