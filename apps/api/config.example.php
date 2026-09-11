@@ -20,6 +20,13 @@ return [
         // The Scolia service-account access token itself is configured in Admin per club.
         'bridge_secret' => 'replace-with-a-long-random-secret',
     ],
+    'backend_v2' => [
+        // Policy-only canary guard. PHP remains the sole writer until a later,
+        // separately reviewed single-writer backend-v2 client is introduced.
+        'scoring_routing_mode' => 'php',
+        'base_url' => '',
+        'canary_kiosk_ids' => '',
+    ],
     'db' => [
         'host' => '127.0.0.1',
         'port' => 3306,

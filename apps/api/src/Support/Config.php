@@ -114,6 +114,21 @@ final class Config
     public function realtimePublishEnabled(): bool { return $this->realtimePublishUrl() !== '' && $this->realtimePublishSecret() !== ''; }
     public function scoliaBridgeSecret(): string { return (string) (($this->config['scolia']['bridge_secret'] ?? '') ?: ''); }
 
+    public function backendV2ScoringRoutingMode(): string
+    {
+        return trim((string) (($this->config['backend_v2']['scoring_routing_mode'] ?? 'php') ?: 'php'));
+    }
+
+    public function backendV2BaseUrl(): string
+    {
+        return rtrim(trim((string) (($this->config['backend_v2']['base_url'] ?? '') ?: '')), '/');
+    }
+
+    public function backendV2CanaryKioskIds(): string
+    {
+        return (string) (($this->config['backend_v2']['canary_kiosk_ids'] ?? '') ?: '');
+    }
+
     public function challonge(): ChallongeConfig
     {
         /** @var array<string, mixed> $challonge */
