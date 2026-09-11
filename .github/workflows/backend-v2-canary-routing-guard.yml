@@ -1,0 +1,61 @@
+name: Backend v2 Canary Routing Guard
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/config.example.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/src/Service/BackendV2ScoringRoutingPolicy.php'
+      - 'apps/api/tests/backend_v2_scoring_routing_policy_test.php'
+      - '.github/workflows/backend-v2-canary-routing-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy-only-canary-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: PHP syntax
+        run: |
+          php -l apps/api/src/Service/BackendV2ScoringRoutingPolicy.php
+          php -l apps/api/src/Support/Config.php
+          php -l apps/api/tests/backend_v2_scoring_routing_policy_test.php
+
+      - name: Verify routing policy contract
+        run: php apps/api/tests/backend_v2_scoring_routing_policy_test.php
+
+      - name: Verify canary remains policy-only and fail-closed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          policy='apps/api/src/Service/BackendV2ScoringRoutingPolicy.php'
+          config='apps/api/config.example.php'
+
+          grep -Fq "'scoring_routing_mode' => 'php'" "$config"
+          grep -Fq "ROUTE_PHP = 'php'" "$policy"
+          grep -Fq "ROUTE_CANDIDATE = 'candidate'" "$policy"
+          grep -Fq "isCanonicalPositiveDecimalId" "$policy"
+          grep -Fq "One malformed entry invalidates the complete candidate config" "$policy"
+
+          # This slice may decide eligibility only. It must not contact backend-v2
+          # or introduce any network/mutation transport.
+          if grep -En 'curl_|file_get_contents|stream_socket|fsockopen|Guzzle|HttpClient|internal/v1/scoring|start-match|/visit|/undo' "$policy"; then
+            echo 'Policy-only canary guard unexpectedly contains a network or scoring mutation client.' >&2
+            exit 1
+          fi
+
+          # PROD write arming remains independently compile-time blocked.
+          grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
