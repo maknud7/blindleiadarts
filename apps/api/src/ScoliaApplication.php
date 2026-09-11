@@ -12,8 +12,8 @@ use Blindleia\Dartkiosk\Api\Repository\ScoliaRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScoliaRoutedEventRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
-use Blindleia\Dartkiosk\Api\Service\CanonicalScoringService;
 use Blindleia\Dartkiosk\Api\Service\Dart501Rules;
+use Blindleia\Dartkiosk\Api\Service\RoutedScoringMutationService;
 use Blindleia\Dartkiosk\Api\Service\ScoliaQueueService;
 use Blindleia\Dartkiosk\Api\Service\ScoliaScoringService;
 use Blindleia\Dartkiosk\Api\Support\Config;
@@ -41,7 +41,7 @@ final class ScoliaApplication
             $routedEvents = new ScoliaRoutedEventRepository($database);
             $service = new ScoliaScoringService(
                 $repo,
-                new CanonicalScoringService($database, $config),
+                RoutedScoringMutationService::fromRuntime($database, $config),
                 new Dart501Rules()
             );
             $queue = new ScoliaQueueService($database, $repo, $service);
@@ -97,9 +97,6 @@ final class ScoliaApplication
                 if ($serial === '' || $message === []) {
                     return JsonResponse::error(422, 'scolia_event_invalid', 'serial_number and message are required.');
                 }
-                // Ingress is intentionally cheap: persist/dedupe only. The bridge's
-                // queue worker drains asynchronously so Scolia delivery never waits
-                // for canonical scoring work in the same HTTP request.
                 $queued = $routedEvents->enqueueEvent($serial, $message, $routedKioskId);
                 return JsonResponse::ok(['event' => $queued, 'queued' => true], $queued['duplicate'] ? 200 : 202);
             }
@@ -123,8 +120,6 @@ final class ScoliaApplication
                 $limit = max(1, min(200, (int) ($body['limit'] ?? 100)));
                 return JsonResponse::ok(['items' => $queue->pollCommands($kioskIds, $limit)]);
             }
-            // Backwards-compatible single-board command polling while older bridge
-            // instances are being replaced by the bulk poller.
             if ($method === 'GET' && preg_match('#^v1/scolia/bridge/commands/(\d+)$#', $path, $m) === 1) {
                 return JsonResponse::ok(['items' => $repo->pollCommands((int) $m[1])]);
             }
@@ -133,11 +128,9 @@ final class ScoliaApplication
                 $repo->completeCommand((int) $m[1], (string) ($body['result'] ?? 'failed'), isset($body['error']) ? (string) $body['error'] : null);
                 return JsonResponse::ok(['command_id' => (int) $m[1]]);
             }
-            return JsonResponse::error(404, 'scolia_bridge_route_not_found', 'Unknown bridge route.');
+            return JsonResponse::error(404, 'scolia_bridge_route_not_found', 'Unknown Scolia bridge route.');
         }
 
-        // Admin: Scolia master settings are always canonical PROD hardware settings.
-        // Queue/incidents remain isolated in the active runtime environment.
         if (preg_match('#^v1/clubs/(\d+)/scolia(?:/(.*))?$#', $path, $m) === 1) {
             $clubId = (int) $m[1];
             $admin = $this->requireAdmin($request, $users, $clubId);
@@ -168,8 +161,6 @@ final class ScoliaApplication
             return JsonResponse::error(404, 'scolia_admin_route_not_found', 'Unknown Scolia admin route.');
         }
 
-        // Admin: per-board mapping is canonical PROD master data. Runtime actions
-        // target the current environment's kiosk (a TEST alias during test mode).
         if (preg_match('#^v1/clubs/(\d+)/kiosks/(\d+)/scolia(?:/(.*))?$#', $path, $m) === 1) {
             $clubId = (int) $m[1];
             $kioskId = (int) $m[2];
@@ -219,7 +210,6 @@ final class ScoliaApplication
             return JsonResponse::error(404, 'scolia_board_route_not_found', 'Unknown Scolia board route.');
         }
 
-        // Paired board terminal: status, manual fallback and corrections for the current uncommitted visit.
         if (preg_match('#^v1/kiosks/([^/]+)/scolia(?:/(.*))?$#', $path, $m) === 1) {
             $code = urldecode($m[1]);
             $token = $request->header('x-kiosk-pairing-token');
