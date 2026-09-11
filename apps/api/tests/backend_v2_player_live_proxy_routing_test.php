@@ -13,6 +13,7 @@ $assert = static function (bool $condition, string $message): void {
 $proxy = new BackendV2PlayerLiveProxyApplication(dirname(__DIR__));
 
 foreach ([
+    ['GET', '/v1/realtime/config'],
     ['GET', '/v1/me/dashboard'],
     ['GET', '/v1/clubs'],
     ['GET', '/v1/clubs/1/player-directory'],
@@ -55,5 +56,13 @@ foreach ([
 $assert(!$proxy->handles('GET', '/v1/seasons/1/activate'), 'Unsupported season read path must not be captured.');
 $assert(!$proxy->handles('GET', '/v1/clubs/1/tournaments'), 'Unmigrated public reads must not be captured accidentally.');
 $assert(!$proxy->handles('GET', '/v1/tournaments/429/summary/admin'), 'Admin summary read must remain outside this public read slice.');
+
+// These look like reads, but their current PHP implementations can mutate state:
+// public Live may capture/self-heal tournament ELO baselines, and check-in display
+// may rotate/persist a missing check-in code. They need dedicated single-writer
+// cutovers rather than being swept into this GET-only proxy.
+$assert(!$proxy->handles('GET', '/v1/public/clubs/blindleia-dartklubb/live'), 'Public Live must remain outside the pure-read proxy until ELO side effects are explicit.');
+$assert(!$proxy->handles('GET', '/v1/public/tournaments/429/live'), 'Tournament Live must remain outside the pure-read proxy until ELO side effects are explicit.');
+$assert(!$proxy->handles('GET', '/v1/public/check-in-display'), 'Check-in display must remain outside the pure-read proxy while it may rotate a code.');
 
 echo "BackendV2PlayerLiveProxy routing OK\n";
