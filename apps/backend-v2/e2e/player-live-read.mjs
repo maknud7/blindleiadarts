@@ -18,6 +18,8 @@ let server = null;
 let serverOutput = "";
 let playerId = null;
 let tournamentId = null;
+let seasonId = null;
+let seasonClubId = null;
 
 const provider = makeProvider(false);
 try {
@@ -56,6 +58,25 @@ try {
     );
     tournamentId = String(tournaments[0]?.id ?? "");
     assert.match(tournamentId, /^[1-9][0-9]*$/, "TEST runtime has no stable completed tournament fixture");
+
+    const seasons = await sql.query(
+      `SELECT s.id,s.club_id
+         FROM \`${config.prefixes.runtime}seasons\` s
+        WHERE EXISTS (
+          SELECT 1 FROM \`${config.prefixes.runtime}tournaments\` t
+           WHERE t.season_id=s.id
+             AND EXISTS (
+               SELECT 1 FROM \`${config.prefixes.runtime}matches\` m
+                WHERE m.tournament_id=t.id AND m.status='completed'
+             )
+        )
+        ORDER BY s.id ASC
+        LIMIT 1`,
+    );
+    seasonId = String(seasons[0]?.id ?? "");
+    seasonClubId = String(seasons[0]?.club_id ?? "");
+    assert.match(seasonId, /^[1-9][0-9]*$/, "TEST runtime has no stable season fixture");
+    assert.match(seasonClubId, /^[1-9][0-9]*$/, "Stable TEST season has no club id");
   });
 
   const reads = new MySqlPlayerLiveReadRepository(provider, config.prefixes.runtime);
@@ -107,6 +128,25 @@ try {
   assert.ok(Array.isArray(highlights.top_checkouts));
   assert.ok(Array.isArray(highlights.top_three_dart_averages));
 
+  const seasonList = await requestJson(`/v1/clubs/${seasonClubId}/seasons`);
+  assert.equal(seasonList.ok, true);
+  assert.equal(String(seasonList.club_id), seasonClubId);
+  assert.ok(Array.isArray(seasonList.items));
+  assert.ok(seasonList.items.some((season) => String(season.id) === seasonId));
+
+  const season = await requestJson(`/v1/seasons/${seasonId}`);
+  assert.equal(season.ok, true);
+  assert.equal(String(season.season.id), seasonId);
+  assert.equal(String(season.season.club_id), seasonClubId);
+
+  const standings = await requestJson(`/v1/seasons/${seasonId}/standings`);
+  assert.equal(standings.ok, true);
+  assert.equal(String(standings.season.id), seasonId);
+  assert.ok(Array.isArray(standings.items));
+  assert.ok(standings.items.length > 0, "Stable TEST season should expose standings");
+  assert.ok(standings.items.every((row, index) => Number(row.position) === index + 1));
+  assert.ok(standings.items.every((row) => typeof row.points === "number" && typeof row.elo_rating === "number"));
+
   const unauthenticatedDashboard = await requestJson("/v1/me/dashboard", { expectedStatus: 401 });
   assert.equal(unauthenticatedDashboard.ok, false);
   assert.equal(unauthenticatedDashboard.error.code, "authentication_required");
@@ -119,9 +159,12 @@ try {
     identity_prefix: config.prefixes.identity,
     player_id: playerId,
     tournament_id: tournamentId,
+    season_id: seasonId,
+    season_club_id: seasonClubId,
     profile_verified: true,
     tournament_elo_verified: true,
     live_highlights_verified: true,
+    season_reads_verified: true,
     dashboard_read_model_verified: true,
     shared_identity_write_not_required: true,
   }));
