@@ -35,19 +35,27 @@ try {
     playerId = String(players[0]?.id ?? "");
     assert.match(playerId, /^[1-9][0-9]*$/, "TEST runtime has no active player fixture");
 
+    // Pick canonical historical data rather than the newest active tournament.
+    // Other hosted E2Es create/delete active fixtures concurrently, so choosing
+    // a completed tournament with completed matches keeps this read-only test
+    // independent of those temporary lifecycle fixtures.
     const tournaments = await sql.query(
       `SELECT t.id
          FROM \`${config.prefixes.runtime}tournaments\` t
-        WHERE EXISTS (
-          SELECT 1 FROM \`${config.prefixes.runtime}tournament_players\` tp
-           WHERE tp.tournament_id=t.id AND tp.status NOT IN ('withdrawn','no_show')
-        )
-        ORDER BY CASE WHEN t.status IN ('in_progress','ready','completed') THEN 0 ELSE 1 END,
-                 COALESCE(t.start_at,'1970-01-01') DESC,t.id DESC
+        WHERE t.status='completed'
+          AND EXISTS (
+            SELECT 1 FROM \`${config.prefixes.runtime}matches\` m
+             WHERE m.tournament_id=t.id AND m.status='completed'
+          )
+          AND EXISTS (
+            SELECT 1 FROM \`${config.prefixes.runtime}tournament_players\` tp
+             WHERE tp.tournament_id=t.id AND tp.status NOT IN ('withdrawn','no_show')
+          )
+        ORDER BY t.id ASC
         LIMIT 1`,
     );
     tournamentId = String(tournaments[0]?.id ?? "");
-    assert.match(tournamentId, /^[1-9][0-9]*$/, "TEST runtime has no tournament fixture");
+    assert.match(tournamentId, /^[1-9][0-9]*$/, "TEST runtime has no stable completed tournament fixture");
   });
 
   const reads = new MySqlPlayerLiveReadRepository(provider, config.prefixes.runtime);
