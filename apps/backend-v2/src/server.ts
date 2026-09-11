@@ -8,10 +8,13 @@ import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalPlayoffReconciliation } from "./mysql/canonical-playoff-reconciliation.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
+import { MySqlEquipmentAdminRepository } from "./mysql/equipment-admin-repository.js";
 import { MySqlIdentityAuthRepository, type IdentityUser } from "./mysql/identity-auth-repository.js";
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
 import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
+import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
+import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { MySqlTournamentFlowRepository } from "./mysql/tournament-flow-repository.js";
 import { MySqlTournamentOperationsRepository } from "./mysql/tournament-operations-repository.js";
@@ -26,6 +29,7 @@ import {
   mutationsAllowed,
   RuntimeAccessError,
 } from "./runtime/config.js";
+import { EquipmentAdminRouter } from "./runtime/equipment-admin-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
@@ -84,6 +88,16 @@ const accountProfiles = new MySqlAccountProfileRepository(
   config.prefixes.identity,
 );
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
+const equipment = new MySqlEquipmentAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
+const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
+const scoliaDashboard = new MySqlScoliaDashboardRepository(sessions, config.prefixes.runtime);
+const equipmentRuntime = new EquipmentAdminRouter(
+  config,
+  identityRepository,
+  equipment,
+  scoliaAdmin,
+  scoliaDashboard,
+);
 const tournaments = new MySqlTournamentRuntimeRepository(sessions, config.prefixes.runtime);
 const tournamentFlow = new MySqlTournamentFlowRepository(sessions, config.prefixes.runtime);
 const tournamentOperations = new MySqlTournamentOperationsRepository(sessions, config.prefixes.runtime);
@@ -135,6 +149,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       release_sha: config.releaseSha,
       runtime_prefix: config.prefixes.runtime,
       identity_prefix: config.prefixes.identity,
+      hardware_prefix: config.prefixes.hardware,
       max_connections: config.mysql.budget.maxConcurrentConnections,
       connection_mode: "idle-reuse",
       db_idle_ms: config.mysql.idleConnectionTimeoutMs,
@@ -210,6 +225,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const equipmentRoute = await equipmentRuntime.handle(method, publicPath, request);
+  if (equipmentRoute !== null) {
+    sendJson(response, equipmentRoute.statusCode, equipmentRoute.payload);
     return;
   }
 
