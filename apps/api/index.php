@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\AccountProfileApplication;
 use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
+use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
@@ -102,6 +103,14 @@ if ($membershipEligibility->run()) {
 
 $paymentSettings = new PaymentSettingsApplication(__DIR__);
 if ($paymentSettings->run()) {
+    return;
+}
+
+// Equipment cutover keeps the public API on the Domeneshop same-origin front
+// door. The proxy decides PHP vs Node before dispatch; after a Node attempt it
+// fails closed and never invokes the legacy PHP writer.
+$equipmentV2 = new BackendV2EquipmentProxyApplication(__DIR__);
+if ($equipmentV2->run()) {
     return;
 }
 

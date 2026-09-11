@@ -1,0 +1,114 @@
+name: Backend v2 TEST Render Bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-v2-test-render-bootstrap
+  cancel-in-progress: false
+
+env:
+  RENDER_SERVICE_ID: srv-dahr6o2d0e5s738jbm4g
+  HOST_URL: https://blindleia-backend-v2-test.onrender.com
+
+jobs:
+  configure-test-host:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          for name in RENDER_API_KEY DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD INTERNAL_TOKEN; do
+            test -n "${!name}" || { echo "$name is required." >&2; exit 1; }
+          done
+
+      - name: Configure isolated TEST runtime on Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+          update_env() {
+            local key="$1" value="$2"
+            curl --fail --silent --show-error --output /dev/null \
+              -X PUT "$api/$key" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H 'Accept: application/json' \
+              -H 'Content-Type: application/json' \
+              --data "$(jq -nc --arg value "$value" '{value:$value}')"
+          }
+
+          update_env BD_APP_ENV test
+          update_env BD_BACKEND_V2_MODE test-write
+          update_env BD_BACKEND_V2_INTERNAL_TOKEN "$INTERNAL_TOKEN"
+          update_env DB_HOST "$DB_HOST"
+          update_env DB_PORT "$DB_PORT"
+          update_env DB_NAME "$DB_NAME"
+          update_env DB_USERNAME "$DB_USERNAME"
+          update_env DB_PASSWORD "$DB_PASSWORD"
+          update_env DB_TABLE_PREFIX bd_test_
+          update_env IDENTITY_TABLE_PREFIX bd_prod_
+          update_env HARDWARE_TABLE_PREFIX bd_prod_
+          update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
+          update_env BD_BACKEND_V2_DB_IDLE_MS 15000
+          update_env RELEASE_SHA "$GITHUB_SHA"
+
+      - name: Deploy current backend-v2 release
+        id: deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -Eeuo pipefail
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          curl --fail --silent --show-error --output "$response" \
+            -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H 'Accept: application/json' \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
+          deploy_id="$(jq -r '.id // empty' "$response")"
+          test -n "$deploy_id"
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for TEST host readiness
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 60); do
+            health="$(curl -fsS --max-time 20 "${HOST_URL%/}/health" || true)"
+            if jq -e --arg sha "$GITHUB_SHA" '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse" and .release_sha == $sha' <<<"$health" >/dev/null 2>&1; then
+              echo 'Persistent TEST backend-v2 host is ready.'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'TEST backend-v2 host never reached the required readiness contract.' >&2
+          exit 1
+
+      - name: Verify TEST DB connectivity without mutation
+        run: |
+          set -Eeuo pipefail
+          ready="$(curl -fsS --max-time 20 "$HOST_URL/ready")"
+          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and (.checked_tables | type == "array") and (.checked_tables | length > 0)' <<<"$ready" >/dev/null
+          echo 'TEST backend-v2 preflight reached bd_test_ successfully.'
