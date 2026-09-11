@@ -12,6 +12,7 @@
     "backend-v2:verify-host": "node apps/backend-v2/scripts/verify-host-readiness.mjs"
   },
   "dependencies": {
+    "bcryptjs": "3.0.2",
     "mysql2": "3.24.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
