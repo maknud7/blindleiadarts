@@ -1,0 +1,81 @@
+name: Backend v2 Scoring Cutover
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/**'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-scoring-cutover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  single-writer-cutover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Syntax and routing contracts
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/src/Service/ScoringMutationPort.php
+          php -l apps/api/src/Service/CanonicalScoringService.php
+          php -l apps/api/src/Service/RoutedScoringMutationService.php
+          php -l apps/api/src/Service/ScoliaScoringService.php
+          php -l apps/api/src/MatchScoringApplication.php
+          php apps/api/tests/backend_v2_scoring_routing_policy_test.php
+          php apps/api/tests/backend_v2_scoring_client_test.php
+          php apps/api/tests/routed_scoring_mutation_service_test.php
+
+      - name: Verify both scoring entrypoints use the router
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'RoutedScoringMutationService::fromRuntime' apps/api/src/MatchScoringApplication.php
+          grep -Fq 'RoutedScoringMutationService::fromRuntime' apps/api/src/ScoliaApplication.php
+          grep -Fq 'private readonly ScoringMutationPort $scoring' apps/api/src/Service/ScoliaScoringService.php
+          if grep -Fq 'new CanonicalScoringService($database, $config)' apps/api/src/MatchScoringApplication.php; then
+            echo 'Manual scoring still bypasses the single-writer router.' >&2
+            exit 1
+          fi
+          if grep -Fq 'new CanonicalScoringService($database, $config)' apps/api/src/ScoliaApplication.php; then
+            echo 'Scolia scoring still bypasses the single-writer router.' >&2
+            exit 1
+          fi
+
+      - name: Verify safe deploy defaults and PROD write lock
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq "'scoring_routing_mode' => 'php'" apps/api/config.example.php
+          grep -Fq "BACKEND_V2_SCORING_ROUTING_MODE', 'php'" infra/deploy/generate_api_config.php
+          grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'allowsPhpFallback(): bool' apps/api/src/Service/BackendV2ScoringAttemptException.php
+          grep -Fq 'return false;' apps/api/src/Service/BackendV2ScoringAttemptException.php
+
+      - name: Verify generated config remains PHP by default
+        shell: bash
+        env:
+          APP_ENV: test
+          BASE_URL: https://example.test
+          STATIC_BASE_URL: https://example.test
+          SCOLIA_BRIDGE_SECRET: unit-test
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: test
+          DB_USERNAME: test
+          DB_PASSWORD: test
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          php infra/deploy/generate_api_config.php --output=/tmp/backend-v2-cutover-config.php
+          php -r '$c=require "/tmp/backend-v2-cutover-config.php"; if (($c["backend_v2"]["scoring_routing_mode"] ?? null) !== "php") exit(1); if (($c["backend_v2"]["internal_token"] ?? null) !== "") exit(1);'

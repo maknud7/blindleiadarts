@@ -39,10 +39,6 @@ $defaultIdentityBaseUrl = $identityPrefix === 'bd_prod_'
     ? 'https://blindleiadart.ingenting.org'
     : $baseUrl;
 
-// Hosted MySQL currently caps the shared DB user at 10 sessions. Reserve the
-// first six local web-host gate slots for PROD, give deployed TEST only two,
-// and leave slots 8-9 outside the web-host gate as CI/maintenance headroom.
-// These are local admission budgets; MySQL remains the final global authority.
 $isTest = strtolower($appEnv) === 'test';
 $isProd = strtolower($appEnv) === 'production' || strtolower($appEnv) === 'prod';
 $defaultDbConnectionLimit = $isTest ? '2' : ($isProd ? '6' : '0');
@@ -51,9 +47,6 @@ $defaultDbConnectionSlotStart = $isTest ? '6' : '0';
 $config = [
     'app_env' => $appEnv,
     'base_url' => $baseUrl,
-    // Identity is shared between test and production. Member-specific account
-    // invitations therefore always use the canonical production origin when
-    // they target the production identity namespace.
     'identity_base_url' => env_optional('IDENTITY_BASE_URL', $defaultIdentityBaseUrl) ?? $defaultIdentityBaseUrl,
     'static_base_url' => getenv('STATIC_BASE_URL') ?: '',
     'screen' => [
@@ -65,10 +58,15 @@ $config = [
         'publish_secret' => getenv('REALTIME_PUBLISH_SECRET') ?: '',
     ],
     'scolia' => [
-        // Scolia is an active platform capability. A deploy without the
-        // bridge credential would produce a green-looking but unusable router,
-        // so config generation must fail closed instead of writing an empty value.
         'bridge_secret' => env_required('SCOLIA_BRIDGE_SECRET'),
+    ],
+    'backend_v2' => [
+        // Safe default is PHP. Candidate routing is useful only when host, token and
+        // explicit kiosk allowlist are all present; the runtime policy fails closed.
+        'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', 'php') ?? 'php',
+        'base_url' => env_optional('BACKEND_V2_BASE_URL', '') ?? '',
+        'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', '') ?? '',
+        'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', '') ?? '',
     ],
     'db' => [
         'host' => env_required('DB_HOST'),
@@ -84,10 +82,7 @@ $config = [
         'connection_wait_ms' => max(100, (int) (env_optional('DB_CONNECTION_WAIT_MS', '3000') ?? '3000')),
     ],
     'members_db' => [
-        'sqlconnect_path' => env_optional(
-            'MEMBERS_SQLCONNECT_PATH',
-            '/home/1/i/ingenting/dart/sqlconnect.php'
-        ),
+        'sqlconnect_path' => env_optional('MEMBERS_SQLCONNECT_PATH', '/home/1/i/ingenting/dart/sqlconnect.php'),
     ],
     'challonge' => [
         'api_base_url' => getenv('CHALLONGE_API_BASE_URL') ?: 'https://api.challonge.com/v2.1',

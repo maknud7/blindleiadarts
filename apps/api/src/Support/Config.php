@@ -68,23 +68,12 @@ final class Config
         return max(100, min(15000, $configured));
     }
 
-    /**
-     * User accounts, sessions and permissions are shared between test and production.
-     * Runtime test therefore points at the production identity tables while tournament
-     * and scoring data keep their environment-specific prefix. CI may omit this setting
-     * to keep destructive smoke tests isolated in bd_test_.
-     */
     public function identityTablePrefix(): string
     {
         $configured = trim((string) (($this->config['db']['identity_table_prefix'] ?? '') ?: ''));
         return $configured !== '' ? $configured : $this->dbTablePrefix();
     }
 
-    /**
-     * Physical boards are real club equipment and have one canonical registry. Deployed
-     * test and production point at the production hardware namespace. The test runtime may
-     * still create internal aliases for match foreign keys; those are not board masterdata.
-     */
     public function hardwareTablePrefix(): string
     {
         $configured = trim((string) (($this->config['db']['hardware_table_prefix'] ?? '') ?: ''));
@@ -95,14 +84,8 @@ final class Config
     {
         $members = is_array($this->config['members_db'] ?? null) ? $this->config['members_db'] : [];
         $path = trim((string) (($members['sqlconnect_path'] ?? '/home/1/i/ingenting/dart/sqlconnect.php') ?: ''));
-        if ($path === '') {
-            return '';
-        }
-
-        if (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1) {
-            return $path;
-        }
-
+        if ($path === '') return '';
+        if (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1) return $path;
         return $this->rootPath . DIRECTORY_SEPARATOR . $path;
     }
 
@@ -127,6 +110,11 @@ final class Config
     public function backendV2CanaryKioskIds(): string
     {
         return (string) (($this->config['backend_v2']['canary_kiosk_ids'] ?? '') ?: '');
+    }
+
+    public function backendV2InternalToken(): string
+    {
+        return (string) (($this->config['backend_v2']['internal_token'] ?? '') ?: '');
     }
 
     public function challonge(): ChallongeConfig
