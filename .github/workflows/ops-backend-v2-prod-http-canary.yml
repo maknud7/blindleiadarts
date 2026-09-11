@@ -1,0 +1,310 @@
+name: Ops Backend v2 PROD HTTP Canary Once
+
+on:
+  push:
+    branches:
+      - ops/backend-v2-prod-http-canary
+    paths:
+      - '.github/prod-http-canary-trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-backend-v2-prod-http-canary
+  cancel-in-progress: false
+
+env:
+  PROD_BASE_URL: https://blindleiadart.ingenting.org
+  NODE_BASE_URL: https://blindleia-backend-v2-readonly.onrender.com
+  RENDER_SERVICE_ID: srv-dahq6o142hec73a1dr10
+  RELEASE_SHA: 12e07f42aab801dbedc0f1766e9fe78469055ec4
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Verify exact release is live and Render starts read-only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release="$(curl -fsS --max-time 20 "$PROD_BASE_URL/release.json?cb=$RANDOM")"
+          test "$(jq -r '.sha // empty' <<<"$release")" = "$RELEASE_SHA"
+          health="$(curl -fsS --max-time 20 "$NODE_BASE_URL/health")"
+          test "$(jq -r '.environment' <<<"$health")" = 'prod'
+          test "$(jq -r '.mode' <<<"$health")" = 'readonly'
+          test "$(jq -r '.writes_armed' <<<"$health")" = 'false'
+          test "$(jq -r '.runtime_prefix' <<<"$health")" = 'bd_prod_'
+          test "$(jq -r '.max_connections' <<<"$health")" = '1'
+
+      - name: Validate canary secrets
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in RENDER_API_KEY INTERNAL_TOKEN DB_HOST DB_NAME SFTP_HOST SFTP_USERNAME SFTP_PASSWORD; do
+            test -n "${!name:-}" || { echo "Missing required secret $name" >&2; exit 1; }
+          done
+
+      - name: Create isolated PROD fixture
+        id: fixture
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > /tmp/create_fixture.php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));
+          $db->set_charset('utf8mb4'); $p='bd_prod_'; $suffix=strtolower(bin2hex(random_bytes(6)));
+          $clubName='PROD HTTP Canary '.$suffix; $clubSlug='prod-http-canary-'.$suffix;
+          $stmt=$db->prepare("INSERT INTO `{$p}clubs` (name,slug) VALUES (?,?)"); $stmt->bind_param('ss',$clubName,$clubSlug); $stmt->execute(); $clubId=(int)$stmt->insert_id; $stmt->close();
+          $players=[]; foreach(['PROD Canary A','PROD Canary B'] as $name){$stmt=$db->prepare("INSERT INTO `{$p}players` (club_id,display_name) VALUES (?,?)");$stmt->bind_param('is',$clubId,$name);$stmt->execute();$players[]=(int)$stmt->insert_id;$stmt->close();}
+          $tn='PROD Canary Tournament '.$suffix; $ts='prod-canary-tournament-'.$suffix;
+          $stmt=$db->prepare("INSERT INTO `{$p}tournaments` (club_id,name,slug,provider_system,status,start_at) VALUES (?,?,?,'local','ready',NOW())");$stmt->bind_param('iss',$clubId,$tn,$ts);$stmt->execute();$tournamentId=(int)$stmt->insert_id;$stmt->close();
+          $code='BV2PROD-'.strtoupper(substr($suffix,0,8)); $pairingToken=bin2hex(random_bytes(24)); $pairingHash=password_hash($pairingToken,PASSWORD_DEFAULT); $board=996;
+          $stmt=$db->prepare("INSERT INTO `{$p}kiosks` (club_id,code,name,board_number,pairing_token_hash,paired_device_name,paired_at,last_seen_at) VALUES (?,?, 'Backend v2 PROD Canary', ?, ?, 'GitHub synthetic canary', NOW(), NOW())");$stmt->bind_param('isis',$clubId,$code,$board,$pairingHash);$stmt->execute();$kioskId=(int)$stmt->insert_id;$stmt->close();
+          $stmt=$db->prepare("INSERT INTO `{$p}matches` (tournament_id,kiosk_id,status,best_of_legs,legs_to_win,player_a_id,player_b_id) VALUES (?,?,'assigned',1,1,?,?)");$stmt->bind_param('iiii',$tournamentId,$kioskId,$players[0],$players[1]);$stmt->execute();$matchId=(int)$stmt->insert_id;$stmt->close();
+          file_put_contents(getenv('GITHUB_OUTPUT'),"club_id={$clubId}\nplayer_a={$players[0]}\nplayer_b={$players[1]}\ntournament_id={$tournamentId}\nkiosk_id={$kioskId}\nkiosk_code={$code}\npairing_token={$pairingToken}\nmatch_id={$matchId}\n",FILE_APPEND);
+          echo "Created isolated PROD fixture kiosk={$kioskId} match={$matchId}\n";
+          PHP
+          php /tmp/create_fixture.php
+
+      - name: Generate temporary PROD candidate and rollback configs
+        id: configs
+        env:
+          APP_ENV: prod
+          BASE_URL: https://blindleiadart.ingenting.org
+          IDENTITY_BASE_URL: https://blindleiadart.ingenting.org
+          STATIC_BASE_URL: https://blindleiadart.ingenting.org
+          SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
+          REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+          SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_prod_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+          MEMBERS_SQLCONNECT_PATH: /home/1/i/ingenting/dart/sqlconnect.php
+          CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
+          CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
+          CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
+          CHALLONGE_REDIRECT_URI: https://blindleiadart.ingenting.org/api/v1/connectors/challonge/callback
+          BACKEND_V2_BASE_URL: https://blindleia-backend-v2-readonly.onrender.com
+          BACKEND_V2_INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          BACKEND_V2_CANARY_KIOSK_IDS: ${{ steps.fixture.outputs.kiosk_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate/api rollback/api
+          BACKEND_V2_SCORING_ROUTING_MODE=candidate php infra/deploy/generate_api_config.php --output=candidate/api/config.php
+          BACKEND_V2_SCORING_ROUTING_MODE=php BACKEND_V2_BASE_URL='' BACKEND_V2_INTERNAL_TOKEN='' BACKEND_V2_CANARY_KIOSK_IDS='' php infra/deploy/generate_api_config.php --output=rollback/api/config.php
+          grep -Fq "'scoring_routing_mode' => 'candidate'" candidate/api/config.php
+          grep -Fq "'canary_kiosk_ids' => '${{ steps.fixture.outputs.kiosk_id }}'" candidate/api/config.php
+          grep -Fq "'scoring_routing_mode' => 'php'" rollback/api/config.php
+
+      - name: Arm exact Render release for synthetic PROD canary
+        id: render_arm
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+          update_env(){ local key="$1" value="$2"; curl --fail --silent --show-error --output /dev/null -X PUT "$api/$key" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg value "$value" '{value:$value}')"; }
+          update_env BD_APP_ENV prod
+          update_env BD_BACKEND_V2_MODE prod-canary
+          update_env BD_BACKEND_V2_PROD_WRITE_CONFIRMATION ALLOW_PROD_SCORING_WRITES
+          update_env BD_BACKEND_V2_INTERNAL_TOKEN "$INTERNAL_TOKEN"
+          update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
+          update_env DB_TABLE_PREFIX bd_prod_
+          update_env IDENTITY_TABLE_PREFIX bd_prod_
+          update_env HARDWARE_TABLE_PREFIX bd_prod_
+          update_env DB_HOST "$DB_HOST"; update_env DB_PORT "$DB_PORT"; update_env DB_NAME "$DB_NAME"; update_env DB_USERNAME "$DB_USERNAME"; update_env DB_PASSWORD "$DB_PASSWORD"
+          update_env RELEASE_SHA "$RELEASE_SHA"
+          if [ -n "${REALTIME_PUBLISH_URL:-}" ] && [ -n "${REALTIME_PUBLISH_SECRET:-}" ]; then update_env REALTIME_PUBLISH_URL "$REALTIME_PUBLISH_URL"; update_env REALTIME_PUBLISH_SECRET "$REALTIME_PUBLISH_SECRET"; fi
+          response="$(mktemp)"; trap 'rm -f "$response"' EXIT
+          curl --fail --silent --show-error --output "$response" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
+          deploy_id="$(jq -r '.id // empty' "$response")"; test -n "$deploy_id"; echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for armed exact PROD canary host
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          body="$(mktemp)"; trap 'rm -f "$body"' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 10 "$NODE_BASE_URL/health" >"$body" && \
+               [ "$(jq -r '.release_sha' "$body")" = "$RELEASE_SHA" ] && \
+               [ "$(jq -r '.environment' "$body")" = 'prod' ] && \
+               [ "$(jq -r '.mode' "$body")" = 'prod-canary' ] && \
+               [ "$(jq -r '.writes_armed' "$body")" = 'true' ]; then break; fi
+            sleep 5
+          done
+          test "$(jq -r '.release_sha' "$body")" = "$RELEASE_SHA"
+          test "$(jq -r '.mode' "$body")" = 'prod-canary'
+          test "$(jq -r '.writes_armed' "$body")" = 'true'
+          test "$(jq -r '.runtime_prefix' "$body")" = 'bd_prod_'
+          test "$(jq -r '.max_connections' "$body")" = '1'
+          ready="$(curl -fsS --max-time 20 "$NODE_BASE_URL/ready")"
+          test "$(jq -r '.ok' <<<"$ready")" = 'true'
+
+      - name: Activate only synthetic PROD kiosk routing
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./candidate/*
+          remote_path: /www/blindleiadarts/prod
+          sftp_only: true
+
+      - name: Exercise public PROD PHP to Node single-writer path
+        env:
+          KIOSK_CODE: ${{ steps.fixture.outputs.kiosk_code }}
+          PAIRING_TOKEN: ${{ steps.fixture.outputs.pairing_token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base="${PROD_BASE_URL%/}/api/v1/kiosks/$KIOSK_CODE"
+          call(){ local action="$1" payload="$2"; curl --fail --silent --show-error --max-time 25 -X POST -H 'Content-Type: application/json' -H "X-Kiosk-Pairing-Token: $PAIRING_TOKEN" --data "$payload" "$base/$action"; }
+          call start-match '{}' >/tmp/prod-start.json
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' /tmp/prod-start.json
+          call visit '{"input_mode":"sum","score":60,"darts_used":3,"request_id":"prod-http-canary-${{ github.run_id }}"}' >/tmp/prod-visit.json
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' /tmp/prod-visit.json
+          call undo '{}' >/tmp/prod-undo.json
+          grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' /tmp/prod-undo.json
+
+      - name: Verify canonical PROD result after Node round trip
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MATCH_ID: ${{ steps.fixture.outputs.match_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT); $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT")); $id=(int)getenv("MATCH_ID");
+            $r=$db->query("SELECT status FROM bd_prod_matches WHERE id={$id}")->fetch_assoc(); if(($r["status"]??"")!=="in_progress") throw new RuntimeException("Synthetic PROD match was not started through Node.");
+            $visits=(int)$db->query("SELECT COUNT(*) c FROM bd_prod_visits WHERE match_id={$id}")->fetch_assoc()["c"]; if($visits!==0) throw new RuntimeException("Undo did not leave zero synthetic visits.");
+            $legs=(int)$db->query("SELECT COUNT(*) c FROM bd_prod_legs WHERE match_id={$id}")->fetch_assoc()["c"]; if($legs<1) throw new RuntimeException("Canonical leg state missing.");
+            echo "Synthetic canonical PROD state verified.\n";
+          '
+
+      - name: Restore normal PHP PROD routing
+        if: always() && steps.configs.outcome == 'success'
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./rollback/*
+          remote_path: /www/blindleiadarts/prod
+          sftp_only: true
+
+      - name: Disarm Render PROD back to readonly
+        if: always() && steps.render_arm.outcome == 'success'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
+          update_env(){ local key="$1" value="$2"; curl --fail --silent --show-error --output /dev/null -X PUT "$api/$key" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg value "$value" '{value:$value}')"; }
+          update_env BD_BACKEND_V2_MODE readonly
+          update_env BD_BACKEND_V2_PROD_WRITE_CONFIRMATION DISARMED
+          response="$(mktemp)"; trap 'rm -f "$response"' EXIT
+          curl --fail --silent --show-error --output "$response" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" -H "Authorization: Bearer $RENDER_API_KEY" -H 'Content-Type: application/json' --data "$(jq -nc --arg commitId "$RELEASE_SHA" '{clearCache:"do_not_clear",commitId:$commitId}')"
+          test -n "$(jq -r '.id // empty' "$response")"
+          body="$(mktemp)"; for attempt in $(seq 1 60); do if curl -fsS --max-time 10 "$NODE_BASE_URL/health" >"$body" && [ "$(jq -r '.release_sha' "$body")" = "$RELEASE_SHA" ] && [ "$(jq -r '.mode' "$body")" = 'readonly' ] && [ "$(jq -r '.writes_armed' "$body")" = 'false' ]; then break; fi; sleep 5; done
+          test "$(jq -r '.mode' "$body")" = 'readonly'; test "$(jq -r '.writes_armed' "$body")" = 'false'; rm -f "$body"
+
+      - name: Cleanup isolated PROD fixture
+        if: always() && steps.fixture.outcome == 'success'
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          CLUB_ID: ${{ steps.fixture.outputs.club_id }}
+          PLAYER_A: ${{ steps.fixture.outputs.player_a }}
+          PLAYER_B: ${{ steps.fixture.outputs.player_b }}
+          TOURNAMENT_ID: ${{ steps.fixture.outputs.tournament_id }}
+          KIOSK_ID: ${{ steps.fixture.outputs.kiosk_id }}
+          MATCH_ID: ${{ steps.fixture.outputs.match_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT); $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+            $m=(int)getenv("MATCH_ID"); $k=(int)getenv("KIOSK_ID"); $t=(int)getenv("TOURNAMENT_ID"); $c=(int)getenv("CLUB_ID");
+            if($m){foreach(["season_elo_events","match_statistics","live_match_states","visits","legs"] as $table){try{$db->query("DELETE FROM bd_prod_{$table} WHERE match_id={$m}");}catch(Throwable $e){}} $db->query("DELETE FROM bd_prod_matches WHERE id={$m}");}
+            if($k)$db->query("DELETE FROM bd_prod_kiosks WHERE id={$k}");
+            if($t){try{$db->query("DELETE FROM bd_prod_tournament_summaries WHERE tournament_id={$t}");}catch(Throwable $e){} try{$db->query("DELETE FROM bd_prod_season_ranking_events WHERE tournament_id={$t}");}catch(Throwable $e){} $db->query("DELETE FROM bd_prod_tournaments WHERE id={$t}");}
+            foreach([(int)getenv("PLAYER_A"),(int)getenv("PLAYER_B")] as $p)if($p)$db->query("DELETE FROM bd_prod_players WHERE id={$p}"); if($c)$db->query("DELETE FROM bd_prod_clubs WHERE id={$c}");
+          '
+
+      - name: Verify final safe state
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          health="$(curl -fsS --max-time 20 "$NODE_BASE_URL/health")"
+          test "$(jq -r '.mode' <<<"$health")" = 'readonly'
+          test "$(jq -r '.writes_armed' <<<"$health")" = 'false'
+          release="$(curl -fsS --max-time 20 "$PROD_BASE_URL/release.json?cb=$RANDOM")"
+          test "$(jq -r '.sha' <<<"$release")" = "$RELEASE_SHA"
+
+      - name: Record successful synthetic PROD canary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo '### Synthetic PROD backend-v2 canary passed'
+            echo
+            echo 'One isolated PROD fixture traversed Domeneshop PHP -> Render/Node -> bd_prod_ for start -> visit -> undo.'
+            echo 'The fixture was removed, Domeneshop routing was restored to PHP, and Render was returned to readonly.'
+            echo '**No physical kiosk or Scolia board was routed to Node.**'
+          } >> "$GITHUB_STEP_SUMMARY"
