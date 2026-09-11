@@ -54,7 +54,9 @@ try {
   assert.equal(byPlayer.get(fixture.playerB)?.status, "applied");
   assert.equal(byPlayer.get(fixture.playerA)?.ruleset, "linear_v1");
 
-  const metadataA = JSON.parse(byPlayer.get(fixture.playerA)?.metadata_json ?? "{}");
+  // mysql2 may expose MySQL JSON columns as an already-decoded object. Keep
+  // this assertion compatible with both decoded JSON and string transports.
+  const metadataA = jsonObject(byPlayer.get(fixture.playerA)?.metadata_json);
   assert.equal(metadataA.calculation, "completed_match_wins_fallback");
 
   await provider.withConnection(async (sql) => {
@@ -163,6 +165,14 @@ async function cleanupFixture() {
   } catch (error) {
     console.error("backend-v2 ranking E2E cleanup failed", error);
   }
+}
+
+function jsonObject(value) {
+  if (value === null || value === undefined || value === "") return {};
+  if (typeof value === "string") return JSON.parse(value);
+  assert.equal(typeof value, "object", `metadata_json must be an object or JSON string, got ${typeof value}`);
+  assert.ok(!Array.isArray(value), "metadata_json must be a JSON object, not an array");
+  return value;
 }
 
 function isInitialConnectivityError(error) {
