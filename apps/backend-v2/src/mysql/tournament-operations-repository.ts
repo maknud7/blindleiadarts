@@ -174,9 +174,9 @@ export class MySqlTournamentOperationsRepository {
       if (currentKioskId === targetKioskId && status !== "pending") {
         return {
           moved: false,
-          match_id: publicId(matchId),
+          match_id: matchId,
           status,
-          kiosk_id: publicId(targetKioskId),
+          kiosk_id: targetKioskId,
           board_number: numberValue(board.board_number),
         };
       }
@@ -226,10 +226,10 @@ export class MySqlTournamentOperationsRepository {
 
       return {
         moved: true,
-        match_id: publicId(matchId),
+        match_id: matchId,
         status: status === "pending" ? "assigned" : status,
-        from_kiosk_id: currentKioskId === null ? null : publicId(currentKioskId),
-        kiosk_id: publicId(targetKioskId),
+        from_kiosk_id: currentKioskId,
+        kiosk_id: targetKioskId,
         board_number: numberValue(board.board_number),
         player_a_name: String(match.player_a_name ?? ""),
         player_b_name: String(match.player_b_name ?? ""),
@@ -282,8 +282,8 @@ export class MySqlTournamentOperationsRepository {
           throw new DomainValidationError("match_assignment_conflict", "Kampen kunne ikke tildeles skiven uten konflikt.", 409);
         }
         items.push({
-          match_id: publicId(matchId),
-          kiosk_id: publicId(kioskId),
+          match_id: matchId,
+          kiosk_id: kioskId,
           board_number: numberValue(board.board_number),
           players: `${String(candidate.player_a_name ?? "")} vs ${String(candidate.player_b_name ?? "")}`,
         });
@@ -455,7 +455,7 @@ export class MySqlTournamentOperationsRepository {
       const reserved = numberValue(row.is_reserved) === 1;
       return {
         ...row,
-        id: publicId(id),
+        id,
         board_number: numberValue(row.board_number),
         is_active: active,
         is_busy: busy,
@@ -465,7 +465,7 @@ export class MySqlTournamentOperationsRepository {
       };
     });
     return {
-      tournament_id: publicId(tournamentId),
+      tournament_id: tournamentId,
       tournament_status: String(tournament.status ?? ""),
       selection_initialized: initialized,
       boards,
@@ -628,11 +628,6 @@ function nullableId(value: unknown): string | null {
   return /^[1-9][0-9]*$/.test(normalized) ? normalized : null;
 }
 
-function publicId(value: string): string | number {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) ? numeric : value;
-}
-
 function numberValue(value: unknown): number {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
@@ -647,19 +642,16 @@ function nullableNumber(value: unknown): number | null {
 function publicTournament(row: QueryResultRow): Record<string, unknown> {
   return {
     ...row,
-    id: publicId(requiredId(row.id, "tournament_id")),
-    club_id: publicId(requiredId(row.club_id, "club_id")),
-    season_id: nullableId(row.season_id) ? publicId(nullableId(row.season_id)!) : null,
+    id: requiredId(row.id, "tournament_id"),
+    club_id: requiredId(row.club_id, "club_id"),
+    season_id: nullableId(row.season_id),
     auto_assign_enabled: numberValue(row.auto_assign_enabled) === 1,
   };
 }
 
 function publicIds(row: QueryResultRow, fields: readonly string[]): Record<string, unknown> {
   const output: Record<string, unknown> = { ...row };
-  for (const field of fields) {
-    const value = nullableId(row[field]);
-    output[field] = value === null ? null : publicId(value);
-  }
+  for (const field of fields) output[field] = nullableId(row[field]);
   return output;
 }
 
