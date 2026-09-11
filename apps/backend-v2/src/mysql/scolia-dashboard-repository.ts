@@ -1,10 +1,15 @@
 import type { MySqlSessionProvider, QueryResultRow, TablePrefix } from "./contracts.js";
+import { MySqlScreenDeviceRepository } from "./screen-device-repository.js";
 
 export class MySqlScoliaDashboardRepository {
+  private readonly screens: MySqlScreenDeviceRepository;
+
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly runtimePrefix: TablePrefix,
-  ) {}
+  ) {
+    this.screens = new MySqlScreenDeviceRepository(sessions, runtimePrefix);
+  }
 
   async listOpenIncidents(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
     const clubId = requiredId(clubIdInput, "club_id");
@@ -60,6 +65,18 @@ export class MySqlScoliaDashboardRepository {
       }
       return counts;
     });
+  }
+
+  async listScreenDevices(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
+    return this.screens.listByClubId(clubIdInput);
+  }
+
+  async createScreenDevice(clubIdInput: unknown, labelInput: unknown): Promise<Record<string, unknown>> {
+    return this.screens.createForClub(clubIdInput, labelInput);
+  }
+
+  async deleteScreenDevice(clubIdInput: unknown, screenIdInput: unknown): Promise<boolean> {
+    return this.screens.deleteForClub(clubIdInput, screenIdInput);
   }
 }
 
