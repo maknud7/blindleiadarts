@@ -4,9 +4,9 @@ import type { ScoringSource } from "./contracts/canonical-scoring.js";
 import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
 import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
+import { MySqlCanonicalPlayoffReconciliation } from "./mysql/canonical-playoff-reconciliation.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
-import { MySqlCoreOnlyMutationGuard } from "./mysql/core-only-mutation-guard.js";
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
@@ -18,7 +18,6 @@ import {
   mutationsAllowed,
   RuntimeAccessError,
 } from "./runtime/config.js";
-import { CoreOnlyCanonicalSideEffects } from "./runtime/core-only-side-effects.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
 
@@ -37,11 +36,10 @@ const sessions = new MySql2SessionProvider({
 });
 const scoringRepository = new MySqlCanonicalScoringRepository(sessions, config.prefixes.runtime);
 const scoringState = new MySqlCanonicalScoringState(sessions, config.prefixes.runtime);
+const playoffs = new MySqlCanonicalPlayoffReconciliation(sessions, config.prefixes.runtime);
 const elo = new MySqlCanonicalEloLedger(sessions, config.prefixes.runtime);
 const tournamentElo = new MySqlTournamentEloProjection(sessions, config.prefixes.runtime);
 const ranking = new MySqlLinearRankingProjection(sessions, config.prefixes.runtime);
-const coreOnlyMutationGuard = new MySqlCoreOnlyMutationGuard(sessions, config.prefixes.runtime);
-const coreOnlySideEffects = new CoreOnlyCanonicalSideEffects(scoringState);
 const realtime = new CanonicalRealtimePublisher(
   sessions,
   config.prefixes.runtime,
@@ -56,7 +54,7 @@ const realtime = new CanonicalRealtimePublisher(
 const scoring = new CanonicalScoringService(
   scoringRepository,
   scoringState,
-  coreOnlySideEffects,
+  playoffs,
   elo,
   tournamentElo,
   ranking,
@@ -111,7 +109,6 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
 
   if (method === "POST" && url.pathname === "/internal/v1/scoring/start-match") {
     const { kioskId, source } = await scoringCommandContext(request);
-    await coreOnlyMutationGuard.assertAllowed(kioskId, "start");
     const result = await scoring.startMatch({ kiosk_id: kioskId, source });
     sendJson(response, 200, { ok: true, result });
     return;
@@ -128,7 +125,6 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       throw new DomainValidationError("invalid_visit_payload", "Scoring payload must be a JSON object.");
     }
 
-    await coreOnlyMutationGuard.assertAllowed(kioskId, "visit");
     const result = await scoring.recordVisit({
       kiosk_id: kioskId,
       source,
@@ -140,7 +136,6 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
 
   if (method === "POST" && url.pathname === "/internal/v1/scoring/undo") {
     const { kioskId, source } = await scoringCommandContext(request);
-    await coreOnlyMutationGuard.assertAllowed(kioskId, "undo");
     const result = await scoring.undoLastVisit({ kiosk_id: kioskId, source });
     sendJson(response, 200, { ok: true, result });
     return;
