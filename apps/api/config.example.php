@@ -17,9 +17,10 @@ return [
         'bridge_secret' => 'replace-with-a-long-random-secret',
     ],
     'backend_v2' => [
-        // Safe default: every scoring mutation remains on PHP unless candidate mode,
-        // HTTPS host, token and explicit kiosk allowlist are all configured.
+        // Safe defaults: scoring and equipment remain on PHP unless their
+        // independent single-writer routing modes are explicitly enabled.
         'scoring_routing_mode' => 'php',
+        'equipment_routing_mode' => 'php',
         'base_url' => '',
         'canary_kiosk_ids' => '',
         'internal_token' => '',
