@@ -96,9 +96,12 @@ jobs:
           grep -Fq 'DB_TABLE_PREFIX=bd_prod_' apps/backend-v2/src/runtime/config.ts
           grep -Fq 'Backend v2 MySQL executor is read-only' apps/backend-v2/src/mysql/mysql2-session-provider.ts
 
-          # All canonical adapters now exist, but PROD writes remain compile-time
-          # blocked until hosted TEST proves the complete playoff lifecycle.
-          grep -Fq 'const FULL_CANONICAL_SIDE_EFFECTS_READY = false' apps/backend-v2/src/runtime/config.ts
+          # Hosted TEST has proven the complete canonical side-effect chain.
+          # PROD remains independently compile-time blocked until a persistent
+          # runtime and explicit canary routing/rollback plan are approved.
+          grep -Fq 'const CANONICAL_SIDE_EFFECTS_READY = true' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'const PROD_CANARY_WRITES_READY = false' apps/backend-v2/src/runtime/config.ts
+          grep -Fq 'prodWriteConfirmationPresent && CANONICAL_SIDE_EFFECTS_READY && PROD_CANARY_WRITES_READY' apps/backend-v2/src/runtime/config.ts
 
           grep -Fq 'CanonicalEloPort' apps/backend-v2/src/service/canonical-scoring-service.ts
           grep -Fq 'CanonicalPlayoffPort' apps/backend-v2/src/service/canonical-scoring-service.ts
