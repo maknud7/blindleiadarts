@@ -84,15 +84,26 @@ jobs:
           if (!health.ok || health.environment !== 'prod' || health.mode !== 'readonly') {
             throw new Error(`Unexpected production health payload: ${JSON.stringify(health)}`);
           }
-          if (health.writes_armed !== false || health.runtime_prefix !== 'bd_prod_' || health.max_connections !== 1) {
-            throw new Error(`Production safety boundary is not read-only: ${JSON.stringify(health)}`);
+          if (
+            health.canonical_side_effects_ready !== true ||
+            health.writes_armed !== false ||
+            health.runtime_prefix !== 'bd_prod_' ||
+            health.max_connections !== 1
+          ) {
+            throw new Error(`Production readiness/write boundary is wrong: ${JSON.stringify(health)}`);
           }
-          if (!ready.ok || ready.runtime_prefix !== 'bd_prod_' || ready.writes_armed !== false) {
+          if (
+            !ready.ok ||
+            ready.canonical_side_effects_ready !== true ||
+            ready.runtime_prefix !== 'bd_prod_' ||
+            ready.writes_armed !== false
+          ) {
             throw new Error(`Production schema preflight failed: ${JSON.stringify(ready)}`);
           }
           console.log(JSON.stringify({
             ok: true,
             mode: health.mode,
+            canonical_side_effects_ready: health.canonical_side_effects_ready,
             writes_armed: health.writes_armed,
             mysql_version: ready.mysql_version,
             checked_tables: ready.checked_tables,
