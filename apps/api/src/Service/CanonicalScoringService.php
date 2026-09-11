@@ -18,7 +18,7 @@ use Throwable;
  * input before reaching this service. From here on, the same match rules,
  * projections and realtime refresh path are always used.
  */
-final class CanonicalScoringService
+final class CanonicalScoringService implements ScoringMutationPort
 {
     private mysqli $connection;
     private string $tablePrefix;
@@ -45,14 +45,9 @@ final class CanonicalScoringService
     {
         $before = $this->startState($kioskId);
         $this->scoring->startMatch($kioskId);
-
-        // startMatch is intentionally idempotent. Scolia may call it while a visit
-        // is being assembled, so only reconcile/publish when it actually starts a
-        // match or opens a new leg.
         if ($before === null || ((string) $before['status'] === 'in_progress' && (int) $before['has_open_leg'] === 1)) {
             return;
         }
-
         $matchId = (int) $before['id'];
         $this->playoffs->afterMutation($matchId, false);
         $this->publishRefresh($kioskId, $matchId, $source, 'match_started');
@@ -63,15 +58,9 @@ final class CanonicalScoringService
     {
         $matchId = $this->playoffs->targetMatchIdForKiosk($kioskId, false);
         $this->scoring->recordVisit($kioskId, $payload);
-
-        // ELO is a match result, never live match state. It is therefore applied
-        // only after the canonical match has actually reached completed status.
         if ($matchId !== null && $this->matchIsCompleted($matchId)) {
             $this->elo->applyCompletedMatch($matchId);
         }
-
-        // Playoff reconciliation can complete the whole tournament. Linear season
-        // points are therefore reconciled only after the bracket lifecycle is current.
         $this->playoffs->afterMutation($matchId, false);
         $this->tournamentElo->syncByMatchId($matchId);
         $this->linearRanking->reconcileByMatchId($matchId);
@@ -82,13 +71,9 @@ final class CanonicalScoringService
     {
         $matchId = $this->playoffs->assertUndoAllowed($kioskId);
         $this->scoring->undoLastVisit($kioskId);
-
-        // If the undo reopens a previously completed match, remove its already
-        // applied ELO result. No new ELO is calculated until the match completes again.
         if ($matchId !== null) {
             $this->elo->revertMatch($matchId);
         }
-
         $this->playoffs->afterMutation($matchId, true);
         $this->tournamentElo->syncByMatchId($matchId);
         $this->linearRanking->reconcileByMatchId($matchId);
@@ -143,11 +128,7 @@ final class CanonicalScoringService
         if ($this->config === null || !$this->config->realtimePublishEnabled()) {
             return;
         }
-
-        $sql = sprintf(
-            'SELECT code, club_id FROM `%1$skiosks` WHERE id=? LIMIT 1',
-            $this->tablePrefix
-        );
+        $sql = sprintf('SELECT code, club_id FROM `%1$skiosks` WHERE id=? LIMIT 1', $this->tablePrefix);
         $stmt = $this->connection->prepare($sql);
         $stmt->bind_param('i', $kioskId);
         $stmt->execute();
@@ -156,20 +137,12 @@ final class CanonicalScoringService
         if ($row === null) {
             return;
         }
-
         $channels = [];
         $code = trim((string) ($row['code'] ?? ''));
         $clubId = (int) ($row['club_id'] ?? 0);
-        if ($code !== '') {
-            $channels[] = 'kiosk:' . $code;
-        }
-        if ($clubId > 0) {
-            $channels[] = 'club:' . $clubId;
-        }
-        if ($channels === []) {
-            return;
-        }
-
+        if ($code !== '') $channels[] = 'kiosk:' . $code;
+        if ($clubId > 0) $channels[] = 'club:' . $clubId;
+        if ($channels === []) return;
         $this->publish($channels, [
             'refresh' => true,
             'reason' => $reason,
@@ -182,20 +155,14 @@ final class CanonicalScoringService
     /** @param array<int,string> $channels @param array<string,mixed> $payload */
     private function publish(array $channels, array $payload): void
     {
-        if ($this->config === null) {
-            return;
-        }
-
+        if ($this->config === null) return;
         $body = json_encode([
             'secret' => $this->config->realtimePublishSecret(),
             'channels' => $channels,
             'event' => 'snapshot',
             'payload' => $payload,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($body === false) {
-            return;
-        }
-
+        if ($body === false) return;
         $context = stream_context_create([
             'http' => [
                 'method' => 'POST',
@@ -205,19 +172,15 @@ final class CanonicalScoringService
                 'ignore_errors' => true,
             ],
         ]);
-
         try {
             @file_get_contents($this->config->realtimePublishUrl(), false, $context);
         } catch (Throwable) {
-            // Realtime is best effort and must never break canonical scoring.
         }
     }
 
     private function normalizeSource(string $source): string
     {
         $source = strtolower(trim($source));
-        return in_array($source, ['manual', 'scolia', 'import', 'api'], true)
-            ? $source
-            : 'api';
+        return in_array($source, ['manual', 'scolia', 'import', 'api'], true) ? $source : 'api';
     }
 }
