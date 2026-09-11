@@ -107,14 +107,8 @@ jobs:
           exit 1
 
       - name: Verify TEST DB connectivity without mutation
-        env:
-          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
         run: |
           set -Eeuo pipefail
-          body="$(mktemp)"
-          status="$(curl -sS --max-time 20 -o "$body" -w '%{http_code}' \
-            -H "X-BD-Backend-V2-Token: $INTERNAL_TOKEN" \
-            "$HOST_URL/v1/clubs")"
-          [[ "$status" == "200" ]]
-          jq -e '.ok == true and (.items | type == "array")' "$body" >/dev/null
-          rm -f "$body"
+          ready="$(curl -fsS --max-time 20 "$HOST_URL/ready")"
+          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and (.checked_tables | type == "array") and (.checked_tables | length > 0)' <<<"$ready" >/dev/null
+          echo 'TEST backend-v2 preflight reached bd_test_ successfully.'
