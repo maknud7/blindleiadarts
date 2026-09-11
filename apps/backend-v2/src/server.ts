@@ -7,6 +7,7 @@ import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalPlayoffReconciliation } from "./mysql/canonical-playoff-reconciliation.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
 import { MySqlCanonicalScoringState } from "./mysql/canonical-scoring-state.js";
+import { MySqlIdentityAuthRepository } from "./mysql/identity-auth-repository.js";
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
@@ -20,6 +21,7 @@ import {
 } from "./runtime/config.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
+import { IdentityAuthService } from "./service/identity-auth-service.js";
 
 const config = loadRuntimeConfig();
 const sessions = new MySql2SessionProvider({
@@ -60,10 +62,17 @@ const scoring = new CanonicalScoringService(
   ranking,
   realtime,
 );
+const identityRepository = new MySqlIdentityAuthRepository(
+  sessions,
+  config.prefixes.runtime,
+  config.prefixes.identity,
+);
+const identityAuth = new IdentityAuthService(identityRepository);
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 
 const server = createServer(async (request, response) => {
   try {
+    if (handleCors(request, response)) return;
     await dispatch(request, response);
   } catch (error) {
     sendError(response, error);
@@ -73,6 +82,7 @@ const server = createServer(async (request, response) => {
 async function dispatch(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", "http://backend-v2.internal");
+  const publicPath = normalizePublicPath(url.pathname);
 
   if (method === "GET" && url.pathname === "/health") {
     sendJson(response, 200, {
@@ -85,6 +95,7 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
       runtime_prefix: config.prefixes.runtime,
+      identity_prefix: config.prefixes.identity,
       max_connections: config.mysql.budget.maxConcurrentConnections,
       connection_mode: "idle-reuse",
       db_idle_ms: config.mysql.idleConnectionTimeoutMs,
@@ -104,6 +115,20 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
     });
+    return;
+  }
+
+  if (method === "POST" && publicPath === "/v1/auth/login") {
+    assertMutationAllowed(config);
+    const body = await readJsonObject(request);
+    const result = await identityAuth.login(body.email ?? body.username, body.password);
+    sendJson(response, 200, { ok: true, ...result });
+    return;
+  }
+
+  if (method === "GET" && publicPath === "/v1/auth/me") {
+    const result = await identityAuth.me(bearerToken(request), mutationsAllowed(config));
+    sendJson(response, 200, { ok: true, ...result });
     return;
   }
 
@@ -229,6 +254,45 @@ function header(request: IncomingMessage, name: string): string | undefined {
   const value = request.headers[name];
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+function bearerToken(request: IncomingMessage): string | null {
+  const authorization = header(request, "authorization")?.trim() ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(authorization);
+  const token = match?.[1]?.trim() ?? "";
+  return token === "" ? null : token;
+}
+
+function normalizePublicPath(pathname: string): string {
+  if (pathname.startsWith("/api/v1/")) return pathname.slice(4);
+  return pathname;
+}
+
+function handleCors(request: IncomingMessage, response: ServerResponse): boolean {
+  const origin = header(request, "origin")?.trim() ?? "";
+  const allowed = new Set([
+    "https://blindleiadart.ingenting.org",
+    "https://test.blindleiadart.ingenting.org",
+    "https://test.blindleiadarts.ingenting.org",
+    "https://dart.ingenting.org",
+  ]);
+  if (origin !== "" && allowed.has(origin)) {
+    response.setHeader("access-control-allow-origin", origin);
+    response.setHeader("vary", "Origin");
+    response.setHeader("access-control-allow-headers", "Content-Type, Authorization, X-Kiosk-Pairing-Token, X-Scolia-Bridge-Secret");
+    response.setHeader("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  }
+  if ((request.method ?? "GET") === "OPTIONS") {
+    if (!allowed.has(origin)) {
+      response.statusCode = 403;
+      response.end();
+      return true;
+    }
+    response.statusCode = 204;
+    response.end();
+    return true;
+  }
+  return false;
 }
 
 server.listen(config.port, config.host, () => {
