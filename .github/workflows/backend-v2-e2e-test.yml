@@ -108,6 +108,29 @@ jobs:
       - name: Release hosted MySQL connection budget after ranking
         run: sleep 5
 
+      - name: Run canonical playoff lifecycle against TEST MySQL
+        env:
+          BD_APP_ENV: test
+          BD_BACKEND_V2_MODE: test-write
+          BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+          BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+          BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '30000'
+          HOST: 127.0.0.1
+          PORT: '18085'
+          RELEASE_SHA: ${{ github.sha }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_TABLE_PREFIX: bd_test_
+          IDENTITY_TABLE_PREFIX: bd_prod_
+          HARDWARE_TABLE_PREFIX: bd_prod_
+        run: node apps/backend-v2/e2e/playoff-lifecycle.mjs
+
+      - name: Release hosted MySQL connection budget after playoff
+        run: sleep 5
+
       - name: Run canonical scoring lifecycle against TEST MySQL
         env:
           BD_APP_ENV: test
