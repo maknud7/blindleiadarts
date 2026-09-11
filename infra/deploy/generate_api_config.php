@@ -50,9 +50,11 @@ $bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
 // production deploy could silently return an already-proven domain to PHP.
 $defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
 $defaultBackendV2EquipmentRoutingMode = $isProd ? 'node' : 'php';
-// Player/public/live is enabled by default only in TEST while parity is proven.
-// PROD remains fail-closed on PHP until the separate production release gate.
+// Player/public/live remains TEST-only while the broader PROD read cutover is gated.
 $defaultBackendV2PlayerLiveRoutingMode = $isTest ? 'node' : 'php';
+// Realtime client config is a side-effect-free slice with an independent gate.
+// It is safe to preserve on Node in TEST and PROD without moving the wider player/live surface.
+$defaultBackendV2RealtimeConfigRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
@@ -77,6 +79,7 @@ $config = [
         'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', $defaultBackendV2RoutingMode) ?? $defaultBackendV2RoutingMode,
         'equipment_routing_mode' => env_optional('BACKEND_V2_EQUIPMENT_ROUTING_MODE', $defaultBackendV2EquipmentRoutingMode) ?? $defaultBackendV2EquipmentRoutingMode,
         'player_live_routing_mode' => env_optional('BACKEND_V2_PLAYER_LIVE_ROUTING_MODE', $defaultBackendV2PlayerLiveRoutingMode) ?? $defaultBackendV2PlayerLiveRoutingMode,
+        'realtime_config_routing_mode' => env_optional('BACKEND_V2_REALTIME_CONFIG_ROUTING_MODE', $defaultBackendV2RealtimeConfigRoutingMode) ?? $defaultBackendV2RealtimeConfigRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
         'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
         'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', $defaultBackendV2InternalToken) ?? $defaultBackendV2InternalToken,
