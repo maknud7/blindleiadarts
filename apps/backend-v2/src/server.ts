@@ -13,6 +13,7 @@ import { MySqlIdentityAuthRepository, type IdentityUser } from "./mysql/identity
 import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.js";
 import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
+import { MySqlPlayerLiveReadRepository } from "./mysql/player-live-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
 import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
@@ -30,6 +31,7 @@ import {
   RuntimeAccessError,
 } from "./runtime/config.js";
 import { EquipmentAdminRouter } from "./runtime/equipment-admin-router.js";
+import { PlayerLiveReadRouter } from "./runtime/player-live-read-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
@@ -87,6 +89,8 @@ const accountProfiles = new MySqlAccountProfileRepository(
   config.prefixes.runtime,
   config.prefixes.identity,
 );
+const playerLiveReads = new MySqlPlayerLiveReadRepository(sessions, config.prefixes.runtime);
+const playerLiveRuntime = new PlayerLiveReadRouter(config, identityRepository, playerLiveReads);
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
 const equipment = new MySqlEquipmentAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
@@ -225,6 +229,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const playerLiveRoute = await playerLiveRuntime.handle(method, publicPath, request);
+  if (playerLiveRoute !== null) {
+    sendJson(response, playerLiveRoute.statusCode, playerLiveRoute.payload);
     return;
   }
 
