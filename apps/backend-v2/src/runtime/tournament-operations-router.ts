@@ -99,8 +99,8 @@ export class TournamentOperationsRouter {
     const playoffMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/playoffs$/.exec(path);
     if (method === "GET" && playoffMatch) {
       const tournamentId = requiredCapture(playoffMatch, 1);
-      const tournament = await this.requireTournament(tournamentId);
-      return ok({ bracket: await this.playoffs.getBracket(tournamentId), tournament });
+      await this.requireTournament(tournamentId);
+      return ok({ bracket: await this.playoffs.getBracket(tournamentId) });
     }
 
     const playoffGenerate = /^\/v1\/tournaments\/([1-9][0-9]*)\/playoffs\/generate$/.exec(path);
