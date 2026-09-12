@@ -25,6 +25,79 @@ export class TournamentAttendanceRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentAttendanceRouteResult | null> {
+    const statusMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/check-in-status$/.exec(path);
+    if (method === "GET" && statusMatch) {
+      const user = await this.requireUser(request);
+      const playerId = requiredPlayerId(user);
+      return ok(await this.attendance.statusForPlayer(requiredCapture(statusMatch, 1), playerId));
+    }
+
+    const clubSettingsMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/checkin-settings$/.exec(path);
+    if (clubSettingsMatch && (method === "GET" || method === "PUT" || method === "PATCH")) {
+      const clubId = requiredCapture(clubSettingsMatch, 1);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, clubId);
+      if (method === "GET") return ok({ settings: await this.attendance.getClubSettings(clubId) });
+      assertMutationAllowed(this.config);
+      return ok({
+        settings: await this.attendance.updateClubSettings(
+          clubId,
+          await readJsonObject(request),
+          requiredId(user.id, "user_id"),
+        ),
+      });
+    }
+
+    const tournamentSettingsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/checkin-settings$/.exec(path);
+    if (tournamentSettingsMatch && (method === "GET" || method === "PUT" || method === "PATCH")) {
+      const tournamentId = requiredCapture(tournamentSettingsMatch, 1);
+      const settings = await this.requireTournamentSettings(tournamentId);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(settings.club_id, "club_id"));
+      if (method === "GET") return ok({ settings });
+      assertMutationAllowed(this.config);
+      return ok({
+        settings: await this.attendance.updateTournamentSettings(tournamentId, await readJsonObject(request)),
+      });
+    }
+
+    const rotateMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/checkin-code\/rotate$/.exec(path);
+    if (method === "POST" && rotateMatch) {
+      assertMutationAllowed(this.config);
+      const tournamentId = requiredCapture(rotateMatch, 1);
+      const settings = await this.requireTournamentSettings(tournamentId);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(settings.club_id, "club_id"));
+      return ok({ settings: await this.attendance.rotateTournamentCode(tournamentId) });
+    }
+
+    const adminCheckinMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/admin-check-in\/([1-9][0-9]*)$/.exec(path);
+    if (adminCheckinMatch && (method === "POST" || method === "DELETE")) {
+      assertMutationAllowed(this.config);
+      const tournamentId = requiredCapture(adminCheckinMatch, 1);
+      const playerId = requiredCapture(adminCheckinMatch, 2);
+      const settings = await this.requireTournamentSettings(tournamentId);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(settings.club_id, "club_id"));
+      return ok({
+        registration: method === "POST"
+          ? await this.attendance.adminCheckIn(tournamentId, playerId)
+          : await this.attendance.adminCheckOut(tournamentId, playerId),
+      });
+    }
+
+    const guestMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/registrations\/guest$/.exec(path);
+    if (method === "POST" && guestMatch) {
+      assertMutationAllowed(this.config);
+      const tournamentId = requiredCapture(guestMatch, 1);
+      const settings = await this.requireTournamentSettings(tournamentId);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(settings.club_id, "club_id"));
+      return ok({
+        registration: await this.attendance.addGuest(tournamentId, await readJsonObject(request)),
+      }, 201);
+    }
+
     const checkInMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/check-in$/.exec(path);
     if (method === "POST" && checkInMatch) {
       assertMutationAllowed(this.config);
@@ -80,6 +153,14 @@ export class TournamentAttendanceRouter {
       throw new DomainValidationError("tournament_not_found", "Turneringen ble ikke funnet.", 404);
     }
     return tournament;
+  }
+
+  private async requireTournamentSettings(tournamentId: string): Promise<Record<string, unknown>> {
+    const settings = await this.attendance.getTournamentSettings(tournamentId);
+    if (settings === null) {
+      throw new DomainValidationError("tournament_not_found", "Turneringen ble ikke funnet.", 404);
+    }
+    return settings;
   }
 
   private async requireUser(request: IncomingMessage): Promise<IdentityUser> {

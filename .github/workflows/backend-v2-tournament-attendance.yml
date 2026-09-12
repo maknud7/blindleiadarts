@@ -6,10 +6,12 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/mysql/tournament-attendance-repository.ts'
+      - 'apps/backend-v2/src/mysql/tournament-attendance-admin-repository.ts'
       - 'apps/backend-v2/src/runtime/tournament-attendance-router.ts'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/test/tournament-attendance*.test.mjs'
       - 'apps/backend-v2/e2e/tournament-attendance-lifecycle.mjs'
+      - 'apps/backend-v2/e2e/tournament-attendance-admin-lifecycle.mjs'
       - 'apps/api/src/BackendV2TournamentProxyApplication.php'
       - 'apps/api/tests/backend_v2_tournament_proxy_routing_test.php'
       - '.github/workflows/backend-v2-tournament-attendance.yml'
