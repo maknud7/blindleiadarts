@@ -18,6 +18,9 @@ $yes = [
     ['DELETE', '/v1/tournaments/9/register'],
     ['POST', '/v1/tournaments/9/registrations'],
     ['DELETE', '/v1/tournaments/9/registrations/17'],
+    ['POST', '/v1/tournaments/9/check-in'],
+    ['POST', '/v1/tournaments/9/finish-checkin'],
+    ['POST', '/v1/tournaments/9/start'],
     ['GET', '/v1/tournaments/9/operations'],
     ['PATCH', '/v1/tournaments/9/operations/settings'],
     ['GET', '/v1/tournaments/9/operations/boards'],
@@ -39,10 +42,6 @@ foreach ($yes as [$method, $path]) {
 $no = [
     ['POST', '/v1/tournaments'],
     ['DELETE', '/v1/tournaments/9'],
-    // Check-in still needs PHP code/window semantics; start still needs the
-    // attendance finalization guard. Do not capture them until Node has parity.
-    ['POST', '/v1/tournaments/9/check-in'],
-    ['POST', '/v1/tournaments/9/start'],
     ['POST', '/v1/tournaments/9/finish'],
     ['POST', '/v1/tournaments/9/playoffs'],
     ['GET', '/v1/tournaments/9/registrations'],
