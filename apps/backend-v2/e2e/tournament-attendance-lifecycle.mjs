@@ -153,6 +153,12 @@ async function createFixture() {
       fixture.players.push(requireInsertId(inserted, `player ${index + 1}`));
     }
 
+    const identityMemberId = fixture.players[0];
+    await sql.execute(
+      `UPDATE \`${prefix}players\` SET member_id=? WHERE id=?`,
+      [identityMemberId, fixture.players[0]],
+    );
+
     const checkinCodes = ["ABC", "DEF"];
     for (let index = 0; index < 2; index += 1) {
       const tournament = await sql.execute(
@@ -188,9 +194,9 @@ async function createFixture() {
     const username = `attendance-e2e-${suffix}`;
     const user = await sql.execute(
       `INSERT INTO \`${prefix}user_accounts\`
-        (username,email,password_hash,display_name,player_id,role,is_active,account_status)
-       VALUES (?,?,NULL,?,?,'player',1,'active')`,
-      [username, `${username}@example.invalid`, `Attendance E2E Admin ${suffix}`, fixture.players[0]],
+        (username,email,password_hash,display_name,player_id,member_id,role,is_active,account_status)
+       VALUES (?,?,NULL,?,?,?,'player',1,'active')`,
+      [username, `${username}@example.invalid`, `Attendance E2E Admin ${suffix}`, fixture.players[0], identityMemberId],
     );
     fixture.user = requireInsertId(user, "user");
     await sql.execute(
