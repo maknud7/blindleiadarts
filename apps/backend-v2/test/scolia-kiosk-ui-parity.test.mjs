@@ -171,8 +171,9 @@ test("Scolia undo refuses to remove a latest manual visit", async () => {
   );
 });
 
-test("kiosk Scolia frontend calls backend-v2 directly", () => {
+test("kiosk Scolia frontend calls backend-v2 directly and legacy PHP stays retired", () => {
   const source = fs.readFileSync("apps/kiosk/scolia-live-ux.js", "utf8");
+  assert.equal(fs.existsSync("apps/api/kiosk-scolia-ui.php"), false, "legacy kiosk Scolia PHP endpoint must stay retired");
   assert.doesNotMatch(source, /kiosk-scolia-ui\.php/);
   assert.match(source, /\/kiosks\/\$\{encodeURIComponent\(code\)\}\/scolia\/\$\{encodeURIComponent\(action\)\}/);
   assert.match(source, /request\("status"\)/);
