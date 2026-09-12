@@ -171,7 +171,7 @@ export class EquipmentAdminRouter {
       const clubId = capture(scoliaSettings, 1);
       const admin = await this.requireAdmin(request, clubId);
       assertProductionHardwareMutationAllowed(this.config);
-      return ok({ settings: await this.scolia.updateClubSettings(clubId, await readJsonObject(request), decimalId(admin.id) });
+      return ok({ settings: await this.scolia.updateClubSettings(clubId, await readJsonObject(request), decimalId(admin.id)) });
     }
 
     const boardScolia = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks\/([1-9][0-9]*)\/scolia$/.exec(path);
