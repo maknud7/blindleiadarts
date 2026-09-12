@@ -41,6 +41,15 @@ jobs:
         run: |
           sed -i 's/if "countBoardMatchesWith(" not in text:/if "private async countBoardMatchesWith" not in text:/' .github/tmp-equipment-delete-patch.py
           python3 .github/tmp-equipment-delete-patch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/backend-v2/test/equipment-delete-parity.test.mjs')
+          lines = path.read_text().splitlines()
+          for index, line in enumerate(lines):
+              if 'assert.ok(statements.some' in line and 'bd_prod_${table}' in line:
+                  lines[index] = '    assert.ok(statements.some((sql) => sql.includes("DELETE FROM `bd_prod_" + table + "`")));'
+          path.write_text('\n'.join(lines) + '\n')
+          PY
       - name: Build and run focused contracts
         run: |
           npm install --no-package-lock --ignore-scripts
