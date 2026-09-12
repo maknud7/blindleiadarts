@@ -18,6 +18,14 @@ $respond = static function (array $payload, int $status = 200): never {
 
 try {
     $config = Config::load(__DIR__);
+    if ($config->backendV2ScoliaRoutingMode() === 'node') {
+        $client = new \Blindleia\Dartkiosk\Api\Service\BackendV2ApiClient(
+            $config->backendV2BaseUrl(),
+            $config->backendV2InternalToken()
+        );
+        $response = $client->request('GET', '/v1/scolia/health');
+        $respond($response['payload'], $response['status']);
+    }
     $database = new Database($config);
     $db = $database->connection();
 
