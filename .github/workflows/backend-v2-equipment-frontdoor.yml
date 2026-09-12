@@ -60,7 +60,13 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps/backend-v2/src/mysql/equipment-admin-repository.ts apps/backend-v2/src/runtime/equipment-admin-router.ts apps/backend-v2/src/mysql/scolia-admin-repository.ts apps/backend-v2/test/equipment-delete-parity.test.mjs apps/api/src/BackendV2EquipmentProxyApplication.php apps/api/tests/backend_v2_equipment_proxy_routing_test.php .github/workflows/backend-v2-equipment-frontdoor.yml
+          git add \
+            apps/backend-v2/src/mysql/equipment-admin-repository.ts \
+            apps/backend-v2/src/runtime/equipment-admin-router.ts \
+            apps/backend-v2/src/mysql/scolia-admin-repository.ts \
+            apps/backend-v2/test/equipment-delete-parity.test.mjs \
+            apps/api/src/BackendV2EquipmentProxyApplication.php \
+            apps/api/tests/backend_v2_equipment_proxy_routing_test.php
           git commit -m 'Move physical board delete safety to backend-v2'
           git push origin HEAD:feat/backend-v2-scolia-ownership-delete-parity
 
