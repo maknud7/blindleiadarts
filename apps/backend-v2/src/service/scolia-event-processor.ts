@@ -64,6 +64,12 @@ export class ScoliaEventProcessor {
           await this.bridge.markEventProcessed(event.id, result.status, result.visit_id ?? null, result.meta ?? null);
           processed += 1;
         } catch (error) {
+          console.error("scolia_event_processing_failed", {
+            event_id: event.id,
+            kiosk_id: event.kiosk_id,
+            event_type: event.event_type,
+            error: error instanceof Error ? error.message : String(error),
+          });
           await this.bridge.markEventFailed(event, error);
           failed += 1;
           blocked = true;
