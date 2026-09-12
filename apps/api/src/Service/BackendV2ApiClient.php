@@ -53,7 +53,6 @@ final class BackendV2ApiClient
             try {
                 $body = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             } catch (JsonException $error) {
-                // Encoding fails before transport, so no remote attempt has occurred.
                 throw new InvalidArgumentException('Backend-v2 API payload is not JSON encodable.', 0, $error);
             }
         }
@@ -67,7 +66,7 @@ final class BackendV2ApiClient
             $name = strtolower(trim($name));
             $value = trim($value);
             if ($value === '') continue;
-            if (!in_array($name, ['authorization', 'x-kiosk-pairing-token'], true)) continue;
+            if (!in_array($name, ['authorization', 'x-kiosk-pairing-token', 'x-scolia-bridge-secret'], true)) continue;
             $headers[] = $name . ': ' . $value;
         }
 
