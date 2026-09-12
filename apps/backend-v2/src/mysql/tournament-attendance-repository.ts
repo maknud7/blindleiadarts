@@ -1,4 +1,5 @@
 import { DomainValidationError } from "../domain/errors.js";
+import { MySqlTournamentAttendanceAdminRepository } from "./tournament-attendance-admin-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
 interface AttendanceTournamentRow extends QueryResultRow {
@@ -34,11 +35,14 @@ export interface TournamentAttendanceResult {
 
 export class MySqlTournamentAttendanceRepository {
   private static readonly MIN_PLAYERS = 2;
+  private readonly admin: MySqlTournamentAttendanceAdminRepository;
 
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly prefix: TablePrefix,
-  ) {}
+  ) {
+    this.admin = new MySqlTournamentAttendanceAdminRepository(sessions, prefix);
+  }
 
   async findTournament(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
     const tournamentId = requiredId(tournamentIdInput, "tournament_id");
@@ -51,6 +55,49 @@ export class MySqlTournamentAttendanceRepository {
         status: String(row.status ?? ""),
       };
     });
+  }
+
+  async getClubSettings(clubIdInput: unknown): Promise<Record<string, unknown>> {
+    return this.admin.getClubSettings(clubIdInput);
+  }
+
+  async updateClubSettings(
+    clubIdInput: unknown,
+    payload: Record<string, unknown>,
+    userIdInput: unknown,
+  ): Promise<Record<string, unknown>> {
+    return this.admin.updateClubSettings(clubIdInput, payload, userIdInput);
+  }
+
+  async getTournamentSettings(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
+    return this.admin.getTournamentSettings(tournamentIdInput);
+  }
+
+  async updateTournamentSettings(
+    tournamentIdInput: unknown,
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.admin.updateTournamentSettings(tournamentIdInput, payload);
+  }
+
+  async rotateTournamentCode(tournamentIdInput: unknown): Promise<Record<string, unknown>> {
+    return this.admin.rotateTournamentCode(tournamentIdInput);
+  }
+
+  async statusForPlayer(tournamentIdInput: unknown, playerIdInput: unknown): Promise<Record<string, unknown>> {
+    return this.admin.statusForPlayer(tournamentIdInput, playerIdInput);
+  }
+
+  async adminCheckIn(tournamentIdInput: unknown, playerIdInput: unknown): Promise<Record<string, unknown>> {
+    return this.admin.adminCheckIn(tournamentIdInput, playerIdInput);
+  }
+
+  async adminCheckOut(tournamentIdInput: unknown, playerIdInput: unknown): Promise<Record<string, unknown>> {
+    return this.admin.adminCheckOut(tournamentIdInput, playerIdInput);
+  }
+
+  async addGuest(tournamentIdInput: unknown, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.admin.addGuest(tournamentIdInput, payload);
   }
 
   async checkInPlayer(
