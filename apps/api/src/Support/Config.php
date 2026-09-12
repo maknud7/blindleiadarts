@@ -108,6 +108,12 @@ final class Config
         return $mode === 'node' ? 'node' : 'php';
     }
 
+    public function backendV2ScoliaRoutingMode(): string
+    {
+        $mode = strtolower(trim((string) (($this->config['backend_v2']['scolia_routing_mode'] ?? 'php') ?: 'php')));
+        return $mode === 'node' ? 'node' : 'php';
+    }
+
     public function backendV2PlayerLiveRoutingMode(): string
     {
         $mode = strtolower(trim((string) (($this->config['backend_v2']['player_live_routing_mode'] ?? 'php') ?: 'php')));
