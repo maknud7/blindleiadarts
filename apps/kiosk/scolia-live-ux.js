@@ -4,7 +4,6 @@
   const activity = document.querySelector("#matchState .activity-card");
   if (!originalCard || !activity || !originalCard.parentNode) return;
 
-  const API_URL = "../api/kiosk-scolia-ui.php";
   const API_ROOT = "../api/v1";
   const OFFLINE_FALLBACK_GRACE_MS = 30000;
   const OFFLINE_FALLBACK_RETRY_MS = 5000;
@@ -118,15 +117,12 @@
     const code = kioskCode();
     const token = pairingToken();
     if (!code || !token) throw new Error("Skiveterminalen mangler pairinginformasjon.");
-    const url = new URL(API_URL, window.location.href);
-    url.searchParams.set("action", action);
-    if (method === "GET") url.searchParams.set("kiosk_code", code);
     const headers = { "X-Kiosk-Pairing-Token": token };
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    const response = await fetch(url.toString(), {
+    const response = await fetch(`${API_ROOT}/kiosks/${encodeURIComponent(code)}/scolia/${encodeURIComponent(action)}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify({ kiosk_code: code, ...body }),
+      body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     });
     const payload = await response.json().catch(() => null);
@@ -137,22 +133,7 @@
   }
 
   async function runtimeAction(action, body) {
-    const code = kioskCode();
-    const token = pairingToken();
-    if (!code || !token) throw new Error("Skiveterminalen mangler pairinginformasjon.");
-    const headers = { "X-Kiosk-Pairing-Token": token };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    const response = await fetch(`${API_ROOT}/kiosks/${encodeURIComponent(code)}/scolia/${encodeURIComponent(action)}`, {
-      method: "POST",
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store",
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || `Scolia-feil (${response.status})`);
-    }
-    return payload.data;
+    return request(action, { method: "POST", body });
   }
 
   function clearManualFallbackUi() {
@@ -484,6 +465,6 @@
     document.body.classList.remove("scolia-live-active");
     clearManualFallbackUi();
   });
-  window.setInterval(() => poll().catch(() => undefined), 350);
+  window.setInterval(() => poll().catch(() => undefined), 750);
   poll().catch(() => undefined);
 })();

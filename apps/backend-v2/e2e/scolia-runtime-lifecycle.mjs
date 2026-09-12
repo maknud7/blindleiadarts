@@ -92,9 +92,29 @@ try {
   assert.equal(statusAfterHello.ok, true);
   assert.equal(String(statusAfterHello.board.runtime_kiosk_id ?? statusAfterHello.board.id), fixture.kiosk);
   assert.equal(statusAfterHello.board.connection_state, "connected");
-  assert.equal(statusAfterHello.board.board_status, "Ready");
+  assert.equal(statusAfterHello.board.reported_board_status, "Ready");
+  assert.equal(statusAfterHello.board.physical_board_status, "Ready");
   assert.equal(statusAfterHello.board.board_phase, "Throw");
-  assert.equal(statusAfterHello.buffer, null);
+  assert.equal(statusAfterHello.board.bridge_heartbeat_fresh, true);
+  assert.equal(statusAfterHello.board.buffer, null);
+  if (statusAfterHello.board.physical_status_fresh === true) {
+    assert.equal(statusAfterHello.board.board_status, "Ready");
+    assert.equal(statusAfterHello.board.physical_available, true);
+  } else {
+    assert.equal(statusAfterHello.board.board_status, "Offline");
+    assert.equal(statusAfterHello.board.physical_available, false);
+  }
+
+  const statusProbePoll = await requestJson("/v1/scolia/bridge/commands/poll", {
+    method: "POST",
+    body: { kiosk_ids: [fixture.kiosk], limit: 10 },
+  });
+  assert.equal(statusProbePoll.items.length, 1, "Kiosk status should queue one rate-limited physical status probe");
+  assert.equal(statusProbePoll.items[0].command_type, "GET_SBC_STATUS");
+  await requestJson(`/v1/scolia/bridge/commands/${statusProbePoll.items[0].id}/result`, {
+    method: "POST",
+    body: { result: "acked" },
+  });
 
   await seedVisitBuffer();
 
@@ -111,16 +131,17 @@ try {
   assert.equal(corrected.command.command_type, "CORRECT_THROW");
   assert.match(corrected.command.message_id, /^[0-9a-f-]{36}$/i);
 
-  const deleted = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/scolia/delete-throw`, {
+  const undoneBuffered = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/scolia/undo`, {
     method: "POST",
     pairing: true,
-    body: { throw_index: 1 },
+    body: {},
   });
-  assert.equal(deleted.ok, true);
-  assert.equal(deleted.buffer.darts.length, 1);
-  assert.equal(deleted.buffer.event_ids.length, 1);
-  assert.equal(deleted.buffer.provider_event_ids.length, 1);
-  assert.equal(deleted.command.command_type, "DELETE_THROW");
+  assert.equal(undoneBuffered.ok, true);
+  assert.equal(undoneBuffered.action, "buffered_throw_removed");
+  assert.equal(undoneBuffered.result.buffer.darts.length, 1);
+  assert.equal(undoneBuffered.result.buffer.event_ids.length, 1);
+  assert.equal(undoneBuffered.result.buffer.provider_event_ids.length, 1);
+  assert.equal(undoneBuffered.result.command.command_type, "DELETE_THROW");
 
   const firstPoll = await requestJson("/v1/scolia/bridge/commands/poll", {
     method: "POST",
@@ -192,7 +213,7 @@ try {
   });
   assert.equal(Number(finalStatus.board.fallback_active), 0);
   assert.equal(Number(finalStatus.board.needs_reconciliation), 0);
-  assert.equal(finalStatus.buffer, null, "Resume must clear unfinished visit buffer");
+  assert.equal(finalStatus.board.buffer, null, "Resume must clear unfinished visit buffer");
 
   console.log(JSON.stringify({
     ok: true,
@@ -203,6 +224,9 @@ try {
     event_enqueue_dedupe_verified: true,
     queue_drain_verified: true,
     pairing_runtime_verified: true,
+    kiosk_status_fail_closed_verified: true,
+    status_probe_verified: true,
+    buffered_undo_verified: true,
     buffer_correction_verified: true,
     command_fifo_ack_verified: true,
     fallback_resume_verified: true,
