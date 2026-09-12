@@ -105,7 +105,7 @@ final class BackendV2ScoliaProxyApplication
         }
 
         if ($method === 'GET' && preg_match('#^/v1/kiosks/[^/]+/scolia(?:/status)?$#', $path) === 1) return true;
-        if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/scolia/(fallback|resume|reset-phase|delete-throw|correct-throw)$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/scolia/(undo|fallback|resume|reset-phase|delete-throw|correct-throw)$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/scolia/test-lease/(acquire|heartbeat|release)$#', $path) === 1) return true;
 
         return false;
