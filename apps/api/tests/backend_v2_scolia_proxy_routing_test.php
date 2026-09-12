@@ -22,6 +22,7 @@ foreach ([
     ['POST', '/v1/scolia/bridge/commands/17/result'],
     ['GET', '/v1/kiosks/BOARD-1/scolia'],
     ['GET', '/v1/kiosks/BOARD-1/scolia/status'],
+    ['POST', '/v1/kiosks/BOARD-1/scolia/undo'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/fallback'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/resume'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/reset-phase'],
