@@ -55,6 +55,8 @@ try {
   assert.equal(board.ok, true);
   assert.equal(String(board.board.physical_kiosk_id), physicalBoard.id);
   assert.equal(board.board.configuration_table_prefix, "bd_prod_");
+  assert.equal(board.board.runtime_table_prefix, "bd_test_");
+  assert.equal(board.board.can_change_bridge, false, "TEST must expose canonical Scolia ownership as read-only");
 
   const blockedBoardWrite = await requestJson(`/v1/clubs/${fixture.club}/kiosks/${physicalBoard.id}`, {
     method: "PATCH",
@@ -71,6 +73,21 @@ try {
     expectedStatus: 403,
   });
   assert.equal(blockedScoliaWrite.error.code, "production_hardware_read_only");
+
+  const blockedBridgeRelease = await requestJson(`/v1/clubs/${fixture.club}/kiosks/${physicalBoard.id}/scolia`, {
+    method: "PATCH",
+    auth: true,
+    body: { bridge_attached: false },
+    expectedStatus: 403,
+  });
+  assert.equal(blockedBridgeRelease.error.code, "production_hardware_read_only");
+
+  const blockedBoardDelete = await requestJson(`/v1/clubs/${fixture.club}/kiosks/${physicalBoard.id}`, {
+    method: "DELETE",
+    auth: true,
+    expectedStatus: 403,
+  });
+  assert.equal(blockedBoardDelete.error.code, "production_hardware_read_only");
 
   const pairing = await requestJson("/v1/kiosk-pairing-requests", {
     method: "POST",
@@ -107,6 +124,8 @@ try {
     hardware_prefix: config.prefixes.hardware,
     canonical_board_count: kiosks.items.length,
     hardware_write_guard_verified: true,
+    scolia_release_guard_verified: true,
+    board_delete_guard_verified: true,
     pairing_request_verified: true,
   }));
 } catch (error) {
