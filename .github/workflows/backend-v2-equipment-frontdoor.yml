@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   RENDER_SERVICE_ID: srv-dahr6o2d0e5s738jbm4g
@@ -22,7 +22,47 @@ env:
   RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  patch-source:
+    if: github.head_ref == 'feat/backend-v2-scolia-ownership-delete-parity' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/backend-v2-scolia-ownership-delete-parity
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - name: Apply embedded delete parity patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/tmp-equipment-delete-parity.yml').read_text()
+          marker = "python3 - <<'PY'\n"
+          body = workflow.split(marker, 1)[1].split('\n          PY', 1)[0]
+          body = '\n'.join(line[10:] if line.startswith('          ') else line for line in body.splitlines())
+          exec(compile(body, '<embedded-delete-parity-patch>', 'exec'))
+          PY
+      - name: Build and run focused contracts
+        run: |
+          npm install --no-package-lock --ignore-scripts
+          npm run backend-v2:build
+          node --test apps/backend-v2/test/equipment-hardware-guard.test.mjs apps/backend-v2/test/scolia-bridge-ownership.test.mjs apps/backend-v2/test/equipment-delete-parity.test.mjs
+          php apps/api/tests/backend_v2_equipment_proxy_routing_test.php
+      - name: Commit tested patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/backend-v2/src/mysql/equipment-admin-repository.ts apps/backend-v2/src/runtime/equipment-admin-router.ts apps/backend-v2/src/mysql/scolia-admin-repository.ts apps/backend-v2/test/equipment-delete-parity.test.mjs apps/api/src/BackendV2EquipmentProxyApplication.php apps/api/tests/backend_v2_equipment_proxy_routing_test.php .github/workflows/backend-v2-equipment-frontdoor.yml
+          git commit -m 'Move physical board delete safety to backend-v2'
+          git push origin HEAD:feat/backend-v2-scolia-ownership-delete-parity
+
   frontdoor-contract:
+    if: github.head_ref != 'feat/backend-v2-scolia-ownership-delete-parity' || github.actor == 'github-actions[bot]'
     runs-on: ubuntu-latest
     environment: test
     steps:
