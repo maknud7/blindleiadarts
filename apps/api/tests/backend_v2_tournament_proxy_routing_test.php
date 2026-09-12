@@ -19,6 +19,10 @@ $yes = [
     ['POST', '/v1/tournaments/9/registrations'],
     ['POST', '/v1/tournaments/9/registrations/guest'],
     ['DELETE', '/v1/tournaments/9/registrations/17'],
+    ['GET', '/v1/tournaments/9/wizard-plan'],
+    ['PUT', '/v1/tournaments/9/wizard-plan'],
+    ['PATCH', '/v1/tournaments/9/wizard-plan'],
+    ['DELETE', '/v1/tournaments/9/wizard-plan'],
     ['POST', '/v1/tournaments/9/check-in'],
     ['GET', '/v1/tournaments/9/check-in-status'],
     ['POST', '/v1/tournaments/9/finish-checkin'],
@@ -51,6 +55,7 @@ foreach ($yes as [$method, $path]) {
 $no = [
     ['POST', '/v1/tournaments'],
     ['DELETE', '/v1/tournaments/9'],
+    ['POST', '/v1/tournaments/9/wizard-plan'],
     ['POST', '/v1/tournaments/9/finish'],
     ['POST', '/v1/tournaments/9/playoffs'],
     ['GET', '/v1/tournaments/9/registrations'],
