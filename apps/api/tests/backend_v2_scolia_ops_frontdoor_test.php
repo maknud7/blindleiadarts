@@ -18,7 +18,7 @@ $assert = static function (bool $condition, string $message): void {
 
 $assert(str_contains($router, "backendV2ScoliaRoutingMode() === 'node'"), 'Bridge router must use the explicit Scolia Node routing gate.');
 $assert(str_contains($router, "'/v1/scolia/bridge/router'"), 'Bridge router must call the backend-v2 router endpoint.');
-$assert(str_contains($router, "'x-scolia-bridge-secret' => $providedSecret"), 'Bridge router must validate and forward the incoming bridge secret.');
+$assert(str_contains($router, "'x-scolia-bridge-secret' => \$providedSecret"), 'Bridge router must validate and forward the incoming bridge secret.');
 $assert(strpos($router, "backendV2ScoliaRoutingMode() === 'node'") < strpos($router, 'new Database($config)'), 'Bridge router must decide Node routing before opening the PHP DB path.');
 $assert(str_contains($health, "backendV2ScoliaRoutingMode() === 'node'"), 'Health endpoint must use the explicit Scolia Node routing gate.');
 $assert(str_contains($health, "'/v1/scolia/health'"), 'Health endpoint must call the backend-v2 health endpoint.');
