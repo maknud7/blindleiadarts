@@ -90,7 +90,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Backend
     mode,
     host: env.HOST?.trim() || "0.0.0.0",
     port: integer(env.PORT ?? "8082", "PORT"),
-    releaseSha: env.RELEASE_SHA?.trim() || env.GITHUB_SHA?.trim() || "unknown",
+    releaseSha: env.RENDER_GIT_COMMIT?.trim() || env.RELEASE_SHA?.trim() || env.GITHUB_SHA?.trim() || "unknown",
     internalToken,
     prodCanaryWritesEnabled,
     canonicalSideEffectsReady: CANONICAL_SIDE_EFFECTS_READY,
