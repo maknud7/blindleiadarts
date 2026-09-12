@@ -22,6 +22,7 @@ import { MySqlScoliaCommandRepository } from "./mysql/scolia-command-repository.
 import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
 import { MySqlScoliaKioskAuthRepository } from "./mysql/scolia-kiosk-auth-repository.js";
 import { MySqlScoliaKioskRuntimeRepository } from "./mysql/scolia-kiosk-runtime-repository.js";
+import { MySqlTournamentAttendanceRepository } from "./mysql/tournament-attendance-repository.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { MySqlTournamentFlowRepository } from "./mysql/tournament-flow-repository.js";
 import { MySqlTournamentOperationsRepository } from "./mysql/tournament-operations-repository.js";
@@ -42,6 +43,7 @@ import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { PublicLiveReadRouter } from "./runtime/public-live-read-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
+import { TournamentAttendanceRouter } from "./runtime/tournament-attendance-router.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
 import { TournamentRuntimeRouter } from "./runtime/tournament-runtime-router.js";
@@ -135,6 +137,7 @@ const equipmentRuntime = new EquipmentAdminRouter(
   scoliaDashboard,
 );
 const tournaments = new MySqlTournamentRuntimeRepository(sessions, config.prefixes.runtime);
+const tournamentAttendance = new MySqlTournamentAttendanceRepository(sessions, config.prefixes.runtime);
 const tournamentFlow = new MySqlTournamentFlowRepository(sessions, config.prefixes.runtime);
 const tournamentOperations = new MySqlTournamentOperationsRepository(sessions, config.prefixes.runtime);
 const tournamentPlayoffs = new MySqlTournamentPlayoffRepository(sessions, config.prefixes.runtime);
@@ -143,6 +146,12 @@ const tournamentRealtime = new TournamentRealtimePublisher({
   publishSecret: config.realtime.publishSecret,
   timeoutMs: config.realtime.timeoutMs,
 });
+const tournamentAttendanceRuntime = new TournamentAttendanceRouter(
+  config,
+  identityRepository,
+  tournamentAttendance,
+  tournamentFlow,
+);
 const tournamentRuntime = new TournamentRuntimeRouter(
   config,
   identityRepository,
@@ -291,6 +300,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   const equipmentRoute = await equipmentRuntime.handle(method, publicPath, request);
   if (equipmentRoute !== null) {
     sendJson(response, equipmentRoute.statusCode, equipmentRoute.payload);
+    return;
+  }
+
+  const tournamentAttendanceRoute = await tournamentAttendanceRuntime.handle(method, publicPath, request);
+  if (tournamentAttendanceRoute !== null) {
+    sendJson(response, tournamentAttendanceRoute.statusCode, tournamentAttendanceRoute.payload);
     return;
   }
 
