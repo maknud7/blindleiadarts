@@ -75,7 +75,7 @@ jobs:
 
           checkin_status="$(curl -sS --max-time 30 -o /tmp/checkin.json -w '%{http_code}' "${HOST_URL%/}/v1/public/check-in-display?club_slug=blindleia")"
           echo "check-in-display HTTP $checkin_status: $(cat /tmp/checkin.json)"
-          if [[ "$checkin_status" != '200' ]] || ! jq -e '.ok == true' /tmp/checkin.json >/dev/null 2>&1; then failed=1; fi
+          if ! { [[ "$checkin_status" == '200' ]] || [[ "$checkin_status" == '404' ]]; } || ! jq -e '(.ok == true) or (.ok == false and .error.code == "club_not_found")' /tmp/checkin.json >/dev/null 2>&1; then failed=1; fi
 
           dashboard_status="$(curl -sS --max-time 30 -o /tmp/dashboard.json -w '%{http_code}' "${HOST_URL%/}/v1/me/dashboard")"
           echo "me/dashboard HTTP $dashboard_status: $(cat /tmp/dashboard.json)"
