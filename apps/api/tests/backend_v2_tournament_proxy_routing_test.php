@@ -34,6 +34,9 @@ $yes = [
     ['POST', '/v1/tournaments/9/checkin-code/rotate'],
     ['POST', '/v1/tournaments/9/admin-check-in/17'],
     ['DELETE', '/v1/tournaments/9/admin-check-in/17'],
+    ['GET', '/v1/tournaments/9/me/break'],
+    ['POST', '/v1/tournaments/9/me/break'],
+    ['GET', '/v1/me/break-context'],
     ['GET', '/v1/tournaments/9/operations'],
     ['PATCH', '/v1/tournaments/9/operations/settings'],
     ['GET', '/v1/tournaments/9/operations/boards'],
@@ -59,6 +62,8 @@ $no = [
     ['POST', '/v1/tournaments/9/finish'],
     ['POST', '/v1/tournaments/9/playoffs'],
     ['GET', '/v1/tournaments/9/registrations'],
+    ['DELETE', '/v1/tournaments/9/me/break'],
+    ['POST', '/v1/me/break-context'],
     ['POST', '/v1/tournaments/9/operations/matches/22/start'],
     ['GET', '/v1/tournaments/9/summary'],
 ];
