@@ -122,7 +122,7 @@ jobs:
           test -f dist/test/api/src/Service/BackendV2ApiClient.php
           test -f dist/test/api/src/Service/BackendV2ApiAttemptException.php
           test -f dist/test/api/test-player-candidates.php
-          test -f dist/test/api/kiosk-scolia-ui.php
+          test ! -e dist/test/api/kiosk-scolia-ui.php
           test -f dist/test/admin/scolia-admin.js
           test -f dist/test/admin/board-admin-core.mjs
           test -f dist/test/admin/season-admin.js
@@ -153,7 +153,6 @@ jobs:
           test -f dist/test/kiosk/tablet-portrait.css
           test -f dist/test/kiosk/scolia-live-ux.js
           test -f dist/test/kiosk/scolia-live-ux.css
-          php -l dist/test/api/kiosk-scolia-ui.php >/dev/null
           php -l dist/test/api/src/BackendV2EquipmentProxyApplication.php >/dev/null
           php -l dist/test/api/src/Service/BackendV2ApiClient.php >/dev/null
           grep -Fq 'viewport-fit=cover' dist/test/onboarding/index.html
@@ -291,7 +290,6 @@ jobs:
           check_contains "kiosk overflow" "$base/kiosk/tablet-portrait.css" "overflow: hidden"
           check_contains "Scolia live kiosk JS" "$base/kiosk/scolia-live-ux.js" "Angre siste Scolia-kast"
           check_contains "Scolia live kiosk CSS" "$base/kiosk/scolia-live-ux.css" ".scolia-darts-grid"
-          check_status_contains "Scolia kiosk UI endpoint guard" "$base/api/kiosk-scolia-ui.php" "422" "kiosk_context_required"
 
           echo "VERIFY: equipment same-origin Node frontdoor"
           clubs="$(curl -fsS --max-time 15 "$base/api/v1/clubs")"
