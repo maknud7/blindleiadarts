@@ -92,10 +92,10 @@ final class BackendV2EquipmentProxyApplication
     {
         $method = strtoupper($method);
 
-        // Physical board deletion remains on PHP until Node has identical match
-        // history and reference cleanup protection. Do not add DELETE here yet.
+        // Physical board delete has the same history/reference safety contract in Node.
+        // TEST still fails closed before any canonical hardware mutation is attempted.
         if (preg_match('#^/v1/clubs/\d+/kiosks/\d+$#', $path) === 1) {
-            return in_array($method, ['PUT', 'PATCH'], true);
+            return in_array($method, ['PUT', 'PATCH', 'DELETE'], true);
         }
 
         if (preg_match('#^/v1/clubs/\d+/kiosks$#', $path) === 1) {

@@ -48,6 +48,15 @@ export class EquipmentAdminRouter {
     }
 
     const kiosk = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks\/([1-9][0-9]*)$/.exec(path);
+    if (kiosk && method === "DELETE") {
+      const clubId = capture(kiosk, 1);
+      const kioskId = capture(kiosk, 2);
+      await this.requireSuperAdmin(request);
+      assertProductionHardwareMutationAllowed(this.config);
+      const deleted = await this.equipment.deleteBoard(clubId, kioskId);
+      if (!deleted) throw new DomainValidationError("board_not_found", "Skiva ble ikke funnet i valgt klubb.", 404);
+      return ok({ deleted: true, kind: "board", id: kioskId, ...this.equipment.scope() });
+    }
     if (kiosk && (method === "PATCH" || method === "PUT")) {
       const clubId = capture(kiosk, 1);
       const kioskId = capture(kiosk, 2);

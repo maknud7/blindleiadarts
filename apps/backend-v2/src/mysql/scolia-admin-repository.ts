@@ -84,7 +84,7 @@ export class MySqlScoliaAdminRepository {
       if (!current) return null;
       if (payload.bridge_attached !== undefined) {
         if (typeof payload.bridge_attached !== "boolean") {
-throw new DomainValidationError("bridge_attached_required", "bridge_attached must be true or false.");
+          throw new DomainValidationError("bridge_attached_required", "bridge_attached must be true or false.");
         }
         return this.setBridgeAttachedWith(db, environmentClubId, kioskId, current, payload.bridge_attached, userId);
       }
@@ -425,17 +425,17 @@ throw new DomainValidationError("bridge_attached_required", "bridge_attached mus
       const reason = "Frikoblet fra Blindleia av admin.";
       await db.execute(
         `INSERT INTO \`${this.hardwarePrefix}scolia_board_runtime\`
-(kiosk_id,connection_state,board_status,board_phase,error_type,last_disconnect_reason,last_disconnect_at,connected_at)
+          (kiosk_id,connection_state,board_status,board_phase,error_type,last_disconnect_reason,last_disconnect_at,connected_at)
          VALUES (?,'disabled',NULL,NULL,NULL,?,NOW(3),NULL)
          ON DUPLICATE KEY UPDATE connection_state='disabled',board_status=NULL,board_phase=NULL,error_type=NULL,
- last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3),connected_at=NULL`,
+           last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3),connected_at=NULL`,
         [physicalId, reason],
       );
       await db.execute(`DELETE FROM \`${this.hardwarePrefix}scolia_test_leases\` WHERE physical_kiosk_id=?`, [physicalId]);
       await db.execute(
         `UPDATE \`${this.hardwarePrefix}scolia_commands\`
-  SET status='expired',completed_at=NOW(3),last_error=?
-WHERE kiosk_id=? AND status IN ('queued','delivered','failed')`,
+            SET status='expired',completed_at=NOW(3),last_error=?
+          WHERE kiosk_id=? AND status IN ('queued','delivered','failed')`,
         [reason, physicalId],
       );
     }
