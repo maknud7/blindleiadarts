@@ -1,9 +1,10 @@
 import type { IncomingMessage } from "node:http";
 
 import { DomainValidationError } from "../domain/errors.js";
+import type { MySqlScoliaAdminRepository } from "../mysql/scolia-admin-repository.js";
 import type { MySqlScoliaBridgeRepository } from "../mysql/scolia-bridge-repository.js";
 import type { MySqlScoliaKioskAuthRepository } from "../mysql/scolia-kiosk-auth-repository.js";
-import type { MySqlScoliaAdminRepository } from "../mysql/scolia-admin-repository.js";
+import type { MySqlScoliaKioskRuntimeRepository } from "../mysql/scolia-kiosk-runtime-repository.js";
 import type { ScoliaEventProcessor } from "../service/scolia-event-processor.js";
 import { assertInternalToken, assertMutationAllowed, type BackendRuntimeConfig } from "./config.js";
 
@@ -18,6 +19,7 @@ export class ScoliaRuntimeRouter {
     private readonly bridge: MySqlScoliaBridgeRepository,
     private readonly processor: ScoliaEventProcessor,
     private readonly kioskAuth: MySqlScoliaKioskAuthRepository,
+    private readonly kioskRuntime: MySqlScoliaKioskRuntimeRepository,
     private readonly scoliaAdmin: MySqlScoliaAdminRepository,
   ) {}
 
@@ -89,17 +91,19 @@ export class ScoliaRuntimeRouter {
     if (method !== "POST") return null;
     assertMutationAllowed(this.config);
     if (action === "fallback") {
-      return ok({ board: await this.scoliaAdmin.fallback(paired.club_id, paired.kiosk_id) });
+      return ok({ board: await this.kioskRuntime.fallback(paired.club_id, paired.kiosk_id) });
     }
     if (action === "reset-phase") {
-      return ok({ command: await this.scoliaAdmin.resetPhase(paired.club_id, paired.kiosk_id, "0") });
+      await this.kioskRuntime.resetPhase(paired.club_id, paired.kiosk_id);
+      return ok({ command: await this.bridge.queueCommand(paired.club_id, paired.kiosk_id, "RESET_PHASE", {}, null) });
     }
     if (action === "resume") {
       const body = await readJsonObject(request);
       if (body.reconciled !== true) {
         throw new DomainValidationError("scolia_reconciliation_required", "Bekreft avstemming før Scolia gjenopptas.", 409);
       }
-      return ok({ command: await this.scoliaAdmin.resume(paired.club_id, paired.kiosk_id, "0") });
+      await this.kioskRuntime.resume(paired.club_id, paired.kiosk_id);
+      return ok({ command: await this.bridge.queueCommand(paired.club_id, paired.kiosk_id, "RESET_PHASE", {}, null) });
     }
     if (action === "delete-throw") {
       const body = await readJsonObject(request);
