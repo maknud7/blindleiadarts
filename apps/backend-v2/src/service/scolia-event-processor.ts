@@ -30,7 +30,7 @@ export class ScoliaEventProcessor {
     private readonly bridge: MySqlScoliaBridgeRepository,
     private readonly scoring: CanonicalScoringPort,
     private readonly disconnects: ScoliaDisconnectPort = bridge,
-    private readonly commands: ScoliaCommandPort = bridge,
+    private readonly commands: ScoliaCommandPort = bridge as unknown as ScoliaCommandPort,
   ) {}
 
   async drain(limitInput: unknown = 25, maxProcessingMs = 750): Promise<Record<string, unknown>> {
