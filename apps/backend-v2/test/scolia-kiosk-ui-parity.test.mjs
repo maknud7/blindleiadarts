@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+import { MySqlScoliaCommandRepository } from "../dist/mysql/scolia-command-repository.js";
 import { loadRuntimeConfig } from "../dist/runtime/config.js";
 import { ScoliaRuntimeRouter } from "../dist/runtime/scolia-runtime-router.js";
 
@@ -88,6 +89,36 @@ function routerWith({ uiSnapshot = snapshot(), board = {}, queueCommand } = {}) 
 function request() {
   return { headers: { "x-kiosk-pairing-token": "paired" } };
 }
+
+test("Scolia kiosk snapshot accepts MySQL JSON values that are already parsed", async () => {
+  const nativeDarts = [{ multiplier: "T", value: 20 }];
+  const db = {
+    async query(sql) {
+      if (sql.includes("FROM `bd_test_scolia_events`") && sql.includes("event_type,payload_json")) {
+        return [{
+          event_type: "SBC_STATUS_CHANGED",
+          payload_json: { payload: { boardStatus: "Ready" } },
+          received_at: "2026-09-12 13:00:00.000",
+          age_seconds: 1,
+        }];
+      }
+      if (sql.includes("last_bridge_heartbeat_at")) {
+        return [{ bridge_heartbeat_age_seconds: 2, last_status_probe_age_seconds: null }];
+      }
+      if (sql.includes("FROM `bd_test_matches`")) return [];
+      if (sql.includes("FROM `bd_test_scolia_visit_buffers`")) {
+        return [{ match_id: null, player_id: null, darts_json: nativeDarts, updated_at: "2026-09-12 13:00:00.000" }];
+      }
+      if (sql.includes("GROUP BY processing_status")) return [];
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const sessions = { async withConnection(callback) { return callback(db); } };
+  const repository = new MySqlScoliaCommandRepository(sessions, "bd_test_");
+  const result = await repository.kioskUiSnapshot("11", "17");
+  assert.equal(result.physical_status.status, "Ready");
+  assert.deepEqual(result.buffer.darts, nativeDarts);
+});
 
 test("Scolia kiosk status fails closed when the physical status is stale", async () => {
   const router = routerWith({
