@@ -49,6 +49,19 @@ try {
   assert.equal(configuredBoard.serial_number, serial);
   assert.equal(configuredBoard.mode, "live");
 
+  const bridgeRouter = await requestJson("/v1/scolia/bridge/router", { method: "GET" });
+  assert.equal(bridgeRouter.ok, true);
+  assert.equal(bridgeRouter.data.configuration_scope, "production_hardware");
+  assert.ok(bridgeRouter.data.configured_boards >= 1);
+  assert.equal(bridgeRouter.data.bridge_mode, "idle", "Ready fixture without start_at must not wake physical Scolia routing");
+
+  const bridgeHealth = await requestJson("/v1/scolia/health", { method: "GET", bridgeAuth: false });
+  assert.equal(bridgeHealth.ok, true);
+  assert.equal(bridgeHealth.service, "scolia-bridge");
+  assert.equal(bridgeHealth.data.configuration_scope, "production_hardware");
+  assert.ok(bridgeHealth.data.configured_boards >= 1);
+  assert.equal(bridgeHealth.data.bridge_status, "sleeping");
+
   const providerEventId = `hello-${suffix}`;
   const eventBody = {
     serial_number: serial,
