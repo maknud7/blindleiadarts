@@ -1,5 +1,5 @@
 (() => {
-  const TEST_LEASE_API = "../api/kiosk-scolia-test-lease.php";
+  const TEST_LEASE_API_ROOT = "../api/v1";
   const TEST_MODE_KEY = "bd:kioskTestMode";
   const TEST_BOARD_ID_KEY = "bd:kioskTestPhysicalBoardId";
   const TEST_LEASE_ACTIVE_KEY = "bd:kioskScoliaLeaseActive";
@@ -92,6 +92,8 @@
   }
 
   async function leaseRequest(action, body, { keepalive = false } = {}) {
+    const code = String(body?.test_kiosk_code || kioskCode() || "").trim();
+    if (!code) throw new Error("Testterminalen mangler skivekode.");
     const headers = { "Content-Type": "application/json" };
     const token = pairingToken();
     if (token) headers["X-Kiosk-Pairing-Token"] = token;
@@ -102,7 +104,7 @@
       cache: "no-store",
       keepalive,
     };
-    const url = `${TEST_LEASE_API}?action=${encodeURIComponent(action)}`;
+    const url = `${TEST_LEASE_API_ROOT}/kiosks/${encodeURIComponent(code)}/scolia/test-lease/${encodeURIComponent(action)}`;
     const response = keepalive ? await fetch(url, init) : await fetchWithTimeout(url, init);
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
@@ -186,8 +188,7 @@
       setError("");
     } catch (error) {
       // Keep the pending marker while TEST retries. This prevents the Scolia UI from
-      // interpreting the initial bridge setup as a genuine board outage and falling
-      // straight through to manual scoring.
+      // interpreting initial bridge setup as a genuine board outage.
       setPending();
       setError(error.message || "Kunne ikke koble TEST til Scolia.");
       console.warn("Scolia test-lease kunne ikke aktiveres:", error.message);
