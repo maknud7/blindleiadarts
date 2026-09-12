@@ -16,6 +16,9 @@ foreach ([
     ['GET', '/v1/realtime/config'],
     ['GET', '/v1/me/dashboard'],
     ['GET', '/v1/clubs'],
+    ['GET', '/v1/public/clubs/blindleia-dartklubb/live'],
+    ['GET', '/v1/public/tournaments/429/live'],
+    ['GET', '/v1/public/check-in-display'],
     ['GET', '/v1/clubs/1/player-directory'],
     ['GET', '/v1/clubs/1/elo'],
     ['GET', '/v1/clubs/1/summaries'],
@@ -34,8 +37,8 @@ foreach ([
     $assert($proxy->handles($method, $path), "$method $path should route to backend-v2 player/live reads.");
 }
 
-// This front door is deliberately read-only. Club/player/season/tournament mutations
-// remain with their existing writers until a dedicated single-writer cutover.
+// This front door is deliberately read-only. Club/player/season/tournament/check-in
+// mutations remain with their explicit writers until a dedicated single-writer cutover.
 foreach ([
     ['POST', '/v1/clubs'],
     ['POST', '/v1/clubs/1/players'],
@@ -49,6 +52,8 @@ foreach ([
     ['PUT', '/v1/tournaments/429/summary/admin'],
     ['PATCH', '/v1/tournaments/429/summary/admin'],
     ['POST', '/v1/tournaments/429/matches'],
+    ['POST', '/v1/tournaments/429/check-in'],
+    ['POST', '/v1/tournaments/429/checkin-code/rotate'],
 ] as [$method, $path]) {
     $assert(!$proxy->handles($method, $path), "$method $path must remain outside the read-only backend-v2 proxy.");
 }
@@ -57,12 +62,10 @@ $assert(!$proxy->handles('GET', '/v1/seasons/1/activate'), 'Unsupported season r
 $assert(!$proxy->handles('GET', '/v1/clubs/1/tournaments'), 'Unmigrated public reads must not be captured accidentally.');
 $assert(!$proxy->handles('GET', '/v1/tournaments/429/summary/admin'), 'Admin summary read must remain outside this public read slice.');
 
-// These look like reads, but their current PHP implementations can mutate state:
-// public Live may capture/self-heal tournament ELO baselines, and check-in display
-// may rotate/persist a missing check-in code. They need dedicated single-writer
-// cutovers rather than being swept into this GET-only proxy.
-$assert(!$proxy->handles('GET', '/v1/public/clubs/blindleia-dartklubb/live'), 'Public Live must remain outside the pure-read proxy until ELO side effects are explicit.');
-$assert(!$proxy->handles('GET', '/v1/public/tournaments/429/live'), 'Tournament Live must remain outside the pure-read proxy until ELO side effects are explicit.');
-$assert(!$proxy->handles('GET', '/v1/public/check-in-display'), 'Check-in display must remain outside the pure-read proxy while it may rotate a code.');
+// Public live/check-in display are safe here only because their read implementations
+// are now side-effect free. ELO baseline capture, check-in code generation and screen
+// heartbeat are explicit mutation concerns and must not be reintroduced from GET.
+$assert(!$proxy->handles('POST', '/v1/public/check-in-display'), 'Public display route must remain GET-only.');
+$assert(!$proxy->handles('PATCH', '/v1/public/tournaments/429/live'), 'Public live route must remain GET-only.');
 
 echo "BackendV2PlayerLiveProxy routing OK\n";
