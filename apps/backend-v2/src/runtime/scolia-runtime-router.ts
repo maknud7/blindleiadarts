@@ -78,6 +78,26 @@ export class ScoliaRuntimeRouter {
       throw new DomainValidationError("scolia_bridge_route_not_found", "Unknown Scolia bridge route.", 404);
     }
 
+    const testLeaseRoute = /^\/v1\/kiosks\/([^/]+)\/scolia\/test-lease\/(acquire|heartbeat|release)$/.exec(path);
+    if (testLeaseRoute) {
+      if (method !== "POST") return null;
+      if (this.config.environment !== "test") {
+        throw new DomainValidationError("scolia_test_lease_test_only", "Scolia test-lease finnes bare i TEST.", 404);
+      }
+      assertMutationAllowed(this.config);
+      const code = decodeURIComponent(capture(testLeaseRoute, 1));
+      const action = capture(testLeaseRoute, 2);
+      const paired = await this.kioskAuth.resolve(code, header(request, "x-kiosk-pairing-token"), true);
+      const body = await readJsonObject(request);
+      if (action === "acquire") {
+        return ok(await this.kioskRuntime.acquireTestLease(paired.club_id, paired.kiosk_id, body.physical_kiosk_id));
+      }
+      if (action === "heartbeat") {
+        return ok(await this.kioskRuntime.heartbeatTestLease(paired.club_id, paired.kiosk_id, body.physical_kiosk_id));
+      }
+      return ok(await this.kioskRuntime.releaseTestLease(paired.club_id, paired.kiosk_id, body.physical_kiosk_id));
+    }
+
     const kioskRoute = /^\/v1\/kiosks\/([^/]+)\/scolia(?:\/(status|fallback|resume|reset-phase|delete-throw|correct-throw))?$/.exec(path);
     if (!kioskRoute) return null;
     const code = decodeURIComponent(capture(kioskRoute, 1));

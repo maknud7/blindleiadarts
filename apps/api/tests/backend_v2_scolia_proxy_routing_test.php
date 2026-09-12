@@ -27,6 +27,9 @@ foreach ([
     ['POST', '/v1/kiosks/BOARD-1/scolia/reset-phase'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/delete-throw'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/correct-throw'],
+    ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/acquire'],
+    ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/heartbeat'],
+    ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/release'],
 ] as [$method, $path]) {
     $assert($proxy->handles($method, $path), "$method $path should route to backend-v2 Scolia runtime.");
 }
@@ -37,6 +40,8 @@ foreach ([
     ['POST', '/v1/scolia/bridge/commands/not-an-id/result'],
     ['PATCH', '/v1/kiosks/BOARD-1/scolia'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/unknown'],
+    ['GET', '/v1/kiosks/BOARD-1/scolia/test-lease/acquire'],
+    ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/unknown'],
     ['GET', '/v1/clubs/1/kiosks/9/scolia'],
 ] as [$method, $path]) {
     $assert(!$proxy->handles($method, $path), "$method $path must not be captured by Scolia runtime proxy.");

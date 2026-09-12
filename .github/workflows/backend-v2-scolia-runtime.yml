@@ -18,7 +18,10 @@ on:
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/config.example.php'
       - 'apps/api/index.php'
+      - 'apps/api/kiosk-scolia-test-lease.php'
+      - 'apps/api/scolia-bridge-control.php'
       - 'apps/api/tests/backend_v2_scolia_proxy_routing_test.php'
+      - 'apps/kiosk/scolia-test-lease.js'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-scolia-runtime.yml'
   workflow_dispatch:
@@ -63,6 +66,14 @@ jobs:
           grep -Fq "'scolia_routing_mode' => 'php'" apps/api/config.example.php
           grep -Fq "x-scolia-bridge-secret" apps/api/src/Service/BackendV2ApiClient.php
           grep -Fq 'new BackendV2ScoliaProxyApplication' apps/api/index.php
+
+      - name: Verify TEST lease has no standalone PHP writer
+        run: |
+          set -Eeuo pipefail
+          test ! -e apps/api/kiosk-scolia-test-lease.php
+          test ! -e apps/api/scolia-bridge-control.php
+          ! grep -Fq 'kiosk-scolia-test-lease.php' apps/kiosk/scolia-test-lease.js
+          grep -Fq '/scolia/test-lease/' apps/kiosk/scolia-test-lease.js
 
       - name: Verify TEST-only routing default
         run: |
