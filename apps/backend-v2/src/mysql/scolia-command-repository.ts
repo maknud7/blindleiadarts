@@ -266,6 +266,9 @@ function recordOrEmpty(value: unknown): Record<string, unknown> {
     : {};
 }
 function parseObject(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
   try {
     return recordOrEmpty(JSON.parse(String(value ?? "{}")));
   } catch {
@@ -273,6 +276,7 @@ function parseObject(value: unknown): Record<string, unknown> {
   }
 }
 function parseArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
   try {
     const parsed = JSON.parse(String(value ?? "[]"));
     return Array.isArray(parsed) ? parsed : [];
