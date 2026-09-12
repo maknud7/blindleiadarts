@@ -16,6 +16,7 @@ foreach ([
     ['GET', '/v1/clubs/1/kiosks'],
     ['POST', '/v1/clubs/1/kiosks'],
     ['PATCH', '/v1/clubs/1/kiosks/9'],
+    ['DELETE', '/v1/clubs/1/kiosks/9'],
     ['POST', '/v1/clubs/1/kiosks/9/reset-pairing'],
     ['GET', '/v1/clubs/1/kiosk-pairing-requests'],
     ['POST', '/v1/clubs/1/kiosk-pairing-requests/ABC123/approve'],
@@ -37,9 +38,6 @@ foreach ([
     $assert($proxy->handles($method, $path), "$method $path should route to backend-v2 equipment.");
 }
 
-// Irreversible physical delete stays on the PHP safety implementation until
-// Node has identical historical-reference checks and cleanup semantics.
-$assert(!$proxy->handles('DELETE', '/v1/clubs/1/kiosks/9'), 'Physical board delete must remain outside Node cutover.');
 // Scolia bridge/runtime and queue drain are separate runtime surfaces, not this admin cutover.
 $assert(!$proxy->handles('POST', '/v1/clubs/1/scolia/queue/drain'), 'Scolia queue drain is not part of this cutover.');
 $assert(!$proxy->handles('POST', '/v1/scolia/bridge/events'), 'Scolia bridge must not be captured by equipment proxy.');

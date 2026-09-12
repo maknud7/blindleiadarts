@@ -45,7 +45,7 @@ jobs:
           grep -Fq 'allowsPhpFallback(): bool' apps/api/src/Service/BackendV2ApiAttemptException.php
           grep -Fq 'return false;' apps/api/src/Service/BackendV2ApiAttemptException.php
           grep -Fq 'Never fall through to PHP after a remote attempt' apps/api/src/BackendV2EquipmentProxyApplication.php
-          grep -Fq "!\$proxy->handles('DELETE', '/v1/clubs/1/kiosks/9')" apps/api/tests/backend_v2_equipment_proxy_routing_test.php
+          grep -Fq "['DELETE', '/v1/clubs/1/kiosks/9']" apps/api/tests/backend_v2_equipment_proxy_routing_test.php
 
       - name: Verify independent TEST and PROD routing config
         env:

@@ -5,7 +5,8 @@ on:
     branches:
       - develop
     paths:
-      - 'apps/api/scolia-bridge-control.php'
+      - 'apps/backend-v2/src/mysql/scolia-admin-repository.ts'
+      - 'apps/backend-v2/src/runtime/equipment-admin-router.ts'
       - 'apps/admin/scolia-release-control.js'
       - 'apps/admin/test-hardware-readonly.js'
       - 'apps/admin/index.html'
@@ -15,7 +16,8 @@ on:
     branches:
       - develop
     paths:
-      - 'apps/api/scolia-bridge-control.php'
+      - 'apps/backend-v2/src/mysql/scolia-admin-repository.ts'
+      - 'apps/backend-v2/src/runtime/equipment-admin-router.ts'
       - 'apps/admin/scolia-release-control.js'
       - 'apps/admin/test-hardware-readonly.js'
       - 'apps/admin/index.html'
@@ -30,14 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup PHP 8.3
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-      - name: Verify release API and admin control
+      - name: Verify backend-v2 release API and admin control
         run: |
           set -Eeuo pipefail
-          php -l apps/api/scolia-bridge-control.php
           node --check apps/admin/scolia-release-control.js
           node --check apps/admin/test-hardware-readonly.js
           node infra/tests/scolia_release_control_contract_test.mjs

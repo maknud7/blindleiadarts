@@ -82,6 +82,12 @@ export class MySqlScoliaAdminRepository {
     return this.sessions.withTransaction(async (db) => {
       const current = await this.getBoardSettingsWith(db, environmentClubId, kioskId);
       if (!current) return null;
+      if (payload.bridge_attached !== undefined) {
+        if (typeof payload.bridge_attached !== "boolean") {
+          throw new DomainValidationError("bridge_attached_required", "bridge_attached must be true or false.");
+        }
+        return this.setBridgeAttachedWith(db, environmentClubId, kioskId, current, payload.bridge_attached, userId);
+      }
       const physicalId = requiredId(current.physical_kiosk_id, "physical_kiosk_id");
       let serial = payload.serial_number === undefined ? nullableString(current.serial_number) : nullableString(payload.serial_number);
       if (serial) serial = serial.toUpperCase();
@@ -347,6 +353,9 @@ export class MySqlScoliaAdminRepository {
       runtime = runtimeRows[0] ?? {};
     }
     const mode = stringValue(row.mode) || (stringValue(row.scoring_mode) === "scolia" ? "live" : "off");
+    const serial = stringValue(row.serial_number);
+    const isScolia = stringValue(row.scoring_mode).toLowerCase() === "scolia" && serial !== "";
+    const bridgeAttached = isScolia && mode === "live";
     return {
       ...publicRow(row),
       ...publicRow(runtime),
@@ -356,6 +365,12 @@ export class MySqlScoliaAdminRepository {
       environment_club_id: environmentClubId,
       canonical_club_id: resolved.canonicalClubId,
       mode,
+      is_scolia: isScolia,
+      bridge_attached: bridgeAttached,
+      bridge_released: isScolia && !bridgeAttached,
+      direct_scolia_ready: isScolia && !bridgeAttached,
+      can_change_bridge: this.runtimePrefix === this.hardwarePrefix,
+      release_effective_within_seconds: 12,
       auto_fallback_to_manual: row.auto_fallback_to_manual == null ? 1 : numberValue(row.auto_fallback_to_manual),
       connection_state: stringValue(runtime.connection_state) || (mode === "off" ? "disabled" : "disconnected"),
       fallback_active: numberValue(runtime.fallback_active),
@@ -363,6 +378,71 @@ export class MySqlScoliaAdminRepository {
       turn_locked_until_takeout: numberValue(runtime.turn_locked_until_takeout),
       ...this.scope(),
     };
+  }
+
+  private async setBridgeAttachedWith(
+    db: SqlExecutor,
+    clubId: string,
+    kioskId: string,
+    current: Record<string, unknown>,
+    attached: boolean,
+    userId: string,
+  ): Promise<Record<string, unknown>> {
+    const physicalId = requiredId(current.physical_kiosk_id, "physical_kiosk_id");
+    const runtimeId = optionalId(current.runtime_kiosk_id);
+    const serial = stringValue(current.serial_number);
+    const isScolia = stringValue(current.scoring_mode).toLowerCase() === "scolia" && serial !== "";
+    if (!isScolia) {
+      throw new DomainValidationError("scolia_not_configured", "Denne skiva er ikke konfigurert som en fysisk Scolia-skive.", 409);
+    }
+
+    const currentAttached = stringValue(current.mode).toLowerCase() === "live";
+    if (currentAttached === attached) {
+      return { ...current, bridge_changed: false };
+    }
+
+    if (!attached && runtimeId) {
+      await this.markDisconnectedWith(db, clubId, runtimeId, "Scolia frikoblet fra Blindleia av admin.");
+    }
+
+    const newMode = attached ? "live" : "off";
+    const updated = await db.execute(
+      `UPDATE \`${this.hardwarePrefix}scolia_board_settings\` SET mode=?,updated_by_user_id=? WHERE kiosk_id=?`,
+      [newMode, userId, physicalId],
+    );
+    if (updated.affectedRows < 1) {
+      throw new DomainValidationError("scolia_bridge_update_failed", "Scolia-innstillingen kunne ikke oppdateres.", 500);
+    }
+
+    if (attached) {
+      await db.execute(
+        `INSERT INTO \`${this.hardwarePrefix}scolia_board_runtime\` (kiosk_id,connection_state,board_status,board_phase,error_type,connected_at)
+         VALUES (?,'disconnected',NULL,NULL,NULL,NULL)
+         ON DUPLICATE KEY UPDATE connection_state='disconnected',board_status=NULL,board_phase=NULL,error_type=NULL,connected_at=NULL`,
+        [physicalId],
+      );
+    } else {
+      const reason = "Frikoblet fra Blindleia av admin.";
+      await db.execute(
+        `INSERT INTO \`${this.hardwarePrefix}scolia_board_runtime\`
+          (kiosk_id,connection_state,board_status,board_phase,error_type,last_disconnect_reason,last_disconnect_at,connected_at)
+         VALUES (?,'disabled',NULL,NULL,NULL,?,NOW(3),NULL)
+         ON DUPLICATE KEY UPDATE connection_state='disabled',board_status=NULL,board_phase=NULL,error_type=NULL,
+           last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3),connected_at=NULL`,
+        [physicalId, reason],
+      );
+      await db.execute(`DELETE FROM \`${this.hardwarePrefix}scolia_test_leases\` WHERE physical_kiosk_id=?`, [physicalId]);
+      await db.execute(
+        `UPDATE \`${this.hardwarePrefix}scolia_commands\`
+            SET status='expired',completed_at=NOW(3),last_error=?
+          WHERE kiosk_id=? AND status IN ('queued','delivered','failed')`,
+        [reason, physicalId],
+      );
+    }
+
+    const fresh = await this.getBoardSettingsWith(db, clubId, kioskId);
+    if (!fresh) throw new DomainValidationError("kiosk_not_found", "Skiva forsvant etter Scolia-frikobling.", 404);
+    return { ...fresh, bridge_changed: true };
   }
 
   private async getRuntimeStatusWith(db: SqlExecutor, clubId: string, kioskId: string): Promise<Record<string, unknown>> {

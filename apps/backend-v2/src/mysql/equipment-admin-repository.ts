@@ -152,6 +152,44 @@ export class MySqlEquipmentAdminRepository {
     });
   }
 
+  async deleteBoard(environmentClubIdInput: unknown, physicalIdInput: unknown): Promise<boolean> {
+    const environmentClubId = requiredId(environmentClubIdInput, "club_id");
+    const physicalId = requiredId(physicalIdInput, "kiosk_id");
+    return this.sessions.withTransaction(async (db) => {
+      const canonicalClubId = await this.canonicalClubIdWith(db, environmentClubId);
+      const board = await this.findPhysicalBoardWith(db, canonicalClubId, physicalId);
+      if (!board) return false;
+
+      const matchCount = await this.countBoardMatchesWith(db, environmentClubId, physicalId);
+      if (matchCount > 0) {
+        throw new DomainValidationError(
+          "board_has_match_history",
+          `Skiva er brukt i ${matchCount} kamp${matchCount === 1 ? "" : "er"} og kan ikke slettes. Deaktiver den i stedet.`,
+          409,
+        );
+      }
+
+      if (this.runtimePrefix !== this.hardwarePrefix) {
+        const runtime = await this.runtimeBoardWith(db, environmentClubId, physicalId);
+        if (runtime) {
+          const runtimeId = requiredId(runtime.id, "runtime_kiosk_id");
+          await this.deleteBoardReferencesWith(db, this.runtimePrefix, runtimeId);
+          await db.execute(
+            `DELETE FROM \`${this.runtimePrefix}kiosks\` WHERE id=? AND club_id=?`,
+            [runtimeId, environmentClubId],
+          );
+        }
+      }
+
+      await this.deleteBoardReferencesWith(db, this.hardwarePrefix, physicalId);
+      const deleted = await db.execute(
+        `DELETE FROM \`${this.hardwarePrefix}kiosks\` WHERE id=? AND club_id=?`,
+        [physicalId, canonicalClubId],
+      );
+      return deleted.affectedRows > 0;
+    });
+  }
+
   async ensureRuntimeAlias(environmentClubIdInput: unknown, physicalIdInput: unknown): Promise<string> {
     const environmentClubId = requiredId(environmentClubIdInput, "club_id");
     const physicalId = requiredId(physicalIdInput, "kiosk_id");
@@ -433,6 +471,34 @@ export class MySqlEquipmentAdminRepository {
     );
     if (!rows[0]) throw new DomainValidationError("club_not_found", "Klubben finnes ikke i dette miljøet.", 404);
     return rows[0];
+  }
+
+  private async countBoardMatchesWith(db: SqlExecutor, environmentClubId: string, physicalId: string): Promise<number> {
+    const physicalRows = await db.query<QueryResultRow>(
+      `SELECT COUNT(*) AS c FROM \`${this.hardwarePrefix}matches\` WHERE kiosk_id=?`,
+      [physicalId],
+    );
+    let count = numberValue(physicalRows[0]?.c);
+    if (this.runtimePrefix !== this.hardwarePrefix) {
+      const runtimeRows = await db.query<QueryResultRow>(
+        `SELECT COUNT(*) AS c FROM \`${this.runtimePrefix}matches\` m
+           INNER JOIN \`${this.runtimePrefix}kiosks\` k ON k.id=m.kiosk_id
+          WHERE k.club_id=? AND (k.source_kiosk_id=? OR k.id=?)`,
+        [environmentClubId, physicalId, physicalId],
+      );
+      count += numberValue(runtimeRows[0]?.c);
+    }
+    return count;
+  }
+
+  private async deleteBoardReferencesWith(db: SqlExecutor, prefix: TablePrefix, kioskId: string): Promise<void> {
+    for (const table of ["tournament_board_reservations", "tournament_kiosks", "kiosk_sessions"] as const) {
+      await db.execute(`DELETE FROM \`${prefix}${table}\` WHERE kiosk_id=?`, [kioskId]);
+    }
+    await db.execute(
+      `UPDATE \`${prefix}kiosk_pairing_requests\` SET approved_kiosk_id=NULL WHERE approved_kiosk_id=?`,
+      [kioskId],
+    );
   }
 
   private async generateKioskCodeWith(db: SqlExecutor, clubKey: string, boardNumber: number): Promise<string> {
