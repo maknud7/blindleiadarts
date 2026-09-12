@@ -95,7 +95,11 @@ const accountProfiles = new MySqlAccountProfileRepository(
 );
 const playerLiveReads = new MySqlPlayerLiveReadRepository(sessions, config.prefixes.runtime);
 const playerLiveRuntime = new PlayerLiveReadRouter(config, identityRepository, playerLiveReads);
-const publicLiveReads = new MySqlPublicLiveReadRepository(sessions, config.prefixes.runtime);
+const publicLiveReads = new MySqlPublicLiveReadRepository(
+  sessions,
+  config.prefixes.runtime,
+  config.prefixes.hardware,
+);
 const publicLiveRuntime = new PublicLiveReadRouter(publicLiveReads);
 const seasonPublicReads = new MySqlSeasonPublicReadRepository(sessions, config.prefixes.runtime);
 const seasonPublicRuntime = new SeasonPublicReadRouter(seasonPublicReads);

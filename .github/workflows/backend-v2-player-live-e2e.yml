@@ -53,13 +53,26 @@ jobs:
           REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
         run: |
           set -Eeuo pipefail
-          current="$(curl -fsS --max-time 15 "${BASE_URL%/}/api/v1/realtime/config")"
-          jq -e --arg expected "$REALTIME_WEBSOCKET_URL" '
-            .ok == true
-            and .data.websocket_url == $expected
-            and .data.enabled == ($expected != "")
-            and .data.transport == (if $expected != "" then "websocket" else "sse" end)
-          ' <<<"$current" >/dev/null
+          verified=no
+          current=''
+          for attempt in $(seq 1 30); do
+            current="$(curl -fsS --max-time 15 "${BASE_URL%/}/api/v1/realtime/config" || true)"
+            if jq -e --arg expected "$REALTIME_WEBSOCKET_URL" '
+              .ok == true
+              and .data.websocket_url == $expected
+              and .data.enabled == ($expected != "")
+              and .data.transport == (if $expected != "" then "websocket" else "sse" end)
+            ' <<<"$current" >/dev/null 2>&1; then
+              verified=yes
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$verified" != yes ]]; then
+            echo 'TEST realtime config did not become healthy after Render restart window.' >&2
+            printf '%s\n' "$current" >&2
+            exit 1
+          fi
           echo "REALTIME_WEBSOCKET_URL=$REALTIME_WEBSOCKET_URL"
 
       - name: Generate loopback-only E2E token

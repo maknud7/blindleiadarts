@@ -21,6 +21,9 @@ let before = null;
 const discovery = makeProvider(false);
 try {
   ({ fixture, state: before } = await discovery.withConnection(async (sql) => {
+    // Use canonical historical data rather than the newest completed tournament.
+    // Other hosted E2Es create/delete operations-smoke fixtures concurrently, so
+    // selecting the oldest complete fixture keeps this read-only purity test stable.
     const rows = await sql.query(
       `SELECT t.id AS tournament_id,t.club_id,c.slug AS club_slug
          FROM \`${config.prefixes.runtime}tournaments\` t
@@ -30,7 +33,11 @@ try {
             SELECT 1 FROM \`${config.prefixes.runtime}matches\` m
              WHERE m.tournament_id=t.id AND m.status='completed'
           )
-        ORDER BY COALESCE(t.end_at,t.start_at) DESC,t.id DESC
+          AND EXISTS (
+            SELECT 1 FROM \`${config.prefixes.runtime}tournament_players\` tp
+             WHERE tp.tournament_id=t.id AND tp.status NOT IN ('withdrawn','no_show')
+          )
+        ORDER BY t.id ASC
         LIMIT 1`,
     );
     const row = rows[0];
@@ -42,17 +49,18 @@ try {
     assert.notEqual(clubSlug, "", "Public-live fixture has no club slug");
 
     const screens = await sql.query(
-      `SELECT id,access_token,last_connected_at
-         FROM \`${config.prefixes.runtime}screen_devices\`
-        WHERE club_id=? AND is_active=1
-        ORDER BY id ASC`,
-      [clubId],
+      `SELECT sd.id,sd.access_token,sd.last_connected_at
+         FROM \`${config.prefixes.hardware}screen_devices\` sd
+         INNER JOIN \`${config.prefixes.hardware}clubs\` c ON c.id=sd.club_id
+        WHERE c.slug=? AND sd.is_active=1
+        ORDER BY sd.id ASC`,
+      [clubSlug],
     );
     const screenToken = String(screens[0]?.access_token ?? "").trim() || null;
 
     return {
       fixture: { tournamentId, clubId, clubSlug, screenToken },
-      state: await captureState(sql, tournamentId, clubId),
+      state: await captureState(sql, tournamentId, clubId, clubSlug),
     };
   }));
 
@@ -98,7 +106,12 @@ try {
 
   const verification = makeProvider(false);
   try {
-    const after = await verification.withConnection((sql) => captureState(sql, fixture.tournamentId, fixture.clubId));
+    const after = await verification.withConnection((sql) => captureState(
+      sql,
+      fixture.tournamentId,
+      fixture.clubId,
+      fixture.clubSlug,
+    ));
     assert.deepEqual(
       after.eloSnapshots,
       before.eloSnapshots,
@@ -112,7 +125,7 @@ try {
     assert.deepEqual(
       after.screenHeartbeats,
       before.screenHeartbeats,
-      "Public check-in display GET must not touch screen last_connected_at",
+      "Public check-in display GET must not touch canonical hardware screen last_connected_at",
     );
   } finally {
     await verification.close().catch(() => undefined);
@@ -123,6 +136,7 @@ try {
     scenario: "backend-v2-public-live-read-purity",
     release_sha: config.releaseSha,
     runtime_prefix: config.prefixes.runtime,
+    hardware_prefix: config.prefixes.hardware,
     tournament_id: fixture.tournamentId,
     club_id: fixture.clubId,
     club_slug: fixture.clubSlug,
@@ -142,7 +156,7 @@ try {
   await discovery.close().catch(() => undefined);
 }
 
-async function captureState(sql, tournamentId, clubId) {
+async function captureState(sql, tournamentId, clubId, clubSlug) {
   const eloSnapshots = await sql.query(
     `SELECT player_id,elo_before,elo_after,matches_before,matches_after,
             rank_before,rank_after,rank_baseline_kind,captured_start_at,captured_end_at
@@ -159,11 +173,12 @@ async function captureState(sql, tournamentId, clubId) {
     [clubId],
   );
   const screenHeartbeats = await sql.query(
-    `SELECT id,access_token,last_connected_at
-       FROM \`${config.prefixes.runtime}screen_devices\`
-      WHERE club_id=?
-      ORDER BY id ASC`,
-    [clubId],
+    `SELECT sd.id,sd.access_token,sd.last_connected_at
+       FROM \`${config.prefixes.hardware}screen_devices\` sd
+       INNER JOIN \`${config.prefixes.hardware}clubs\` c ON c.id=sd.club_id
+      WHERE c.slug=?
+      ORDER BY sd.id ASC`,
+    [clubSlug],
   );
   return {
     eloSnapshots: normalizeRows(eloSnapshots),
@@ -226,6 +241,7 @@ async function waitForReady() {
           && health.environment === "test"
           && health.runtime_prefix === "bd_test_"
           && health.identity_prefix === "bd_prod_"
+          && health.hardware_prefix === "bd_prod_"
           && health.max_connections === 1
           && health.connection_mode === "idle-reuse"
         ) return;

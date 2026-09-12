@@ -46,13 +46,7 @@ final class BackendV2PlayerLiveProxyApplication
             $authorization = $request->header('authorization');
             if ($authorization !== null) $headers['authorization'] = $authorization;
 
-            // Request::path() deliberately contains only the path component.
-            // Public check-in uses query parameters for club/screen context, so
-            // preserve the original query string when forwarding the GET.
-            $targetPath = $path;
-            $query = trim((string) ($_SERVER['QUERY_STRING'] ?? ''));
-            if ($query !== '') $targetPath .= '?' . $query;
-
+            $targetPath = $this->targetPath($path, (string) ($_SERVER['QUERY_STRING'] ?? ''));
             $result = $client->request('GET', $targetPath, null, $headers);
             $status = $result['status'];
             $payload = $result['payload'];
@@ -105,5 +99,24 @@ final class BackendV2PlayerLiveProxyApplication
         if (preg_match('#^/v1/seasons/\d+$#', $path) === 1) return true;
         if (preg_match('#^/v1/seasons/\d+/standings$#', $path) === 1) return true;
         return false;
+    }
+
+    public function targetPath(string $path, string $queryString): string
+    {
+        if ($path !== '/v1/public/check-in-display') return $path;
+
+        $parsed = [];
+        parse_str($queryString, $parsed);
+        $allowed = [];
+        foreach (['screen_token', 'club_slug'] as $key) {
+            $value = $parsed[$key] ?? null;
+            if (!is_string($value)) continue;
+            $value = trim($value);
+            if ($value === '') continue;
+            $allowed[$key] = $value;
+        }
+
+        $query = http_build_query($allowed, '', '&', PHP_QUERY_RFC3986);
+        return $query === '' ? $path : $path . '?' . $query;
     }
 }
