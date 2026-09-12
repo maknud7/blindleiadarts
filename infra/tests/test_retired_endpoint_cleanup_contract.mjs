@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const workflow = fs.readFileSync(".github/workflows/test-retired-endpoint-cleanup.yml", "utf8");
+const deployTest = fs.readFileSync(".github/workflows/deploy-test.yml", "utf8");
 
 assert.match(workflow, /push:\s*\n\s*branches:\s*\n\s*- develop/);
 assert.doesNotMatch(workflow, /workflow_run:/);
@@ -12,7 +13,14 @@ assert.match(workflow, /release\.json\?cb=/);
 assert.match(workflow, /environment: test/);
 assert.match(workflow, /\/www\/blindleiadarts\/test\/api\/kiosk-scolia-test-lease\.php/);
 assert.match(workflow, /\/www\/blindleiadarts\/test\/api\/scolia-bridge-control\.php/);
+assert.match(workflow, /\/www\/blindleiadarts\/test\/api\/kiosk-scolia-ui\.php/);
 assert.doesNotMatch(workflow, /\/www\/blindleiadarts\/prod\//);
 assert.match(workflow, /status" != "404"/);
+assert.match(workflow, /\/api\/kiosk-scolia-ui\.php/);
+
+assert.match(deployTest, /test ! -e dist\/test\/api\/kiosk-scolia-ui\.php/);
+assert.doesNotMatch(deployTest, /test -f dist\/test\/api\/kiosk-scolia-ui\.php/);
+assert.doesNotMatch(deployTest, /php -l dist\/test\/api\/kiosk-scolia-ui\.php/);
+assert.doesNotMatch(deployTest, /Scolia kiosk UI endpoint guard/);
 
 console.log("Retired TEST endpoint cleanup contract OK");
