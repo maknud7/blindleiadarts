@@ -537,13 +537,23 @@ function objectValue(value: unknown, name: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 function recordOrEmpty(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return value !== null && typeof value === "object" && !Array.isArray(value) && !Buffer.isBuffer(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 function parseObject(value: unknown): Record<string, unknown> {
-  try { return recordOrEmpty(JSON.parse(String(value ?? "{}"))); } catch { return {}; }
+  if (value !== null && typeof value === "object" && !Array.isArray(value) && !Buffer.isBuffer(value)) {
+    return value as Record<string, unknown>;
+  }
+  const text = Buffer.isBuffer(value) ? value.toString("utf8") : typeof value === "string" ? value : "";
+  if (text.trim() === "") return {};
+  try { return recordOrEmpty(JSON.parse(text)); } catch { return {}; }
 }
 function parseArray(value: unknown): unknown[] {
-  try { const parsed = JSON.parse(String(value ?? "[]")); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+  if (Array.isArray(value)) return value;
+  const text = Buffer.isBuffer(value) ? value.toString("utf8") : typeof value === "string" ? value : "";
+  if (text.trim() === "") return [];
+  try { const parsed = JSON.parse(text); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
 }
 function requiredId(value: unknown, name: string): string {
   const id = optionalId(value);
