@@ -11,10 +11,15 @@ import type {
   ScoliaVisitBuffer,
 } from "../mysql/scolia-bridge-repository.js";
 
+interface ScoliaDisconnectPort {
+  markDisconnected(kioskIdInput: unknown, reasonInput: unknown): Promise<void>;
+}
+
 export class ScoliaEventProcessor {
   constructor(
     private readonly bridge: MySqlScoliaBridgeRepository,
     private readonly scoring: CanonicalScoringPort,
+    private readonly disconnects: ScoliaDisconnectPort = bridge,
   ) {}
 
   async drain(limitInput: unknown = 25, maxProcessingMs = 750): Promise<Record<string, unknown>> {
@@ -71,12 +76,12 @@ export class ScoliaEventProcessor {
     }
     if (type === "BRIDGE_DISCONNECTED") {
       const reason = stringValue(payload.reason ?? message.reason) || "Scolia WebSocket disconnected";
-      await this.bridge.markDisconnected(event.kiosk_id, reason);
+      await this.disconnects.markDisconnected(event.kiosk_id, reason);
       return { status: "processed", meta: { connection: "disconnected" } };
     }
     if (type === "BRIDGE_ERROR") {
       const reason = stringValue(payload.error ?? message.error) || "Ukjent bridge-feil";
-      await this.bridge.markDisconnected(event.kiosk_id, reason);
+      await this.disconnects.markDisconnected(event.kiosk_id, reason);
       await this.bridge.recordIncident(event.club_id, event.kiosk_id, event.match_id, "error", "bridge_error", "Scolia Bridge rapporterte en feil", reason);
       return { status: "processed", meta: { bridge_error: reason } };
     }
@@ -119,7 +124,7 @@ export class ScoliaEventProcessor {
 
     let buffer = await this.bridge.getVisitBuffer(event.kiosk_id);
     if (buffer && (buffer.match_id !== context.match_id || buffer.player_id !== context.player_id)) {
-      await this.bridge.markDisconnected(event.kiosk_id, "Scolia-bufferen samsvarer ikke med aktiv kamp/spiller. Manuell avstemming kreves.");
+      await this.disconnects.markDisconnected(event.kiosk_id, "Scolia-bufferen samsvarer ikke med aktiv kamp/spiller. Manuell avstemming kreves.");
       throw new DomainValidationError("scolia_buffer_context_mismatch", "Scolia-bufferen samsvarer ikke med canonical kampstate.", 409);
     }
 
@@ -133,7 +138,7 @@ export class ScoliaEventProcessor {
       provider_event_ids: [],
     };
     if (buffer.darts.length >= 3) {
-      await this.bridge.markDisconnected(event.kiosk_id, "Mer enn tre Scolia-kast ble registrert før takeout. Manuell avstemming kreves.");
+      await this.disconnects.markDisconnected(event.kiosk_id, "Mer enn tre Scolia-kast ble registrert før takeout. Manuell avstemming kreves.");
       throw new DomainValidationError("scolia_too_many_darts", "Mer enn tre piler i samme Scolia-visit.", 409);
     }
 
@@ -207,7 +212,7 @@ export class ScoliaEventProcessor {
     const context = await this.bridge.scoringContext(kioskId);
     if (!context) throw new DomainValidationError("scolia_no_scoring_context", "Ingen aktiv canonical kamp finnes for Scolia-visiten.", 409);
     if (buffer.match_id !== context.match_id || buffer.player_id !== context.player_id) {
-      await this.bridge.markDisconnected(kioskId, "Scolia-visiten kunne ikke avstemmes mot canonical spiller.");
+      await this.disconnects.markDisconnected(kioskId, "Scolia-visiten kunne ikke avstemmes mot canonical spiller.");
       throw new DomainValidationError("scolia_visit_context_changed", "Canonical turrekkefølge endret seg før Scolia-visiten ble ferdig.", 409);
     }
     const darts = buffer.darts.slice();
