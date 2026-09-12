@@ -14,6 +14,7 @@ import { MySqlLinearRankingProjection } from "./mysql/linear-ranking-projection.
 import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibility-repository.js";
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlPlayerLiveReadRepository } from "./mysql/player-live-read-repository.js";
+import { MySqlPublicLiveReadRepository } from "./mysql/public-live-read-repository.js";
 import { MySqlSeasonPublicReadRepository } from "./mysql/season-public-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
 import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
@@ -34,6 +35,7 @@ import {
 import { EquipmentAdminRouter } from "./runtime/equipment-admin-router.js";
 import { PlayerLiveReadRouter } from "./runtime/player-live-read-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
+import { PublicLiveReadRouter } from "./runtime/public-live-read-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
@@ -93,6 +95,8 @@ const accountProfiles = new MySqlAccountProfileRepository(
 );
 const playerLiveReads = new MySqlPlayerLiveReadRepository(sessions, config.prefixes.runtime);
 const playerLiveRuntime = new PlayerLiveReadRouter(config, identityRepository, playerLiveReads);
+const publicLiveReads = new MySqlPublicLiveReadRepository(sessions, config.prefixes.runtime);
+const publicLiveRuntime = new PublicLiveReadRouter(publicLiveReads);
 const seasonPublicReads = new MySqlSeasonPublicReadRepository(sessions, config.prefixes.runtime);
 const seasonPublicRuntime = new SeasonPublicReadRouter(seasonPublicReads);
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
@@ -233,6 +237,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const publicLiveRoute = await publicLiveRuntime.handle(method, publicPath, request);
+  if (publicLiveRoute !== null) {
+    sendJson(response, publicLiveRoute.statusCode, publicLiveRoute.payload);
     return;
   }
 
