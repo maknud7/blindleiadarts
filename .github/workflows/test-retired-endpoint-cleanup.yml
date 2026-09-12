@@ -1,6 +1,12 @@
 name: Cleanup Retired TEST Endpoints
 
 on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/test-retired-endpoint-cleanup.yml'
+      - 'infra/tests/test_retired_endpoint_cleanup_contract.mjs'
   workflow_run:
     workflows:
       - Deploy Test
@@ -12,10 +18,21 @@ permissions:
   contents: read
 
 jobs:
+  contract:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify TEST-only cleanup contract
+        run: node infra/tests/test_retired_endpoint_cleanup_contract.mjs
+
   cleanup:
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
-          (github.event.workflow_run.conclusion == 'success' &&
+          (github.event_name == 'workflow_run' &&
+           github.event.workflow_run.conclusion == 'success' &&
            github.event.workflow_run.head_branch == 'develop') }}
     runs-on: ubuntu-latest
     environment: test
