@@ -1,4 +1,5 @@
 const API_ROOT = "../api/v1";
+const API_TIMEOUT_MS = 12000;
 
 const state = {
   token: localStorage.getItem("bd:token") || "",
@@ -67,25 +68,38 @@ function hideMessage(target) {
   target.className = "message hidden";
 }
 
-async function requestJson(url, { method = "GET", body, auth = false } = {}) {
+async function requestJson(url, { method = "GET", body, auth = false, timeoutMs = API_TIMEOUT_MS } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (auth && state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
-  let payload = null;
-  try { payload = await response.json(); } catch { payload = null; }
-  if (!response.ok || !payload?.ok) {
-    const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
-    error.status = response.status;
-    error.payload = payload;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch { payload = null; }
+    if (!response.ok || !payload?.ok) {
+      const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    return payload.data;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const route = String(url).replace(API_ROOT, "");
+      throw new Error(`Forespørselen tok for lang tid (${Math.round(timeoutMs / 1000)} sek): ${route}`);
+    }
     throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-  return payload.data;
 }
 
 function api(path, options = {}) {
@@ -132,17 +146,23 @@ function renderClubSelect() {
 }
 
 async function loadAdminData() {
-  const [playersData, tournamentsData, screensData] = await Promise.all([
+  const [playersResult, tournamentsResult, screensResult] = await Promise.allSettled([
     api(`/clubs/${state.clubId}/players`),
     api(`/clubs/${state.clubId}/tournaments`),
     api(`/clubs/${state.clubId}/screen-devices`, { auth: true }),
   ]);
   state.data = {
     club: state.clubs.find((item) => Number(item.id) === state.clubId) || null,
-    players: playersData.items || [],
-    tournaments: tournamentsData.items || [],
-    screens: screensData.items || [],
+    players: playersResult.status === "fulfilled" ? (playersResult.value.items || []) : [],
+    tournaments: tournamentsResult.status === "fulfilled" ? (tournamentsResult.value.items || []) : [],
+    screens: screensResult.status === "fulfilled" ? (screensResult.value.items || []) : [],
   };
+
+  const warnings = [];
+  if (playersResult.status === "rejected") warnings.push(`Spillere: ${playersResult.reason?.message || "ukjent feil"}`);
+  if (tournamentsResult.status === "rejected") warnings.push(`Turneringer: ${tournamentsResult.reason?.message || "ukjent feil"}`);
+  if (screensResult.status === "rejected") warnings.push(`Venue-skjermer: ${screensResult.reason?.message || "ukjent feil"}`);
+  return warnings;
 }
 
 async function loadKioskAdmin() {
@@ -173,6 +193,7 @@ async function loadAll() {
 
     const warnings = [];
     if (adminResult.status === "rejected") warnings.push(`Øvrige admindata kunne ikke lastes: ${adminResult.reason?.message || "ukjent feil"}`);
+    else if (Array.isArray(adminResult.value)) warnings.push(...adminResult.value);
     if (kioskResult.status === "rejected") warnings.push(`Skivene kunne ikke lastes: ${kioskResult.reason?.message || "ukjent feil"}`);
     else if (kioskResult.value) warnings.push(kioskResult.value);
     if (warnings.length) showMessage(el.globalMessage, warnings.join(" "), "warning");
