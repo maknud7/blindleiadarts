@@ -72,9 +72,13 @@ export class TournamentPlayerBreakRouter {
 
   private async requireUser(request: IncomingMessage): Promise<IdentityUser> {
     const token = bearerToken(request);
-    if (token === null) throw new RuntimeAccessError(401, "authentication_required", "Du må logge inn.");
+    if (token === null) {
+      throw new RuntimeAccessError(401, "authentication_required", "Du må være logget inn for å bruke spillerpause.");
+    }
     const user = await this.identityRepository.findBySessionToken(token, this.identityTouchAllowed());
-    if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Økten er utløpt eller ugyldig.");
+    if (user === null) {
+      throw new RuntimeAccessError(401, "invalid_session", "Innloggingen er utløpt eller ugyldig.");
+    }
     return user;
   }
 
@@ -107,9 +111,9 @@ function requiredPlayerId(user: IdentityUser): string {
   const playerId = decimalId(user.player_id);
   if (playerId === null) {
     throw new DomainValidationError(
-      "player_profile_required",
+      "player_profile_missing",
       "Kontoen er ikke koblet til en spillerprofil.",
-      409,
+      422,
     );
   }
   return playerId;
