@@ -34,10 +34,21 @@ export class ScoliaRuntimeRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<ScoliaRuntimeRouteResult | null> {
+    if (method === "GET" && path === "/v1/scolia/health") {
+      return ok({
+        service: "scolia-bridge",
+        generated_at: new Date().toISOString(),
+        data: await this.bridge.bridgeHealthState(this.config.internalToken !== null),
+      });
+    }
+
     if (path.startsWith("/v1/scolia/bridge/")) {
       this.requireBridge(request);
       if (method === "GET" && path === "/v1/scolia/bridge/config") {
         return ok({ boards: await this.bridge.listBridgeBoards(), ...this.bridge.scope() });
+      }
+      if (method === "GET" && path === "/v1/scolia/bridge/router") {
+        return ok({ data: await this.bridge.bridgeRouterState() });
       }
       assertMutationAllowed(this.config);
       if (method === "POST" && path === "/v1/scolia/bridge/events") {
