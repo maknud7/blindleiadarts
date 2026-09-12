@@ -21,6 +21,9 @@ let before = null;
 const discovery = makeProvider(false);
 try {
   ({ fixture, state: before } = await discovery.withConnection(async (sql) => {
+    // Use canonical historical data rather than the newest completed tournament.
+    // Other hosted E2Es create/delete operations-smoke fixtures concurrently, so
+    // selecting the oldest complete fixture keeps this read-only purity test stable.
     const rows = await sql.query(
       `SELECT t.id AS tournament_id,t.club_id,c.slug AS club_slug
          FROM \`${config.prefixes.runtime}tournaments\` t
@@ -30,7 +33,11 @@ try {
             SELECT 1 FROM \`${config.prefixes.runtime}matches\` m
              WHERE m.tournament_id=t.id AND m.status='completed'
           )
-        ORDER BY COALESCE(t.end_at,t.start_at) DESC,t.id DESC
+          AND EXISTS (
+            SELECT 1 FROM \`${config.prefixes.runtime}tournament_players\` tp
+             WHERE tp.tournament_id=t.id AND tp.status NOT IN ('withdrawn','no_show')
+          )
+        ORDER BY t.id ASC
         LIMIT 1`,
     );
     const row = rows[0];
