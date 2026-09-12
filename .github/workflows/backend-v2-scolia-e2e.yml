@@ -10,7 +10,7 @@ on:
       - 'apps/backend-v2/src/runtime/scolia-runtime-router.ts'
       - 'apps/backend-v2/src/service/scolia-event-processor.ts'
       - 'apps/backend-v2/src/server.ts'
-      - 'apps/backend-v2/e2e/scolia-runtime-lifecycle.mjs'
+      - 'apps/backend-v2/e2e/scolia-runtime-*.mjs'
       - '.github/workflows/backend-v2-scolia-e2e.yml'
   workflow_dispatch:
 
@@ -25,6 +25,24 @@ jobs:
   scolia-lifecycle:
     runs-on: ubuntu-latest
     environment: test
+    env:
+      BD_APP_ENV: test
+      BD_BACKEND_V2_MODE: test-write
+      BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+      BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+      BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '30000'
+      BD_BACKEND_V2_DB_IDLE_MS: '15000'
+      HOST: 127.0.0.1
+      PORT: '18088'
+      RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_test_
+      IDENTITY_TABLE_PREFIX: bd_test_
+      HARDWARE_TABLE_PREFIX: bd_test_
     steps:
       - name: Checkout candidate
         uses: actions/checkout@v4
@@ -47,23 +65,8 @@ jobs:
         shell: bash
         run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
+      - name: Diagnose Scolia event processing against hosted TEST MySQL
+        run: node apps/backend-v2/e2e/scolia-runtime-diagnostic.mjs
+
       - name: Run isolated Scolia lifecycle against hosted TEST MySQL
-        env:
-          BD_APP_ENV: test
-          BD_BACKEND_V2_MODE: test-write
-          BD_BACKEND_V2_MAX_CONNECTIONS: '1'
-          BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
-          BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '30000'
-          BD_BACKEND_V2_DB_IDLE_MS: '15000'
-          HOST: 127.0.0.1
-          PORT: '18088'
-          RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_TABLE_PREFIX: bd_test_
-          IDENTITY_TABLE_PREFIX: bd_test_
-          HARDWARE_TABLE_PREFIX: bd_test_
         run: node apps/backend-v2/e2e/scolia-runtime-lifecycle.mjs
