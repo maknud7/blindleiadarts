@@ -5,6 +5,7 @@ export class MySqlScoliaKioskRuntimeRepository {
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly runtimePrefix: TablePrefix,
+    private readonly hardwarePrefix: TablePrefix,
   ) {}
 
   async fallback(clubIdInput: unknown, kioskIdInput: unknown): Promise<Record<string, unknown>> {
@@ -26,6 +27,47 @@ export class MySqlScoliaKioskRuntimeRepository {
         [kioskId, reason],
       );
       return this.statusWith(db, kioskId);
+    });
+  }
+
+  async markDisconnected(kioskIdInput: unknown, reasonInput: unknown): Promise<void> {
+    const kioskId = id(kioskIdInput, "kiosk_id");
+    const reason = String(reasonInput ?? "Scolia WebSocket disconnected").trim().slice(0, 255) || "Scolia WebSocket disconnected";
+    await this.sessions.withTransaction(async (db) => {
+      const runtimeRows = await db.query<QueryResultRow>(
+        `SELECT id,club_id,source_kiosk_id FROM \`${this.runtimePrefix}kiosks\` WHERE id=? AND is_active=1 LIMIT 1 FOR UPDATE`,
+        [kioskId],
+      );
+      const runtime = runtimeRows[0];
+      if (!runtime) return;
+      const physicalId = this.runtimePrefix === this.hardwarePrefix
+        ? kioskId
+        : id(runtime.source_kiosk_id, "physical_kiosk_id");
+      const settingsRows = await db.query<QueryResultRow>(
+        `SELECT s.mode,s.auto_fallback_to_manual,k.scoring_mode
+           FROM \`${this.hardwarePrefix}kiosks\` k
+           LEFT JOIN \`${this.hardwarePrefix}scolia_board_settings\` s ON s.kiosk_id=k.id
+          WHERE k.id=? LIMIT 1`,
+        [physicalId],
+      );
+      const settings = settingsRows[0] ?? {};
+      const mode = String(settings.mode ?? (String(settings.scoring_mode ?? "") === "scolia" ? "live" : "off"));
+      const autoFallback = Number(settings.auto_fallback_to_manual ?? 1) === 1;
+      const matches = await db.query<QueryResultRow>(
+        `SELECT id FROM \`${this.runtimePrefix}matches\`
+          WHERE kiosk_id=? AND status IN ('in_progress','assigned')
+          ORDER BY FIELD(status,'in_progress','assigned'),id LIMIT 1`,
+        [kioskId],
+      );
+      const fallback = matches.length > 0 && mode === "live" && autoFallback;
+      await db.execute(
+        `INSERT INTO \`${this.runtimePrefix}scolia_board_runtime\`
+          (kiosk_id,connection_state,fallback_active,needs_reconciliation,last_disconnect_reason,last_disconnect_at)
+         VALUES (?,'disconnected',?,?,?,NOW(3))
+         ON DUPLICATE KEY UPDATE connection_state='disconnected',fallback_active=VALUES(fallback_active),
+           needs_reconciliation=VALUES(needs_reconciliation),last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3)`,
+        [kioskId, fallback ? 1 : 0, fallback ? 1 : 0, reason],
+      );
     });
   }
 
