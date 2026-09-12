@@ -56,7 +56,7 @@ export class MySqlPublicLiveReadRepository {
     const rawBoards = Array.isArray(ops.boards) ? ops.boards as Record<string, unknown>[] : [];
     const boards: Record<string, unknown>[] = [];
     for (const rawBoard of rawBoards) {
-      const board = { ...rawBoard };
+      const board: Record<string, unknown> = { ...rawBoard };
       const activeMatchId = decimalId(board.active_match_id);
       board.live_match = activeMatchId === null ? null : await this.liveMatch(activeMatchId);
       boards.push(board);
@@ -249,8 +249,8 @@ export class MySqlPublicLiveReadRepository {
       byName.set(key, byName.has(key) ? null : snapshot);
     }
 
-    const decorated = rows.map((raw) => {
-      const row = { ...raw };
+    const decorated: Record<string, unknown>[] = rows.map((raw): Record<string, unknown> => {
+      const row: Record<string, unknown> = { ...raw };
       const playerId = decimalId(row.id);
       const snapshot = (playerId === null ? null : byPlayer.get(playerId)) ?? byName.get(nameKey(row.display_name)) ?? null;
       if (snapshot === null) {
@@ -293,8 +293,8 @@ export class MySqlPublicLiveReadRepository {
       if (rating !== 0) return rating;
       return String(a.display_name ?? "").localeCompare(String(b.display_name ?? ""), "nb-NO", { sensitivity: "base" });
     });
-    return decorated.map((raw, index) => {
-      const row = { ...raw, position: index + 1 };
+    return decorated.map((raw, index): Record<string, unknown> => {
+      const row: Record<string, unknown> = { ...raw, position: index + 1 };
       if (row.tournament_rank_baseline_kind === null) return row;
       const before = nullableInteger(row.tournament_rank_before);
       const after = nullableInteger(row.tournament_rank_after);
@@ -384,11 +384,11 @@ export class MySqlPublicLiveReadRepository {
     const rounds = Array.isArray(bracket.rounds) ? bracket.rounds as Record<string, unknown>[] : [];
     const decoratedRounds: Record<string, unknown>[] = [];
     for (const rawRound of rounds) {
-      const round = { ...rawRound };
+      const round: Record<string, unknown> = { ...rawRound };
       const nodes = Array.isArray(round.nodes) ? round.nodes as Record<string, unknown>[] : [];
       const decoratedNodes: Record<string, unknown>[] = [];
       for (const rawNode of nodes) {
-        const node = { ...rawNode, legs_a: 0, legs_b: 0 };
+        const node: Record<string, unknown> = { ...rawNode, legs_a: 0, legs_b: 0 };
         const matchId = decimalId(node.match_id);
         const playerA = decimalId(node.player_a_id);
         const playerB = decimalId(node.player_b_id);
