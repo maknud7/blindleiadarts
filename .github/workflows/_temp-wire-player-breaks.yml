@@ -64,13 +64,6 @@ jobs:
               '  const tournamentRoute = await tournamentRuntime.handle(method, publicPath, request);\n',
               '  const tournamentPlayerBreakRoute = await tournamentPlayerBreakRuntime.handle(method, publicPath, request);\n  if (tournamentPlayerBreakRoute !== null) {\n    sendJson(response, tournamentPlayerBreakRoute.statusCode, tournamentPlayerBreakRoute.payload);\n    return;\n  }\n\n  const tournamentRoute = await tournamentRuntime.handle(method, publicPath, request);\n',
           )
-
-          workflow = '.github/workflows/backend-v2-tournament-e2e.yml'
-          replace_once(
-              workflow,
-              '          node apps/backend-v2/e2e/tournament-wizard-lifecycle.mjs\n',
-              '          node apps/backend-v2/e2e/tournament-wizard-lifecycle.mjs\n          node apps/backend-v2/e2e/tournament-player-break-lifecycle.mjs\n',
-          )
           PY
 
       - name: Validate candidate
@@ -82,13 +75,12 @@ jobs:
           php -l apps/api/src/BackendV2TournamentProxyApplication.php
           php apps/api/tests/backend_v2_tournament_proxy_routing_test.php
 
-      - name: Commit clean wiring
+      - name: Commit server wiring
         shell: bash
         run: |
           set -Eeuo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git rm .github/workflows/_temp-wire-player-breaks.yml
-          git add apps/backend-v2/src/server.ts .github/workflows/backend-v2-tournament-e2e.yml
+          git add apps/backend-v2/src/server.ts
           git commit -m 'Wire player breaks into backend-v2 tournament runtime'
           git push origin HEAD:feat/backend-v2-player-breaks
