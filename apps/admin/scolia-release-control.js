@@ -1,4 +1,3 @@
-const CONTROL_API = "../api/scolia-bridge-control.php";
 const stateCache = new Map();
 let syncTimer = null;
 let syncRunning = false;
@@ -19,14 +18,12 @@ function cacheKey(clubId, kioskId) {
 async function requestState(kioskId, { method = "GET", attached } = {}) {
   const clubId = selectedClubId();
   if (!clubId || !kioskId) throw new Error("Mangler klubb eller skive.");
-  const url = new URL(CONTROL_API, window.location.href);
-  url.searchParams.set("club_id", String(clubId));
-  url.searchParams.set("kiosk_id", String(kioskId));
+  const url = new URL(`../api/v1/clubs/${encodeURIComponent(String(clubId))}/kiosks/${encodeURIComponent(String(kioskId))}/scolia`, window.location.href);
   const headers = { Authorization: `Bearer ${authToken()}` };
   let body;
-  if (method === "POST") {
+  if (method !== "GET") {
     headers["Content-Type"] = "application/json";
-    body = JSON.stringify({ attached: Boolean(attached) });
+    body = JSON.stringify({ bridge_attached: Boolean(attached) });
   }
   const response = await fetch(url, { method, headers, body, cache: "no-store" });
   const payload = await response.json().catch(() => null);
@@ -96,7 +93,7 @@ async function changeOwnership(kioskId, button, currentState) {
   button.disabled = true;
   button.textContent = action.attached ? "Kobler til …" : "Frikobler …";
   try {
-    const next = await requestState(kioskId, { method: "POST", attached: action.attached });
+    const next = await requestState(kioskId, { method: "PATCH", attached: action.attached });
     renderAllForBoard(kioskId, next);
     if (next.bridge_released) {
       editorMessage(`Scolia er frikoblet fra Blindleia. Vent opptil ca. ${Number(next.release_effective_within_seconds || 12)} sekunder før du åpner skiva direkte i Scolia.`, "good");
