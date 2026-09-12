@@ -228,12 +228,11 @@ function requiredId(value: unknown, field: string): string {
   return normalized;
 }
 
-function publicId(value: string): number | string {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : value;
+function publicId(value: string): string {
+  return value;
 }
 
-function optionalPublicId(value: unknown): number | string | null {
+function optionalPublicId(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
-  return /^[1-9][0-9]*$/.test(normalized) ? publicId(normalized) : null;
+  return /^[1-9][0-9]*$/.test(normalized) ? normalized : null;
 }
