@@ -25,6 +25,21 @@ export class TournamentAttendanceRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentAttendanceRouteResult | null> {
+    const wizardMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/wizard-plan$/.exec(path);
+    if (wizardMatch && ["GET", "PUT", "PATCH", "DELETE"].includes(method)) {
+      const tournamentId = requiredCapture(wizardMatch, 1);
+      const plan = await this.requireWizardPlan(tournamentId);
+      if (method === "GET") return ok({ plan });
+
+      assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(plan.club_id, "club_id"));
+      if (method === "DELETE") return ok(await this.attendance.deleteWizardDraft(tournamentId));
+      return ok({
+        plan: await this.attendance.updateWizardPlan(tournamentId, await readJsonObject(request)),
+      });
+    }
+
     const statusMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/check-in-status$/.exec(path);
     if (method === "GET" && statusMatch) {
       const user = await this.requireUser(request);
@@ -153,6 +168,14 @@ export class TournamentAttendanceRouter {
       throw new DomainValidationError("tournament_not_found", "Turneringen ble ikke funnet.", 404);
     }
     return tournament;
+  }
+
+  private async requireWizardPlan(tournamentId: string): Promise<Record<string, unknown>> {
+    const plan = await this.attendance.getWizardPlan(tournamentId);
+    if (plan === null) {
+      throw new DomainValidationError("tournament_not_found", "Turneringen ble ikke funnet.", 404);
+    }
+    return plan;
   }
 
   private async requireTournamentSettings(tournamentId: string): Promise<Record<string, unknown>> {
