@@ -29,6 +29,17 @@ try {
         $respond(['ok' => false, 'error' => ['code' => 'method_not_allowed', 'message' => 'Metoden støttes ikke.']], 405);
     }
 
+    if ($config->backendV2ScoliaRoutingMode() === 'node') {
+        $client = new \Blindleia\Dartkiosk\Api\Service\BackendV2ApiClient(
+            $config->backendV2BaseUrl(),
+            $config->backendV2InternalToken()
+        );
+        $response = $client->request('GET', '/v1/scolia/bridge/router', null, [
+            'x-scolia-bridge-secret' => $providedSecret,
+        ]);
+        $respond($response['payload'], $response['status']);
+    }
+
     $database = new Database($config);
     $db = $database->connection();
     $prodPrefix = $config->hardwareTablePrefix();

@@ -51,6 +51,7 @@ jobs:
           php -l apps/api/kiosk-pairing.php
           php apps/api/tests/backend_v2_api_client_test.php
           php apps/api/tests/backend_v2_equipment_proxy_routing_test.php
+          php apps/api/tests/backend_v2_scolia_ops_frontdoor_test.php
           grep -Fq 'allowsPhpFallback(): bool' apps/api/src/Service/BackendV2ApiAttemptException.php
           grep -Fq 'return false;' apps/api/src/Service/BackendV2ApiAttemptException.php
           grep -Fq 'Never fall through to PHP after a remote attempt' apps/api/src/BackendV2EquipmentProxyApplication.php
