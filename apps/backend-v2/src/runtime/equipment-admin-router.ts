@@ -31,13 +31,13 @@ export class EquipmentAdminRouter {
     if (method === "GET" && equipmentBoards) {
       const clubId = capture(equipmentBoards, 1);
       await this.requireAdmin(request, clubId);
-      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, true) });
+      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, true), ...this.equipment.scope() });
     }
 
     const kiosks = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks$/.exec(path);
     if (kiosks && method === "GET") {
       const clubId = capture(kiosks, 1);
-      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, false) });
+      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, false), ...this.equipment.scope() });
     }
     if (kiosks && method === "POST") {
       const clubId = capture(kiosks, 1);
