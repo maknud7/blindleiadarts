@@ -15,7 +15,6 @@ final class TournamentLiveRepository
     private PlayerPortalRepository $portal;
     private EloReadRepository $elo;
     private TournamentPlayoffRepository $playoffs;
-    private TournamentEloSnapshotRepository $tournamentElo;
 
     public function __construct(Database $database)
     {
@@ -25,7 +24,6 @@ final class TournamentLiveRepository
         $this->portal = new PlayerPortalRepository($database);
         $this->elo = new EloReadRepository($database);
         $this->playoffs = new TournamentPlayoffRepository($database, null, $this->portal);
-        $this->tournamentElo = new TournamentEloSnapshotRepository($database);
     }
 
     /** @return array<string,mixed>|null */
@@ -73,10 +71,9 @@ final class TournamentLiveRepository
             static fn (array $match): bool => (string) ($match['status'] ?? '') === 'pending'
         ));
 
-        $eloRows = $this->elo->listClubElo((int) $tournament['club_id']);
-        $eloRows = $this->tournamentElo->decorateLiveRows(
+        $eloRows = $this->decorateEloRowsReadOnly(
             $tournamentId,
-            $eloRows,
+            $this->elo->listClubElo((int) $tournament['club_id']),
             (string) ($tournament['status'] ?? '') === 'completed'
         );
 
@@ -98,6 +95,136 @@ final class TournamentLiveRepository
             'highlights' => $this->highlights($tournamentId),
             'updated_at' => date('c'),
         ];
+    }
+
+    /**
+     * Decorate current club ELO with already-captured tournament snapshots.
+     * This is intentionally read-only: missing baselines are provisioned by
+     * tournament-start/scoring mutations, never by a public GET.
+     *
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array<string,mixed>>
+     */
+    private function decorateEloRowsReadOnly(int $tournamentId, array $rows, bool $completed): array
+    {
+        $snapshots = $this->listEloSnapshots($tournamentId);
+        if ($snapshots === []) return $rows;
+
+        [$byPlayer, $byName] = $this->snapshotIndexes($snapshots);
+        $participants = $this->participantIds($tournamentId);
+
+        foreach ($rows as &$row) {
+            $snapshot = $byPlayer[(int) ($row['id'] ?? 0)] ?? null;
+            if (!is_array($snapshot)) {
+                $key = mb_strtolower(trim((string) ($row['display_name'] ?? '')), 'UTF-8');
+                $snapshot = $key !== '' ? ($byName[$key] ?? null) : null;
+            }
+            if (!is_array($snapshot)) {
+                $row['tournament_elo_before'] = null;
+                $row['tournament_elo_after'] = null;
+                $row['tournament_elo_delta'] = null;
+                $row['tournament_elo_participant'] = false;
+                $row['tournament_rank_before'] = null;
+                $row['tournament_rank_after'] = null;
+                $row['tournament_rank_delta'] = null;
+                $row['tournament_rank_baseline_kind'] = null;
+                $row['tournament_rank_is_new'] = false;
+                continue;
+            }
+
+            $snapshotPlayerId = (int) $snapshot['player_id'];
+            $isParticipant = isset($participants[$snapshotPlayerId]);
+            $before = (float) $snapshot['elo_before'];
+            $after = $snapshot['elo_after'] !== null ? (float) $snapshot['elo_after'] : null;
+            $displayRating = $completed && $after !== null ? $after : (float) ($row['elo_rating'] ?? $before);
+            $row['elo_rating'] = $displayRating;
+            $row['tournament_elo_before'] = $before;
+            $row['tournament_elo_after'] = $after;
+            $row['tournament_elo_participant'] = $isParticipant;
+            $row['tournament_elo_delta'] = $isParticipant ? $displayRating - $before : null;
+            $row['tournament_rank_before'] = $snapshot['rank_before'] !== null ? (int) $snapshot['rank_before'] : null;
+            $row['tournament_rank_after'] = $snapshot['rank_after'] !== null ? (int) $snapshot['rank_after'] : null;
+            $row['tournament_rank_baseline_kind'] = (string) ($snapshot['rank_baseline_kind'] ?? 'start');
+            $row['tournament_rank_delta'] = null;
+            $row['tournament_rank_is_new'] = false;
+        }
+        unset($row);
+
+        usort($rows, static function (array $a, array $b): int {
+            $rating = ((float) ($b['elo_rating'] ?? 1000)) <=> ((float) ($a['elo_rating'] ?? 1000));
+            return $rating !== 0 ? $rating : strcasecmp((string) ($a['display_name'] ?? ''), (string) ($b['display_name'] ?? ''));
+        });
+        foreach ($rows as $index => &$row) {
+            $row['position'] = $index + 1;
+            if (($row['tournament_rank_baseline_kind'] ?? null) === null) continue;
+            $beforeRank = $row['tournament_rank_before'];
+            $currentRank = $completed && $row['tournament_rank_after'] !== null
+                ? (int) $row['tournament_rank_after']
+                : (int) $row['position'];
+            if ($beforeRank === null) {
+                $row['tournament_rank_delta'] = null;
+                $row['tournament_rank_is_new'] = true;
+                continue;
+            }
+            $rankDelta = (int) $beforeRank - $currentRank;
+            $row['tournament_rank_delta'] = $rankDelta;
+            $row['tournament_rank_is_new'] = ($row['tournament_rank_baseline_kind'] === 'entry' && $rankDelta === 0);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function listEloSnapshots(int $tournamentId): array
+    {
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT s.*,p.display_name
+             FROM `%1$stournament_elo_snapshots` s
+             INNER JOIN `%1$splayers` p ON p.id=s.player_id
+             WHERE s.tournament_id=? ORDER BY p.display_name ASC,p.id ASC',
+            $this->tablePrefix
+        ));
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
+    }
+
+    /** @return array<int,bool> */
+    private function participantIds(int $tournamentId): array
+    {
+        $stmt = $this->connection->prepare(sprintf(
+            'SELECT player_id FROM `%1$stournament_players`
+             WHERE tournament_id=? AND status NOT IN ("withdrawn","no_show")',
+            $this->tablePrefix
+        ));
+        $stmt->bind_param('i', $tournamentId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        $ids = [];
+        foreach ($rows as $row) {
+            $playerId = (int) ($row['player_id'] ?? 0);
+            if ($playerId > 0) $ids[$playerId] = true;
+        }
+        return $ids;
+    }
+
+    /** @return array{0:array<int,array<string,mixed>>,1:array<string,array<string,mixed>|null>} */
+    private function snapshotIndexes(array $snapshots): array
+    {
+        $byPlayer = [];
+        $byName = [];
+        foreach ($snapshots as $snapshot) {
+            $playerId = (int) $snapshot['player_id'];
+            $byPlayer[$playerId] = $snapshot;
+            $key = mb_strtolower(trim((string) ($snapshot['display_name'] ?? '')), 'UTF-8');
+            if ($key === '') continue;
+            if (!array_key_exists($key, $byName)) $byName[$key] = $snapshot;
+            else $byName[$key] = null;
+        }
+        return [$byPlayer, $byName];
     }
 
     /** @return array<string,mixed>|null */
