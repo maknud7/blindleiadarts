@@ -2,6 +2,11 @@ name: Backend v2 Equipment Frontdoor
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
     branches:
       - develop
     paths:
@@ -10,11 +15,14 @@ on:
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-equipment-frontdoor.yml'
       - '.github/workflows/backend-v2-test-render-bootstrap.yml'
-      - '.github/workflows/deploy-test.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: backend-v2-equipment-frontdoor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   RENDER_SERVICE_ID: srv-dahr6o2d0e5s738jbm4g
@@ -23,6 +31,7 @@ env:
 
 jobs:
   frontdoor-contract:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     environment: test
     steps:
