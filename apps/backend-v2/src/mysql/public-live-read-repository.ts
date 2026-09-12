@@ -19,6 +19,7 @@ export class MySqlPublicLiveReadRepository {
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly prefix: TablePrefix,
+    private readonly hardwarePrefix: TablePrefix = prefix,
   ) {
     this.operations = new MySqlTournamentOperationsRepository(sessions, prefix);
     this.publicReads = new MySqlTournamentPublicReadRepository(sessions, prefix);
@@ -105,16 +106,31 @@ export class MySqlPublicLiveReadRepository {
     let clubId: string;
 
     if (screenToken !== "") {
-      const resolved = await this.sessions.withConnection(async (db) => {
+      const canonicalClubSlug = await this.sessions.withConnection(async (db) => {
         const rows = await db.query<QueryResultRow>(
-          `SELECT club_id FROM \`${this.prefix}screen_devices\`
-            WHERE access_token=? AND is_active=1 LIMIT 1`,
+          `SELECT c.slug AS club_slug
+             FROM \`${this.hardwarePrefix}screen_devices\` sd
+             INNER JOIN \`${this.hardwarePrefix}clubs\` c ON c.id=sd.club_id
+            WHERE sd.access_token=? AND sd.is_active=1
+            LIMIT 1`,
           [screenToken],
         );
-        return decimalId(rows[0]?.club_id);
+        const slug = String(rows[0]?.club_slug ?? "").trim();
+        return slug === "" ? null : slug;
+      });
+      if (canonicalClubSlug === null) {
+        throw new DomainValidationError("screen_token_invalid", "Skjermtoken er ugyldig.", 401);
+      }
+
+      const resolved = await this.sessions.withConnection(async (db) => {
+        const rows = await db.query<QueryResultRow>(
+          `SELECT id FROM \`${this.prefix}clubs\` WHERE slug=? LIMIT 1`,
+          [canonicalClubSlug],
+        );
+        return decimalId(rows[0]?.id);
       });
       if (resolved === null) {
-        throw new DomainValidationError("screen_token_invalid", "Skjermtoken er ugyldig.", 401);
+        throw new DomainValidationError("club_not_found", "Klubben ble ikke funnet.", 404);
       }
       clubId = resolved;
     } else if (clubSlug !== "") {
