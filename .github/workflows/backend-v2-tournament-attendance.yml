@@ -1,0 +1,44 @@
+name: Backend v2 Tournament Attendance
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/src/mysql/tournament-attendance-repository.ts'
+      - 'apps/backend-v2/src/runtime/tournament-attendance-router.ts'
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/tournament-attendance.test.mjs'
+      - 'apps/backend-v2/e2e/tournament-attendance-lifecycle.mjs'
+      - 'apps/api/src/BackendV2TournamentProxyApplication.php'
+      - 'apps/api/tests/backend_v2_tournament_proxy_routing_test.php'
+      - '.github/workflows/backend-v2-tournament-attendance.yml'
+      - '.github/workflows/backend-v2-tournament-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  attendance-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+      - name: Typecheck and build backend v2
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:typecheck
+          npm run backend-v2:build
+      - name: Run attendance unit coverage
+        run: node --test apps/backend-v2/test/tournament-attendance.test.mjs
+      - name: Verify PHP tournament frontdoor routing
+        run: |
+          php -l apps/api/src/BackendV2TournamentProxyApplication.php
+          php apps/api/tests/backend_v2_tournament_proxy_routing_test.php
