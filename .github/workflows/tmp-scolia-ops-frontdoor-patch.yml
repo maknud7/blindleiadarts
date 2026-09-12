@@ -1,0 +1,35 @@
+name: Temporary Scolia ops frontdoor patch
+
+on:
+  push:
+    branches:
+      - feat/scolia-ops-test-frontdoor
+    paths:
+      - '.github/workflows/tmp-scolia-ops-frontdoor-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/scolia-ops-test-frontdoor
+      - name: Apply consolidated patch
+        run: python .github/tmp/apply_scolia_ops_frontdoor.py
+      - name: Validate focused contracts
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/scolia-bridge-router.php
+          php -l apps/api/scolia-health.php
+          php apps/api/tests/backend_v2_scolia_ops_frontdoor_test.php
+      - name: Commit final source changes
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Route Scolia ops frontdoors to backend-v2 in TEST"
+          git push origin HEAD:feat/scolia-ops-test-frontdoor
