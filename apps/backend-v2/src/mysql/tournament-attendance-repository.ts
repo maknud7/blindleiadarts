@@ -1,5 +1,6 @@
 import { DomainValidationError } from "../domain/errors.js";
 import { MySqlTournamentAttendanceAdminRepository } from "./tournament-attendance-admin-repository.js";
+import { MySqlTournamentWizardRepository } from "./tournament-wizard-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
 interface AttendanceTournamentRow extends QueryResultRow {
@@ -36,12 +37,14 @@ export interface TournamentAttendanceResult {
 export class MySqlTournamentAttendanceRepository {
   private static readonly MIN_PLAYERS = 2;
   private readonly admin: MySqlTournamentAttendanceAdminRepository;
+  private readonly wizard: MySqlTournamentWizardRepository;
 
   constructor(
     private readonly sessions: MySqlSessionProvider,
     private readonly prefix: TablePrefix,
   ) {
     this.admin = new MySqlTournamentAttendanceAdminRepository(sessions, prefix);
+    this.wizard = new MySqlTournamentWizardRepository(sessions, prefix);
   }
 
   async findTournament(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
@@ -98,6 +101,21 @@ export class MySqlTournamentAttendanceRepository {
 
   async addGuest(tournamentIdInput: unknown, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.admin.addGuest(tournamentIdInput, payload);
+  }
+
+  async getWizardPlan(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
+    return this.wizard.getPlan(tournamentIdInput);
+  }
+
+  async updateWizardPlan(
+    tournamentIdInput: unknown,
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.wizard.updatePlan(tournamentIdInput, payload);
+  }
+
+  async deleteWizardDraft(tournamentIdInput: unknown): Promise<Record<string, unknown>> {
+    return this.wizard.deleteDraftTournament(tournamentIdInput);
   }
 
   async checkInPlayer(
