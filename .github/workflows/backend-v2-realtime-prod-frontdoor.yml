@@ -51,7 +51,7 @@ jobs:
             $c = require "/tmp/prod-api-config.php";
             $b = $c["backend_v2"] ?? [];
             if (($b["realtime_config_routing_mode"] ?? null) !== "node") exit(1);
-            if (($b["player_live_routing_mode"] ?? null) !== "php") exit(2);
+            if (($b["player_live_routing_mode"] ?? null) !== "node") exit(2);
             if (($b["equipment_routing_mode"] ?? null) !== "node") exit(3);
             if (($b["scoring_routing_mode"] ?? null) !== "candidate") exit(4);
           '
