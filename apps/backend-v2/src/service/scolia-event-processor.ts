@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
+
 import type { CanonicalScoringPort } from "../contracts/canonical-scoring.js";
-import { asDbId, type NormalizedDart } from "../contracts/scoring.js";
+import { asDbId } from "../contracts/scoring.js";
 import { evaluateVisit } from "../domain/dart501.js";
 import { DomainValidationError } from "../domain/errors.js";
 import { boolValue, mapScoliaSector } from "../domain/scolia.js";
@@ -248,14 +250,5 @@ function requiredId(value: unknown, name: string): string { const v = optionalId
 function integerIndex(value: unknown): number { const n = Number(value); return Number.isInteger(n) ? n : -1; }
 function clampInt(value: unknown, min: number, max: number, fallback: number): number { const n = Number(value); return Number.isInteger(n) ? Math.min(max, Math.max(min, n)) : fallback; }
 function hashIds(ids: readonly string[]): string {
-  // Browser-independent SHA-like stable key is not enough for canonical dedupe.
-  // Import laziness is avoided; use a deterministic 64-hex digest produced by Node.
-  const input = ids.join(",");
-  // eslint is not part of this package; require is deliberately avoided in ESM.
-  return globalHash(input);
-}
-function globalHash(input: string): string {
-  let a = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) { a ^= input.charCodeAt(i); a = Math.imul(a, 0x01000193); }
-  return Array.from({ length: 8 }, (_, i) => ((a ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0).toString(16).padStart(8, "0")).join("");
+  return createHash("sha256").update(ids.join(","), "utf8").digest("hex");
 }
