@@ -154,8 +154,8 @@ export class MySqlScoliaBridgeRepository {
       const matchId = matchRows[0] ? idString(matchRows[0].id) : null;
       const inserted = await db.execute(
         `INSERT IGNORE INTO ${this.table(this.runtimePrefix, "scolia_events")}
-          (club_id,kiosk_id,match_id,provider_event_id,dedupe_key,event_type,priority,provider_detected_at,payload_json)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+          (club_id,kiosk_id,match_id,provider_event_id,dedupe_key,event_type,priority,provider_detected_at,payload_json,next_attempt_at)
+         VALUES (?,?,?,?,?,?,?,?,?,NOW(3))`,
         [runtimeClubId, runtimeKioskId, matchId, providerId, dedupeKey, eventType, priority, detectedAt, JSON.stringify(message)],
       );
       let eventId = inserted.affectedRows > 0 ? idString(inserted.insertId) : null;
@@ -224,15 +224,15 @@ export class MySqlScoliaBridgeRepository {
     ).then(() => undefined));
   }
 
-  async recordIncident(clubIdInput: unknown, kioskIdInput: unknown, matchIdInput: unknown, severity: string, category: string, title: string, details: string): Promise<void> {
+  async recordIncident(clubIdInput: unknown, kioskIdInput: unknown, matchIdInput: unknown, severity: string, category: string, summary: string, details: string): Promise<void> {
     const clubId = requiredId(clubIdInput, "club_id");
     const kioskId = requiredId(kioskIdInput, "kiosk_id");
     const matchId = optionalId(matchIdInput);
     await this.sessions.withConnection((db) => db.execute(
       `INSERT INTO ${this.table(this.runtimePrefix, "scolia_incidents")}
-        (club_id,kiosk_id,match_id,severity,category,title,details,status,first_seen_at,last_seen_at)
+        (club_id,kiosk_id,match_id,severity,category,summary,details,status,first_seen_at,last_seen_at)
        VALUES (?,?,?,?,?,?,?,'open',NOW(3),NOW(3))`,
-      [clubId, kioskId, matchId, severity, category, title, details.slice(0, 6000)],
+      [clubId, kioskId, matchId, severity, category, summary, details.slice(0, 6000)],
     ).then(() => undefined));
   }
 
@@ -310,82 +310,11 @@ export class MySqlScoliaBridgeRepository {
   async findVisitByRequestKey(requestKey: string): Promise<string | null> {
     return this.sessions.withConnection(async (db) => {
       const rows = await db.query<QueryResultRow>(
-        `SELECT id FROM ${this.table(this.runtimePrefix, "visits")} WHERE request_id=? ORDER BY id DESC LIMIT 1`,
+        `SELECT id FROM ${this.table(this.runtimePrefix, "visits")} WHERE request_key=? ORDER BY id DESC LIMIT 1`,
         [requestKey],
       );
       return rows[0] ? idString(rows[0].id) : null;
     });
-  }
-
-  async queueCommand(clubIdInput: unknown, kioskIdInput: unknown, typeInput: unknown, payloadInput: unknown, userIdInput: unknown): Promise<Record<string, unknown>> {
-    const clubId = requiredId(clubIdInput, "club_id");
-    const kioskId = requiredId(kioskIdInput, "kiosk_id");
-    const type = stringValue(typeInput).toUpperCase();
-    const userId = optionalId(userIdInput);
-    const payload = recordOrEmpty(payloadInput);
-    return this.sessions.withConnection(async (db) => {
-      const result = await db.execute(
-        `INSERT INTO ${this.table(this.runtimePrefix, "scolia_commands")}
-          (club_id,kiosk_id,command_type,payload_json,status,priority,created_by_user_id)
-         VALUES (?,?,?,?,'queued',100,?)`,
-        [clubId, kioskId, type, JSON.stringify(payload), userId],
-      );
-      return { id: idString(result.insertId), kiosk_id: kioskId, command_type: type, payload, status: "queued" };
-    });
-  }
-
-  async pollCommands(kioskIdsInput: unknown, limitInput: unknown = 100): Promise<Record<string, unknown>[]> {
-    const raw = Array.isArray(kioskIdsInput) ? kioskIdsInput : [];
-    const kioskIds = Array.from(new Set(raw.map(optionalId).filter((value): value is string => value !== null))).slice(0, 100);
-    if (kioskIds.length === 0) return [];
-    const limit = clampInt(limitInput, 1, 200, 100);
-    return this.sessions.withTransaction(async (db) => {
-      const inSql = placeholders(kioskIds.length);
-      await db.execute(
-        `UPDATE ${this.table(this.runtimePrefix, "scolia_commands")}
-            SET status='failed',next_attempt_at=NOW(3),last_error=COALESCE(last_error,'Recovered stale command delivery')
-          WHERE kiosk_id IN (${inSql}) AND status='delivered'
-            AND delivered_at < DATE_SUB(NOW(3),INTERVAL 30 SECOND)`,
-        kioskIds,
-      );
-      const rows = await db.query<QueryResultRow>(
-        `SELECT c.id,c.kiosk_id,c.command_type,c.message_id,c.payload_json,c.attempt_count,c.priority,c.created_at
-           FROM ${this.table(this.runtimePrefix, "scolia_commands")} c
-          WHERE c.kiosk_id IN (${inSql}) AND c.status IN ('queued','failed') AND c.next_attempt_at<=NOW(3)
-            AND NOT EXISTS (
-              SELECT 1 FROM ${this.table(this.runtimePrefix, "scolia_commands")} older
-               WHERE older.kiosk_id=c.kiosk_id AND older.id<c.id AND older.status IN ('queued','failed','delivered')
-            )
-          ORDER BY c.priority DESC,c.id ASC LIMIT ${limit} FOR UPDATE`,
-        kioskIds,
-      );
-      if (rows.length > 0) {
-        const ids = rows.map((row) => requiredId(row.id, "command_id"));
-        await db.execute(
-          `UPDATE ${this.table(this.runtimePrefix, "scolia_commands")}
-              SET status='delivered',attempt_count=attempt_count+1,delivered_at=NOW(3)
-            WHERE id IN (${placeholders(ids.length)})`, ids,
-        );
-      }
-      return rows.map((row) => ({
-        ...publicRow(row),
-        id: idString(row.id), kiosk_id: idString(row.kiosk_id),
-        attempt_count: numberValue(row.attempt_count) + 1,
-        priority: numberValue(row.priority), payload: parseObject(row.payload_json),
-      }));
-    });
-  }
-
-  async completeCommand(commandIdInput: unknown, resultInput: unknown, errorInput: unknown): Promise<void> {
-    const commandId = requiredId(commandIdInput, "command_id");
-    const result = stringValue(resultInput).toLowerCase();
-    const success = ["ok", "success", "completed", "done"].includes(result);
-    const error = nullableString(errorInput);
-    await this.sessions.withConnection((db) => db.execute(
-      `UPDATE ${this.table(this.runtimePrefix, "scolia_commands")}
-          SET status=?,completed_at=NOW(3),last_error=? WHERE id=?`,
-      [success ? "completed" : "failed", error, commandId],
-    ).then(() => undefined));
   }
 
   async claimEvents(limitInput: unknown = 25): Promise<ScoliaEventRow[]> {
@@ -401,7 +330,8 @@ export class MySqlScoliaBridgeRepository {
       const heads = await db.query<QueryResultRow>(
         `SELECT e.kiosk_id,e.id,e.priority
            FROM ${this.table(this.runtimePrefix, "scolia_events")} e
-          WHERE e.processing_status IN ('queued','failed') AND e.next_attempt_at<=NOW(3)
+          WHERE e.processing_status IN ('queued','failed')
+            AND (e.attempt_count=0 OR e.next_attempt_at<=NOW(3))
             AND NOT EXISTS (
               SELECT 1 FROM ${this.table(this.runtimePrefix, "scolia_events")} older
                WHERE older.kiosk_id=e.kiosk_id AND older.id<e.id
@@ -416,12 +346,13 @@ export class MySqlScoliaBridgeRepository {
       const rows = await db.query<QueryResultRow>(
         `SELECT e.*
            FROM ${this.table(this.runtimePrefix, "scolia_events")} e
-          WHERE e.kiosk_id IN (${inSql}) AND e.processing_status IN ('queued','failed') AND e.next_attempt_at<=NOW(3)
+          WHERE e.kiosk_id IN (${inSql}) AND e.processing_status IN ('queued','failed')
+            AND (e.attempt_count=0 OR e.next_attempt_at<=NOW(3))
             AND NOT EXISTS (
               SELECT 1 FROM ${this.table(this.runtimePrefix, "scolia_events")} blocker
                WHERE blocker.kiosk_id=e.kiosk_id AND blocker.id<e.id AND (
                  blocker.processing_status IN ('processing','dead_letter') OR
-                 (blocker.processing_status IN ('queued','failed') AND blocker.next_attempt_at>NOW(3))
+                 (blocker.processing_status IN ('queued','failed') AND blocker.attempt_count>0 AND blocker.next_attempt_at>NOW(3))
                )
             )
             AND (
@@ -482,7 +413,7 @@ export class MySqlScoliaBridgeRepository {
       if (dead) {
         await db.execute(
           `INSERT INTO ${this.table(this.runtimePrefix, "scolia_incidents")}
-            (club_id,kiosk_id,match_id,severity,category,title,details,status,first_seen_at,last_seen_at)
+            (club_id,kiosk_id,match_id,severity,category,summary,details,status,first_seen_at,last_seen_at)
            VALUES (?,?,?,'error','event_dead_letter','Scolia-event kunne ikke behandles',?,'open',NOW(3),NOW(3))`,
           [event.club_id, event.kiosk_id, event.match_id, message],
         );
