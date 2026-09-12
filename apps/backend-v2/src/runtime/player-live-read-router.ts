@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { DomainValidationError } from "../domain/errors.js";
 import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identity-auth-repository.js";
 import type { MySqlPlayerLiveReadRepository } from "../mysql/player-live-read-repository.js";
-import { mutationsAllowed, RuntimeAccessError, type BackendRuntimeConfig } from "./config.js";
+import { RuntimeAccessError, type BackendRuntimeConfig } from "./config.js";
 
 export interface PlayerLiveReadRouteResult {
   statusCode: number;
@@ -72,18 +72,13 @@ export class PlayerLiveReadRouter {
     if (token === null) {
       throw new RuntimeAccessError(401, "authentication_required", "Authentication is required.");
     }
-    const user = await this.identity.findBySessionToken(token, this.identityTouchAllowed());
+    // Player/public/live is a GET-only surface. Never refresh/touch the canonical
+    // identity session from this router, even when the backend is in prod-canary.
+    const user = await this.identity.findBySessionToken(token, false);
     if (user === null) {
       throw new RuntimeAccessError(401, "invalid_session", "Session is invalid or expired.");
     }
     return user;
-  }
-
-  private identityTouchAllowed(): boolean {
-    return (
-      (this.config.environment === "prod" && this.config.prefixes.identity === "bd_prod_" && mutationsAllowed(this.config)) ||
-      (this.config.environment === "test" && this.config.prefixes.identity === "bd_test_" && mutationsAllowed(this.config))
-    );
   }
 }
 
