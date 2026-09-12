@@ -7,6 +7,18 @@ class FakeExecutor {
   constructor(plan) { this.plan = plan; this.executed = []; }
   async query(sql, params = []) {
     this.executed.push({ kind: "query", sql, params });
+    if (sql.includes("FROM `bd_test_players` p") && sql.includes("elo_current_ratings")) {
+      return this.plan.rankedRows ?? [
+        { id: "11", display_name: "Alpha", rating: 1120, matches_played: 12, local_matches_played: 12 },
+        { id: "12", display_name: "Beta", rating: 1080, matches_played: 9, local_matches_played: 9 },
+      ];
+    }
+    if (sql.includes("SELECT tp.player_id") && sql.includes("FROM `bd_test_tournament_players` tp")) {
+      return this.plan.participants ?? [
+        { player_id: "11", rating: 1120, matches_played: 12 },
+        { player_id: "13", rating: 1000, matches_played: 0 },
+      ];
+    }
     if (sql.includes("FROM `bd_test_tournaments`")) return [this.plan.tournament];
     if (sql.includes("FROM `bd_test_matches`")) return [{ cnt: this.plan.matchCount ?? 0 }];
     if (sql.includes("FROM `bd_test_tournament_players`")) {
@@ -26,7 +38,17 @@ class FakeSessions {
   async withTransaction(work) { this.transactions += 1; return work(this.db); }
 }
 function tournament(status = "ready") {
-  return { id: "17", club_id: "1", name: "Mandagsserien #6", status, start_at: "2026-09-14 18:30:00", registration_opens_at: null, registration_closes_at: null };
+  return {
+    id: "17",
+    club_id: "1",
+    season_id: "5",
+    name: "Mandagsserien #6",
+    status,
+    start_at: "2026-09-14 18:30:00",
+    registration_opens_at: null,
+    registration_closes_at: null,
+    elo_enabled: 1,
+  };
 }
 
 test("requires at least two checked-in players before tournament start", async () => {
@@ -40,20 +62,24 @@ test("requires at least two checked-in players before tournament start", async (
   assert.equal(sessions.transactions, 0);
 });
 
-test("starts tournament atomically with no-show cleanup and immutable ELO boundary", async () => {
+test("starts tournament atomically with no-show cleanup and immutable full-club ELO boundary", async () => {
   const sessions = new FakeSessions({ tournament: tournament(), checkedIn: 8, registered: 2, waitlisted: 1, matchCount: 0 });
   const repo = new MySqlTournamentFlowRepository(sessions, "bd_test_");
   const result = await repo.startTournament("17");
   assert.equal(sessions.transactions, 1);
   assert.deepEqual(result, { tournament_id: "17", status: "in_progress", checked_in_count: 8, no_show_count: 2, withdrawn_waitlist_count: 1, already_started: false });
-  const writes = sessions.db.executed.filter((entry) => entry.kind === "execute").map((entry) => entry.sql);
-  assert.ok(writes.some((sql) => sql.includes("status='no_show'")));
-  assert.ok(writes.some((sql) => sql.includes("status='withdrawn'")));
-  assert.ok(writes.some((sql) => sql.includes("status='in_progress'")));
-  assert.ok(writes.some((sql) => sql.includes("INSERT IGNORE INTO `bd_test_tournament_elo_snapshots`")));
+  const writes = sessions.db.executed.filter((entry) => entry.kind === "execute");
+  assert.ok(writes.some((entry) => entry.sql.includes("status='no_show'")));
+  assert.ok(writes.some((entry) => entry.sql.includes("status='withdrawn'")));
+  assert.ok(writes.some((entry) => entry.sql.includes("status='in_progress'")));
+  const snapshots = writes.filter((entry) => entry.sql.includes("INSERT IGNORE INTO `bd_test_tournament_elo_snapshots`"));
+  assert.ok(snapshots.length >= 3, "ranked club rows and checked-in participants should be snapshotted at start");
+  assert.ok(snapshots.some((entry) => entry.params[3] === "11" && entry.params[6] === 1));
+  assert.ok(snapshots.some((entry) => entry.params[3] === "12" && entry.params[6] === 2));
+  assert.ok(snapshots.some((entry) => entry.params[3] === "13" && entry.params[6] === "2026-09-14 18:30:00"));
 });
 
-test("already-started tournament is idempotent and only backfills missing ELO snapshot", async () => {
+test("already-started tournament is idempotent and only backfills missing ELO baseline rows", async () => {
   const sessions = new FakeSessions({ tournament: tournament("in_progress"), checkedIn: 6, noShow: 3, matchCount: 12 });
   const repo = new MySqlTournamentFlowRepository(sessions, "bd_test_");
   const result = await repo.startTournament("17");

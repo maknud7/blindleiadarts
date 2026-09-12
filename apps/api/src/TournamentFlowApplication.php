@@ -6,6 +6,7 @@ namespace Blindleia\Dartkiosk\Api;
 
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
+use Blindleia\Dartkiosk\Api\Repository\TournamentEloSnapshotRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentFlowRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
@@ -41,9 +42,16 @@ final class TournamentFlowApplication
                 $response = JsonResponse::error(404, 'tournament_not_found', 'Turneringen ble ikke funnet.');
             } else {
                 $admin = $this->requireAdmin($request, $users, (int) $tournament['club_id']);
-                $response = $admin instanceof JsonResponse
-                    ? $admin
-                    : JsonResponse::ok(['start' => $repo->startTournament($tournamentId)]);
+                if ($admin instanceof JsonResponse) {
+                    $response = $admin;
+                } else {
+                    $start = $repo->startTournament($tournamentId);
+                    // Full-club ELO/rank baselines belong to this explicit
+                    // mutation boundary. Public live GETs must never create or
+                    // repair snapshot rows while spectators are polling.
+                    (new TournamentEloSnapshotRepository($database))->captureStart($tournamentId);
+                    $response = JsonResponse::ok(['start' => $start]);
+                }
             }
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());

@@ -7,6 +7,10 @@ on:
     paths:
       - 'apps/backend-v2/**'
       - 'apps/api/src/BackendV2PlayerLiveProxyApplication.php'
+      - 'apps/api/src/Repository/TournamentCheckinPublicReadRepository.php'
+      - 'apps/api/src/Repository/TournamentLiveRepository.php'
+      - 'apps/api/src/TournamentCheckinApplication.php'
+      - 'apps/api/src/TournamentFlowApplication.php'
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/player-elo-tournaments.php'
       - 'apps/api/index.php'
@@ -87,3 +91,7 @@ jobs:
       - name: Run tournament public reads against hosted TEST MySQL
         env: *test-runtime
         run: node apps/backend-v2/e2e/tournament-public-read.mjs
+
+      - name: Verify public live reads are write-free in hosted TEST
+        env: *test-runtime
+        run: node apps/backend-v2/e2e/public-live-read.mjs

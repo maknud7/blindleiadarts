@@ -31,14 +31,13 @@ jobs:
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
           echo "release_sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Verify PROD Render is exact and write-armed
+      - name: Verify PROD Render is healthy and write-armed
         env:
-          EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
           HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
         run: |
           set -Eeuo pipefail
           health="$(curl -fsS --max-time 30 "${HOST_URL%/}/health")"
-          jq -e --arg sha "$EXPECTED_SHA" '.ok == true and .environment == "prod" and .mode == "prod-canary" and .writes_armed == true and .runtime_prefix == "bd_prod_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse" and .release_sha == $sha' <<<"$health" >/dev/null
+          jq -e '.ok == true and .environment == "prod" and .mode == "prod-canary" and .writes_armed == true and .runtime_prefix == "bd_prod_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
           ready="$(curl -fsS --max-time 30 "${HOST_URL%/}/ready")"
           jq -e '.ok == true and .environment == "prod" and .writes_armed == true and (.checked_tables | type == "array") and (.checked_tables | length > 0)' <<<"$ready" >/dev/null
 

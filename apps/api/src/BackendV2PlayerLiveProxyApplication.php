@@ -46,7 +46,14 @@ final class BackendV2PlayerLiveProxyApplication
             $authorization = $request->header('authorization');
             if ($authorization !== null) $headers['authorization'] = $authorization;
 
-            $result = $client->request('GET', $path, null, $headers);
+            // Request::path() deliberately contains only the path component.
+            // Public check-in uses query parameters for club/screen context, so
+            // preserve the original query string when forwarding the GET.
+            $targetPath = $path;
+            $query = trim((string) ($_SERVER['QUERY_STRING'] ?? ''));
+            if ($query !== '') $targetPath .= '?' . $query;
+
+            $result = $client->request('GET', $targetPath, null, $headers);
             $status = $result['status'];
             $payload = $result['payload'];
             header('X-BD-Backend-V2: player-live');
@@ -88,6 +95,9 @@ final class BackendV2PlayerLiveProxyApplication
         if ($path === '/v1/realtime/config') return true;
         if ($path === '/v1/me/dashboard') return true;
         if ($path === '/v1/clubs') return true;
+        if ($path === '/v1/public/check-in-display') return true;
+        if (preg_match('#^/v1/public/clubs/[^/]+/live$#', $path) === 1) return true;
+        if (preg_match('#^/v1/public/tournaments/\d+/live$#', $path) === 1) return true;
         if (preg_match('#^/v1/clubs/\d+/(?:player-directory|elo|seasons|summaries)$#', $path) === 1) return true;
         if (preg_match('#^/v1/players/\d+/(?:profile|matches|elo-tournaments)$#', $path) === 1) return true;
         if (preg_match('#^/v1/matches/\d+/detail$#', $path) === 1) return true;

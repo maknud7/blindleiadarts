@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScreenRepository;
+use Blindleia\Dartkiosk\Api\Repository\TournamentCheckinPublicReadRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentCheckinRepository;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\ValidationException;
@@ -34,10 +35,11 @@ final class TournamentCheckinApplication
             $config = Config::load($this->rootPath);
             $database = new Database($config);
             $repo = new TournamentCheckinRepository($database);
+            $publicReads = new TournamentCheckinPublicReadRepository($database);
             $users = new UserAccountRepository($database);
             $screens = new ScreenRepository($database);
             $clubs = new ClubRepository($database);
-            $response = $this->dispatch($request, $path, $repo, $users, $screens, $clubs, $database);
+            $response = $this->dispatch($request, $path, $repo, $users, $screens, $clubs, $database, $publicReads);
         } catch (ValidationException $error) {
             $response = JsonResponse::error($error->statusCode(), $error->errorCode(), $error->getMessage());
         } catch (mysqli_sql_exception) {
@@ -68,7 +70,8 @@ final class TournamentCheckinApplication
         UserAccountRepository $users,
         ScreenRepository $screens,
         ClubRepository $clubs,
-        Database $database
+        Database $database,
+        TournamentCheckinPublicReadRepository $publicReads
     ): JsonResponse {
         $method = $request->method();
 
@@ -126,14 +129,12 @@ final class TournamentCheckinApplication
             $clubId = 0;
 
             if ($screenToken !== '') {
-                $screen = $screens->resolveByAccessToken($screenToken);
-                $clubId = (int) ($screen['club']['id'] ?? 0);
+                $clubId = (int) ($publicReads->clubIdForScreenToken($screenToken) ?? 0);
                 if ($clubId <= 0) {
                     return JsonResponse::error(401, 'screen_token_invalid', 'Skjermtoken er ugyldig.');
                 }
             } elseif ($clubSlug !== '') {
-                $club = $clubs->findBySlug($clubSlug);
-                $clubId = (int) ($club['id'] ?? 0);
+                $clubId = (int) ($publicReads->clubIdForSlug($clubSlug) ?? 0);
                 if ($clubId <= 0) {
                     return JsonResponse::error(404, 'club_not_found', 'Klubben ble ikke funnet.');
                 }
@@ -141,13 +142,7 @@ final class TournamentCheckinApplication
                 return JsonResponse::error(422, 'checkin_display_context_required', 'Oppgi skjermtoken eller klubb.');
             }
 
-            $display = $repo->publicDisplayForClub($clubId);
-            if ($display !== null) {
-                $settings = $repo->getTournamentSettings((int) ($display['tournament_id'] ?? 0));
-                if ($settings === null || $this->checkinLocked($settings)) {
-                    $display = null;
-                }
-            }
+            $display = $publicReads->publicDisplayForClub($clubId);
             return JsonResponse::ok([
                 'active' => $display !== null,
                 'checkin' => $display,
