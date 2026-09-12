@@ -38,7 +38,9 @@ jobs:
           php-version: '8.3'
           coverage: none
       - name: Apply hardened delete parity patch
-        run: python3 .github/tmp-equipment-delete-patch.py
+        run: |
+          sed -i 's/if "countBoardMatchesWith(" not in text:/if "private async countBoardMatchesWith" not in text:/' .github/tmp-equipment-delete-patch.py
+          python3 .github/tmp-equipment-delete-patch.py
       - name: Build and run focused contracts
         run: |
           npm install --no-package-lock --ignore-scripts
