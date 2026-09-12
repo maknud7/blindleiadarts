@@ -36,9 +36,9 @@ export class ScoliaEventProcessor {
   async drain(limitInput: unknown = 25, maxProcessingMs = 750): Promise<Record<string, unknown>> {
     const limit = clampInt(limitInput, 1, 25, 25);
     const budgetMs = Math.min(5000, Math.max(100, maxProcessingMs));
-    const startedAt = Date.now();
     const events = await this.bridge.claimEvents(limit);
     if (events.length === 0) return { claimed: 0, processed: 0, failed: 0 };
+    const startedAt = Date.now();
 
     const groups = new Map<string, ScoliaEventRow[]>();
     for (const event of events) {
