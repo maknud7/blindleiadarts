@@ -15,11 +15,22 @@ interface ScoliaDisconnectPort {
   markDisconnected(kioskIdInput: unknown, reasonInput: unknown): Promise<void>;
 }
 
+interface ScoliaCommandPort {
+  queueCommand(
+    clubIdInput: unknown,
+    kioskIdInput: unknown,
+    typeInput: unknown,
+    payloadInput: unknown,
+    userIdInput: unknown,
+  ): Promise<Record<string, unknown>>;
+}
+
 export class ScoliaEventProcessor {
   constructor(
     private readonly bridge: MySqlScoliaBridgeRepository,
     private readonly scoring: CanonicalScoringPort,
     private readonly disconnects: ScoliaDisconnectPort = bridge,
+    private readonly commands: ScoliaCommandPort = bridge,
   ) {}
 
   async drain(limitInput: unknown = 25, maxProcessingMs = 750): Promise<Record<string, unknown>> {
@@ -186,7 +197,7 @@ export class ScoliaEventProcessor {
     if (index < buffer.provider_event_ids.length) buffer.provider_event_ids.splice(index, 1);
     if (buffer.darts.length === 0) await this.bridge.clearVisitBuffer(kioskId);
     else await this.bridge.saveVisitBuffer(buffer);
-    const command = await this.bridge.queueCommand(clubId, kioskId, "DELETE_THROW", { throwIndex: index }, userId);
+    const command = await this.commands.queueCommand(clubId, kioskId, "DELETE_THROW", { throwIndex: index }, userId);
     return { buffer: await this.bridge.getVisitBuffer(kioskId), command };
   }
 
@@ -204,7 +215,7 @@ export class ScoliaEventProcessor {
     const mapped = mapScoliaSector(sector, false);
     buffer.darts[index] = mapped.dart;
     await this.bridge.saveVisitBuffer(buffer);
-    const command = await this.bridge.queueCommand(clubId, kioskId, "CORRECT_THROW", { throwIndex: index, sector }, userId);
+    const command = await this.commands.queueCommand(clubId, kioskId, "CORRECT_THROW", { throwIndex: index, sector }, userId);
     return { buffer, command, dart: { ...mapped.dart, label: mapped.label, score: mapped.score } };
   }
 
