@@ -66,57 +66,17 @@ jobs:
             php infra/deploy/generate_api_config.php --output=/tmp/equipment-prod.php
           php -r '$c=require "/tmp/equipment-prod.php"; $b=$c["backend_v2"]??[]; if (($b["equipment_routing_mode"]??null)!=="node") exit(1); if (($b["scoring_routing_mode"]??null)!=="candidate") exit(1);'
 
-      - name: Validate TEST Render bootstrap secrets
+      - name: Validate TEST Render deploy credential
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
         run: |
           set -Eeuo pipefail
-          for name in RENDER_API_KEY DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD INTERNAL_TOKEN; do
-            test -n "${!name}" || { echo "$name is required for persistent TEST backend-v2." >&2; exit 1; }
-          done
+          test -n "$RENDER_API_KEY" || { echo 'RENDER_API_KEY is required for persistent TEST backend-v2.' >&2; exit 1; }
 
-      - name: Configure isolated TEST backend on Render
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
-        run: |
-          set -Eeuo pipefail
-          api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
-          update_env() {
-            local key="$1" value="$2"
-            curl --fail --silent --show-error --output /dev/null \
-              -X PUT "$api/$key" \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H 'Accept: application/json' \
-              -H 'Content-Type: application/json' \
-              --data "$(jq -nc --arg value "$value" '{value:$value}')"
-          }
-          update_env BD_APP_ENV test
-          update_env BD_BACKEND_V2_MODE test-write
-          update_env BD_BACKEND_V2_INTERNAL_TOKEN "$INTERNAL_TOKEN"
-          update_env DB_HOST "$DB_HOST"
-          update_env DB_PORT "$DB_PORT"
-          update_env DB_NAME "$DB_NAME"
-          update_env DB_USERNAME "$DB_USERNAME"
-          update_env DB_PASSWORD "$DB_PASSWORD"
-          update_env DB_TABLE_PREFIX bd_test_
-          update_env IDENTITY_TABLE_PREFIX bd_prod_
-          update_env HARDWARE_TABLE_PREFIX bd_prod_
-          update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
-          update_env BD_BACKEND_V2_DB_IDLE_MS 15000
-          update_env RELEASE_SHA "$RELEASE_SHA"
-
+      # Persistent TEST environment/prefix/secret configuration belongs to the
+      # bootstrap workflow. Updating env vars here caused Render to redeploy once
+      # for the env change and then again for the exact commit below, interrupting
+      # live TEST sessions during ordinary PR verification.
       - name: Deploy exact PR backend-v2 release to TEST Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
