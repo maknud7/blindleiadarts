@@ -8,6 +8,7 @@ use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ScoliaProxyApplication;
+use Blindleia\Dartkiosk\Api\BackendV2TournamentProxyApplication;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
@@ -128,6 +129,14 @@ if ($equipmentV2->run()) {
 // routing gate. TEST can move to Node without changing PROD ownership.
 $scoliaV2 = new BackendV2ScoliaProxyApplication(__DIR__);
 if ($scoliaV2->run()) {
+    return;
+}
+
+// Migrated tournament runtime has its own single-writer gate. Only routes that
+// backend-v2 already owns are captured; all remaining tournament functionality
+// continues to the legacy PHP applications below.
+$tournamentV2 = new BackendV2TournamentProxyApplication(__DIR__);
+if ($tournamentV2->run()) {
     return;
 }
 
