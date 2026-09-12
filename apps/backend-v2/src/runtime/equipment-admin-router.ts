@@ -31,20 +31,24 @@ export class EquipmentAdminRouter {
     if (method === "GET" && equipmentBoards) {
       const clubId = capture(equipmentBoards, 1);
       await this.requireAdmin(request, clubId);
-      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, true) });
+      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, true), ...this.equipment.scope() });
     }
 
     const kiosks = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks$/.exec(path);
     if (kiosks && method === "GET") {
       const clubId = capture(kiosks, 1);
-      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, false) });
+      return ok({ club_id: clubId, items: await this.equipment.listBoards(clubId, false), ...this.equipment.scope() });
     }
     if (kiosks && method === "POST") {
       const clubId = capture(kiosks, 1);
       const admin = await this.requireAdmin(request, clubId);
       assertProductionHardwareMutationAllowed(this.config);
       const body = await readJsonObject(request);
-      return ok({ kiosk: await this.equipment.createBoard(clubId, body), updated_by_user_id: decimalId(admin.id) }, 201);
+      return ok({
+        kiosk: await this.equipment.createBoard(clubId, body),
+        updated_by_user_id: decimalId(admin.id),
+        ...this.equipment.scope(),
+      }, 201);
     }
 
     const kiosk = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks\/([1-9][0-9]*)$/.exec(path);
@@ -64,7 +68,7 @@ export class EquipmentAdminRouter {
       assertProductionHardwareMutationAllowed(this.config);
       const updated = await this.equipment.updateBoard(clubId, kioskId, await readJsonObject(request));
       if (!updated) throw new DomainValidationError("kiosk_not_found", "Kiosk was not found for the selected club.", 404);
-      return ok({ kiosk: updated });
+      return ok({ kiosk: updated, ...this.equipment.scope() });
     }
 
     const screens = /^\/v1\/clubs\/([1-9][0-9]*)\/screen-devices$/.exec(path);
@@ -100,7 +104,7 @@ export class EquipmentAdminRouter {
       assertMutationAllowed(this.config);
       const updated = await this.equipment.resetPairing(clubId, kioskId);
       if (!updated) throw new DomainValidationError("kiosk_not_found", "Kiosk was not found for the selected club.", 404);
-      return ok({ kiosk: updated });
+      return ok({ kiosk: updated, ...this.equipment.scope() });
     }
 
     const pendingPairings = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosk-pairing-requests$/.exec(path);
@@ -124,7 +128,7 @@ export class EquipmentAdminRouter {
       const kioskId = requiredId(body.kiosk_id, "kiosk_id");
       const result = await this.equipment.approvePairingRequest(clubId, requestCode, kioskId, decimalId(admin.id));
       if (!result) throw new DomainValidationError("pairing_request_not_found", "Pairing request or kiosk was not found.", 404);
-      return ok(result);
+      return ok({ ...result, ...this.equipment.scope() });
     }
 
     if (method === "POST" && path === "/v1/kiosk-pairing-requests") {
@@ -167,7 +171,7 @@ export class EquipmentAdminRouter {
       const clubId = capture(scoliaSettings, 1);
       const admin = await this.requireAdmin(request, clubId);
       assertProductionHardwareMutationAllowed(this.config);
-      return ok({ settings: await this.scolia.updateClubSettings(clubId, await readJsonObject(request), decimalId(admin.id)) });
+      return ok({ settings: await this.scolia.updateClubSettings(clubId, await readJsonObject(request), decimalId(admin.id) });
     }
 
     const boardScolia = /^\/v1\/clubs\/([1-9][0-9]*)\/kiosks\/([1-9][0-9]*)\/scolia$/.exec(path);
