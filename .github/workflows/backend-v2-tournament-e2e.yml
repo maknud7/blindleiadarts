@@ -67,4 +67,7 @@ jobs:
           DB_TABLE_PREFIX: bd_test_
           IDENTITY_TABLE_PREFIX: bd_test_
           HARDWARE_TABLE_PREFIX: bd_prod_
-        run: node apps/backend-v2/e2e/tournament-lifecycle.mjs
+        run: |
+          set -Eeuo pipefail
+          node apps/backend-v2/e2e/tournament-lifecycle.mjs
+          node apps/backend-v2/e2e/tournament-attendance-lifecycle.mjs
