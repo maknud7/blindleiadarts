@@ -68,4 +68,24 @@ $assert(!$proxy->handles('GET', '/v1/tournaments/429/summary/admin'), 'Admin sum
 $assert(!$proxy->handles('POST', '/v1/public/check-in-display'), 'Public display route must remain GET-only.');
 $assert(!$proxy->handles('PATCH', '/v1/public/tournaments/429/live'), 'Public live route must remain GET-only.');
 
+// Query forwarding is deliberately narrower than route matching. Only the two
+// check-in display context parameters may cross the same-origin Node boundary.
+$assert(
+    $proxy->targetPath(
+        '/v1/public/check-in-display',
+        'ignored=1&club_slug=blindleia-dartklubb&screen_token=abc%2B123&another=2'
+    ) === '/v1/public/check-in-display?screen_token=abc%2B123&club_slug=blindleia-dartklubb',
+    'Check-in display must forward only screen_token and club_slug.'
+);
+$assert(
+    $proxy->targetPath('/v1/public/check-in-display', 'club_slug%5B%5D=bad&screen_token%5B%5D=bad&ignored=1')
+        === '/v1/public/check-in-display',
+    'Array-shaped or unknown query parameters must not be forwarded.'
+);
+$assert(
+    $proxy->targetPath('/v1/public/clubs/blindleia-dartklubb/live', 'screen_token=secret&ignored=1')
+        === '/v1/public/clubs/blindleia-dartklubb/live',
+    'Public live routes must not forward unrelated query parameters.'
+);
+
 echo "BackendV2PlayerLiveProxy routing OK\n";
