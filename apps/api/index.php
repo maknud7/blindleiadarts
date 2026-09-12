@@ -7,6 +7,7 @@ use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
+use Blindleia\Dartkiosk\Api\BackendV2ScoliaProxyApplication;
 use Blindleia\Dartkiosk\Api\EloApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
@@ -120,6 +121,13 @@ if ($playerLiveV2->run()) {
 // fails closed and never invokes the legacy PHP writer.
 $equipmentV2 = new BackendV2EquipmentProxyApplication(__DIR__);
 if ($equipmentV2->run()) {
+    return;
+}
+
+// Scolia bridge and paired-kiosk runtime have an independent single-writer
+// routing gate. TEST can move to Node without changing PROD ownership.
+$scoliaV2 = new BackendV2ScoliaProxyApplication(__DIR__);
+if ($scoliaV2->run()) {
     return;
 }
 
