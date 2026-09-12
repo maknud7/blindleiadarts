@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { DomainValidationError } from "../domain/errors.js";
 import type { MySqlScoliaAdminRepository } from "../mysql/scolia-admin-repository.js";
 import type { MySqlScoliaBridgeRepository } from "../mysql/scolia-bridge-repository.js";
+import type { MySqlScoliaCommandRepository } from "../mysql/scolia-command-repository.js";
 import type { MySqlScoliaKioskAuthRepository } from "../mysql/scolia-kiosk-auth-repository.js";
 import type { MySqlScoliaKioskRuntimeRepository } from "../mysql/scolia-kiosk-runtime-repository.js";
 import type { ScoliaEventProcessor } from "../service/scolia-event-processor.js";
@@ -17,6 +18,7 @@ export class ScoliaRuntimeRouter {
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly bridge: MySqlScoliaBridgeRepository,
+    private readonly commands: MySqlScoliaCommandRepository,
     private readonly processor: ScoliaEventProcessor,
     private readonly kioskAuth: MySqlScoliaKioskAuthRepository,
     private readonly kioskRuntime: MySqlScoliaKioskRuntimeRepository,
@@ -60,17 +62,17 @@ export class ScoliaRuntimeRouter {
       }
       if (method === "POST" && path === "/v1/scolia/bridge/commands/poll") {
         const body = await readJsonObject(request);
-        return ok({ items: await this.bridge.pollCommands(body.kiosk_ids, body.limit ?? 100) });
+        return ok({ items: await this.commands.pollCommands(body.kiosk_ids, body.limit ?? 100) });
       }
       const commandPoll = /^\/v1\/scolia\/bridge\/commands\/([1-9][0-9]*)$/.exec(path);
       if (method === "GET" && commandPoll) {
-        return ok({ items: await this.bridge.pollCommands([capture(commandPoll, 1)], 100) });
+        return ok({ items: await this.commands.pollCommands([capture(commandPoll, 1)], 100) });
       }
       const commandResult = /^\/v1\/scolia\/bridge\/commands\/([1-9][0-9]*)\/result$/.exec(path);
       if (method === "POST" && commandResult) {
         const commandId = capture(commandResult, 1);
         const body = await readJsonObject(request);
-        await this.bridge.completeCommand(commandId, body.result ?? "failed", body.error);
+        await this.commands.completeCommand(commandId, body.result ?? "failed", body.error);
         return ok({ command_id: commandId });
       }
       throw new DomainValidationError("scolia_bridge_route_not_found", "Unknown Scolia bridge route.", 404);
@@ -95,7 +97,7 @@ export class ScoliaRuntimeRouter {
     }
     if (action === "reset-phase") {
       await this.kioskRuntime.resetPhase(paired.club_id, paired.kiosk_id);
-      return ok({ command: await this.bridge.queueCommand(paired.club_id, paired.kiosk_id, "RESET_PHASE", {}, null) });
+      return ok({ command: await this.commands.queueCommand(paired.club_id, paired.kiosk_id, "RESET_PHASE", {}, null) });
     }
     if (action === "resume") {
       const body = await readJsonObject(request);
@@ -103,7 +105,7 @@ export class ScoliaRuntimeRouter {
         throw new DomainValidationError("scolia_reconciliation_required", "Bekreft avstemming før Scolia gjenopptas.", 409);
       }
       await this.kioskRuntime.resume(paired.club_id, paired.kiosk_id);
-      return ok({ command: await this.bridge.queueCommand(paired.club_id, paired.kiosk_id, "RESET_PHASE", {}, null) });
+      return ok({ command: await this.commands.queueCommand(paired.club_id, paired.kiosk_id, "RESET_PHASE", {}, null) });
     }
     if (action === "delete-throw") {
       const body = await readJsonObject(request);
