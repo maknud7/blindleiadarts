@@ -153,14 +153,15 @@ async function createFixture() {
       fixture.players.push(requireInsertId(inserted, `player ${index + 1}`));
     }
 
+    const checkinCodes = ["ABC", "DEF"];
     for (let index = 0; index < 2; index += 1) {
       const tournament = await sql.execute(
         `INSERT INTO \`${prefix}tournaments\`
           (club_id,name,slug,provider_system,status,start_at,registration_opens_at,registration_closes_at,
            checkin_opens_at,checkin_method,checkin_code,max_players)
          VALUES (?,?,?,'local','draft',DATE_ADD(NOW(),INTERVAL 1 DAY),DATE_SUB(NOW(),INTERVAL 1 DAY),DATE_ADD(NOW(),INTERVAL 2 DAY),
-                 DATE_SUB(NOW(),INTERVAL 1 HOUR),'code','ABC',16)`,
-        [fixture.club, `Attendance E2E ${index + 1} ${suffix}`, `attendance-e2e-${index + 1}-${suffix}`],
+                 DATE_SUB(NOW(),INTERVAL 1 HOUR),'code',?,16)`,
+        [fixture.club, `Attendance E2E ${index + 1} ${suffix}`, `attendance-e2e-${index + 1}-${suffix}`, checkinCodes[index]],
       );
       fixture.tournaments.push(requireInsertId(tournament, `tournament ${index + 1}`));
     }
