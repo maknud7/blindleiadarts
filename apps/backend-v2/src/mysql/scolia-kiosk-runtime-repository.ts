@@ -20,10 +20,10 @@ export class MySqlScoliaKioskRuntimeRepository {
       const reason = "Manuell fallback aktivert fra board-terminal.";
       await db.execute(
         `INSERT INTO \`${this.runtimePrefix}scolia_board_runtime\`
-          (kiosk_id,connection_state,fallback_active,needs_reconciliation,last_disconnect_reason,last_disconnect_at)
-         VALUES (?,'disconnected',1,1,?,NOW(3))
+          (kiosk_id,connection_state,fallback_active,needs_reconciliation,last_disconnect_reason,last_disconnect_at,connected_at)
+         VALUES (?,'disconnected',1,1,?,NOW(3),NULL)
          ON DUPLICATE KEY UPDATE connection_state='disconnected',fallback_active=1,needs_reconciliation=1,
-           last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3)`,
+           last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3),connected_at=NULL`,
         [kioskId, reason],
       );
       return this.statusWith(db, kioskId);
@@ -55,17 +55,18 @@ export class MySqlScoliaKioskRuntimeRepository {
       const autoFallback = Number(settings.auto_fallback_to_manual ?? 1) === 1;
       const matches = await db.query<QueryResultRow>(
         `SELECT id FROM \`${this.runtimePrefix}matches\`
-          WHERE kiosk_id=? AND status IN ('in_progress','assigned')
-          ORDER BY FIELD(status,'in_progress','assigned'),id LIMIT 1`,
+          WHERE kiosk_id=? AND status='in_progress' ORDER BY id LIMIT 1`,
         [kioskId],
       );
       const fallback = matches.length > 0 && mode === "live" && autoFallback;
       await db.execute(
         `INSERT INTO \`${this.runtimePrefix}scolia_board_runtime\`
-          (kiosk_id,connection_state,fallback_active,needs_reconciliation,last_disconnect_reason,last_disconnect_at)
-         VALUES (?,'disconnected',?,?,?,NOW(3))
-         ON DUPLICATE KEY UPDATE connection_state='disconnected',fallback_active=VALUES(fallback_active),
-           needs_reconciliation=VALUES(needs_reconciliation),last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3)`,
+          (kiosk_id,connection_state,fallback_active,needs_reconciliation,last_disconnect_reason,last_disconnect_at,connected_at)
+         VALUES (?,'disconnected',?,?,?,NOW(3),NULL)
+         ON DUPLICATE KEY UPDATE connection_state='disconnected',
+           fallback_active=GREATEST(fallback_active,VALUES(fallback_active)),
+           needs_reconciliation=GREATEST(needs_reconciliation,VALUES(needs_reconciliation)),
+           last_disconnect_reason=VALUES(last_disconnect_reason),last_disconnect_at=NOW(3),connected_at=NULL`,
         [kioskId, fallback ? 1 : 0, fallback ? 1 : 0, reason],
       );
     });
