@@ -53,6 +53,9 @@ $defaultBackendV2EquipmentRoutingMode = $isProd ? 'node' : 'php';
 // Scolia bridge/kiosk runtime is deliberately TEST-only until its dedicated
 // hosted cutover gate has passed. An ordinary PROD deploy must keep PHP ownership.
 $defaultBackendV2ScoliaRoutingMode = $isTest ? 'node' : 'php';
+// Tournament runtime is single-writer in TEST while PROD remains on PHP until
+// the tournament frontdoor and lifecycle have passed a dedicated PROD gate.
+$defaultBackendV2TournamentRoutingMode = $isTest ? 'node' : 'php';
 // Player/public/live is GET-only and explicitly side-effect-free in backend-v2.
 // Keep Node ownership in TEST and PROD once the production read gate has passed.
 $defaultBackendV2PlayerLiveRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
@@ -83,6 +86,7 @@ $config = [
         'scoring_routing_mode' => env_optional('BACKEND_V2_SCORING_ROUTING_MODE', $defaultBackendV2RoutingMode) ?? $defaultBackendV2RoutingMode,
         'equipment_routing_mode' => env_optional('BACKEND_V2_EQUIPMENT_ROUTING_MODE', $defaultBackendV2EquipmentRoutingMode) ?? $defaultBackendV2EquipmentRoutingMode,
         'scolia_routing_mode' => env_optional('BACKEND_V2_SCOLIA_ROUTING_MODE', $defaultBackendV2ScoliaRoutingMode) ?? $defaultBackendV2ScoliaRoutingMode,
+        'tournament_routing_mode' => env_optional('BACKEND_V2_TOURNAMENT_ROUTING_MODE', $defaultBackendV2TournamentRoutingMode) ?? $defaultBackendV2TournamentRoutingMode,
         'player_live_routing_mode' => env_optional('BACKEND_V2_PLAYER_LIVE_ROUTING_MODE', $defaultBackendV2PlayerLiveRoutingMode) ?? $defaultBackendV2PlayerLiveRoutingMode,
         'realtime_config_routing_mode' => env_optional('BACKEND_V2_REALTIME_CONFIG_ROUTING_MODE', $defaultBackendV2RealtimeConfigRoutingMode) ?? $defaultBackendV2RealtimeConfigRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,

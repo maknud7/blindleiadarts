@@ -6,7 +6,13 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/**'
+      - 'apps/api/src/BackendV2TournamentProxyApplication.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/index.php'
+      - 'apps/api/tests/backend_v2_tournament_proxy_routing_test.php'
+      - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-tournament-e2e.yml'
+      - '.github/workflows/backend-v2-tournament-frontdoor.yml'
   workflow_dispatch:
 
 permissions:
