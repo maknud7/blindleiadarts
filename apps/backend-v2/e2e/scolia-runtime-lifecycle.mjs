@@ -281,8 +281,8 @@ async function createFixture(dbProvider) {
 
     const tournament = await sql.execute(
       `INSERT INTO \`${config.prefixes.runtime}tournaments\`
-        (club_id,name,slug,provider_system,status,best_of_legs,legs_to_win)
-       VALUES (?,?,?,'local','ready',3,2)`,
+        (club_id,name,slug,provider_system,status)
+       VALUES (?,?,?,'local','ready')`,
       [fixture.club, `Scolia E2E Tournament ${suffix}`, `scolia-e2e-t-${suffix}`],
     );
     fixture.tournament = requireInsertId(tournament, "tournament");
