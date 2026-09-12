@@ -18,6 +18,7 @@ import { MySqlPublicLiveReadRepository } from "./mysql/public-live-read-reposito
 import { MySqlSeasonPublicReadRepository } from "./mysql/season-public-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
 import { MySqlScoliaBridgeRepository } from "./mysql/scolia-bridge-repository.js";
+import { MySqlScoliaCommandRepository } from "./mysql/scolia-command-repository.js";
 import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
 import { MySqlScoliaKioskAuthRepository } from "./mysql/scolia-kiosk-auth-repository.js";
 import { MySqlScoliaKioskRuntimeRepository } from "./mysql/scolia-kiosk-runtime-repository.js";
@@ -113,12 +114,14 @@ const equipment = new MySqlEquipmentAdminRepository(sessions, config.prefixes.ru
 const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaDashboard = new MySqlScoliaDashboardRepository(sessions, config.prefixes.runtime);
 const scoliaBridge = new MySqlScoliaBridgeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
+const scoliaCommands = new MySqlScoliaCommandRepository(sessions, config.prefixes.runtime);
 const scoliaKioskAuth = new MySqlScoliaKioskAuthRepository(sessions, config.prefixes.runtime);
 const scoliaKioskRuntime = new MySqlScoliaKioskRuntimeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
-const scoliaProcessor = new ScoliaEventProcessor(scoliaBridge, scoring, scoliaKioskRuntime);
+const scoliaProcessor = new ScoliaEventProcessor(scoliaBridge, scoring, scoliaKioskRuntime, scoliaCommands);
 const scoliaRuntime = new ScoliaRuntimeRouter(
   config,
   scoliaBridge,
+  scoliaCommands,
   scoliaProcessor,
   scoliaKioskAuth,
   scoliaKioskRuntime,
