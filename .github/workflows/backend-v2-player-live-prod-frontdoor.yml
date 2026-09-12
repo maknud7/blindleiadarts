@@ -1,0 +1,90 @@
+name: Backend v2 Player Live PROD Frontdoor
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/src/runtime/player-live-read-router.ts'
+      - 'apps/backend-v2/test/player-live-read-only.test.mjs'
+      - 'apps/api/src/BackendV2PlayerLiveProxyApplication.php'
+      - 'apps/api/tests/backend_v2_player_live_proxy_routing_test.php'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-player-live-prod-frontdoor.yml'
+      - '.github/workflows/backend-v2-realtime-prod-frontdoor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prod-read-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Verify side-effect-free Node player/live reads
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:typecheck
+          npm run backend-v2:build
+          node --test apps/backend-v2/test/player-live-read-only.test.mjs
+
+      - name: Verify PROD routing contract without deploying PROD
+        env:
+          SCOLIA_BRIDGE_SECRET: player-live-prod-contract
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: prod
+          DB_USERNAME: prod
+          DB_PASSWORD: prod
+        run: |
+          set -Eeuo pipefail
+          php -l infra/deploy/generate_api_config.php
+          php -l apps/api/src/BackendV2PlayerLiveProxyApplication.php
+          APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org \
+            DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            php infra/deploy/generate_api_config.php --output=/tmp/player-live-prod.php
+          php -r '$c=require "/tmp/player-live-prod.php"; $b=$c["backend_v2"]??[]; if (($b["player_live_routing_mode"]??null)!=="node") exit(1); if (($b["realtime_config_routing_mode"]??null)!=="node") exit(2); if (($b["scolia_routing_mode"]??null)!=="php") exit(3); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(4);'
+          php apps/api/tests/backend_v2_player_live_proxy_routing_test.php
+
+      - name: Verify current PROD backend against canonical production schema
+        env:
+          HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
+        run: |
+          set -Eeuo pipefail
+          health="$(curl -fsS --max-time 30 "${HOST_URL%/}/health")"
+          jq -e '.ok == true and .environment == "prod" and .mode == "prod-canary" and .runtime_prefix == "bd_prod_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections <= 2' <<<"$health" >/dev/null
+
+          checkin="$(curl -fsS --max-time 30 "${HOST_URL%/}/v1/public/check-in-display?club_slug=blindleia")"
+          jq -e '.ok == true' <<<"$checkin" >/dev/null
+
+          dashboard_status="$(curl -sS --max-time 30 -o /tmp/dashboard.json -w '%{http_code}' "${HOST_URL%/}/v1/me/dashboard")"
+          test "$dashboard_status" = '401'
+          jq -e '.ok == false and .error.code == "authentication_required"' /tmp/dashboard.json >/dev/null
+
+          profile_status="$(curl -sS --max-time 30 -o /tmp/profile.json -w '%{http_code}' "${HOST_URL%/}/v1/players/1/profile")"
+          test "$profile_status" = '200' || test "$profile_status" = '404'
+          jq -e '(.ok == true) or (.ok == false and .error.code == "player_not_found")' /tmp/profile.json >/dev/null
+
+          live_status="$(curl -sS --max-time 30 -o /tmp/live.json -w '%{http_code}' "${HOST_URL%/}/v1/public/clubs/blindleia/live")"
+          test "$live_status" = '200' || test "$live_status" = '404'
+          jq -e '(.ok == true) or (.ok == false and .error.code == "live_tournament_not_found")' /tmp/live.json >/dev/null
+
+          echo 'PROD player/public/live reads are reachable on canonical bd_prod_ without any PROD deploy or mutation.'
