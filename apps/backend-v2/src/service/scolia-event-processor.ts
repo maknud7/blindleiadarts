@@ -225,6 +225,15 @@ export class ScoliaEventProcessor {
     return { buffer, command, dart: { ...mapped.dart, label: mapped.label, score: mapped.score } };
   }
 
+  async undoCanonicalVisit(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    const result = await this.scoring.undoLastVisit({ kiosk_id: asDbId(kioskId), source: "scolia" });
+    if (result.kind === "no_visit") {
+      throw new DomainValidationError("visit_not_found", "Det finnes ikke noe kast å angre.", 409);
+    }
+    return result;
+  }
+
   private async finalizeBuffer(kioskId: string, buffer: ScoliaVisitBuffer): Promise<{ status: string; visit_id?: string; meta: Record<string, unknown> }> {
     const context = await this.bridge.scoringContext(kioskId);
     if (!context) throw new DomainValidationError("scolia_no_scoring_context", "Ingen aktiv canonical kamp finnes for Scolia-visiten.", 409);
