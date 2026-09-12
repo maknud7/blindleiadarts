@@ -87,6 +87,7 @@ jobs:
             "$SFTP_USERNAME@$SFTP_HOST" <<'SFTP'
           -rm /www/blindleiadarts/test/api/kiosk-scolia-test-lease.php
           -rm /www/blindleiadarts/test/api/scolia-bridge-control.php
+          -rm /www/blindleiadarts/test/api/kiosk-scolia-ui.php
           bye
           SFTP
 
@@ -98,7 +99,8 @@ jobs:
           base="${BASE_URL%/}"
           for path in \
             /api/kiosk-scolia-test-lease.php \
-            /api/scolia-bridge-control.php
+            /api/scolia-bridge-control.php \
+            /api/kiosk-scolia-ui.php
           do
             status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$base$path" || true)"
             if [[ "$status" != "404" ]]; then
