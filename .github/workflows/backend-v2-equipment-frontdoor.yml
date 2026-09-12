@@ -37,16 +37,8 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-      - name: Apply embedded delete parity patch
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          workflow = Path('.github/workflows/tmp-equipment-delete-parity.yml').read_text()
-          marker = "python3 - <<'PY'\n"
-          body = workflow.split(marker, 1)[1].split('\n          PY', 1)[0]
-          body = '\n'.join(line[10:] if line.startswith('          ') else line for line in body.splitlines())
-          exec(compile(body, '<embedded-delete-parity-patch>', 'exec'))
-          PY
+      - name: Apply hardened delete parity patch
+        run: python3 .github/tmp-equipment-delete-patch.py
       - name: Build and run focused contracts
         run: |
           npm install --no-package-lock --ignore-scripts
