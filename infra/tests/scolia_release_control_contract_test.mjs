@@ -1,24 +1,33 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const api = readFileSync("apps/api/scolia-bridge-control.php", "utf8");
+const repository = readFileSync("apps/backend-v2/src/mysql/scolia-admin-repository.ts", "utf8");
+const router = readFileSync("apps/backend-v2/src/runtime/equipment-admin-router.ts", "utf8");
 const ui = readFileSync("apps/admin/scolia-release-control.js", "utf8");
 const readonly = readFileSync("apps/admin/test-hardware-readonly.js", "utf8");
 const admin = readFileSync("apps/admin/index.html", "utf8");
 
-assert.match(api, /SET mode=\?,updated_by_user_id=\?/);
-assert.match(api, /Scolia frikoblet fra Blindleia av admin/);
-assert.match(api, /DELETE FROM `\{\$leaseTable\}` WHERE physical_kiosk_id=\?/);
-assert.match(api, /status='expired'/);
-assert.match(api, /production_hardware_read_only/);
-assert.match(api, /\$dataPrefix === \$hardwarePrefix/);
-assert.doesNotMatch(api, /UPDATE `\{\$[^}]*kiosks[^}]*\}` SET scoring_mode/);
+assert.match(repository, /payload\.bridge_attached !== undefined/);
+assert.match(repository, /SET mode=\?,updated_by_user_id=\?/);
+assert.match(repository, /Scolia frikoblet fra Blindleia av admin/);
+assert.match(repository, /scolia_test_leases/);
+assert.match(repository, /status='expired'/);
+assert.match(repository, /bridge_released/);
+assert.match(repository, /direct_scolia_ready/);
+assert.match(repository, /can_change_bridge: this\.runtimePrefix === this\.hardwarePrefix/);
+assert.doesNotMatch(repository, /UPDATE .*kiosks.*SET scoring_mode/s);
+assert.match(router, /assertProductionHardwareMutationAllowed\(this\.config\)/);
+assert.match(router, /\/scolia\$\/\.exec\(path\)/);
 
 assert.match(ui, /Frikoble Scolia/);
 assert.match(ui, /Koble til Blindleia/);
 assert.match(ui, /kan brukes direkte i Scolia/);
 assert.match(ui, /release_effective_within_seconds/);
 assert.match(ui, /data-scolia-action/);
+assert.match(ui, /method: "PATCH"/);
+assert.match(ui, /bridge_attached/);
+assert.match(ui, /\/api\/v1\/clubs\//);
+assert.doesNotMatch(ui, /scolia-bridge-control\.php/);
 assert.match(ui, /let syncRunning = false/);
 assert.match(ui, /if \(syncRunning\)/);
 assert.match(ui, /mutations\.every\(mutationIsInternal\)/);
@@ -34,4 +43,4 @@ assert.doesNotMatch(readonly, /test-hardware-readonly \.board-edit-button/);
 assert.doesNotMatch(readonly, /#newBoardButton, \.board-edit-button/);
 assert.match(admin, /scolia-release-control\.js\?v=/);
 
-console.log("Scolia release control contract: OK");
+console.log("Scolia release control contract: backend-v2 OK");
