@@ -91,9 +91,15 @@ final class BackendV2TournamentProxyApplication
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/groups/(?:draw|round-robin)$#', $path) === 1) return true;
         if (in_array($method, ['POST', 'DELETE'], true) && preg_match('#^/v1/tournaments/\d+/register$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/registrations$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/registrations/guest$#', $path) === 1) return true;
         if ($method === 'DELETE' && preg_match('#^/v1/tournaments/\d+/registrations/\d+$#', $path) === 1) return true;
 
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/(?:check-in|finish-checkin|start)$#', $path) === 1) return true;
+        if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+/check-in-status$#', $path) === 1) return true;
+        if (in_array($method, ['GET', 'PUT', 'PATCH'], true) && preg_match('#^/v1/clubs/\d+/checkin-settings$#', $path) === 1) return true;
+        if (in_array($method, ['GET', 'PUT', 'PATCH'], true) && preg_match('#^/v1/tournaments/\d+/checkin-settings$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/checkin-code/rotate$#', $path) === 1) return true;
+        if (in_array($method, ['POST', 'DELETE'], true) && preg_match('#^/v1/tournaments/\d+/admin-check-in/\d+$#', $path) === 1) return true;
 
         if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+/operations$#', $path) === 1) return true;
         if (in_array($method, ['PUT', 'PATCH'], true) && preg_match('#^/v1/tournaments/\d+/operations/settings$#', $path) === 1) return true;
