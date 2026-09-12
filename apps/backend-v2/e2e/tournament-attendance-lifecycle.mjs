@@ -90,6 +90,10 @@ try {
   assert.equal(started.start.checked_in_count, 2);
   assert.equal(started.start.already_started, false);
 
+  const directCheckin = await postJson(`/v1/tournaments/${directStartTournament}/check-in`, { code: "d-e-f" });
+  assert.equal(directCheckin.registration.status, "checked_in");
+  assert.equal(directCheckin.registration.checkin_source, "player_code");
+
   const directStarted = await postJson(`/v1/tournaments/${directStartTournament}/start`, {});
   assert.equal(directStarted.start.status, "in_progress");
   assert.equal(directStarted.start.checked_in_count, 2);
