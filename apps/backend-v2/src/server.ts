@@ -17,7 +17,11 @@ import { MySqlPlayerLiveReadRepository } from "./mysql/player-live-read-reposito
 import { MySqlPublicLiveReadRepository } from "./mysql/public-live-read-repository.js";
 import { MySqlSeasonPublicReadRepository } from "./mysql/season-public-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
+import { MySqlScoliaBridgeRepository } from "./mysql/scolia-bridge-repository.js";
+import { MySqlScoliaCommandRepository } from "./mysql/scolia-command-repository.js";
 import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-repository.js";
+import { MySqlScoliaKioskAuthRepository } from "./mysql/scolia-kiosk-auth-repository.js";
+import { MySqlScoliaKioskRuntimeRepository } from "./mysql/scolia-kiosk-runtime-repository.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { MySqlTournamentFlowRepository } from "./mysql/tournament-flow-repository.js";
 import { MySqlTournamentOperationsRepository } from "./mysql/tournament-operations-repository.js";
@@ -37,11 +41,13 @@ import { PlayerLiveReadRouter } from "./runtime/player-live-read-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { PublicLiveReadRouter } from "./runtime/public-live-read-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
+import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
 import { TournamentRuntimeRouter } from "./runtime/tournament-runtime-router.js";
 import { CanonicalScoringService } from "./service/canonical-scoring-service.js";
 import { IdentityAuthService } from "./service/identity-auth-service.js";
+import { ScoliaEventProcessor } from "./service/scolia-event-processor.js";
 
 const config = loadRuntimeConfig();
 const sessions = new MySql2SessionProvider({
@@ -107,6 +113,20 @@ const membership = new MySqlMembershipEligibilityRepository(sessions, config.pre
 const equipment = new MySqlEquipmentAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaDashboard = new MySqlScoliaDashboardRepository(sessions, config.prefixes.runtime);
+const scoliaBridge = new MySqlScoliaBridgeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
+const scoliaCommands = new MySqlScoliaCommandRepository(sessions, config.prefixes.runtime);
+const scoliaKioskAuth = new MySqlScoliaKioskAuthRepository(sessions, config.prefixes.runtime);
+const scoliaKioskRuntime = new MySqlScoliaKioskRuntimeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
+const scoliaProcessor = new ScoliaEventProcessor(scoliaBridge, scoring, scoliaKioskRuntime, scoliaCommands);
+const scoliaRuntime = new ScoliaRuntimeRouter(
+  config,
+  scoliaBridge,
+  scoliaCommands,
+  scoliaProcessor,
+  scoliaKioskAuth,
+  scoliaKioskRuntime,
+  scoliaAdmin,
+);
 const equipmentRuntime = new EquipmentAdminRouter(
   config,
   identityRepository,
@@ -259,6 +279,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   const seasonPublicRoute = await seasonPublicRuntime.handle(method, publicPath);
   if (seasonPublicRoute !== null) {
     sendJson(response, seasonPublicRoute.statusCode, seasonPublicRoute.payload);
+    return;
+  }
+
+  const scoliaRoute = await scoliaRuntime.handle(method, publicPath, request);
+  if (scoliaRoute !== null) {
+    sendJson(response, scoliaRoute.statusCode, scoliaRoute.payload);
     return;
   }
 

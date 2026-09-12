@@ -1,0 +1,72 @@
+name: Backend v2 Scolia TEST E2E
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/src/domain/scolia.ts'
+      - 'apps/backend-v2/src/mysql/scolia-*.ts'
+      - 'apps/backend-v2/src/runtime/scolia-runtime-router.ts'
+      - 'apps/backend-v2/src/service/scolia-event-processor.ts'
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/e2e/scolia-runtime-*.mjs'
+      - '.github/workflows/backend-v2-scolia-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-v2-scolia-test-e2e
+  cancel-in-progress: false
+
+jobs:
+  scolia-lifecycle:
+    runs-on: ubuntu-latest
+    environment: test
+    env:
+      BD_APP_ENV: test
+      BD_BACKEND_V2_MODE: test-write
+      BD_BACKEND_V2_MAX_CONNECTIONS: '1'
+      BD_BACKEND_V2_ACQUIRE_TIMEOUT_MS: '5000'
+      BD_BACKEND_V2_CONNECT_TIMEOUT_MS: '30000'
+      BD_BACKEND_V2_DB_IDLE_MS: '15000'
+      HOST: 127.0.0.1
+      PORT: '18088'
+      RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_test_
+      IDENTITY_TABLE_PREFIX: bd_test_
+      HARDWARE_TABLE_PREFIX: bd_test_
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Typecheck and build backend v2
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:typecheck
+          npm run backend-v2:build
+
+      - name: Generate loopback-only E2E token
+        shell: bash
+        run: echo "BD_BACKEND_V2_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Diagnose Scolia event processing against hosted TEST MySQL
+        run: node apps/backend-v2/e2e/scolia-runtime-diagnostic.mjs
+
+      - name: Run isolated Scolia lifecycle against hosted TEST MySQL
+        run: node apps/backend-v2/e2e/scolia-runtime-lifecycle.mjs

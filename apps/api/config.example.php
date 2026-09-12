@@ -17,10 +17,11 @@ return [
         'bridge_secret' => 'replace-with-a-long-random-secret',
     ],
     'backend_v2' => [
-        // Safe defaults: scoring and equipment remain on PHP unless their
-        // independent single-writer routing modes are explicitly enabled.
+        // Safe defaults: each writer domain stays on PHP unless its independent
+        // single-writer routing mode is explicitly enabled.
         'scoring_routing_mode' => 'php',
         'equipment_routing_mode' => 'php',
+        'scolia_routing_mode' => 'php',
         'base_url' => '',
         'canary_kiosk_ids' => '',
         'internal_token' => '',

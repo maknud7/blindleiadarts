@@ -1,0 +1,78 @@
+name: Backend v2 Scolia Runtime
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/src/domain/scolia.ts'
+      - 'apps/backend-v2/src/mysql/scolia-bridge-repository.ts'
+      - 'apps/backend-v2/src/mysql/scolia-kiosk-auth-repository.ts'
+      - 'apps/backend-v2/src/mysql/scolia-kiosk-runtime-repository.ts'
+      - 'apps/backend-v2/src/runtime/scolia-runtime-router.ts'
+      - 'apps/backend-v2/src/service/scolia-event-processor.ts'
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/scolia-*.test.mjs'
+      - 'apps/api/src/BackendV2ScoliaProxyApplication.php'
+      - 'apps/api/src/Service/BackendV2ApiClient.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/config.example.php'
+      - 'apps/api/index.php'
+      - 'apps/api/tests/backend_v2_scolia_proxy_routing_test.php'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-scolia-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Typecheck and run backend-v2 Scolia tests
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:typecheck
+          npm run backend-v2:test
+
+      - name: Verify same-origin Scolia routing contract
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/src/BackendV2ScoliaProxyApplication.php >/dev/null
+          php -l apps/api/src/Service/BackendV2ApiClient.php >/dev/null
+          php apps/api/tests/backend_v2_scolia_proxy_routing_test.php
+          grep -Fq "backendV2ScoliaRoutingMode" apps/api/src/Support/Config.php
+          grep -Fq "'scolia_routing_mode' => 'php'" apps/api/config.example.php
+          grep -Fq "x-scolia-bridge-secret" apps/api/src/Service/BackendV2ApiClient.php
+          grep -Fq 'new BackendV2ScoliaProxyApplication' apps/api/index.php
+
+      - name: Verify TEST-only routing default
+        run: |
+          set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          common_env=(
+            DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=test DB_USERNAME=test DB_PASSWORD=test
+            SCOLIA_BRIDGE_SECRET=test-secret DB_TABLE_PREFIX=bd_test_
+          )
+          env "${common_env[@]}" APP_ENV=test php infra/deploy/generate_api_config.php --output="$tmp/test.php"
+          env "${common_env[@]}" APP_ENV=prod DB_TABLE_PREFIX=bd_prod_ php infra/deploy/generate_api_config.php --output="$tmp/prod.php"
+          php -r '$c=require $argv[1]; exit((($c["backend_v2"]["scolia_routing_mode"]??null)==="node")?0:1);' "$tmp/test.php"
+          php -r '$c=require $argv[1]; exit((($c["backend_v2"]["scolia_routing_mode"]??null)==="php")?0:1);' "$tmp/prod.php"
