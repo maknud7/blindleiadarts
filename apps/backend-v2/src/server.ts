@@ -114,8 +114,8 @@ const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.run
 const scoliaDashboard = new MySqlScoliaDashboardRepository(sessions, config.prefixes.runtime);
 const scoliaBridge = new MySqlScoliaBridgeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaKioskAuth = new MySqlScoliaKioskAuthRepository(sessions, config.prefixes.runtime);
-const scoliaKioskRuntime = new MySqlScoliaKioskRuntimeRepository(sessions, config.prefixes.runtime);
-const scoliaProcessor = new ScoliaEventProcessor(scoliaBridge, scoring);
+const scoliaKioskRuntime = new MySqlScoliaKioskRuntimeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
+const scoliaProcessor = new ScoliaEventProcessor(scoliaBridge, scoring, scoliaKioskRuntime);
 const scoliaRuntime = new ScoliaRuntimeRouter(
   config,
   scoliaBridge,
