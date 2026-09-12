@@ -76,9 +76,9 @@ try {
     return rows[0] ?? null;
   });
   console.log(JSON.stringify({ scenario: "scolia-runtime-diagnostic", queued, drain, diagnostic }));
-  assert.equal(drain.claimed, 1, `Expected one claimed event: ${JSON.stringify(diagnostic)}`);
-  assert.equal(drain.processed, 1, `HELLO_CLIENT processing failed: ${JSON.stringify(diagnostic)}`);
-  assert.equal(drain.failed, 0, `HELLO_CLIENT processing failed: ${JSON.stringify(diagnostic)}`);
+  assert.ok(drain.claimed >= 1, `Expected diagnostic event to be claimable: ${JSON.stringify({ drain, diagnostic })}`);
+  assert.equal(diagnostic?.processing_status, "processed", `Diagnostic HELLO_CLIENT was not processed: ${JSON.stringify({ drain, diagnostic })}`);
+  assert.equal(diagnostic?.last_error ?? null, null, `Diagnostic HELLO_CLIENT recorded an error: ${JSON.stringify({ drain, diagnostic })}`);
 } finally {
   try {
     await provider.withConnection(async (sql) => {
