@@ -1,0 +1,83 @@
+name: Cleanup Retired TEST Endpoints
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - '.github/workflows/test-retired-endpoint-cleanup.yml'
+      - 'infra/tests/test_retired_endpoint_cleanup_contract.mjs'
+  workflow_run:
+    workflows:
+      - Deploy Test
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify TEST-only cleanup contract
+        run: node infra/tests/test_retired_endpoint_cleanup_contract.mjs
+
+  cleanup:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'workflow_run' &&
+           github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.head_branch == 'develop') }}
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Install SFTP client
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+
+      - name: Remove retired TEST PHP endpoints
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SFTP_HOST"
+          test -n "$SFTP_USERNAME"
+          test -n "$SFTP_PASSWORD"
+
+          sshpass -p "$SFTP_PASSWORD" sftp \
+            -oBatchMode=no \
+            -oStrictHostKeyChecking=no \
+            -oUserKnownHostsFile=/dev/null \
+            -P 22 \
+            "$SFTP_USERNAME@$SFTP_HOST" <<'SFTP'
+          -rm /www/blindleiadarts/test/api/kiosk-scolia-test-lease.php
+          -rm /www/blindleiadarts/test/api/scolia-bridge-control.php
+          bye
+          SFTP
+
+      - name: Verify retired endpoints are gone
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+          for path in \
+            /api/kiosk-scolia-test-lease.php \
+            /api/scolia-bridge-control.php
+          do
+            status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$base$path" || true)"
+            if [[ "$status" != "404" ]]; then
+              echo "Retired endpoint still reachable: $path returned HTTP ${status:-unknown}" >&2
+              exit 1
+            fi
+          done
