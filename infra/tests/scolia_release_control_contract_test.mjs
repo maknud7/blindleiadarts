@@ -15,7 +15,14 @@ assert.match(repository, /status='expired'/);
 assert.match(repository, /bridge_released/);
 assert.match(repository, /direct_scolia_ready/);
 assert.match(repository, /can_change_bridge: this\.runtimePrefix === this\.hardwarePrefix/);
-assert.doesNotMatch(repository, /UPDATE .*kiosks.*SET scoring_mode/s);
+
+const releaseStart = repository.indexOf("  private async setBridgeAttachedWith(");
+const releaseEnd = repository.indexOf("\n  private async getRuntimeStatusWith", releaseStart);
+assert.ok(releaseStart >= 0 && releaseEnd > releaseStart, "setBridgeAttachedWith method must exist");
+const releaseMethod = repository.slice(releaseStart, releaseEnd);
+assert.doesNotMatch(releaseMethod, /UPDATE .*kiosks.*SET scoring_mode/s);
+assert.match(releaseMethod, /UPDATE .*scolia_board_settings.*SET mode=/s);
+
 assert.match(router, /assertProductionHardwareMutationAllowed\(this\.config\)/);
 assert.match(router, /\/scolia\$\/\.exec\(path\)/);
 
