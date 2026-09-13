@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { CanonicalScoringPort } from "../contracts/canonical-scoring.js";
-import { asDbId } from "../contracts/scoring.js";
+import { asDbId, type VisitInput } from "../contracts/scoring.js";
 import { evaluateVisit } from "../domain/dart501.js";
 import { DomainValidationError } from "../domain/errors.js";
 import { boolValue, mapScoliaSector } from "../domain/scolia.js";
@@ -186,6 +186,28 @@ export class ScoliaEventProcessor {
         remaining_if_visit_ended_now: evaluation.remaining_after,
       },
     };
+  }
+
+  async startManualMatch(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    return await this.scoring.startMatch({ kiosk_id: asDbId(kioskId), source: "manual" }) as unknown as Record<string, unknown>;
+  }
+
+  async recordManualVisit(kioskIdInput: unknown, payloadInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    if (payloadInput === null || typeof payloadInput !== "object" || Array.isArray(payloadInput)) {
+      throw new DomainValidationError("invalid_visit_payload", "Scoring payload must be a JSON object.", 422);
+    }
+    return await this.scoring.recordVisit({
+      kiosk_id: asDbId(kioskId),
+      source: "manual",
+      payload: payloadInput as VisitInput,
+    }) as unknown as Record<string, unknown>;
+  }
+
+  async undoManualVisit(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    return await this.scoring.undoLastVisit({ kiosk_id: asDbId(kioskId), source: "manual" }) as unknown as Record<string, unknown>;
   }
 
   async deleteBufferedThrow(clubIdInput: unknown, kioskIdInput: unknown, indexInput: unknown, userIdInput: unknown): Promise<Record<string, unknown>> {
