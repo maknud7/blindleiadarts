@@ -124,6 +124,20 @@ export class MySqlScoliaKioskAuthRepository {
     });
   }
 
+  /** Clears only the runtime pairing fields after legacy-compatible kiosk access. */
+  async unpairScoring(codeInput: unknown, tokenInput: unknown): Promise<Record<string, unknown>> {
+    const kiosk = await this.resolveScoring(codeInput, tokenInput, true);
+    await this.sessions.withConnection(async (db) => {
+      await db.execute(
+        `UPDATE \`${this.runtimePrefix}kiosks\`
+            SET pairing_token_hash=NULL,paired_device_name=NULL,paired_at=NULL
+          WHERE id=?`,
+        [kiosk.kiosk_id],
+      );
+    });
+    return this.scoringSnapshot(kiosk.kiosk_id);
+  }
+
   /** Pure canonical kiosk snapshot. No leg or match state is created by reads. */
   async scoringSnapshot(kioskIdInput: unknown): Promise<Record<string, unknown>> {
     const kioskId = id(kioskIdInput, "kiosk_id");
