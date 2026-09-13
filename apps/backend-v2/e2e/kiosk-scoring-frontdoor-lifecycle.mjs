@@ -115,6 +115,36 @@ try {
   assert.equal(undone.match.current_player_id, fixture.playerA);
   assert.deepEqual(undone.match.recent_visits, []);
 
+  const wrongUnpair = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/unpair`, {
+    method: "POST",
+    pairingToken: wrongToken,
+    expectedStatus: 409,
+  });
+  assert.equal(wrongUnpair.error.code, "kiosk_paired_to_other_device");
+
+  const missingUnpair = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/unpair`, {
+    method: "POST",
+    expectedStatus: 403,
+  });
+  assert.equal(missingUnpair.error.code, "kiosk_pairing_required");
+
+  const unpaired = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/unpair`, {
+    method: "POST",
+    pairingToken,
+  });
+  assert.equal(unpaired.ok, true);
+  assert.equal(unpaired.state, "in_progress");
+  assert.equal(String(unpaired.kiosk.id), fixture.kiosk);
+  assert.equal(unpaired.kiosk.is_paired, false);
+  assert.equal(unpaired.kiosk.paired_device_name, null);
+  assert.equal(unpaired.kiosk.paired_at, null);
+
+  const unpairedState = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/state`);
+  assert.equal(unpairedState.ok, true);
+  assert.equal(unpairedState.state, "in_progress");
+  assert.equal(unpairedState.kiosk.is_paired, false);
+  assert.equal(String(unpairedState.match.id), fixture.match);
+
   console.log(JSON.stringify({
     ok: true,
     scenario: "backend-v2-kiosk-scoring-frontdoor-lifecycle",
@@ -127,6 +157,7 @@ try {
     start_match_verified: true,
     visit_verified: true,
     undo_verified: true,
+    unpair_verified: true,
   }));
 } catch (error) {
   if (serverOutput) process.stderr.write(`\n--- backend-v2 server output ---\n${serverOutput}\n`);
