@@ -15,8 +15,8 @@ use Throwable;
 /**
  * Same-origin front door for Scolia bridge and paired-kiosk runtime cutover.
  *
- * The paired-kiosk surface also owns the canonical kiosk scoring front door in
- * TEST: state, start-match, visit and undo all stay in backend-v2 once selected.
+ * The paired-kiosk surface also owns the canonical kiosk scoring/session front door in
+ * TEST: state, start-match, visit, undo and unpair all stay in backend-v2 once selected.
  * PROD remains on PHP while scolia_routing_mode is php.
  *
  * Routing is decided before any mutation. Once Node has been attempted the
@@ -109,7 +109,7 @@ final class BackendV2ScoliaProxyApplication
         }
 
         if ($method === 'GET' && preg_match('#^/v1/kiosks/[^/]+/state$#', $path) === 1) return true;
-        if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/(start-match|visit|undo)$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/(start-match|visit|undo|unpair)$#', $path) === 1) return true;
 
         if ($method === 'GET' && preg_match('#^/v1/kiosks/[^/]+/scolia(?:/status)?$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/scolia/(undo|fallback|resume|reset-phase|delete-throw|correct-throw)$#', $path) === 1) return true;
