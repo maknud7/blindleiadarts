@@ -11,6 +11,7 @@ import {
   RuntimeAccessError,
   type BackendRuntimeConfig,
 } from "./config.js";
+import { TournamentRealtimePublisher } from "./tournament-realtime-publisher.js";
 
 export interface TournamentRouteResult {
   statusCode: number;
@@ -18,15 +19,39 @@ export interface TournamentRouteResult {
 }
 
 export class TournamentRuntimeRouter {
+  private readonly realtime: TournamentRealtimePublisher;
+
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly identityRepository: MySqlIdentityAuthRepository,
     private readonly accountProfiles: MySqlAccountProfileRepository,
     private readonly membership: MySqlMembershipEligibilityRepository,
     private readonly tournaments: MySqlTournamentRuntimeRepository,
-  ) {}
+  ) {
+    this.realtime = new TournamentRealtimePublisher({
+      publishUrl: config.realtime.publishUrl,
+      publishSecret: config.realtime.publishSecret,
+      timeoutMs: config.realtime.timeoutMs,
+    });
+  }
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentRouteResult | null> {
+    const createMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/tournaments$/.exec(path);
+    if (method === "POST" && createMatch) {
+      const clubId = requiredCapture(createMatch, 1);
+      assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, clubId);
+      const body = await readJsonObject(request);
+      const name = String(body.name ?? "").trim();
+      if (name === "") {
+        throw new DomainValidationError("tournament_name_required", "Tournament name is required.", 422);
+      }
+      const tournament = await this.tournaments.createTournament(clubId, { ...body, name });
+      await this.realtime.publishClubRefresh(clubId, "tournament_created");
+      return ok({ tournament }, 201);
+    }
+
     const listMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/registration-tournaments$/.exec(path);
     if (method === "GET" && listMatch) {
       const clubId = requiredCapture(listMatch, 1);
