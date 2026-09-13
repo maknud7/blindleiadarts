@@ -1,5 +1,9 @@
 RewriteEngine On
 
+# Retire the legacy kiosk SSE endpoint. Kiosks use WebSocket with canonical
+# /state polling as the only fallback; do not let this request reach PHP.
+RewriteRule ^v1/kiosks/[^/]+/live$ - [G,L]
+
 # Let direct file requests through.
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
