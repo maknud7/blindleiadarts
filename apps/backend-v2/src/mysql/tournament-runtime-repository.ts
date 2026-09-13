@@ -44,6 +44,68 @@ export class MySqlTournamentRuntimeRepository {
     });
   }
 
+  async createTournament(
+    clubIdInput: unknown,
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const clubId = requiredId(clubIdInput, "club_id");
+    const name = String(payload.name ?? "").trim();
+    if (name === "") {
+      throw new DomainValidationError("tournament_name_required", "Tournament name is required.", 422);
+    }
+
+    return this.sessions.withTransaction(async (db) => {
+      const clubRows = await db.query<QueryResultRow>(
+        `SELECT id,name FROM \`${this.prefix}clubs\` WHERE id=? LIMIT 1`,
+        [clubId],
+      );
+      const club = clubRows[0];
+      if (!club) throw new DomainValidationError("club_not_found", "Club was not found.", 404);
+
+      let seasonId: string | null = null;
+      if (payload.season_id !== null && payload.season_id !== undefined && String(payload.season_id).trim() !== "") {
+        seasonId = requiredId(payload.season_id, "season_id");
+      } else {
+        const seasonRows = await db.query<QueryResultRow>(
+          `SELECT id FROM \`${this.prefix}seasons\` WHERE club_id=? ORDER BY is_active DESC,id DESC LIMIT 1`,
+          [clubId],
+        );
+        seasonId = decimalId(seasonRows[0]?.id);
+      }
+
+      const slug = slugify(payload.slug ?? name);
+      const providerSystem = String(payload.provider_system ?? "local").trim();
+      const status = String(payload.status ?? "draft").trim();
+      const maxVisitsPerLeg = integerValue(payload.max_visits_per_leg, 50);
+      const startAt = nullableString(payload.start_at);
+      const endAt = nullableString(payload.end_at);
+
+      const inserted = await db.execute(
+        `INSERT INTO \`${this.prefix}tournaments\`
+          (club_id,season_id,name,slug,provider_system,status,max_visits_per_leg,start_at,end_at)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [clubId, seasonId, name, slug, providerSystem, status, maxVisitsPerLeg, startAt, endAt],
+      );
+      const tournamentId = requiredId(inserted.insertId, "tournament_id");
+
+      return {
+        id: publicId(tournamentId),
+        club_id: publicId(clubId),
+        club_name: club.name ?? null,
+        season_id: seasonId === null ? null : publicId(seasonId),
+        name,
+        slug,
+        provider_system: providerSystem,
+        status,
+        max_visits_per_leg: maxVisitsPerLeg,
+        start_at: startAt,
+        end_at: endAt,
+        registrations: [],
+        matches: [],
+      };
+    });
+  }
+
   async listRegistrationTournamentsByClubId(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
     const clubId = requiredId(clubIdInput, "club_id");
     return this.sessions.withConnection(async (db) => {
@@ -628,6 +690,25 @@ function publicTournament(row: TournamentRow): Record<string, unknown> {
     group_drawn_at: row.group_drawn_at ?? null,
     registration_state: row.registration_state ?? null,
   };
+}
+
+function slugify(value: unknown): string {
+  const raw = String(value ?? "").trim().toLocaleLowerCase("nb-NO")
+    .replaceAll("æ", "ae")
+    .replaceAll("ø", "o")
+    .replaceAll("å", "a");
+  const ascii = raw.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const slug = ascii.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return (slug || "tournament").slice(0, 180);
+}
+
+function integerValue(value: unknown, fallback: number): number {
+  if (value === null || value === undefined || String(value).trim() === "") return fallback;
+  const number = Math.trunc(Number(value));
+  if (!Number.isSafeInteger(number)) {
+    throw new DomainValidationError("invalid_integer", "Invalid integer value.");
+  }
+  return number;
 }
 
 function nullableDateTime(value: unknown): string | null {

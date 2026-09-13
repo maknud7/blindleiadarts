@@ -85,7 +85,7 @@ final class BackendV2TournamentProxyApplication
     {
         $method = strtoupper($method);
 
-        if ($method === 'GET' && preg_match('#^/v1/clubs/\d+/tournaments$#', $path) === 1) return true;
+        if (in_array($method, ['GET', 'POST'], true) && preg_match('#^/v1/clubs/\d+/tournaments$#', $path) === 1) return true;
         if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+$#', $path) === 1) return true;
         if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+/matches$#', $path) === 1) return true;
         if ($method === 'GET' && preg_match('#^/v1/clubs/\d+/registration-tournaments$#', $path) === 1) return true;
