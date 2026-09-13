@@ -101,6 +101,8 @@ final class BackendV2TournamentProxyApplication
         if (in_array($method, ['GET', 'PUT', 'PATCH'], true) && preg_match('#^/v1/tournaments/\d+/checkin-settings$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/checkin-code/rotate$#', $path) === 1) return true;
         if (in_array($method, ['POST', 'DELETE'], true) && preg_match('#^/v1/tournaments/\d+/admin-check-in/\d+$#', $path) === 1) return true;
+        if (in_array($method, ['GET', 'POST'], true) && preg_match('#^/v1/tournaments/\d+/me/break$#', $path) === 1) return true;
+        if ($method === 'GET' && $path === '/v1/me/break-context') return true;
 
         if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+/operations$#', $path) === 1) return true;
         if (in_array($method, ['PUT', 'PATCH'], true) && preg_match('#^/v1/tournaments/\d+/operations/settings$#', $path) === 1) return true;
