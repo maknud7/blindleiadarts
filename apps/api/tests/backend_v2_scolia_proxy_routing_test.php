@@ -20,6 +20,10 @@ foreach ([
     ['POST', '/v1/scolia/bridge/commands/poll'],
     ['GET', '/v1/scolia/bridge/commands/17'],
     ['POST', '/v1/scolia/bridge/commands/17/result'],
+    ['GET', '/v1/kiosks/BOARD-1/state'],
+    ['POST', '/v1/kiosks/BOARD-1/start-match'],
+    ['POST', '/v1/kiosks/BOARD-1/visit'],
+    ['POST', '/v1/kiosks/BOARD-1/undo'],
     ['GET', '/v1/kiosks/BOARD-1/scolia'],
     ['GET', '/v1/kiosks/BOARD-1/scolia/status'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/undo'],
@@ -32,20 +36,24 @@ foreach ([
     ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/heartbeat'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/release'],
 ] as [$method, $path]) {
-    $assert($proxy->handles($method, $path), "$method $path should route to backend-v2 Scolia runtime.");
+    $assert($proxy->handles($method, $path), "$method $path should route to backend-v2 paired-kiosk runtime.");
 }
 
 foreach ([
     ['PATCH', '/v1/scolia/bridge/config'],
     ['GET', '/v1/scolia/bridge/events'],
     ['POST', '/v1/scolia/bridge/commands/not-an-id/result'],
+    ['POST', '/v1/kiosks/BOARD-1/state'],
+    ['GET', '/v1/kiosks/BOARD-1/start-match'],
+    ['GET', '/v1/kiosks/BOARD-1/visit'],
+    ['GET', '/v1/kiosks/BOARD-1/undo'],
     ['PATCH', '/v1/kiosks/BOARD-1/scolia'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/unknown'],
     ['GET', '/v1/kiosks/BOARD-1/scolia/test-lease/acquire'],
     ['POST', '/v1/kiosks/BOARD-1/scolia/test-lease/unknown'],
     ['GET', '/v1/clubs/1/kiosks/9/scolia'],
 ] as [$method, $path]) {
-    $assert(!$proxy->handles($method, $path), "$method $path must not be captured by Scolia runtime proxy.");
+    $assert(!$proxy->handles($method, $path), "$method $path must not be captured by paired-kiosk runtime proxy.");
 }
 
 echo "BackendV2ScoliaProxy routing OK\n";
