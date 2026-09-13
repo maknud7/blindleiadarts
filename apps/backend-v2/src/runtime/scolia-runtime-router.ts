@@ -8,6 +8,7 @@ import type { MySqlScoliaKioskAuthRepository } from "../mysql/scolia-kiosk-auth-
 import type { MySqlScoliaKioskRuntimeRepository } from "../mysql/scolia-kiosk-runtime-repository.js";
 import type { ScoliaEventProcessor } from "../service/scolia-event-processor.js";
 import { assertInternalToken, assertMutationAllowed, type BackendRuntimeConfig } from "./config.js";
+import { KioskScoringFrontdoor } from "./kiosk-scoring-frontdoor.js";
 
 export interface ScoliaRuntimeRouteResult {
   readonly statusCode: number;
@@ -23,6 +24,8 @@ interface KioskUiState {
 }
 
 export class ScoliaRuntimeRouter {
+  private readonly kioskScoring: KioskScoringFrontdoor;
+
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly bridge: MySqlScoliaBridgeRepository,
@@ -31,9 +34,14 @@ export class ScoliaRuntimeRouter {
     private readonly kioskAuth: MySqlScoliaKioskAuthRepository,
     private readonly kioskRuntime: MySqlScoliaKioskRuntimeRepository,
     private readonly scoliaAdmin: MySqlScoliaAdminRepository,
-  ) {}
+  ) {
+    this.kioskScoring = new KioskScoringFrontdoor(config, kioskAuth, processor);
+  }
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<ScoliaRuntimeRouteResult | null> {
+    const scoringRoute = await this.kioskScoring.handle(method, path, request);
+    if (scoringRoute !== null) return scoringRoute;
+
     if (method === "GET" && path === "/v1/scolia/health") {
       return ok({
         service: "scolia-bridge",
