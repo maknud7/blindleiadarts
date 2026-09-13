@@ -8,7 +8,6 @@ const state = {
   pairingExpires: localStorage.getItem("bd:kioskPairingExpires") || "",
   snapshot: null,
   pollHandle: null,
-  liveSource: null,
   socket: null,
   realtime: null,
   reconnectHandle: null,
@@ -379,31 +378,15 @@ async function realtimeConfig() {
 }
 function closeLive() {
   if (state.socket) { const socket = state.socket; state.socket = null; socket.close(); }
-  if (state.liveSource) { state.liveSource.close(); state.liveSource = null; }
   clearTimeout(state.reconnectHandle);
   clearInterval(state.pollHandle);
   state.pollHandle = null;
-}
-function startSseLive() {
-  if (!state.kioskCode) { startPolling(); return; }
-  if (typeof EventSource !== "function") { startPolling(); return; }
-  const url = `${API_ROOT}/kiosks/${encodeURIComponent(state.kioskCode)}/live?pairing_token=${encodeURIComponent(state.pairingToken)}`;
-  const source = new EventSource(url); state.liveSource = source;
-  source.addEventListener("snapshot", (event) => { if (state.mutating) return; try { state.snapshot = JSON.parse(event.data); render(); } catch {} });
-  source.onerror = () => {
-    if (state.liveSource !== source) return;
-    state.liveSource = null;
-    source.close();
-    startPolling();
-    clearTimeout(state.reconnectHandle);
-    state.reconnectHandle = setTimeout(() => startLive().catch(() => undefined), 2500);
-  };
 }
 async function startLive() {
   closeLive();
   if (!state.kioskCode) { startPolling(); return; }
   const config = await realtimeConfig();
-  if (!config?.enabled || !config.websocket_url || typeof WebSocket !== "function") { startSseLive(); return; }
+  if (!config?.enabled || !config.websocket_url || typeof WebSocket !== "function") { startPolling(); return; }
   try {
     const socket = new WebSocket(config.websocket_url);
     state.socket = socket;
@@ -431,12 +414,12 @@ async function startLive() {
     socket.addEventListener("close", () => {
       if (state.socket !== socket) return;
       state.socket = null;
-      startSseLive();
+      startPolling();
       clearTimeout(state.reconnectHandle);
       state.reconnectHandle = setTimeout(() => startLive().catch(() => undefined), 2500);
     });
     socket.addEventListener("error", () => socket.close());
-  } catch { startSseLive(); }
+  } catch { startPolling(); }
 }
 
 function renderSettings() {
