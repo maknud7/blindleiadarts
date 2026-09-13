@@ -118,8 +118,8 @@ async function createFixture() {
     fixture.club = requireInsertId(club, "club");
 
     const season = await db.execute(
-      `INSERT INTO \`${prefix}seasons\` (club_id,name,slug,is_active) VALUES (?,?,?,1)`,
-      [fixture.club, `Create Season ${suffix}`, `create-season-${suffix}`],
+      `INSERT INTO \`${prefix}seasons\` (club_id,name,is_active) VALUES (?,?,1)`,
+      [fixture.club, `Create Season ${suffix}`],
     );
     fixture.season = requireInsertId(season, "season");
 
