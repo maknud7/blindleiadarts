@@ -69,6 +69,7 @@ jobs:
           HARDWARE_TABLE_PREFIX: bd_prod_
         run: |
           set -Eeuo pipefail
+          node apps/backend-v2/e2e/tournament-catalog-read.mjs
           node apps/backend-v2/e2e/tournament-lifecycle.mjs
           node apps/backend-v2/e2e/tournament-attendance-lifecycle.mjs
           node apps/backend-v2/e2e/tournament-attendance-admin-lifecycle.mjs

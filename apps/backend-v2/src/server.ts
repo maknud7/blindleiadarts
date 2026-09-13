@@ -23,6 +23,7 @@ import { MySqlScoliaDashboardRepository } from "./mysql/scolia-dashboard-reposit
 import { MySqlScoliaKioskAuthRepository } from "./mysql/scolia-kiosk-auth-repository.js";
 import { MySqlScoliaKioskRuntimeRepository } from "./mysql/scolia-kiosk-runtime-repository.js";
 import { MySqlTournamentAttendanceRepository } from "./mysql/tournament-attendance-repository.js";
+import { MySqlTournamentCatalogReadRepository } from "./mysql/tournament-catalog-read-repository.js";
 import { MySqlTournamentEloProjection } from "./mysql/tournament-elo-projection.js";
 import { MySqlTournamentFlowRepository } from "./mysql/tournament-flow-repository.js";
 import { MySqlTournamentOperationsRepository } from "./mysql/tournament-operations-repository.js";
@@ -45,6 +46,7 @@ import { PublicLiveReadRouter } from "./runtime/public-live-read-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
 import { TournamentAttendanceRouter } from "./runtime/tournament-attendance-router.js";
+import { TournamentCatalogReadRouter } from "./runtime/tournament-catalog-read-router.js";
 import { TournamentPlayerBreakRouter } from "./runtime/tournament-player-break-router.js";
 import { TournamentOperationsRouter } from "./runtime/tournament-operations-router.js";
 import { TournamentRealtimePublisher } from "./runtime/tournament-realtime-publisher.js";
@@ -139,6 +141,7 @@ const equipmentRuntime = new EquipmentAdminRouter(
   scoliaDashboard,
 );
 const tournaments = new MySqlTournamentRuntimeRepository(sessions, config.prefixes.runtime);
+const tournamentCatalogReads = new MySqlTournamentCatalogReadRepository(sessions, config.prefixes.runtime);
 const tournamentAttendance = new MySqlTournamentAttendanceRepository(sessions, config.prefixes.runtime);
 const tournamentFlow = new MySqlTournamentFlowRepository(sessions, config.prefixes.runtime);
 const tournamentOperations = new MySqlTournamentOperationsRepository(sessions, config.prefixes.runtime);
@@ -155,6 +158,7 @@ const tournamentAttendanceRuntime = new TournamentAttendanceRouter(
   tournamentAttendance,
   tournamentFlow,
 );
+const tournamentCatalogReadRuntime = new TournamentCatalogReadRouter(tournamentCatalogReads);
 const tournamentPlayerBreakRuntime = new TournamentPlayerBreakRouter(
   config,
   identityRepository,
@@ -309,6 +313,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   const equipmentRoute = await equipmentRuntime.handle(method, publicPath, request);
   if (equipmentRoute !== null) {
     sendJson(response, equipmentRoute.statusCode, equipmentRoute.payload);
+    return;
+  }
+
+  const tournamentCatalogReadRoute = await tournamentCatalogReadRuntime.handle(method, publicPath);
+  if (tournamentCatalogReadRoute !== null) {
+    sendJson(response, tournamentCatalogReadRoute.statusCode, tournamentCatalogReadRoute.payload);
     return;
   }
 

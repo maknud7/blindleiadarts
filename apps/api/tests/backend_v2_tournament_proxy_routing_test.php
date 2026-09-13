@@ -9,6 +9,9 @@ use Blindleia\Dartkiosk\Api\BackendV2TournamentProxyApplication;
 $app = new BackendV2TournamentProxyApplication(dirname(__DIR__));
 
 $yes = [
+    ['GET', '/v1/clubs/1/tournaments'],
+    ['GET', '/v1/tournaments/9'],
+    ['GET', '/v1/tournaments/9/matches'],
     ['GET', '/v1/clubs/1/registration-tournaments'],
     ['GET', '/v1/tournaments/9/groups'],
     ['PATCH', '/v1/tournaments/9/registration-settings'],
@@ -57,7 +60,10 @@ foreach ($yes as [$method, $path]) {
 
 $no = [
     ['POST', '/v1/tournaments'],
+    ['POST', '/v1/clubs/1/tournaments'],
+    ['PATCH', '/v1/tournaments/9'],
     ['DELETE', '/v1/tournaments/9'],
+    ['POST', '/v1/tournaments/9/matches'],
     ['POST', '/v1/tournaments/9/wizard-plan'],
     ['POST', '/v1/tournaments/9/finish'],
     ['POST', '/v1/tournaments/9/playoffs'],
