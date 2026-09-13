@@ -8,9 +8,11 @@ on:
       - 'apps/backend-v2/src/domain/scolia.ts'
       - 'apps/backend-v2/src/mysql/scolia-*.ts'
       - 'apps/backend-v2/src/runtime/scolia-runtime-router.ts'
+      - 'apps/backend-v2/src/runtime/kiosk-scoring-frontdoor.ts'
       - 'apps/backend-v2/src/service/scolia-event-processor.ts'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/e2e/scolia-runtime-*.mjs'
+      - 'apps/backend-v2/e2e/kiosk-scoring-frontdoor-lifecycle.mjs'
       - '.github/workflows/backend-v2-scolia-e2e.yml'
   workflow_dispatch:
 
@@ -70,3 +72,6 @@ jobs:
 
       - name: Run isolated Scolia lifecycle against hosted TEST MySQL
         run: node apps/backend-v2/e2e/scolia-runtime-lifecycle.mjs
+
+      - name: Run paired kiosk scoring frontdoor lifecycle against hosted TEST MySQL
+        run: node apps/backend-v2/e2e/kiosk-scoring-frontdoor-lifecycle.mjs
