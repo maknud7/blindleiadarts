@@ -16,7 +16,7 @@ export interface ManualKioskScoringPort {
 }
 
 /**
- * Public paired-kiosk scoring front door.
+ * Public paired-kiosk scoring and pairing front door.
  *
  * The PHP same-origin proxy selects Node before dispatch. Once this route is
  * entered, all state resolution, canonical scoring and response snapshots stay
@@ -30,7 +30,7 @@ export class KioskScoringFrontdoor {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<KioskScoringRouteResult | null> {
-    const match = /^\/v1\/kiosks\/([^/]+)\/(state|start-match|visit|undo)$/.exec(path);
+    const match = /^\/v1\/kiosks\/([^/]+)\/(state|start-match|visit|undo|unpair)$/.exec(path);
     if (!match) return null;
 
     const action = capture(match, 2);
@@ -42,7 +42,12 @@ export class KioskScoringFrontdoor {
     assertMutationAllowed(this.config);
 
     const code = decodeCode(capture(match, 1));
-    const kiosk = await this.kiosks.resolveScoring(code, header(request, "x-kiosk-pairing-token"), true);
+    const pairingToken = header(request, "x-kiosk-pairing-token");
+    if (action === "unpair") {
+      return ok(await this.kiosks.unpairScoring(code, pairingToken));
+    }
+
+    const kiosk = await this.kiosks.resolveScoring(code, pairingToken, true);
 
     if (action === "start-match") {
       await this.scoring.startManualMatch(kiosk.kiosk_id);
