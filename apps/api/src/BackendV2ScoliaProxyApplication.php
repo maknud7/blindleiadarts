@@ -15,9 +15,13 @@ use Throwable;
 /**
  * Same-origin front door for Scolia bridge and paired-kiosk runtime cutover.
  *
+ * The paired-kiosk surface also owns the canonical kiosk scoring front door in
+ * TEST: state, start-match, visit and undo all stay in backend-v2 once selected.
+ * PROD remains on PHP while scolia_routing_mode is php.
+ *
  * Routing is decided before any mutation. Once Node has been attempted the
- * request always fails closed and never falls through to the legacy PHP Scolia
- * writer, because the remote outcome may already have committed canonical state.
+ * request always fails closed and never falls through to a legacy PHP writer,
+ * because the remote outcome may already have committed canonical state.
  */
 final class BackendV2ScoliaProxyApplication
 {
@@ -64,7 +68,7 @@ final class BackendV2ScoliaProxyApplication
 
             $error = is_array($payload['error'] ?? null) ? $payload['error'] : [];
             $code = trim((string) ($error['code'] ?? '')) ?: 'backend_v2_scolia_failed';
-            $message = trim((string) ($error['message'] ?? '')) ?: 'Backend-v2 rejected the Scolia request.';
+            $message = trim((string) ($error['message'] ?? '')) ?: 'Backend-v2 rejected the paired-kiosk request.';
             $meta = is_array($error['meta'] ?? null) ? $error['meta'] : [];
             JsonResponse::error($status > 0 ? $status : 502, $code, $message, $meta)->send();
             return true;
@@ -73,7 +77,7 @@ final class BackendV2ScoliaProxyApplication
             JsonResponse::error(
                 502,
                 $error->errorCode,
-                'Backend-v2 Scolia request failed after dispatch; PHP fallback is disabled.'
+                'Backend-v2 paired-kiosk request failed after dispatch; PHP fallback is disabled.'
             )->send();
             return true;
         } catch (InvalidArgumentException $error) {
@@ -82,7 +86,7 @@ final class BackendV2ScoliaProxyApplication
             return true;
         } catch (Throwable) {
             header('X-BD-Backend-V2: scolia');
-            JsonResponse::error(500, 'backend_v2_scolia_proxy_failed', 'Scolia proxy failed before a safe response was produced.')->send();
+            JsonResponse::error(500, 'backend_v2_scolia_proxy_failed', 'Paired-kiosk proxy failed before a safe response was produced.')->send();
             return true;
         }
     }
@@ -103,6 +107,9 @@ final class BackendV2ScoliaProxyApplication
             if ($method === 'POST' && preg_match('#^/v1/scolia/bridge/commands/\d+/result$#', $path) === 1) return true;
             return false;
         }
+
+        if ($method === 'GET' && preg_match('#^/v1/kiosks/[^/]+/state$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/(start-match|visit|undo)$#', $path) === 1) return true;
 
         if ($method === 'GET' && preg_match('#^/v1/kiosks/[^/]+/scolia(?:/status)?$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/scolia/(undo|fallback|resume|reset-phase|delete-throw|correct-throw)$#', $path) === 1) return true;
