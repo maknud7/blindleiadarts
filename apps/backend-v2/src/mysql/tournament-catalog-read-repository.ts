@@ -1,3 +1,4 @@
+import { eloBaselineFor } from "../data/mandagsserien-elo-2026-08-24.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
 export class MySqlTournamentCatalogReadRepository {
@@ -27,6 +28,69 @@ export class MySqlTournamentCatalogReadRepository {
     });
   }
 
+  async listClubElo(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
+    const clubId = requiredId(clubIdInput, "club_id");
+    return this.sessions.withConnection(async (db) => {
+      const seasonId = await this.resolveEloSeasonId(db, clubId);
+      const rows = await db.query<QueryResultRow>(
+        `SELECT p.id,p.display_name,p.nickname,p.avatar_url,
+                ecr.rating AS elo_rating,ecr.matches_played AS elo_matches_played,ecr.updated_at AS elo_calculated_at,
+                COUNT(DISTINCT CASE WHEN m.status='completed' THEN m.id END) AS local_matches_played,
+                COUNT(DISTINCT CASE WHEN m.status='completed' AND m.winner_player_id=p.id THEN m.id END) AS matches_won
+           FROM \`${this.prefix}players\` p
+           LEFT JOIN \`${this.prefix}elo_current_ratings\` ecr ON ecr.player_id=p.id AND ecr.season_id=?
+           LEFT JOIN \`${this.prefix}matches\` m ON (m.player_a_id=p.id OR m.player_b_id=p.id)
+          WHERE p.club_id=? AND p.is_active=1
+          GROUP BY p.id,p.display_name,p.nickname,p.avatar_url,ecr.rating,ecr.matches_played,ecr.updated_at
+          ORDER BY p.display_name ASC`,
+        [seasonId, clubId],
+      );
+
+      const normalized = rows.map((row) => normalizeEloRow(row, seasonId));
+      const byName = new Map<string, Record<string, unknown>>();
+      for (const row of normalized) {
+        const key = normalizedName(row.display_name);
+        const current = byName.get(key);
+        if (current === undefined || preferEloRow(row, current)) byName.set(key, row);
+      }
+
+      const ranked = [...byName.values()]
+        .filter((row) => integer(row.elo_matches_played) > 0)
+        .sort((a, b) => {
+          const rating = numberValue(b.elo_rating, 1000) - numberValue(a.elo_rating, 1000);
+          if (rating !== 0) return rating;
+          return compareNames(a.display_name, b.display_name);
+        });
+
+      return ranked.map((row, index) => ({
+        ...row,
+        position: index + 1,
+        matches_played: integer(row.elo_matches_played),
+        baseline_played: integer(row.elo_matches_played),
+      }));
+    });
+  }
+
+  async getTournamentEloSetting(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
+    const tournamentId = requiredId(tournamentIdInput, "tournament_id");
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT id,club_id,season_id,name,elo_enabled
+           FROM \`${this.prefix}tournaments\` WHERE id=? LIMIT 1`,
+        [tournamentId],
+      );
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        id: requiredId(row.id, "tournament_id"),
+        club_id: requiredId(row.club_id, "club_id"),
+        season_id: nullableId(row.season_id),
+        name: row.name ?? null,
+        elo_enabled: integer(row.elo_enabled) === 1,
+      };
+    });
+  }
+
   async findDetail(tournamentIdInput: unknown): Promise<Record<string, unknown> | null> {
     const tournamentId = requiredId(tournamentIdInput, "tournament_id");
     return this.sessions.withConnection(async (db) => {
@@ -52,6 +116,17 @@ export class MySqlTournamentCatalogReadRepository {
   async listMatches(tournamentIdInput: unknown): Promise<Record<string, unknown>[]> {
     const tournamentId = requiredId(tournamentIdInput, "tournament_id");
     return this.sessions.withConnection((db) => this.listMatchesWith(db, tournamentId));
+  }
+
+  private async resolveEloSeasonId(db: SqlExecutor, clubId: string): Promise<string> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT id FROM \`${this.prefix}seasons\`
+        WHERE club_id=?
+        ORDER BY is_active DESC,COALESCE(starts_on,'0000-01-01') DESC,id DESC
+        LIMIT 1`,
+      [clubId],
+    );
+    return rows[0] ? requiredId(rows[0].id, "season_id") : "0";
   }
 
   private async listRegistrationsWith(db: SqlExecutor, tournamentId: string): Promise<Record<string, unknown>[]> {
@@ -116,6 +191,33 @@ export class MySqlTournamentCatalogReadRepository {
   }
 }
 
+function normalizeEloRow(row: QueryResultRow, seasonId: string): Record<string, unknown> {
+  const playerId = requiredId(row.id, "player_id");
+  const baseline = eloBaselineFor(row.display_name);
+  const hasLedger = row.elo_rating !== null && row.elo_rating !== undefined;
+  const played = hasLedger ? integer(row.elo_matches_played) : (baseline?.played ?? 0);
+  return {
+    ...row,
+    id: playerId,
+    elo_rating: hasLedger ? numberValue(row.elo_rating, 1000) : (baseline?.rating ?? 1000),
+    elo_matches_played: played,
+    elo_source: hasLedger ? "elo_ledger" : baseline ? "mandagsserien_2026_08_24" : "default_1000",
+    local_matches_played: integer(row.local_matches_played),
+    matches_won: integer(row.matches_won),
+    season_id: seasonId,
+  };
+}
+
+function preferEloRow(candidate: Record<string, unknown>, current: Record<string, unknown>): boolean {
+  const candidateLedger = candidate.elo_source === "elo_ledger" ? 1 : 0;
+  const currentLedger = current.elo_source === "elo_ledger" ? 1 : 0;
+  if (candidateLedger !== currentLedger) return candidateLedger > currentLedger;
+  const candidateMatches = integer(candidate.local_matches_played);
+  const currentMatches = integer(current.local_matches_played);
+  if (candidateMatches !== currentMatches) return candidateMatches > currentMatches;
+  return compareDecimalIds(requiredId(candidate.id, "player_id"), requiredId(current.id, "player_id")) < 0;
+}
+
 function formatTournamentListItem(row: QueryResultRow): Record<string, unknown> {
   return {
     ...formatTournament(row),
@@ -151,7 +253,27 @@ function nullableId(value: unknown): string | null {
   return requiredId(value, "id");
 }
 
-function numberValue(value: unknown): number {
+function integer(value: unknown): number {
   const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+}
+
+function numberValue(value: unknown, fallback = 0): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizedName(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase("nb-NO");
+}
+
+function compareNames(a: unknown, b: unknown): number {
+  return String(a ?? "").localeCompare(String(b ?? ""), "nb-NO", { sensitivity: "base" });
+}
+
+function compareDecimalIds(a: string, b: string): number {
+  const aa = a.replace(/^0+/, "") || "0";
+  const bb = b.replace(/^0+/, "") || "0";
+  if (aa.length !== bb.length) return aa.length < bb.length ? -1 : 1;
+  return aa === bb ? 0 : aa < bb ? -1 : 1;
 }
