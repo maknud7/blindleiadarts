@@ -1,0 +1,73 @@
+name: Backend v2 Scolia PROD Frontdoor
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/backend-v2/src/domain/scolia.ts'
+      - 'apps/backend-v2/src/mysql/scolia-bridge-repository.ts'
+      - 'apps/backend-v2/src/mysql/scolia-kiosk-auth-repository.ts'
+      - 'apps/backend-v2/src/mysql/scolia-kiosk-runtime-repository.ts'
+      - 'apps/backend-v2/src/runtime/scolia-runtime-router.ts'
+      - 'apps/backend-v2/src/service/scolia-event-processor.ts'
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/scolia-*.test.mjs'
+      - 'apps/api/src/BackendV2ScoliaProxyApplication.php'
+      - 'apps/api/src/Service/BackendV2ApiClient.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/tests/backend_v2_scolia_proxy_routing_test.php'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-scolia-runtime.yml'
+      - '.github/workflows/backend-v2-scolia-prod-frontdoor.yml'
+      - '.github/workflows/backend-v2-scolia-prod-postdeploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prod-frontdoor-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Verify PROD Scolia routing contract without deploying PROD
+        env:
+          SCOLIA_BRIDGE_SECRET: scolia-prod-contract
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: prod
+          DB_USERNAME: prod
+          DB_PASSWORD: prod
+        run: |
+          set -Eeuo pipefail
+          php -l infra/deploy/generate_api_config.php
+          php -l apps/api/src/BackendV2ScoliaProxyApplication.php
+          APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org \
+            DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            php infra/deploy/generate_api_config.php --output=/tmp/scolia-prod.php
+          php -r '$c=require "/tmp/scolia-prod.php"; $b=$c["backend_v2"]??[]; if (($b["scolia_routing_mode"]??null)!=="node") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2); if (($b["internal_token"]??null)!=="scolia-prod-contract") exit(3);'
+          php apps/api/tests/backend_v2_scolia_proxy_routing_test.php
+          grep -Fq "header('X-BD-Backend-V2: scolia')" apps/api/src/BackendV2ScoliaProxyApplication.php
+          echo 'PROD Scolia routing contract verified. This PR gate does not change live PROD routing.'
+
+      - name: Verify current PROD backend is Scolia-capable and single-connection
+        env:
+          HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
+        run: |
+          set -Eeuo pipefail
+          health="$(curl -fsS --max-time 30 "${HOST_URL%/}/health")"
+          jq -e '.ok == true and .environment == "prod" and .mode == "prod-canary" and .writes_armed == true and .runtime_prefix == "bd_prod_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
+
+          scolia="$(curl -fsS --max-time 30 "${HOST_URL%/}/v1/scolia/health")"
+          jq -e '.ok == true and .service == "scolia-bridge" and (.data | type == "object")' <<<"$scolia" >/dev/null
+          echo 'Current PROD backend exposes Scolia runtime on the existing one-connection service.'
