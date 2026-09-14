@@ -22,12 +22,6 @@ export class SeasonPublicReadRouter {
       return ok({ club_id: publicId(clubId), items: await this.seasons.listPlayerDirectory(clubId) });
     }
 
-    const eloMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/elo$/.exec(path);
-    if (eloMatch) {
-      const clubId = requiredCapture(eloMatch, 1);
-      return ok({ club_id: publicId(clubId), items: await this.seasons.listEloTable(clubId) });
-    }
-
     const summariesMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/summaries$/.exec(path);
     if (summariesMatch) {
       const clubId = requiredCapture(summariesMatch, 1);

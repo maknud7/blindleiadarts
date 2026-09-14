@@ -134,7 +134,13 @@ try {
   assert.equal(clubElo.ok, true);
   assert.equal(String(clubElo.club_id), playerClubId);
   assert.ok(Array.isArray(clubElo.items));
-  assert.equal(clubElo.items.length, directory.items.length);
+  assert.ok(clubElo.items.length > 0, "Canonical ELO should expose rated players");
+  assert.ok(clubElo.items.length <= directory.items.length, "ELO is a rated-player subset of the player directory");
+  const directoryNames = new Set(directory.items.map((row) => String(row.display_name ?? "").trim().toLocaleLowerCase("nb-NO")));
+  assert.ok(clubElo.items.every((row) => directoryNames.has(String(row.display_name ?? "").trim().toLocaleLowerCase("nb-NO"))));
+  assert.ok(clubElo.items.every((row) => Number(row.elo_matches_played) > 0));
+  assert.ok(clubElo.items.every((row) => Number(row.matches_played) === Number(row.elo_matches_played)));
+  assert.ok(clubElo.items.every((row) => Number(row.baseline_played) === Number(row.elo_matches_played)));
   assert.ok(clubElo.items.every((row, index) => Number(row.position) === index + 1));
   for (let index = 1; index < clubElo.items.length; index += 1) {
     assert.ok(Number(clubElo.items[index - 1].elo_rating) >= Number(clubElo.items[index].elo_rating));
