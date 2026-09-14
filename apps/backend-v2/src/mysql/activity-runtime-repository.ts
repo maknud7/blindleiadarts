@@ -1,4 +1,4 @@
-import type { MySqlSessionProvider, QueryResultRow, TablePrefix } from "./contracts.js";
+import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
 export interface ActivityEventInput extends Record<string, unknown> {}
 
@@ -140,7 +140,7 @@ export class MySqlActivityRuntimeRepository {
     });
   }
 
-  private async resolveClubIdBySlug(db: { query<T extends QueryResultRow>(sql: string, params?: readonly unknown[]): Promise<T[]> }, slugInput: string): Promise<string | null> {
+  private async resolveClubIdBySlug(db: SqlExecutor, slugInput: string): Promise<string | null> {
     const slug = slugInput.trim().toLocaleLowerCase("nb-NO");
     if (slug === "") return null;
     if (this.clubSlugCache.has(slug)) return this.clubSlugCache.get(slug) ?? null;
@@ -164,10 +164,10 @@ export class MySqlActivityRuntimeRepository {
 function normalizeSummary(
   days: number,
   totals: QueryResultRow,
-  surfaces: QueryResultRow[],
-  paths: QueryResultRow[],
-  recent: QueryResultRow[],
-  clubs: QueryResultRow[],
+  surfaces: readonly QueryResultRow[],
+  paths: readonly QueryResultRow[],
+  recent: readonly QueryResultRow[],
+  clubs: readonly QueryResultRow[],
 ): Record<string, unknown> {
   return {
     days,
@@ -178,16 +178,19 @@ function normalizeSummary(
     },
     surfaces: surfaces.map((row) => ({ ...row, events: integer(row.events), page_views: integer(row.page_views) })),
     top_paths: paths.map((row) => ({ ...row, page_views: integer(row.page_views) })),
-    recent: recent.map((row) => ({
-      ...row,
-      id: publicId(row.id),
-      user_account_id: publicId(row.user_account_id),
-      auth_session_id: publicId(row.auth_session_id),
-      ...(Object.prototype.hasOwnProperty.call(row, "club_id") ? { club_id: publicId(row.club_id) } : {}),
-      tournament_id: publicId(row.tournament_id),
-      metadata: parseMetadata(row.metadata_json),
-      metadata_json: undefined,
-    })),
+    recent: recent.map((row) => {
+      const result: Record<string, unknown> = {
+        ...row,
+        id: publicId(row.id),
+        user_account_id: publicId(row.user_account_id),
+        auth_session_id: publicId(row.auth_session_id),
+        ...(Object.prototype.hasOwnProperty.call(row, "club_id") ? { club_id: publicId(row.club_id) } : {}),
+        tournament_id: publicId(row.tournament_id),
+        metadata: parseMetadata(row.metadata_json),
+      };
+      delete result.metadata_json;
+      return result;
+    }),
     clubs: clubs.map((row) => ({
       ...row,
       club_id: publicId(row.club_id),
