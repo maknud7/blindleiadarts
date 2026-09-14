@@ -67,4 +67,4 @@ jobs:
       - name: Verify activity proxy precedes legacy PHP
         run: |
           set -Eeuo pipefail
-          php -r '$s=file_get_contents("apps/api/index.php"); $n=strpos($s,"$activityV2 = new BackendV2ActivityProxyApplication"); $p=strpos($s,"$activity = new ActivityApplication"); if ($n===false||$p===false||$n>=$p) exit(1);'
+          php -r '$s=file_get_contents("apps/api/index.php"); $n=strpos($s,"\$activityV2 = new BackendV2ActivityProxyApplication"); $p=strpos($s,"\$activity = new ActivityApplication"); if ($n===false||$p===false||$n>=$p) exit(1);'
