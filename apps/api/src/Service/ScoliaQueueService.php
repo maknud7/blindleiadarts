@@ -191,21 +191,16 @@ final class ScoliaQueueService
             $scopeSql = ' AND e.kiosk_id IN (' . implode(',', $scopeIds) . ')';
         }
 
+        // Recovery is deliberately outside the claim transaction. Keeping the
+        // stale-status range update open while subsequently locking queue heads
+        // lets two workers acquire the status index and FIFO rows in opposite
+        // order, which can form an InnoDB 1213 cycle. Recovery is maintenance,
+        // not part of claiming a new canonical event, so let its locks commit
+        // before the bounded FIFO claim begins.
+        $this->recoverStaleEventClaims($eventsTable, $scopeIds);
+
         $this->connection->begin_transaction();
         try {
-            // A PHP/worker crash after claiming must not strand a row forever.
-            $staleScopeSql = $scopeIds === null ? '' : ' AND kiosk_id IN (' . implode(',', $scopeIds) . ')';
-            $this->connection->query(sprintf(
-                'UPDATE `%1$s`
-                 SET processing_status="failed",next_attempt_at=NOW(3),processing_started_at=NULL,
-                     last_error=COALESCE(last_error,"Recovered stale Scolia processing lease")
-                 WHERE processing_status="processing"
-                   AND processing_started_at IS NOT NULL
-                   AND processing_started_at < DATE_SUB(NOW(3), INTERVAL 60 SECOND)%2$s',
-                $eventsTable,
-                $staleScopeSql
-            ));
-
             // First pick eligible board heads. Priority is applied only between
             // boards; later events can never overtake their own board head.
             $headResult = $this->connection->query(sprintf(
@@ -319,19 +314,13 @@ final class ScoliaQueueService
         $commandsTable = $this->tablePrefix . 'scolia_commands';
         $rows = [];
 
+        // Keep stale-delivery recovery out of the FIFO claim transaction for the
+        // same lock-order reason as event recovery above. This statement commits
+        // its status-range locks before any queued command row is selected FOR UPDATE.
+        $this->recoverStaleCommandDeliveries($commandsTable, $idsSql);
+
         $this->connection->begin_transaction();
         try {
-            // If a bridge disappears after a command was handed out, make the
-            // command eligible for retry instead of leaving it delivered forever.
-            $this->connection->query(sprintf(
-                'UPDATE `%1$s`
-                 SET status="failed",next_attempt_at=NOW(3),last_error=COALESCE(last_error,"Recovered stale command delivery")
-                 WHERE kiosk_id IN (%2$s) AND status="delivered"
-                   AND delivered_at < DATE_SUB(NOW(3), INTERVAL 30 SECOND)',
-                $commandsTable,
-                $idsSql
-            ));
-
             $result = $this->connection->query(sprintf(
                 'SELECT c.id,c.kiosk_id,c.command_type,c.message_id,c.payload_json,c.attempt_count,c.priority,c.created_at
                  FROM `%1$s` c
@@ -378,5 +367,33 @@ final class ScoliaQueueService
         }
         unset($row);
         return $rows;
+    }
+
+    /** @param array<int,int>|null $scopeIds */
+    private function recoverStaleEventClaims(string $eventsTable, ?array $scopeIds): void
+    {
+        $staleScopeSql = $scopeIds === null ? '' : ' AND kiosk_id IN (' . implode(',', $scopeIds) . ')';
+        $this->connection->query(sprintf(
+            'UPDATE `%1$s`
+             SET processing_status="failed",next_attempt_at=NOW(3),processing_started_at=NULL,
+                 last_error=COALESCE(last_error,"Recovered stale Scolia processing lease")
+             WHERE processing_status="processing"
+               AND processing_started_at IS NOT NULL
+               AND processing_started_at < DATE_SUB(NOW(3), INTERVAL 60 SECOND)%2$s',
+            $eventsTable,
+            $staleScopeSql
+        ));
+    }
+
+    private function recoverStaleCommandDeliveries(string $commandsTable, string $idsSql): void
+    {
+        $this->connection->query(sprintf(
+            'UPDATE `%1$s`
+             SET status="failed",next_attempt_at=NOW(3),last_error=COALESCE(last_error,"Recovered stale command delivery")
+             WHERE kiosk_id IN (%2$s) AND status="delivered"
+               AND delivered_at < DATE_SUB(NOW(3), INTERVAL 30 SECOND)',
+            $commandsTable,
+            $idsSql
+        ));
     }
 }
