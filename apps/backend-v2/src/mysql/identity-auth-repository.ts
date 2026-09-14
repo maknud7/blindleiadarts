@@ -4,6 +4,7 @@ import { MySqlActivityRuntimeRepository } from "./activity-runtime-repository.js
 import type { MySqlSessionProvider, QueryResultRow, TablePrefix } from "./contracts.js";
 import { MySqlPaymentSettingsRepository } from "./payment-settings-repository.js";
 import { MySqlTournamentSummaryRepository } from "./tournament-summary-repository.js";
+import { MySqlTournamentWizardRepository } from "./tournament-wizard-repository.js";
 
 export interface IdentityUser extends QueryResultRow {
   id: string | number;
@@ -47,6 +48,10 @@ export class MySqlIdentityAuthRepository {
 
   tournamentSummaryRepository(): MySqlTournamentSummaryRepository {
     return new MySqlTournamentSummaryRepository(this.sessions, this.runtimePrefix);
+  }
+
+  tournamentWizardRepository(): MySqlTournamentWizardRepository {
+    return new MySqlTournamentWizardRepository(this.sessions, this.runtimePrefix);
   }
 
   async findByEmail(email: string): Promise<IdentityUser | null> {
