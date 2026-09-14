@@ -9,7 +9,7 @@ class FakeSessions {
   async withTransaction(callback) { return callback(this.db); }
 }
 
-function fakeDb({ conflictingLease = false } = {}) {
+function fakeDb({ conflictingLease = false, busyMatchStatus = null } = {}) {
   const executes = [];
   const queries = [];
   return {
@@ -37,6 +37,9 @@ function fakeDb({ conflictingLease = false } = {}) {
           club_scolia_enabled: 1,
           access_token: "configured-secret",
         }];
+      }
+      if (sql.includes("FROM `bd_prod_matches`") && sql.includes("status IN ('assigned','in_progress')")) {
+        return busyMatchStatus ? [{ id: "501", status: busyMatchStatus }] : [];
       }
       if (sql.includes("FROM `bd_prod_scolia_test_leases`") && sql.includes("FOR UPDATE")) {
         return conflictingLease ? [{ physical_kiosk_id: "7", test_kiosk_id: "99" }] : [];
@@ -76,6 +79,19 @@ test("TEST lease acquire refuses a lease owned by another test terminal", async 
   );
   assert.equal(db.executes.some((entry) => entry.sql.includes("INSERT INTO `bd_prod_scolia_test_leases`")), false);
 });
+
+for (const busyMatchStatus of ["assigned", "in_progress"]) {
+  test(`TEST lease cannot hijack a PROD board with a ${busyMatchStatus} match`, async () => {
+    const db = fakeDb({ busyMatchStatus });
+    const repo = new MySqlScoliaKioskRuntimeRepository(new FakeSessions(db), "bd_test_", "bd_prod_");
+
+    await assert.rejects(
+      () => repo.acquireTestLease("11", "17", "7"),
+      (error) => error?.code === "scolia_physical_board_in_use" && error?.statusCode === 409,
+    );
+    assert.equal(db.executes.some((entry) => entry.sql.includes("INSERT INTO `bd_prod_scolia_test_leases`")), false);
+  });
+}
 
 test("TEST lease release removes lease and TEST runtime without changing PROD master data", async () => {
   const db = fakeDb();
