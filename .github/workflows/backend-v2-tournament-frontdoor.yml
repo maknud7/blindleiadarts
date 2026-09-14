@@ -9,6 +9,7 @@ on:
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/index.php'
       - 'apps/api/tests/backend_v2_tournament_proxy_routing_test.php'
+      - 'apps/api/tests/backend_v2_tournament_frontdoor_order_test.php'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-tournament-frontdoor.yml'
   workflow_dispatch:
@@ -37,7 +38,9 @@ jobs:
           php -l apps/api/src/Support/Config.php
           php -l apps/api/index.php
           php -l apps/api/tests/backend_v2_tournament_proxy_routing_test.php
+          php -l apps/api/tests/backend_v2_tournament_frontdoor_order_test.php
           php apps/api/tests/backend_v2_tournament_proxy_routing_test.php
+          php apps/api/tests/backend_v2_tournament_frontdoor_order_test.php
           grep -Fq 'backendV2TournamentRoutingMode()' apps/api/src/BackendV2TournamentProxyApplication.php
           grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2TournamentProxyApplication.php
           grep -Fq 'BackendV2TournamentProxyApplication' apps/api/index.php
