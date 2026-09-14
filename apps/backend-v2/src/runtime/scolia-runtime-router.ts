@@ -56,7 +56,7 @@ export class ScoliaRuntimeRouter {
         return ok({ boards: await this.bridge.listBridgeBoards(), ...this.bridge.scope() });
       }
       if (method === "GET" && path === "/v1/scolia/bridge/router") {
-        return ok({ data: await this.bridge.bridgeRouterState() });
+        return ok({ data: await this.bridgeRouterStateWithDemandGate() });
       }
       assertMutationAllowed(this.config);
       if (method === "POST" && path === "/v1/scolia/bridge/events") {
@@ -134,7 +134,7 @@ export class ScoliaRuntimeRouter {
     if (method === "GET" && action === "status") {
       const state = await this.kioskUiState(paired.club_id, paired.kiosk_id);
       const isLiveScolia = state.board.mode === "live" && state.board.effective_scoring_mode === "scolia";
-      if (isLiveScolia && state.board.bridge_heartbeat_fresh === true) {
+      if (state.match_id !== null && isLiveScolia && state.board.bridge_heartbeat_fresh === true) {
         const probeAge = state.last_status_probe_age_seconds;
         if (probeAge === null || probeAge >= 5) {
           try {
@@ -208,6 +208,39 @@ export class ScoliaRuntimeRouter {
       return ok(await this.processor.correctBufferedThrow(paired.club_id, paired.kiosk_id, body.throw_index, body.sector, null));
     }
     return null;
+  }
+
+  private async bridgeRouterStateWithDemandGate(): Promise<Record<string, unknown>> {
+    const raw = await this.bridge.bridgeRouterState();
+    const candidates = Array.isArray(raw.boards) ? raw.boards : [];
+    const boards: Record<string, unknown>[] = [];
+    let activeMatchBoards = 0;
+
+    for (const item of candidates) {
+      if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
+      const board = item as Record<string, unknown>;
+      if (stringValue(board.activation_reason) === "test_lease") {
+        boards.push(board);
+        continue;
+      }
+      const kioskId = optionalId(board.kiosk_id);
+      if (kioskId === null) continue;
+      const scoring = await this.bridge.scoringContext(kioskId);
+      if (scoring === null) continue;
+      boards.push({ ...board, activation_reason: "active_scoring_match", match_id: scoring.match_id });
+      activeMatchBoards += 1;
+    }
+
+    return {
+      ...raw,
+      boards,
+      bridge_mode: boards.length === 0 ? "idle" : "active",
+      activation_policy: "active_scoring_match_or_test_lease",
+      active_match_boards: activeMatchBoards,
+      next_activation_in_seconds: null,
+      prewarm_minutes: 0,
+      late_start_grace_hours: 0,
+    };
   }
 
   private async kioskUiState(clubId: string, kioskId: string): Promise<KioskUiState> {
