@@ -11,10 +11,28 @@ export class TournamentCatalogReadRouter {
   async handle(method: string, path: string): Promise<TournamentCatalogReadRouteResult | null> {
     if (method !== "GET") return null;
 
+    const clubElo = /^\/v1\/clubs\/([1-9][0-9]*)\/elo$/.exec(path);
+    if (clubElo) {
+      const clubId = clubElo[1]!;
+      return ok({ club_id: clubId, items: await this.catalog.listClubElo(clubId) });
+    }
+
     const clubList = /^\/v1\/clubs\/([1-9][0-9]*)\/tournaments$/.exec(path);
     if (clubList) {
       const clubId = clubList[1]!;
       return ok({ club_id: clubId, items: await this.catalog.listByClubId(clubId) });
+    }
+
+    const eloSettings = /^\/v1\/tournaments\/([1-9][0-9]*)\/elo-settings$/.exec(path);
+    if (eloSettings) {
+      const tournament = await this.catalog.getTournamentEloSetting(eloSettings[1]!);
+      if (tournament === null) {
+        return {
+          statusCode: 404,
+          payload: { ok: false, error: { code: "tournament_not_found", message: "Tournament was not found." } },
+        };
+      }
+      return ok({ tournament });
     }
 
     const matches = /^\/v1\/tournaments\/([1-9][0-9]*)\/matches$/.exec(path);
