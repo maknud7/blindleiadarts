@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { DomainValidationError } from "../domain/errors.js";
 import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identity-auth-repository.js";
 import type { MySqlPlayerLiveReadRepository } from "../mysql/player-live-read-repository.js";
+import { ActivityRuntimeRouter } from "./activity-runtime-router.js";
 import { RuntimeAccessError, type BackendRuntimeConfig } from "./config.js";
 
 export interface PlayerLiveReadRouteResult {
@@ -11,6 +12,8 @@ export interface PlayerLiveReadRouteResult {
 }
 
 export class PlayerLiveReadRouter {
+  private activity: ActivityRuntimeRouter | null = null;
+
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly identity: MySqlIdentityAuthRepository,
@@ -18,6 +21,13 @@ export class PlayerLiveReadRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<PlayerLiveReadRouteResult | null> {
+    if (isActivityRoute(method, path)) {
+      if (this.activity === null) {
+        this.activity = new ActivityRuntimeRouter(this.config, this.identity, this.identity.activityRuntimeRepository());
+      }
+      return this.activity.handle(method, path, request);
+    }
+
     if (method !== "GET") return null;
 
     if (path === "/v1/realtime/config") {
@@ -80,6 +90,13 @@ export class PlayerLiveReadRouter {
     }
     return user;
   }
+}
+
+function isActivityRoute(method: string, path: string): boolean {
+  if (method === "POST" && path === "/v1/activity") return true;
+  if (method !== "GET") return false;
+  if (path === "/v1/activity/session" || path === "/v1/platform/activity") return true;
+  return /^\/v1\/clubs\/[1-9][0-9]*\/activity$/.test(path);
 }
 
 function requiredCapture(match: RegExpExecArray, index: number): string {
