@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { MySqlActivityRuntimeRepository } from "./activity-runtime-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, TablePrefix } from "./contracts.js";
 import { MySqlPaymentSettingsRepository } from "./payment-settings-repository.js";
+import { MySqlTournamentBoardAdminRepository } from "./tournament-board-admin-repository.js";
 import { MySqlTournamentSummaryRepository } from "./tournament-summary-repository.js";
 import { MySqlTournamentWizardRepository } from "./tournament-wizard-repository.js";
 
@@ -52,6 +53,10 @@ export class MySqlIdentityAuthRepository {
 
   tournamentWizardRepository(): MySqlTournamentWizardRepository {
     return new MySqlTournamentWizardRepository(this.sessions, this.runtimePrefix);
+  }
+
+  tournamentBoardAdminRepository(): MySqlTournamentBoardAdminRepository {
+    return new MySqlTournamentBoardAdminRepository(this.sessions, this.runtimePrefix);
   }
 
   async findByEmail(email: string): Promise<IdentityUser | null> {
