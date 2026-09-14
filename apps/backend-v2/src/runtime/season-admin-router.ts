@@ -9,6 +9,7 @@ import {
   RuntimeAccessError,
   type BackendRuntimeConfig,
 } from "./config.js";
+import { PaymentSettingsRouter } from "./payment-settings-router.js";
 
 export interface SeasonAdminRouteResult {
   statusCode: number;
@@ -16,6 +17,8 @@ export interface SeasonAdminRouteResult {
 }
 
 export class SeasonAdminRouter {
+  private paymentSettings: PaymentSettingsRouter | null = null;
+
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly identityRepository: MySqlIdentityAuthRepository,
@@ -23,6 +26,17 @@ export class SeasonAdminRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<SeasonAdminRouteResult | null> {
+    if (isPaymentSettingsRoute(method, path)) {
+      if (this.paymentSettings === null) {
+        this.paymentSettings = new PaymentSettingsRouter(
+          this.config,
+          this.identityRepository,
+          this.identityRepository.paymentSettingsRepository(),
+        );
+      }
+      return this.paymentSettings.handle(method, path, request);
+    }
+
     const createMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/seasons$/.exec(path);
     if (method === "POST" && createMatch) {
       assertMutationAllowed(this.config);
@@ -101,6 +115,11 @@ export class SeasonAdminRouter {
       (this.config.environment === "test" && this.config.prefixes.identity === "bd_test_" && mutationsAllowed(this.config))
     );
   }
+}
+
+function isPaymentSettingsRoute(method: string, path: string): boolean {
+  return ["GET", "PUT", "PATCH"].includes(method)
+    && /^\/v1\/clubs\/[1-9][0-9]*\/payment-settings$/.test(path);
 }
 
 function requiredCapture(match: RegExpExecArray, index: number): string {
