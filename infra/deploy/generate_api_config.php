@@ -59,6 +59,9 @@ $defaultBackendV2TournamentRoutingMode = $isTest ? 'node' : 'php';
 // Player/public/live is GET-only and explicitly side-effect-free in backend-v2.
 // Keep Node ownership in TEST and PROD once the production read gate has passed.
 $defaultBackendV2PlayerLiveRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
+// Authenticated account reads get their own boundary. They are enabled only in
+// TEST until their dedicated production gate is explicitly completed.
+$defaultBackendV2AccountReadRoutingMode = $isTest ? 'node' : 'php';
 // Realtime client config is a side-effect-free slice with an independent gate.
 // It is safe to preserve on Node in TEST and PROD without moving the wider player/live surface.
 $defaultBackendV2RealtimeConfigRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
@@ -88,6 +91,7 @@ $config = [
         'scolia_routing_mode' => env_optional('BACKEND_V2_SCOLIA_ROUTING_MODE', $defaultBackendV2ScoliaRoutingMode) ?? $defaultBackendV2ScoliaRoutingMode,
         'tournament_routing_mode' => env_optional('BACKEND_V2_TOURNAMENT_ROUTING_MODE', $defaultBackendV2TournamentRoutingMode) ?? $defaultBackendV2TournamentRoutingMode,
         'player_live_routing_mode' => env_optional('BACKEND_V2_PLAYER_LIVE_ROUTING_MODE', $defaultBackendV2PlayerLiveRoutingMode) ?? $defaultBackendV2PlayerLiveRoutingMode,
+        'account_read_routing_mode' => env_optional('BACKEND_V2_ACCOUNT_READ_ROUTING_MODE', $defaultBackendV2AccountReadRoutingMode) ?? $defaultBackendV2AccountReadRoutingMode,
         'realtime_config_routing_mode' => env_optional('BACKEND_V2_REALTIME_CONFIG_ROUTING_MODE', $defaultBackendV2RealtimeConfigRoutingMode) ?? $defaultBackendV2RealtimeConfigRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
         'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
