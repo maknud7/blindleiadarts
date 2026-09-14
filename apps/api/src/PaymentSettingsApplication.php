@@ -31,10 +31,17 @@ final class PaymentSettingsApplication
             return false;
         }
 
+        // Select the owner before opening a legacy DB connection. Once Node is
+        // selected, its proxy is fail-closed and this PHP writer is not reached.
+        $routingConfig = Config::load($this->rootPath);
+        if ($routingConfig->backendV2PaymentSettingsRoutingMode() === 'node') {
+            return (new BackendV2PaymentSettingsProxyApplication($this->rootPath))->run();
+        }
+
         $config = null;
         try {
             $clubId = (int) $matches[1];
-            $config = Config::load($this->rootPath);
+            $config = $routingConfig;
             $database = new Database($config);
             $users = new UserAccountRepository($database);
             $admin = $this->requireAdmin($request, $users, $clubId);
