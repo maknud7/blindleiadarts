@@ -172,6 +172,22 @@ export class MySqlScoliaKioskRuntimeRepository {
         );
       }
 
+      // TEST must never steal a board that PROD has already reserved for a match.
+      // An assigned match is treated as a reservation even before physical scoring starts.
+      const busyMatches = await db.query<QueryResultRow>(
+        `SELECT id,status FROM \`${this.hardwarePrefix}matches\`
+          WHERE kiosk_id=? AND status IN ('assigned','in_progress')
+          ORDER BY FIELD(status,'in_progress','assigned'),id LIMIT 1`,
+        [context.physicalKioskId],
+      );
+      if (busyMatches[0]) {
+        throw new DomainValidationError(
+          "scolia_physical_board_in_use",
+          "Den fysiske Scolia-skiva er reservert av en PROD-kamp og kan ikke tas over av TEST.",
+          409,
+        );
+      }
+
       await db.execute(
         `DELETE FROM \`${this.hardwarePrefix}scolia_test_leases\`
           WHERE expires_at<=NOW(3) AND (physical_kiosk_id=? OR test_kiosk_id=?)`,
