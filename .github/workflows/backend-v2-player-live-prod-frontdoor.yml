@@ -61,7 +61,7 @@ jobs:
           APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org \
             DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/player-live-prod.php
-          php -r '$c=require "/tmp/player-live-prod.php"; $b=$c["backend_v2"]??[]; if (($b["player_live_routing_mode"]??null)!=="node") exit(1); if (($b["realtime_config_routing_mode"]??null)!=="node") exit(2); if (($b["scolia_routing_mode"]??null)!=="php") exit(3); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(4);'
+          php -r '$c=require "/tmp/player-live-prod.php"; $b=$c["backend_v2"]??[]; if (($b["player_live_routing_mode"]??null)!=="node") exit(1); if (($b["realtime_config_routing_mode"]??null)!=="node") exit(2); if (($b["scolia_routing_mode"]??null)!=="node") exit(3); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(4);'
           php apps/api/tests/backend_v2_player_live_proxy_routing_test.php
 
       - name: Verify current PROD backend against canonical production schema

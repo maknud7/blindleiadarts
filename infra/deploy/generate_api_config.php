@@ -50,9 +50,10 @@ $bridgeSecret = env_required('SCOLIA_BRIDGE_SECRET');
 // production deploy could silently return an already-proven domain to PHP.
 $defaultBackendV2RoutingMode = $isProd ? 'candidate' : 'php';
 $defaultBackendV2EquipmentRoutingMode = $isProd ? 'node' : 'php';
-// Scolia bridge/kiosk runtime is deliberately TEST-only until its dedicated
-// hosted cutover gate has passed. An ordinary PROD deploy must keep PHP ownership.
-$defaultBackendV2ScoliaRoutingMode = $isTest ? 'node' : 'php';
+// Scolia bridge/kiosk runtime has completed the TEST single-writer cutover and
+// the dedicated PROD schema/readiness gate. Keep Node ownership in TEST and PROD;
+// routing is still decided before mutations and never falls back after dispatch.
+$defaultBackendV2ScoliaRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 // Tournament runtime is single-writer in TEST while PROD remains on PHP until
 // the tournament frontdoor and lifecycle have passed a dedicated PROD gate.
 $defaultBackendV2TournamentRoutingMode = $isTest ? 'node' : 'php';

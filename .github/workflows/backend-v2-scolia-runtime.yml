@@ -24,6 +24,8 @@ on:
       - 'apps/kiosk/scolia-test-lease.js'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-scolia-runtime.yml'
+      - '.github/workflows/backend-v2-scolia-prod-frontdoor.yml'
+      - '.github/workflows/backend-v2-scolia-prod-postdeploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -75,7 +77,7 @@ jobs:
           ! grep -Fq 'kiosk-scolia-test-lease.php' apps/kiosk/scolia-test-lease.js
           grep -Fq '/scolia/test-lease/' apps/kiosk/scolia-test-lease.js
 
-      - name: Verify TEST-only routing default
+      - name: Verify TEST and PROD Node routing defaults
         run: |
           set -Eeuo pipefail
           tmp="$(mktemp -d)"
@@ -86,4 +88,4 @@ jobs:
           env "${common_env[@]}" APP_ENV=test php infra/deploy/generate_api_config.php --output="$tmp/test.php"
           env "${common_env[@]}" APP_ENV=prod DB_TABLE_PREFIX=bd_prod_ php infra/deploy/generate_api_config.php --output="$tmp/prod.php"
           php -r '$c=require $argv[1]; exit((($c["backend_v2"]["scolia_routing_mode"]??null)==="node")?0:1);' "$tmp/test.php"
-          php -r '$c=require $argv[1]; exit((($c["backend_v2"]["scolia_routing_mode"]??null)==="php")?0:1);' "$tmp/prod.php"
+          php -r '$c=require $argv[1]; exit((($c["backend_v2"]["scolia_routing_mode"]??null)==="node")?0:1);' "$tmp/prod.php"
