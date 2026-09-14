@@ -1,0 +1,181 @@
+name: Probe Round Six Production
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-probe-round-six-prod.flag
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROD_BASE_URL: https://blindleiadarts.ingenting.org
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_prod_
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+      - name: Validate trigger
+        run: grep -Fxq 'PROBE_ROUND_SIX_PROD=yes' infra/sql/run-probe-round-six-prod.flag
+      - name: Canonical PROD report
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT"));
+          $p=getenv("DB_TABLE_PREFIX");
+          $ext="JaqLpRQCCeLi";
+          $s=$db->prepare("SELECT internal_id FROM {$p}external_references WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=? LIMIT 1");
+          $s->bind_param("s",$ext);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()["internal_id"]??0);
+          if($tid<1) throw new RuntimeException("Round six missing");
+          $t=$db->query("SELECT id,season_id,name,status,start_at,end_at FROM {$p}tournaments WHERE id={$tid}")->fetch_assoc();
+          $sid=(int)$t["season_id"];
+          echo "ROUND6_PROD=".json_encode($t,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
+
+          $q="SELECT COUNT(*) matches,
+                     (SELECT COUNT(*) FROM {$p}legs l JOIN {$p}matches x ON x.id=l.match_id WHERE x.tournament_id={$tid}) legs,
+                     (SELECT COUNT(*) FROM {$p}visits v JOIN {$p}matches x ON x.id=v.match_id WHERE x.tournament_id={$tid}) visits,
+                     (SELECT COALESCE(SUM(v.darts_used),0) FROM {$p}visits v JOIN {$p}matches x ON x.id=v.match_id WHERE x.tournament_id={$tid}) darts
+              FROM {$p}matches WHERE tournament_id={$tid}";
+          echo "COUNTS=".json_encode($db->query($q)->fetch_assoc(),JSON_UNESCAPED_UNICODE)."\n";
+
+          echo "GROUP_TABLE_BEGIN\n";
+          $q="SELECT p.display_name,
+                     COUNT(*) played,
+                     SUM(m.winner_player_id=p.id) wins,
+                     SUM(m.winner_player_id<>p.id) losses,
+                     ROUND(SUM(ms.average*ms.darts_thrown)/NULLIF(SUM(ms.darts_thrown),0),2) average
+              FROM {$p}tournament_players tp
+              JOIN {$p}players p ON p.id=tp.player_id
+              JOIN {$p}matches m ON m.tournament_id=tp.tournament_id
+                AND m.tournament_group_id IS NOT NULL
+                AND (m.player_a_id=p.id OR m.player_b_id=p.id)
+              LEFT JOIN {$p}match_statistics ms ON ms.match_id=m.id AND ms.player_id=p.id
+              WHERE tp.tournament_id={$tid}
+              GROUP BY p.id,p.display_name
+              ORDER BY wins DESC,average DESC,p.display_name";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "GROUP_TABLE_END\n";
+
+          echo "PLAYOFFS_BEGIN\n";
+          $q="SELECT COALESCE(m.bracket_label,m.round_label),pa.display_name,pb.display_name,
+                     SUM(l.winner_player_id=m.player_a_id) score_a,
+                     SUM(l.winner_player_id=m.player_b_id) score_b,
+                     pw.display_name winner
+              FROM {$p}matches m
+              JOIN {$p}players pa ON pa.id=m.player_a_id
+              JOIN {$p}players pb ON pb.id=m.player_b_id
+              JOIN {$p}players pw ON pw.id=m.winner_player_id
+              LEFT JOIN {$p}legs l ON l.match_id=m.id
+              WHERE m.tournament_id={$tid} AND m.tournament_group_id IS NULL
+              GROUP BY m.id,m.bracket_label,m.round_label,pa.display_name,pb.display_name,pw.display_name
+              ORDER BY COALESCE(m.finished_at,m.starts_at,m.created_at),m.id";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "PLAYOFFS_END\n";
+
+          echo "PLAYER_STATS_BEGIN\n";
+          $q="SELECT p.display_name,
+                     ROUND(SUM(ms.average*ms.darts_thrown)/NULLIF(SUM(ms.darts_thrown),0),2) round_average,
+                     MAX(ms.average) best_match_average,
+                     MAX(ms.first_nine_average) best_first_nine,
+                     MAX(ms.highest_checkout) highest_checkout,
+                     SUM(ms.score_180) score_180
+              FROM {$p}match_statistics ms
+              JOIN {$p}matches m ON m.id=ms.match_id
+              JOIN {$p}players p ON p.id=ms.player_id
+              WHERE m.tournament_id={$tid}
+              GROUP BY p.id,p.display_name
+              ORDER BY round_average DESC,p.display_name";
+          foreach($db->query($q) as $r) echo implode("|",array_map(fn($v)=>$v===null?"":$v,$r))."\n";
+          echo "PLAYER_STATS_END\n";
+
+          echo "CHECKOUTS_BEGIN\n";
+          $q="SELECT p.display_name,v.score,
+                     CASE WHEN m.player_a_id=p.id THEN pb.display_name ELSE pa.display_name END opponent,
+                     COALESCE(m.bracket_label,m.round_label) stage
+              FROM {$p}visits v
+              JOIN {$p}legs l ON l.id=v.leg_id AND l.winner_player_id=v.player_id
+              JOIN {$p}matches m ON m.id=v.match_id
+              JOIN {$p}players p ON p.id=v.player_id
+              JOIN {$p}players pa ON pa.id=m.player_a_id
+              JOIN {$p}players pb ON pb.id=m.player_b_id
+              WHERE m.tournament_id={$tid} AND v.remaining_after=0
+              ORDER BY v.score DESC,v.id";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "CHECKOUTS_END\n";
+
+          echo "VISIT_180_BEGIN\n";
+          $q="SELECT p.display_name,COUNT(*) total
+              FROM {$p}visits v
+              JOIN {$p}matches m ON m.id=v.match_id
+              JOIN {$p}players p ON p.id=v.player_id
+              WHERE m.tournament_id={$tid} AND v.score=180 AND v.is_bust=0
+              GROUP BY p.id,p.display_name ORDER BY total DESC,p.display_name";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "VISIT_180_END\n";
+
+          echo "ROUND_ELO_BEGIN\n";
+          $q="SELECT p.display_name,ROUND(s.elo_before,1),ROUND(s.elo_after,1),
+                     ROUND(s.elo_after-s.elo_before,1),s.matches_before,s.matches_after
+              FROM {$p}tournament_elo_snapshots s
+              JOIN {$p}players p ON p.id=s.player_id
+              WHERE s.tournament_id={$tid}
+              ORDER BY s.elo_after DESC,p.display_name";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "ROUND_ELO_END\n";
+
+          echo "FULL_ELO_BEGIN\n";
+          $q="SELECT p.display_name,ROUND(e.rating,1),e.matches_played
+              FROM {$p}elo_current_ratings e
+              JOIN {$p}players p ON p.id=e.player_id
+              WHERE e.season_id={$sid} AND p.is_active=1 AND p.merged_into_player_id IS NULL
+              ORDER BY e.rating DESC,p.display_name";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "FULL_ELO_END\n";
+
+          echo "SEASON_STANDINGS_BEGIN\n";
+          $q="SELECT p.display_name,ROUND(SUM(e.points),0) points,COUNT(*) rounds
+              FROM {$p}season_ranking_events e
+              JOIN {$p}players p ON p.id=e.player_id
+              WHERE e.season_id={$sid} AND e.status='applied'
+              GROUP BY p.id,p.display_name
+              ORDER BY points DESC,rounds DESC,p.display_name";
+          foreach($db->query($q) as $r) echo implode("|",$r)."\n";
+          echo "SEASON_STANDINGS_END\n";
+
+          $dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM {$p}players WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1)x")->fetch_assoc()["c"];
+          echo "ACTIVE_PLAYER_DUPLICATES={$dups}\n";
+          PHP
+      - name: Public PROD readback
+        run: |
+          set -Eeuo pipefail
+          tournaments="$(curl -fsS --connect-timeout 10 --max-time 60 "${PROD_BASE_URL%/}/api/v1/clubs/1/tournaments?cb=$RANDOM")"
+          elo="$(curl -fsS --connect-timeout 10 --max-time 60 "${PROD_BASE_URL%/}/api/v1/clubs/1/elo?cb=$RANDOM")"
+          tournament_elo="$(curl -fsS --connect-timeout 10 --max-time 60 "${PROD_BASE_URL%/}/api/tournament-elo.php?tournament_id=15&cb=$RANDOM")"
+          TOURNAMENTS="$tournaments" ELO="$elo" TOURNAMENT_ELO="$tournament_elo" php <<'PHP'
+          <?php
+          $t=json_decode(getenv("TOURNAMENTS"),true,512,JSON_THROW_ON_ERROR);
+          $e=json_decode(getenv("ELO"),true,512,JSON_THROW_ON_ERROR);
+          $te=json_decode(getenv("TOURNAMENT_ELO"),true,512,JSON_THROW_ON_ERROR);
+          $found=null;
+          foreach(($t["data"]["items"]??[]) as $x) if(($x["name"]??"")==="Mandagsserien #6") $found=$x;
+          $items=$e["data"]["items"]??[];$names=[];$dups=0;
+          foreach($items as $x){$n=mb_strtolower(trim((string)($x["display_name"]??"")));if(isset($names[$n]))$dups++;$names[$n]=1;}
+          $tp=$te["data"]["players"]??[];
+          if(!$found||(int)$found["id"]!==15||(int)($found["match_count"]??0)!==24||count($tp)!==7||$dups!==0) throw new RuntimeException("Public readback mismatch");
+          echo "ROUND6_PUBLIC_READBACK_OK=yes tournament_id=15 matches=24 elo_players=7 full_elo_players=".count($items)." duplicates=0\n";
+          PHP
