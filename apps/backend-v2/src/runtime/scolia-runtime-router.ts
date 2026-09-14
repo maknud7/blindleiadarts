@@ -215,11 +215,37 @@ export class ScoliaRuntimeRouter {
     const candidates = Array.isArray(raw.boards) ? raw.boards : [];
     const boards: Record<string, unknown>[] = [];
     let activeMatchBoards = 0;
+    let preemptedTestLeases = 0;
 
     for (const item of candidates) {
       if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
       const board = item as Record<string, unknown>;
       if (stringValue(board.activation_reason) === "test_lease") {
+        const physicalKioskId = optionalId(board.physical_kiosk_id);
+        const clubId = optionalId(board.club_id);
+        if (physicalKioskId !== null && clubId !== null) {
+          const physicalState = await this.commands.kioskUiSnapshot(clubId, physicalKioskId);
+          if (physicalState.match_id !== null) {
+            // PROD reservations always beat a previously granted TEST lease. For an
+            // assigned match we simply release the physical socket. Once canonical
+            // scoring is active we immediately route the same physical socket to PROD.
+            preemptedTestLeases += 1;
+            const scoring = await this.bridge.scoringContext(physicalKioskId);
+            if (scoring !== null) {
+              boards.push({
+                ...board,
+                kiosk_id: physicalKioskId,
+                environment: "prod",
+                target_api_base: productionApiBase(board.target_api_base),
+                activation_reason: "active_scoring_match",
+                match_id: scoring.match_id,
+                test_lease_preempted: true,
+              });
+              activeMatchBoards += 1;
+            }
+            continue;
+          }
+        }
         boards.push(board);
         continue;
       }
@@ -235,8 +261,9 @@ export class ScoliaRuntimeRouter {
       ...raw,
       boards,
       bridge_mode: boards.length === 0 ? "idle" : "active",
-      activation_policy: "active_scoring_match_or_test_lease",
+      activation_policy: "active_scoring_match_or_uncontested_test_lease",
       active_match_boards: activeMatchBoards,
+      preempted_test_leases: preemptedTestLeases,
       next_activation_in_seconds: null,
       prewarm_minutes: 0,
       late_start_grace_hours: 0,
@@ -337,6 +364,9 @@ function capture(match: RegExpExecArray, index: number): string {
 function optionalId(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
   return /^[1-9][0-9]*$/.test(normalized) ? normalized : null;
+}
+function productionApiBase(value: unknown): string {
+  return stringValue(value).replace("://test.", "://");
 }
 function stringValue(value: unknown): string { return String(value ?? "").trim(); }
 function numberValue(value: unknown): number {
