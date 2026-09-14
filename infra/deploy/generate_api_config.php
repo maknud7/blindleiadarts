@@ -66,6 +66,9 @@ $defaultBackendV2AccountReadRoutingMode = $isTest ? 'node' : 'php';
 // Realtime client config is a side-effect-free slice with an independent gate.
 // It is safe to preserve on Node in TEST and PROD without moving the wider player/live surface.
 $defaultBackendV2RealtimeConfigRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
+// Activity writes are runtime-only in TEST. Keep PROD on PHP until a dedicated
+// production activity cutover proves both telemetry writes and admin reads.
+$defaultBackendV2ActivityRoutingMode = $isTest ? 'node' : 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
@@ -94,6 +97,7 @@ $config = [
         'player_live_routing_mode' => env_optional('BACKEND_V2_PLAYER_LIVE_ROUTING_MODE', $defaultBackendV2PlayerLiveRoutingMode) ?? $defaultBackendV2PlayerLiveRoutingMode,
         'account_read_routing_mode' => env_optional('BACKEND_V2_ACCOUNT_READ_ROUTING_MODE', $defaultBackendV2AccountReadRoutingMode) ?? $defaultBackendV2AccountReadRoutingMode,
         'realtime_config_routing_mode' => env_optional('BACKEND_V2_REALTIME_CONFIG_ROUTING_MODE', $defaultBackendV2RealtimeConfigRoutingMode) ?? $defaultBackendV2RealtimeConfigRoutingMode,
+        'activity_routing_mode' => env_optional('BACKEND_V2_ACTIVITY_ROUTING_MODE', $defaultBackendV2ActivityRoutingMode) ?? $defaultBackendV2ActivityRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
         'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
         'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', $defaultBackendV2InternalToken) ?? $defaultBackendV2InternalToken,

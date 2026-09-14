@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
+import { MySqlActivityRuntimeRepository } from "./activity-runtime-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, TablePrefix } from "./contracts.js";
 
 export interface IdentityUser extends QueryResultRow {
@@ -33,6 +34,10 @@ export class MySqlIdentityAuthRepository {
     private readonly runtimePrefix: TablePrefix,
     private readonly identityPrefix: TablePrefix,
   ) {}
+
+  activityRuntimeRepository(): MySqlActivityRuntimeRepository {
+    return new MySqlActivityRuntimeRepository(this.sessions, this.runtimePrefix, this.identityPrefix);
+  }
 
   async findByEmail(email: string): Promise<IdentityUser | null> {
     return this.sessions.withConnection(async (db) => {
