@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { MySqlActivityRuntimeRepository } from "./activity-runtime-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, TablePrefix } from "./contracts.js";
+import { MySqlIdentityAuditReadRepository } from "./identity-audit-read-repository.js";
 import { MySqlPaymentSettingsRepository } from "./payment-settings-repository.js";
 import { MySqlTournamentBoardAdminRepository } from "./tournament-board-admin-repository.js";
 import { MySqlTournamentSummaryRepository } from "./tournament-summary-repository.js";
@@ -41,6 +42,10 @@ export class MySqlIdentityAuthRepository {
 
   activityRuntimeRepository(): MySqlActivityRuntimeRepository {
     return new MySqlActivityRuntimeRepository(this.sessions, this.runtimePrefix, this.identityPrefix);
+  }
+
+  identityAuditReadRepository(): MySqlIdentityAuditReadRepository {
+    return new MySqlIdentityAuditReadRepository(this.sessions, this.runtimePrefix, this.identityPrefix);
   }
 
   paymentSettingsRepository(): MySqlPaymentSettingsRepository {

@@ -47,9 +47,19 @@ final class PlayerIdentityApplication
             }
         }
 
+        // Global identity audit is read-only. Select Node before the legacy DB is
+        // opened; preview/merge remain PHP-owned in this migration slice.
+        $routingConfig = null;
+        if ($globalAction !== null) {
+            $routingConfig = Config::load($this->rootPath);
+            if ($routingConfig->backendV2IdentityAuditRoutingMode() === 'node') {
+                return (new BackendV2IdentityAuditProxyApplication($this->rootPath))->run();
+            }
+        }
+
         $config = null;
         try {
-            $config = Config::load($this->rootPath);
+            $config = $routingConfig instanceof Config ? $routingConfig : Config::load($this->rootPath);
             $database = new Database($config);
             $users = new UserAccountRepository($database);
 

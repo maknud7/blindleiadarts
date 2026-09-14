@@ -150,6 +150,12 @@ final class Config
         return $mode === 'node' ? 'node' : 'php';
     }
 
+    public function backendV2IdentityAuditRoutingMode(): string
+    {
+        $mode = strtolower(trim((string) (($this->config['backend_v2']['identity_audit_routing_mode'] ?? 'php') ?: 'php')));
+        return $mode === 'node' ? 'node' : 'php';
+    }
+
     public function backendV2BaseUrl(): string
     {
         return rtrim(trim((string) (($this->config['backend_v2']['base_url'] ?? '') ?: '')), '/');

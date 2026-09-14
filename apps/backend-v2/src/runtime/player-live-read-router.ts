@@ -5,6 +5,7 @@ import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identit
 import type { MySqlPlayerLiveReadRepository } from "../mysql/player-live-read-repository.js";
 import { ActivityRuntimeRouter } from "./activity-runtime-router.js";
 import { RuntimeAccessError, type BackendRuntimeConfig } from "./config.js";
+import { IdentityAuditReadRouter } from "./identity-audit-read-router.js";
 
 export interface PlayerLiveReadRouteResult {
   statusCode: number;
@@ -13,6 +14,7 @@ export interface PlayerLiveReadRouteResult {
 
 export class PlayerLiveReadRouter {
   private activity: ActivityRuntimeRouter | null = null;
+  private identityAudit: IdentityAuditReadRouter | null = null;
 
   constructor(
     private readonly config: BackendRuntimeConfig,
@@ -26,6 +28,13 @@ export class PlayerLiveReadRouter {
         this.activity = new ActivityRuntimeRouter(this.config, this.identity, this.identity.activityRuntimeRepository());
       }
       return this.activity.handle(method, path, request);
+    }
+
+    if (isIdentityAuditRoute(method, path)) {
+      if (this.identityAudit === null) {
+        this.identityAudit = new IdentityAuditReadRouter(this.identity, this.identity.identityAuditReadRepository());
+      }
+      return this.identityAudit.handle(method, path, request);
     }
 
     if (method !== "GET") return null;
@@ -97,6 +106,11 @@ function isActivityRoute(method: string, path: string): boolean {
   if (method !== "GET") return false;
   if (path === "/v1/activity/session" || path === "/v1/platform/activity") return true;
   return /^\/v1\/clubs\/[1-9][0-9]*\/activity$/.test(path);
+}
+
+function isIdentityAuditRoute(method: string, path: string): boolean {
+  return method === "GET"
+    && (path === "/v1/player-identities/history" || path === "/v1/player-identities/health");
 }
 
 function requiredCapture(match: RegExpExecArray, index: number): string {
