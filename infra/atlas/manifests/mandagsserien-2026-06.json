@@ -1,0 +1,83 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "JaqLpRQCCeLi",
+  "tournament_name": "Mandagsserien #6",
+  "tournament_date": "2026-09-14",
+  "tournament_start_at": "2026-09-14 18:30:00",
+  "tournament_slug": "mandagsserien-6-2026-09-14",
+  "expected_players": 7,
+  "expected_matches": 24,
+  "expected_legs": 27,
+  "players": {
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen",
+    "46u0DEjhFWti": "Andreas Hasselgård",
+    "lGf1wBj3yKWV": "Steffen Madsen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson",
+    "DUq32rNObrUk": "Thomas Kildal"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "GFg9pZkPKrpU",
+        "Rujhhq1jF7Uu",
+        "xTpeuJWBefFN",
+        "46u0DEjhFWti",
+        "lGf1wBj3yKWV",
+        "2bhzMxZ5bdyy",
+        "DUq32rNObrUk"
+      ],
+      "match_ids": [
+        "wpMGSMZuFPtV", "z16tfI1tCbHm", "nFRqUC3UtWpN",
+        "Oe0drZmiT9do", "ayAtEdlLpz01", "ILeQhiBs6eCJ",
+        "8zewk0iqUhQ3", "oIF7nSjSOXyn", "VagGbnrfyn54",
+        "xBPayRoi0GhS", "E7EI7NHws8G8", "niXTqstBnga1",
+        "TrWXCMZvSHcI", "xBuLtS82TPbr", "qqrbKfVbzmOe",
+        "waynCXVTSbRS", "ZeINRINkamfJ", "BkM5CkCykjxQ",
+        "HQoUu4DlNzul", "lo7eAoFlkbxc", "MSo1npXrUqHh"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": ["GFg9pZkPKrpU", "Rujhhq1jF7Uu", "xTpeuJWBefFN", "46u0DEjhFWti"],
+    "match_ids": ["cInukwD97f1H", "q7JQXitq0FkU", "uPaZUufwsn1w"],
+    "champion_external_id": "46u0DEjhFWti",
+    "champion_name": "Andreas Hasselgård"
+  },
+  "ranking_points": {
+    "46u0DEjhFWti": 4,
+    "xTpeuJWBefFN": 3,
+    "GFg9pZkPKrpU": 2,
+    "Rujhhq1jF7Uu": 2,
+    "lGf1wBj3yKWV": 1,
+    "2bhzMxZ5bdyy": 1,
+    "DUq32rNObrUk": 1
+  },
+  "ranking_stages": {
+    "46u0DEjhFWti": "Winner",
+    "xTpeuJWBefFN": "Final",
+    "GFg9pZkPKrpU": "Semi-Final",
+    "Rujhhq1jF7Uu": "Semi-Final",
+    "lGf1wBj3yKWV": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage",
+    "DUq32rNObrUk": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #6 Champion Andreas Hasselgård",
+    "verified_at": "2026-09-14T18:25:45Z"
+  }
+}
