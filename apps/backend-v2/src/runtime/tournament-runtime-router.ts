@@ -77,6 +77,22 @@ export class TournamentRuntimeRouter {
       return ok({ tournament: await this.tournaments.updateRegistrationSettings(tournamentId, body) });
     }
 
+    const eloSettingsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/elo-settings$/.exec(path);
+    if ((method === "PUT" || method === "PATCH") && eloSettingsMatch) {
+      const tournamentId = requiredCapture(eloSettingsMatch, 1);
+      assertMutationAllowed(this.config);
+      const tournament = await this.requireTournament(tournamentId);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
+      const body = await readJsonObject(request);
+      if (!Object.prototype.hasOwnProperty.call(body, "elo_enabled")) {
+        throw new DomainValidationError("elo_enabled_required", "elo_enabled is required.", 422);
+      }
+      return ok({
+        tournament: await this.tournaments.updateTournamentEloSetting(tournamentId, body.elo_enabled),
+      });
+    }
+
     const drawMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/groups\/draw$/.exec(path);
     if (method === "POST" && drawMatch) {
       const tournamentId = requiredCapture(drawMatch, 1);
