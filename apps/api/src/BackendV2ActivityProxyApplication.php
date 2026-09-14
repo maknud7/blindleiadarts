@@ -90,7 +90,9 @@ final class BackendV2ActivityProxyApplication
 
     public function targetPath(string $path, string $queryString): string
     {
-        if (!str_ends_with($path, '/activity') || $queryString === '') return $path;
+        $isSummary = $path === '/v1/platform/activity'
+            || preg_match('#^/v1/clubs/\d+/activity$#', $path) === 1;
+        if (!$isSummary || $queryString === '') return $path;
         $parsed = [];
         parse_str($queryString, $parsed);
         $days = $parsed['days'] ?? null;
