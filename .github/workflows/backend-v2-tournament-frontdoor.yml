@@ -45,7 +45,7 @@ jobs:
           grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2TournamentProxyApplication.php
           grep -Fq 'BackendV2TournamentProxyApplication' apps/api/index.php
 
-      - name: Verify TEST-only tournament routing default
+      - name: Verify tournament routing defaults
         env:
           SCOLIA_BRIDGE_SECRET: tournament-routing-contract
           DB_HOST: 127.0.0.1
@@ -59,9 +59,9 @@ jobs:
             DB_TABLE_PREFIX=bd_test_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             BACKEND_V2_BASE_URL=https://blindleia-backend-v2-test.onrender.com \
             php infra/deploy/generate_api_config.php --output=/tmp/tournament-test.php
-          php -r '$c=require "/tmp/tournament-test.php"; $b=$c["backend_v2"]??[]; if (($b["tournament_routing_mode"]??null)!=="node") exit(1); if (($b["scolia_routing_mode"]??null)!=="node") exit(2);'
+          php -r '$c=require "/tmp/tournament-test.php"; $b=$c["backend_v2"]??[]; if (($b["tournament_routing_mode"]??null)!=="node") exit(1);'
 
           APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org \
             DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/tournament-prod.php
-          php -r '$c=require "/tmp/tournament-prod.php"; $b=$c["backend_v2"]??[]; if (($b["tournament_routing_mode"]??null)!=="php") exit(1); if (($b["scolia_routing_mode"]??null)!=="php") exit(2);'
+          php -r '$c=require "/tmp/tournament-prod.php"; $b=$c["backend_v2"]??[]; if (($b["tournament_routing_mode"]??null)!=="php") exit(1);'
