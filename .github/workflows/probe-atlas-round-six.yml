@@ -1,0 +1,55 @@
+name: Probe Atlas Round Six And PROD
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-probe-atlas-round-six.flag
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - name: Fetch DartsAtlas round six source
+        run: |
+          set -Eeuo pipefail
+          url='https://test.blindleiadarts.ingenting.org/api/atlas-tournament-probe.php?tournament=JaqLpRQCCeLi'
+          for attempt in $(seq 1 8); do
+            status="$(curl -sS -L -o /tmp/round6.json -w '%{http_code}' --max-time 120 "$url" || true)"
+            echo "attempt=$attempt status=$status"
+            [[ "$status" == 200 ]] && break
+            sleep 45
+          done
+          php -r '
+            $d=json_decode(file_get_contents("/tmp/round6.json"),true,512,JSON_THROW_ON_ERROR);
+            if(($d["ok"]??false)!==true)throw new RuntimeException("Round six probe failed");
+            $pages=$d["pages"]??[];
+            foreach($pages as $key=>$page){
+              printf("PAGE %s status=%d players=%d matches=%d\n",$key,(int)($page["status"]??0),count($page["players"]??[]),count($page["matches"]??[]));
+              if(isset($page["players"]))echo "PLAYERS {$key} ".json_encode($page["players"],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+              if(isset($page["matches"]))echo "MATCHES {$key} ".json_encode($page["matches"],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+              if(isset($page["visible_text"]))echo "TEXT {$key} ".json_encode($page["visible_text"],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+            }
+          '
+      - name: Check canonical PROD
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --max-time 30 'https://blindleiadarts.ingenting.org/api/v1/clubs/1/tournaments' -o /tmp/prod-tournaments.json
+          curl -fsS --max-time 30 'https://blindleiadarts.ingenting.org/api/v1/clubs/1/elo' -o /tmp/prod-elo.json
+          php -r '
+            $t=json_decode(file_get_contents("/tmp/prod-tournaments.json"),true,512,JSON_THROW_ON_ERROR);
+            $e=json_decode(file_get_contents("/tmp/prod-elo.json"),true,512,JSON_THROW_ON_ERROR);
+            $items=$t["data"]["items"]??[];$round6=[];
+            foreach($items as $item)if(($item["name"]??"")==="Mandagsserien #6")$round6[]=$item;
+            echo "PROD_ROUND6 ".json_encode($round6,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+            echo "PROD_ELO_COUNT ".count($e["data"]["items"]??[]).PHP_EOL;
+          '
