@@ -22,6 +22,33 @@ function routerWith({ bridge, commands = {}, kioskAuth = {}, scoliaAdmin = {}, k
   );
 }
 
+function liveBoardSettings() {
+  return {
+    mode: "live",
+    connection_state: "connected",
+    fallback_active: 0,
+    needs_reconciliation: 0,
+  };
+}
+
+function freshUiSnapshot(matchId) {
+  return {
+    match_id: matchId,
+    buffer: {},
+    queue: {},
+    last_visit: null,
+    latest_canonical_visit: null,
+    last_status_probe_age_seconds: 30,
+    bridge_heartbeat_age_seconds: 1,
+    physical_status: {
+      status: "Ready",
+      event_type: "SBC_STATUS_CHANGED",
+      received_at: "2026-09-14T08:00:00Z",
+      age_seconds: 1,
+    },
+  };
+}
+
 test("bridge desired-state keeps only active scoring boards plus explicit TEST leases", async () => {
   const scoringLookups = [];
   const bridge = {
@@ -102,33 +129,10 @@ test("idle kiosk status read stays passive and does not enqueue a physical probe
       async resolve() { return { club_id: "10", kiosk_id: "2" }; },
     },
     scoliaAdmin: {
-      async getBoardSettings() {
-        return {
-          mode: "live",
-          connection_state: "connected",
-          fallback_active: 0,
-          needs_reconciliation: 0,
-        };
-      },
+      async getBoardSettings() { return liveBoardSettings(); },
     },
     commands: {
-      async kioskUiSnapshot() {
-        return {
-          match_id: null,
-          buffer: {},
-          queue: {},
-          last_visit: null,
-          latest_canonical_visit: null,
-          last_status_probe_age_seconds: 30,
-          bridge_heartbeat_age_seconds: 1,
-          physical_status: {
-            status: "Ready",
-            event_type: "SBC_STATUS_CHANGED",
-            received_at: "2026-09-14T08:00:00Z",
-            age_seconds: 1,
-          },
-        };
-      },
+      async kioskUiSnapshot() { return freshUiSnapshot(null); },
       async queueCommand() { queued += 1; },
     },
   });
@@ -137,4 +141,29 @@ test("idle kiosk status read stays passive and does not enqueue a physical probe
   assert.equal(result?.statusCode, 200);
   assert.equal(result?.payload.match_id, null);
   assert.equal(queued, 0);
+});
+
+test("active match status read may enqueue the rate-limited physical probe", async () => {
+  const queued = [];
+  const router = routerWith({
+    bridge: {},
+    kioskAuth: {
+      async resolve() { return { club_id: "10", kiosk_id: "2" }; },
+    },
+    scoliaAdmin: {
+      async getBoardSettings() { return liveBoardSettings(); },
+    },
+    commands: {
+      async kioskUiSnapshot() { return freshUiSnapshot("9007199254740993"); },
+      async queueCommand(clubId, kioskId, type, payload) {
+        queued.push({ clubId, kioskId, type, payload });
+        return { id: "1" };
+      },
+    },
+  });
+
+  const result = await router.handle("GET", "/v1/kiosks/BOARD-2/scolia/status", request());
+  assert.equal(result?.statusCode, 200);
+  assert.equal(result?.payload.match_id, "9007199254740993");
+  assert.deepEqual(queued, [{ clubId: "10", kioskId: "2", type: "GET_SBC_STATUS", payload: {} }]);
 });
