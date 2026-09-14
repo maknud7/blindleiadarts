@@ -7,6 +7,12 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/**'
+      - 'apps/api/src/BackendV2ScoliaProxyApplication.php'
+      - 'apps/api/src/Service/BackendV2ApiClient.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/scolia-bridge-router.php'
+      - 'apps/api/scolia-health.php'
+      - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-prod-preflight.yml'
       - 'package.json'
 
@@ -88,7 +94,8 @@ jobs:
             health.canonical_side_effects_ready !== true ||
             health.writes_armed !== false ||
             health.runtime_prefix !== 'bd_prod_' ||
-            health.max_connections !== 1
+            health.max_connections !== 1 ||
+            health.connection_mode !== 'idle-reuse'
           ) {
             throw new Error(`Production readiness/write boundary is wrong: ${JSON.stringify(health)}`);
           }
@@ -108,6 +115,60 @@ jobs:
             mysql_version: ready.mysql_version,
             checked_tables: ready.checked_tables,
           }));
+          NODE
+
+          # Scolia PROD readiness is read-only here. These requests exercise the
+          # real bd_prod_ runtime/hardware schema through the same one idle-reuse
+          # MySQL connection without capturing a board or creating queue state.
+          curl --fail --silent --show-error \
+            http://127.0.0.1:18083/v1/scolia/health \
+            > scolia-health.json
+          curl --fail --silent --show-error \
+            http://127.0.0.1:18083/v1/scolia/bridge/config \
+            -H "x-bd-backend-v2-token: $BD_BACKEND_V2_INTERNAL_TOKEN" \
+            > scolia-config.json
+          curl --fail --silent --show-error \
+            http://127.0.0.1:18083/v1/scolia/bridge/router \
+            -H "x-bd-backend-v2-token: $BD_BACKEND_V2_INTERNAL_TOKEN" \
+            > scolia-router.json
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const health = JSON.parse(fs.readFileSync('scolia-health.json', 'utf8'));
+          const config = JSON.parse(fs.readFileSync('scolia-config.json', 'utf8'));
+          const router = JSON.parse(fs.readFileSync('scolia-router.json', 'utf8'));
+          if (health?.ok !== true || health?.service !== 'scolia-bridge' || health?.data === null || typeof health?.data !== 'object') {
+            throw new Error(`Scolia PROD health read failed: ${JSON.stringify(health)}`);
+          }
+          if (config?.ok !== true || !Array.isArray(config?.boards)) {
+            throw new Error(`Scolia PROD bridge config read failed: ${JSON.stringify(config)}`);
+          }
+          if (router?.ok !== true || router?.data === null || typeof router?.data !== 'object') {
+            throw new Error(`Scolia PROD bridge router read failed: ${JSON.stringify(router)}`);
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            scolia_health: true,
+            configured_boards: config.boards.length,
+            bridge_router_read: true,
+          }));
+          NODE
+
+          # A real Scolia ingress path must fail closed before body processing or
+          # enqueueing while this runtime is readonly. This proves a future routing
+          # mistake cannot create PROD queue/scoring writes on the read-only preflight.
+          scolia_status="$(curl --silent --show-error -o scolia-mutation.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:18083/v1/scolia/bridge/events \
+            -H 'content-type: application/json' \
+            -H "x-bd-backend-v2-token: $BD_BACKEND_V2_INTERNAL_TOKEN" \
+            --data '{"serial_number":"READONLY-PREFLIGHT","message":{"id":"readonly-preflight","type":"THROW_DETECTED","payload":{"sector":"S20"}}}')"
+          test "$scolia_status" = '403'
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const mutation = JSON.parse(fs.readFileSync('scolia-mutation.json', 'utf8'));
+          if (mutation?.error?.code !== 'backend_v2_read_only') {
+            throw new Error(`Scolia read-only mutation guard did not fire: ${JSON.stringify(mutation)}`);
+          }
           NODE
 
           status="$(curl --silent --show-error -o mutation.json -w '%{http_code}' \
