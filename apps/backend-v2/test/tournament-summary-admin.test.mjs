@@ -172,6 +172,8 @@ test("summary repository uses legacy upsert semantics and BIGINT-safe output", a
 
 test("tournament PHP frontdoor captures only GET/PUT/PATCH summary admin", () => {
   const source = fs.readFileSync("apps/api/src/BackendV2TournamentProxyApplication.php", "utf8");
-  assert.match(source, /\['GET', 'PUT', 'PATCH'\].+summary\/admin/s);
-  assert.doesNotMatch(source, /\['GET', 'POST'.+summary\/admin/s);
+  const summaryLine = source.split("\n").find((line) => line.includes("summary/admin"));
+  assert.ok(summaryLine, "summary/admin frontdoor route must exist");
+  assert.match(summaryLine, /\['GET', 'PUT', 'PATCH'\]/);
+  assert.doesNotMatch(summaryLine, /'POST'|'DELETE'/);
 });
