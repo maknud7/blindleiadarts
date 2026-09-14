@@ -5,6 +5,7 @@ import type { MySqlAccountProfileRepository } from "../mysql/account-profile-rep
 import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identity-auth-repository.js";
 import type { MySqlMembershipEligibilityRepository } from "../mysql/membership-eligibility-repository.js";
 import type { MySqlTournamentRuntimeRepository } from "../mysql/tournament-runtime-repository.js";
+import type { MySqlTournamentSummaryRepository } from "../mysql/tournament-summary-repository.js";
 import {
   assertMutationAllowed,
   mutationsAllowed,
@@ -20,6 +21,7 @@ export interface TournamentRouteResult {
 
 export class TournamentRuntimeRouter {
   private readonly realtime: TournamentRealtimePublisher;
+  private summaries: MySqlTournamentSummaryRepository | null = null;
 
   constructor(
     private readonly config: BackendRuntimeConfig,
@@ -36,6 +38,27 @@ export class TournamentRuntimeRouter {
   }
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentRouteResult | null> {
+    const summaryAdminMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/summary\/admin$/.exec(path);
+    if ((method === "GET" || method === "PUT" || method === "PATCH") && summaryAdminMatch) {
+      const tournamentId = requiredCapture(summaryAdminMatch, 1);
+      if (method !== "GET") assertMutationAllowed(this.config);
+      const tournament = await this.requireTournament(tournamentId);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
+      const summaries = this.summaryRepository();
+      if (method === "GET") {
+        return ok({ summary: await summaries.getTournamentSummary(tournamentId, true) });
+      }
+      const body = await readJsonObject(request);
+      return ok({
+        summary: await summaries.saveTournamentSummary(
+          tournamentId,
+          body,
+          requiredId(user.id, "user_account_id"),
+        ),
+      });
+    }
+
     const createMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/tournaments$/.exec(path);
     if (method === "POST" && createMatch) {
       const clubId = requiredCapture(createMatch, 1);
@@ -191,6 +214,13 @@ export class TournamentRuntimeRouter {
     }
 
     return null;
+  }
+
+  private summaryRepository(): MySqlTournamentSummaryRepository {
+    if (this.summaries === null) {
+      this.summaries = this.identityRepository.tournamentSummaryRepository();
+    }
+    return this.summaries;
   }
 
   private async requireTournament(tournamentId: string): Promise<Record<string, unknown>> {
