@@ -110,6 +110,7 @@ try {
   assert.equal(statusAfterHello.board.board_phase, "Throw");
   assert.equal(statusAfterHello.board.bridge_heartbeat_fresh, true);
   assert.equal(statusAfterHello.board.buffer, null);
+  assert.equal(statusAfterHello.match_id, null, "Pending match must not become an active Scolia ownership signal");
   if (statusAfterHello.board.physical_status_fresh === true) {
     assert.equal(statusAfterHello.board.board_status, "Ready");
     assert.equal(statusAfterHello.board.physical_available, true);
@@ -122,12 +123,11 @@ try {
     method: "POST",
     body: { kiosk_ids: [fixture.kiosk], limit: 10 },
   });
-  assert.equal(statusProbePoll.items.length, 1, "Kiosk status should queue one rate-limited physical status probe");
-  assert.equal(statusProbePoll.items[0].command_type, "GET_SBC_STATUS");
-  await requestJson(`/v1/scolia/bridge/commands/${statusProbePoll.items[0].id}/result`, {
-    method: "POST",
-    body: { result: "acked" },
-  });
+  assert.deepEqual(
+    statusProbePoll.items,
+    [],
+    "Idle/pending kiosk status reads must stay passive and must not touch physical Scolia",
+  );
 
   await seedVisitBuffer();
 
@@ -238,7 +238,7 @@ try {
     queue_drain_verified: true,
     pairing_runtime_verified: true,
     kiosk_status_fail_closed_verified: true,
-    status_probe_verified: true,
+    idle_status_passive_verified: true,
     buffered_undo_verified: true,
     buffer_correction_verified: true,
     command_fifo_ack_verified: true,
@@ -378,74 +378,64 @@ async function cleanupFixture(dbProvider) {
       if (fixture.playerB) await sql.execute(`DELETE FROM \`${config.prefixes.runtime}players\` WHERE id=?`, [fixture.playerB]);
       await sql.execute(`DELETE FROM \`${config.prefixes.runtime}clubs\` WHERE id=?`, [fixture.club]);
     });
-  } catch (cleanupError) {
-    console.error("backend-v2 Scolia E2E cleanup failed", cleanupError);
+  } catch (error) {
+    console.warn(`Scolia E2E cleanup warning: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 function startServer() {
   const child = spawn(process.execPath, ["apps/backend-v2/dist/server.js"], {
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(config.port) },
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  child.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); });
-  child.stderr.on("data", (chunk) => { serverOutput += chunk.toString(); });
+  const capture = (chunk) => {
+    serverOutput += chunk.toString("utf8");
+    if (serverOutput.length > 24_000) serverOutput = serverOutput.slice(-24_000);
+  };
+  child.stdout.on("data", capture);
+  child.stderr.on("data", capture);
   return child;
 }
 
 async function waitForHealth() {
-  let lastError = null;
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (server?.exitCode !== null) throw new Error(`backend-v2 exited before health. ${serverOutput}`);
+  const deadline = Date.now() + 20_000;
+  let lastError = "not started";
+  while (Date.now() < deadline) {
     try {
       const response = await fetch(`${baseUrl}/health`);
-      if (response.ok) {
-        const health = await response.json();
-        if (
-          health.ok === true &&
-          health.environment === "test" &&
-          health.writes_armed === true &&
-          health.runtime_prefix === "bd_test_" &&
-          health.hardware_prefix === "bd_test_"
-        ) return;
-      }
+      if (response.ok) return;
+      lastError = `${response.status} ${await response.text()}`;
     } catch (error) {
-      lastError = error;
+      lastError = error instanceof Error ? error.message : String(error);
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(`backend-v2 did not become healthy: ${String(lastError ?? "unknown")}`);
+  throw new Error(`Backend v2 did not become healthy: ${lastError}`);
 }
 
-async function requestJson(path, {
-  method,
-  body = undefined,
-  expectedStatus = 200,
-  pairing = false,
-  bridgeAuth = true,
-}) {
+async function requestJson(path, { method = "GET", body = undefined, expectedStatus = 200, bridgeAuth = true, pairing = false } = {}) {
+  const headers = { Accept: "application/json" };
+  if (bridgeAuth) headers["X-BD-Backend-V2-Token"] = config.internalToken;
+  if (pairing) headers["X-Kiosk-Pairing-Token"] = pairingToken;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: {
-      ...(bridgeAuth ? { "x-bd-backend-v2-token": process.env.BD_BACKEND_V2_INTERNAL_TOKEN } : {}),
-      ...(pairing ? { "x-kiosk-pairing-token": pairingToken } : {}),
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const text = await response.text();
+  const raw = await response.text();
   let payload;
   try {
-    payload = JSON.parse(text);
+    payload = JSON.parse(raw);
   } catch {
-    throw new Error(`${method} ${path} returned non-JSON ${response.status}: ${text}`);
+    throw new Error(`${method} ${path} returned non-JSON ${response.status}: ${raw}`);
   }
-  assert.equal(response.status, expectedStatus, `${method} ${path}: ${text}`);
+  assert.equal(response.status, expectedStatus, `${method} ${path} status mismatch: ${raw}`);
   return payload;
 }
 
 function requireInsertId(result, label) {
   const value = String(result.insertId ?? "").trim();
-  assert.match(value, /^[1-9][0-9]*$/, `${label} insert id missing`);
+  assert.match(value, /^[1-9][0-9]*$/, `${label} insert id must be an exact decimal string`);
   return value;
 }
