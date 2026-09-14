@@ -1,0 +1,70 @@
+name: Backend v2 Payment Settings Frontdoor
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/src/BackendV2PaymentSettingsProxyApplication.php'
+      - 'apps/api/src/PaymentSettingsApplication.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/config.example.php'
+      - 'apps/api/tests/backend_v2_payment_settings_proxy_routing_test.php'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-payment-settings-frontdoor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  routing-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Verify fail-closed payment settings frontdoor
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/src/BackendV2PaymentSettingsProxyApplication.php
+          php -l apps/api/src/PaymentSettingsApplication.php
+          php -l apps/api/src/Support/Config.php
+          php -l apps/api/tests/backend_v2_payment_settings_proxy_routing_test.php
+          php apps/api/tests/backend_v2_payment_settings_proxy_routing_test.php
+          grep -Fq 'backendV2PaymentSettingsRoutingMode()' apps/api/src/BackendV2PaymentSettingsProxyApplication.php
+          grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2PaymentSettingsProxyApplication.php
+
+      - name: Verify TEST-only payment settings routing default
+        env:
+          SCOLIA_BRIDGE_SECRET: payment-settings-routing-contract
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: test
+          DB_USERNAME: test
+          DB_PASSWORD: test
+        run: |
+          set -Eeuo pipefail
+          APP_ENV=test BASE_URL=https://test.blindleiadarts.ingenting.org STATIC_BASE_URL=https://test.blindleiadarts.ingenting.org \
+            DB_TABLE_PREFIX=bd_test_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            BACKEND_V2_BASE_URL=https://blindleia-backend-v2-test.onrender.com \
+            php infra/deploy/generate_api_config.php --output=/tmp/payment-settings-test.php
+          php -r '$c=require "/tmp/payment-settings-test.php"; $b=$c["backend_v2"]??[]; if (($b["payment_settings_routing_mode"]??null)!=="node") exit(1);'
+
+          APP_ENV=prod BASE_URL=https://blindleiadarts.ingenting.org STATIC_BASE_URL=https://blindleiadarts.ingenting.org \
+            DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            php infra/deploy/generate_api_config.php --output=/tmp/payment-settings-prod.php
+          php -r '$c=require "/tmp/payment-settings-prod.php"; $b=$c["backend_v2"]??[]; if (($b["payment_settings_routing_mode"]??null)!=="php") exit(1);'
+
+      - name: Verify owner selection precedes legacy database work
+        run: |
+          set -Eeuo pipefail
+          php -r '$s=file_get_contents("apps/api/src/PaymentSettingsApplication.php"); $r=strpos($s,"backendV2PaymentSettingsRoutingMode()"); $d=strpos($s,"new Database"); if ($r===false||$d===false||$r>=$d) exit(1);'
+          grep -Fq "return (new BackendV2PaymentSettingsProxyApplication" apps/api/src/PaymentSettingsApplication.php
