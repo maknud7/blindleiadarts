@@ -3,7 +3,6 @@ import type { IncomingMessage } from "node:http";
 import { DomainValidationError } from "../domain/errors.js";
 import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identity-auth-repository.js";
 import type { MySqlPlayerLiveReadRepository } from "../mysql/player-live-read-repository.js";
-import { ActivityRuntimeRouter } from "./activity-runtime-router.js";
 import { RuntimeAccessError, type BackendRuntimeConfig } from "./config.js";
 
 export interface PlayerLiveReadRouteResult {
@@ -12,20 +11,13 @@ export interface PlayerLiveReadRouteResult {
 }
 
 export class PlayerLiveReadRouter {
-  private readonly activity: ActivityRuntimeRouter;
-
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly identity: MySqlIdentityAuthRepository,
     private readonly reads: MySqlPlayerLiveReadRepository,
-  ) {
-    this.activity = new ActivityRuntimeRouter(config, identity, identity.activityRuntimeRepository());
-  }
+  ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<PlayerLiveReadRouteResult | null> {
-    const activityRoute = await this.activity.handle(method, path, request);
-    if (activityRoute !== null) return activityRoute;
-
     if (method !== "GET") return null;
 
     if (path === "/v1/realtime/config") {
