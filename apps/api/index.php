@@ -6,6 +6,7 @@ use Blindleia\Dartkiosk\Api\AccountProfileApplication;
 use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\BackendV2AccountReadProxyApplication;
+use Blindleia\Dartkiosk\Api\BackendV2ActivityProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ScoliaProxyApplication;
@@ -78,6 +79,13 @@ if ($config->appEnv() === 'test') {
         )->send();
         return;
     }
+}
+
+// Activity telemetry gets an independent single-writer boundary. TEST routes
+// runtime activity to backend-v2 while PROD remains on PHP until its own gate.
+$activityV2 = new BackendV2ActivityProxyApplication(__DIR__);
+if ($activityV2->run()) {
+    return;
 }
 
 $activity = new ActivityApplication(__DIR__);
