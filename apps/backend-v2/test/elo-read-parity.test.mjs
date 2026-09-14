@@ -143,7 +143,7 @@ test("tournament ELO settings read is boolean and BIGINT-safe", async () => {
   assert.equal(await repo.getTournamentEloSetting("999"), null);
 });
 
-test("catalog router owns both ELO GET routes while mutations fall through", async () => {
+test("catalog router owns both ELO GET routes while mutations fall through to the tournament write router", async () => {
   const repo = new MySqlTournamentCatalogReadRepository(new FakeSessions(fakeDb()), "bd_test_");
   const router = new TournamentCatalogReadRouter(repo);
 
@@ -172,10 +172,11 @@ test("season router no longer shadows the canonical club ELO owner", async () =>
   assert.equal(await router.handle("GET", "/v1/clubs/7/elo"), null);
 });
 
-test("PHP tournament frontdoor captures only GET elo-settings so writes stay legacy", () => {
+test("PHP tournament frontdoor captures GET/PUT/PATCH elo-settings for TEST Node routing", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(path.join(here, "../../api/src/BackendV2TournamentProxyApplication.php"), "utf8");
-  assert.match(source, /\$method === 'GET' && preg_match\('#\^\/v1\/tournaments\/\\d\+\/elo-settings\$#'/);
-  assert.doesNotMatch(source, /in_array\(\$method, \['GET', 'PUT'[^\]]*\][^\n]*elo-settings/);
-  assert.doesNotMatch(source, /in_array\(\$method, \['GET', 'PATCH'[^\]]*\][^\n]*elo-settings/);
+  assert.match(
+    source,
+    /in_array\(\$method, \['GET', 'PUT', 'PATCH'\], true\) && preg_match\('#\^\/v1\/tournaments\/\\d\+\/elo-settings\$#'/,
+  );
 });

@@ -168,6 +168,46 @@ export class MySqlTournamentRuntimeRepository {
     });
   }
 
+  async updateTournamentEloSetting(
+    tournamentIdInput: unknown,
+    enabledInput: unknown,
+  ): Promise<Record<string, unknown>> {
+    const tournamentId = requiredId(tournamentIdInput, "tournament_id");
+    const enabled = phpBooleanValue(enabledInput);
+    return this.sessions.withTransaction(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT id,club_id,season_id,name,elo_enabled
+           FROM \`${this.prefix}tournaments\` WHERE id=? LIMIT 1 FOR UPDATE`,
+        [tournamentId],
+      );
+      const tournament = rows[0];
+      if (!tournament) {
+        throw new DomainValidationError("tournament_not_found", "Tournament was not found.", 404);
+      }
+      const current = numberValue(tournament.elo_enabled) === 1;
+      if (current === enabled) return publicEloSetting(tournament);
+
+      const completedRows = await db.query<QueryResultRow>(
+        `SELECT COUNT(*) AS c FROM \`${this.prefix}matches\`
+          WHERE tournament_id=? AND status='completed'`,
+        [tournamentId],
+      );
+      if (numberValue(completedRows[0]?.c) > 0) {
+        throw new DomainValidationError(
+          "elo_setting_locked",
+          "ELO-innstillingen kan ikke endres etter at turneringen har fullførte kamper.",
+          409,
+        );
+      }
+
+      await db.execute(
+        `UPDATE \`${this.prefix}tournaments\` SET elo_enabled=? WHERE id=?`,
+        [enabled ? 1 : 0, tournamentId],
+      );
+      return publicEloSetting({ ...tournament, elo_enabled: enabled ? 1 : 0 });
+    });
+  }
+
   async registerPlayer(
     tournamentIdInput: unknown,
     playerIdInput: unknown,
@@ -659,6 +699,23 @@ const ELO_BASELINE = new Map<string, number>([
   ["dan christian birkeland", 939.5],
   ["boye buckingham", 921.0],
 ]);
+
+function publicEloSetting(row: QueryResultRow): Record<string, unknown> {
+  return {
+    id: requiredId(row.id, "tournament_id"),
+    club_id: requiredId(row.club_id, "club_id"),
+    season_id: decimalId(row.season_id),
+    name: row.name ?? null,
+    elo_enabled: numberValue(row.elo_enabled) === 1,
+  };
+}
+
+function phpBooleanValue(value: unknown): boolean {
+  if (value === false || value === null || value === undefined) return false;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") return value !== "" && value !== "0";
+  return true;
+}
 
 function registrationStateSql(alias: string): string {
   return `CASE
