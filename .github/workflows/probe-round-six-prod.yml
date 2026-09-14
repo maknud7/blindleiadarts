@@ -130,6 +130,8 @@ jobs:
 
           $season180=(int)$db->query("SELECT COUNT(*) c FROM {$p}visits v JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}tournaments t ON t.id=m.tournament_id WHERE t.season_id={$sid} AND v.score=180 AND v.is_bust=0")->fetch_assoc()["c"];
           echo "SEASON_180_TOTAL={$season180}\n";
+          $q180="SELECT p.display_name,t.name,COUNT(*) total FROM {$p}visits v JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}tournaments t ON t.id=m.tournament_id JOIN {$p}players p ON p.id=v.player_id WHERE t.season_id={$sid} AND v.score=180 AND v.is_bust=0 GROUP BY p.id,p.display_name,t.id,t.name ORDER BY t.start_at,p.display_name";
+          foreach($db->query($q180) as $r) echo "SEASON_180_DETAIL=".implode("|",$r)."\n";
           $seasonHigh=$db->query("SELECT p.display_name,v.score,t.name FROM {$p}visits v JOIN {$p}legs l ON l.id=v.leg_id AND l.winner_player_id=v.player_id JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}tournaments t ON t.id=m.tournament_id JOIN {$p}players p ON p.id=v.player_id WHERE t.season_id={$sid} AND v.remaining_after=0 ORDER BY v.score DESC,v.id LIMIT 1")->fetch_assoc();
           echo "SEASON_HIGH_CHECKOUT=".implode("|",$seasonHigh)."\n";
 
