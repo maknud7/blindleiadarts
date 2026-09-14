@@ -138,6 +138,12 @@ final class Config
         return $mode === 'node' ? 'node' : 'php';
     }
 
+    public function backendV2ActivityRoutingMode(): string
+    {
+        $mode = strtolower(trim((string) (($this->config['backend_v2']['activity_routing_mode'] ?? 'php') ?: 'php')));
+        return $mode === 'node' ? 'node' : 'php';
+    }
+
     public function backendV2BaseUrl(): string
     {
         return rtrim(trim((string) (($this->config['backend_v2']['base_url'] ?? '') ?: '')), '/');
