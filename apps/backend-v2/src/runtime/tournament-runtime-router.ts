@@ -4,6 +4,7 @@ import { DomainValidationError } from "../domain/errors.js";
 import type { MySqlAccountProfileRepository } from "../mysql/account-profile-repository.js";
 import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identity-auth-repository.js";
 import type { MySqlMembershipEligibilityRepository } from "../mysql/membership-eligibility-repository.js";
+import type { MySqlTournamentBoardAdminRepository } from "../mysql/tournament-board-admin-repository.js";
 import type { MySqlTournamentRuntimeRepository } from "../mysql/tournament-runtime-repository.js";
 import type { MySqlTournamentSummaryRepository } from "../mysql/tournament-summary-repository.js";
 import type { MySqlTournamentWizardRepository } from "../mysql/tournament-wizard-repository.js";
@@ -24,6 +25,7 @@ export class TournamentRuntimeRouter {
   private readonly realtime: TournamentRealtimePublisher;
   private summaries: MySqlTournamentSummaryRepository | null = null;
   private wizard: MySqlTournamentWizardRepository | null = null;
+  private boardAdmin: MySqlTournamentBoardAdminRepository | null = null;
 
   constructor(
     private readonly config: BackendRuntimeConfig,
@@ -79,6 +81,106 @@ export class TournamentRuntimeRouter {
           requiredId(user.id, "user_account_id"),
         ),
       });
+    }
+
+    const boardAssignmentsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/board-assignments$/.exec(path);
+    if ((method === "GET" || method === "PUT") && boardAssignmentsMatch) {
+      const tournamentId = requiredCapture(boardAssignmentsMatch, 1);
+      if (method === "PUT") assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireAnyAdmin(user);
+      const boards = this.boardAdminRepository();
+      const tournament = await boards.findTournament(tournamentId);
+      if (tournament === null) {
+        throw new DomainValidationError("tournament_not_found", "Tournament was not found.", 404);
+      }
+      const clubId = requiredId(tournament.club_id, "club_id");
+      this.requireAdmin(user, clubId);
+      if (method === "GET") return ok(await boards.boardAssignmentOverview(tournamentId));
+
+      const body = await readJsonObject(request);
+      const overview = await boards.replaceBoardAssignments(
+        tournamentId,
+        Array.isArray(body.kiosk_ids) ? body.kiosk_ids : [],
+      );
+      await this.realtime.publishClubRefresh(clubId, "tournament_board_assignments_updated");
+      return ok(overview);
+    }
+
+    const autoAssignMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/auto-assign$/.exec(path);
+    if (method === "POST" && autoAssignMatch) {
+      const tournamentId = requiredCapture(autoAssignMatch, 1);
+      assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireAnyAdmin(user);
+      const boards = this.boardAdminRepository();
+      const tournament = await boards.findTournament(tournamentId);
+      if (tournament === null) {
+        throw new DomainValidationError("tournament_not_found", "Tournament was not found.", 404);
+      }
+      const clubId = requiredId(tournament.club_id, "club_id");
+      this.requireAdmin(user, clubId);
+      const result = await boards.autoAssignPendingMatches(tournamentId);
+      await this.realtime.publishClubRefresh(clubId, "tournament_matches_auto_assigned");
+      return ok(result);
+    }
+
+    const manualMatchCreate = /^\/v1\/tournaments\/([1-9][0-9]*)\/matches$/.exec(path);
+    if (method === "POST" && manualMatchCreate) {
+      const tournamentId = requiredCapture(manualMatchCreate, 1);
+      assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireAnyAdmin(user);
+      const body = await readJsonObject(request);
+      const playerAId = decimalId(body.player_a_id);
+      const playerBId = decimalId(body.player_b_id);
+      if (playerAId === null || playerBId === null || playerAId === playerBId) {
+        throw new DomainValidationError(
+          "invalid_match_players",
+          "Two distinct players are required to create a match.",
+          422,
+        );
+      }
+      const boards = this.boardAdminRepository();
+      const match = await boards.createMatch(tournamentId, {
+        ...body,
+        player_a_id: playerAId,
+        player_b_id: playerBId,
+      });
+      const tournament = await boards.findTournament(tournamentId);
+      if (tournament !== null && tournament.club_id != null) {
+        await this.realtime.publishClubRefresh(
+          requiredId(tournament.club_id, "club_id"),
+          "tournament_match_created",
+        );
+      }
+      return ok({ match }, 201);
+    }
+
+    const assignKioskMatch = /^\/v1\/matches\/([1-9][0-9]*)\/assign-kiosk$/.exec(path);
+    if (method === "POST" && assignKioskMatch) {
+      const matchId = requiredCapture(assignKioskMatch, 1);
+      assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireAnyAdmin(user);
+      const body = await readJsonObject(request);
+      const kioskId = decimalId(body.kiosk_id);
+      if (kioskId === null) {
+        throw new DomainValidationError("kiosk_required", "kiosk_id is required.", 422);
+      }
+      const boards = this.boardAdminRepository();
+      const match = await boards.assignMatchToKiosk(matchId, kioskId);
+      const tournamentId = decimalId(match.tournament_id);
+      if (tournamentId !== null) {
+        const tournament = await boards.findTournament(tournamentId);
+        if (tournament !== null && tournament.club_id != null) {
+          await this.realtime.publishClubRefresh(
+            requiredId(tournament.club_id, "club_id"),
+            "tournament_match_board_assigned",
+          );
+        }
+      }
+      return ok({ match });
     }
 
     const createMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/tournaments$/.exec(path);
@@ -252,6 +354,13 @@ export class TournamentRuntimeRouter {
     return this.wizard;
   }
 
+  private boardAdminRepository(): MySqlTournamentBoardAdminRepository {
+    if (this.boardAdmin === null) {
+      this.boardAdmin = this.identityRepository.tournamentBoardAdminRepository();
+    }
+    return this.boardAdmin;
+  }
+
   private async requireTournament(tournamentId: string): Promise<Record<string, unknown>> {
     const tournament = await this.tournaments.findTournament(tournamentId);
     if (tournament === null) {
@@ -266,6 +375,12 @@ export class TournamentRuntimeRouter {
     const user = await this.identityRepository.findBySessionToken(token, this.identityTouchAllowed());
     if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Session is invalid or expired.");
     return user;
+  }
+
+  private requireAnyAdmin(user: IdentityUser): void {
+    const role = String(user.role ?? "");
+    if (role === "super_admin" || role === "club_admin") return;
+    throw new RuntimeAccessError(403, "admin_required", "Administrator access is required.");
   }
 
   private requireAdmin(user: IdentityUser, clubId: string): void {
