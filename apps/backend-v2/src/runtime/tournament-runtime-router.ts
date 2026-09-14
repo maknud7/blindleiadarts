@@ -6,6 +6,7 @@ import type { MySqlIdentityAuthRepository, IdentityUser } from "../mysql/identit
 import type { MySqlMembershipEligibilityRepository } from "../mysql/membership-eligibility-repository.js";
 import type { MySqlTournamentRuntimeRepository } from "../mysql/tournament-runtime-repository.js";
 import type { MySqlTournamentSummaryRepository } from "../mysql/tournament-summary-repository.js";
+import type { MySqlTournamentWizardRepository } from "../mysql/tournament-wizard-repository.js";
 import {
   assertMutationAllowed,
   mutationsAllowed,
@@ -22,6 +23,7 @@ export interface TournamentRouteResult {
 export class TournamentRuntimeRouter {
   private readonly realtime: TournamentRealtimePublisher;
   private summaries: MySqlTournamentSummaryRepository | null = null;
+  private wizard: MySqlTournamentWizardRepository | null = null;
 
   constructor(
     private readonly config: BackendRuntimeConfig,
@@ -38,6 +40,26 @@ export class TournamentRuntimeRouter {
   }
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentRouteResult | null> {
+    const wizardPlanMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/wizard-plan$/.exec(path);
+    if (["GET", "PUT", "PATCH", "DELETE"].includes(method) && wizardPlanMatch) {
+      const tournamentId = requiredCapture(wizardPlanMatch, 1);
+      if (method !== "GET") assertMutationAllowed(this.config);
+      const wizard = this.wizardRepository();
+      const plan = await wizard.getPlan(tournamentId);
+      if (plan === null) {
+        throw new DomainValidationError("tournament_not_found", "Turneringen ble ikke funnet.", 404);
+      }
+      if (method === "GET") return ok({ plan });
+
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, requiredId(plan.club_id, "club_id"));
+      if (method === "DELETE") {
+        return ok(await wizard.deleteDraftTournament(tournamentId));
+      }
+      const body = await readJsonObject(request);
+      return ok({ plan: await wizard.updatePlan(tournamentId, body) });
+    }
+
     const summaryAdminMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/summary\/admin$/.exec(path);
     if ((method === "GET" || method === "PUT" || method === "PATCH") && summaryAdminMatch) {
       const tournamentId = requiredCapture(summaryAdminMatch, 1);
@@ -221,6 +243,13 @@ export class TournamentRuntimeRouter {
       this.summaries = this.identityRepository.tournamentSummaryRepository();
     }
     return this.summaries;
+  }
+
+  private wizardRepository(): MySqlTournamentWizardRepository {
+    if (this.wizard === null) {
+      this.wizard = this.identityRepository.tournamentWizardRepository();
+    }
+    return this.wizard;
   }
 
   private async requireTournament(tournamentId: string): Promise<Record<string, unknown>> {
