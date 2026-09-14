@@ -108,11 +108,6 @@ if ($accountProfile->run()) {
     return;
 }
 
-$membershipEligibility = new MembershipEligibilityApplication(__DIR__);
-if ($membershipEligibility->run()) {
-    return;
-}
-
 $paymentSettings = new PaymentSettingsApplication(__DIR__);
 if ($paymentSettings->run()) {
     return;
@@ -146,6 +141,15 @@ if ($scoliaV2->run()) {
 // continues to the legacy PHP applications below.
 $tournamentV2 = new BackendV2TournamentProxyApplication(__DIR__);
 if ($tournamentV2->run()) {
+    return;
+}
+
+// This legacy application still owns PROD self-registration while tournament
+// routing remains PHP there. In TEST the Node tournament front door above must
+// get first refusal so POST/DELETE /v1/tournaments/{id}/register cannot be
+// intercepted by the old PHP membership handler.
+$membershipEligibility = new MembershipEligibilityApplication(__DIR__);
+if ($membershipEligibility->run()) {
     return;
 }
 
