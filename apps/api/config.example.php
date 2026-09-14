@@ -27,6 +27,7 @@ return [
         'account_read_routing_mode' => 'php',
         'realtime_config_routing_mode' => 'php',
         'activity_routing_mode' => 'php',
+        'payment_settings_routing_mode' => 'php',
         'base_url' => '',
         'canary_kiosk_ids' => '',
         'internal_token' => '',
