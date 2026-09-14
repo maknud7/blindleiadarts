@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\AccountProfileApplication;
 use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
+use Blindleia\Dartkiosk\Api\BackendV2AccountReadProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ScoliaProxyApplication;
@@ -86,6 +87,14 @@ if ($activity->run()) {
 
 $passwordReset = new PasswordResetApplication(__DIR__);
 if ($passwordReset->run()) {
+    return;
+}
+
+// Read-only authenticated account data can use the Node runtime safely even
+// while TEST shares PROD identity tables: backend-v2 deliberately avoids
+// touching shared identity sessions on these reads.
+$accountReadV2 = new BackendV2AccountReadProxyApplication(__DIR__);
+if ($accountReadV2->run()) {
     return;
 }
 
