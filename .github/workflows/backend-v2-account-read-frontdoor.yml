@@ -131,7 +131,8 @@ jobs:
               cat "$headers" >&2
               exit 1
             fi
-            if ! grep -Eq '"code":"invalid_session"|"code":"authentication_required"' "$body"; then
+            error_code="$(jq -r '.error.code // empty' "$body" 2>/dev/null || true)"
+            if [[ "$error_code" != "invalid_session" && "$error_code" != "authentication_required" ]]; then
               echo "$path did not return the expected backend-v2 authentication error." >&2
               cat "$body" >&2
               exit 1
