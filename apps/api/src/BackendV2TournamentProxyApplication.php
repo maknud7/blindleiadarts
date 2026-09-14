@@ -98,6 +98,12 @@ final class BackendV2TournamentProxyApplication
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/registrations/guest$#', $path) === 1) return true;
         if ($method === 'DELETE' && preg_match('#^/v1/tournaments/\d+/registrations/\d+$#', $path) === 1) return true;
 
+        // Season reads remain owned by the player/live read frontdoor. Only
+        // TEST-only admin mutations follow the tournament routing gate here.
+        if ($method === 'POST' && preg_match('#^/v1/clubs/\d+/seasons$#', $path) === 1) return true;
+        if (in_array($method, ['PUT', 'PATCH'], true) && preg_match('#^/v1/seasons/\d+$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/seasons/\d+/(?:activate|complete)$#', $path) === 1) return true;
+
         if (in_array($method, ['GET', 'PUT'], true) && preg_match('#^/v1/tournaments/\d+/board-assignments$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/auto-assign$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/matches/\d+/assign-kiosk$#', $path) === 1) return true;

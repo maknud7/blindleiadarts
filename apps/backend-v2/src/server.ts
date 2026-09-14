@@ -15,6 +15,7 @@ import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibi
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlPlayerLiveReadRepository } from "./mysql/player-live-read-repository.js";
 import { MySqlPublicLiveReadRepository } from "./mysql/public-live-read-repository.js";
+import { MySqlSeasonAdminRepository } from "./mysql/season-admin-repository.js";
 import { MySqlSeasonPublicReadRepository } from "./mysql/season-public-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
 import { MySqlScoliaBridgeRepository } from "./mysql/scolia-bridge-repository.js";
@@ -43,6 +44,7 @@ import { EquipmentAdminRouter } from "./runtime/equipment-admin-router.js";
 import { PlayerLiveReadRouter } from "./runtime/player-live-read-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { PublicLiveReadRouter } from "./runtime/public-live-read-router.js";
+import { SeasonAdminRouter } from "./runtime/season-admin-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
 import { TournamentAttendanceRouter } from "./runtime/tournament-attendance-router.js";
@@ -115,6 +117,8 @@ const publicLiveReads = new MySqlPublicLiveReadRepository(
 const publicLiveRuntime = new PublicLiveReadRouter(publicLiveReads);
 const seasonPublicReads = new MySqlSeasonPublicReadRepository(sessions, config.prefixes.runtime);
 const seasonPublicRuntime = new SeasonPublicReadRouter(seasonPublicReads);
+const seasonAdmin = new MySqlSeasonAdminRepository(sessions, config.prefixes.runtime);
+const seasonAdminRuntime = new SeasonAdminRouter(config, identityRepository, seasonAdmin);
 const membership = new MySqlMembershipEligibilityRepository(sessions, config.prefixes.runtime);
 const equipment = new MySqlEquipmentAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaAdmin = new MySqlScoliaAdminRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
@@ -301,6 +305,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   const seasonPublicRoute = await seasonPublicRuntime.handle(method, publicPath);
   if (seasonPublicRoute !== null) {
     sendJson(response, seasonPublicRoute.statusCode, seasonPublicRoute.payload);
+    return;
+  }
+
+  const seasonAdminRoute = await seasonAdminRuntime.handle(method, publicPath, request);
+  if (seasonAdminRoute !== null) {
+    sendJson(response, seasonAdminRoute.statusCode, seasonAdminRoute.payload);
     return;
   }
 

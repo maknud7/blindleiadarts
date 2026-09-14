@@ -31,6 +31,13 @@ $yes = [
     ['POST', '/v1/tournaments/9/registrations'],
     ['POST', '/v1/tournaments/9/registrations/guest'],
     ['DELETE', '/v1/tournaments/9/registrations/17'],
+
+    ['POST', '/v1/clubs/1/seasons'],
+    ['PUT', '/v1/seasons/8'],
+    ['PATCH', '/v1/seasons/8'],
+    ['POST', '/v1/seasons/8/activate'],
+    ['POST', '/v1/seasons/8/complete'],
+
     ['GET', '/v1/tournaments/9/wizard-plan'],
     ['PUT', '/v1/tournaments/9/wizard-plan'],
     ['PATCH', '/v1/tournaments/9/wizard-plan'],
@@ -73,6 +80,15 @@ $no = [
     ['DELETE', '/v1/tournaments/9'],
     ['POST', '/v1/tournaments/9/elo-settings'],
     ['DELETE', '/v1/tournaments/9/elo-settings'],
+
+    // Season reads stay on the player/live read frontdoor. Unsupported season
+    // verbs must keep falling through to legacy until explicitly migrated.
+    ['GET', '/v1/clubs/1/seasons'],
+    ['GET', '/v1/seasons/8'],
+    ['GET', '/v1/seasons/8/standings'],
+    ['DELETE', '/v1/seasons/8'],
+    ['PUT', '/v1/seasons/8/activate'],
+
     ['POST', '/v1/tournaments/9/wizard-plan'],
     ['POST', '/v1/tournaments/9/finish'],
     ['POST', '/v1/tournaments/9/playoffs'],
