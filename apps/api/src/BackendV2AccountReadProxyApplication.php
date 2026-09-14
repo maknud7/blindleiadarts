@@ -35,9 +35,7 @@ final class BackendV2AccountReadProxyApplication
         if (!$this->handles($method, $path)) return false;
 
         $config = Config::load($this->rootPath);
-        // Reuse the read-only player/live cutover switch. It is already TEST=node
-        // and PROD=php, which is the exact safety boundary these account reads need.
-        if ($config->backendV2PlayerLiveRoutingMode() !== 'node') return false;
+        if ($config->backendV2AccountReadRoutingMode() !== 'node') return false;
 
         try {
             $client = new BackendV2ApiClient(
