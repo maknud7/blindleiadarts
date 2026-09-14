@@ -201,11 +201,11 @@ jobs:
           for attempt in $(seq 1 12); do
             tournaments="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/clubs/1/tournaments?cb=$RANDOM" || true)"
             elo="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/clubs/1/elo?cb=$RANDOM" || true)"
-            tournament_elo="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/tournament-elo.php?tournament_id=13&cb=$RANDOM" || true)"
+            tournament_elo="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/tournament-elo.php?tournament_id=15&cb=$RANDOM" || true)"
             if TOURNAMENTS="$tournaments" ELO="$elo" TOURNAMENT_ELO="$tournament_elo" php -r '
               $t=json_decode(getenv("TOURNAMENTS"),true);$e=json_decode(getenv("ELO"),true);$te=json_decode(getenv("TOURNAMENT_ELO"),true);$items=$t["data"]["items"]??[];$found=false;$tid=0;foreach($items as $x)if(($x["name"]??"")==="Mandagsserien #6"&&($x["status"]??"")==="completed"&&(int)($x["match_count"]??0)===24){$found=true;$tid=(int)$x["id"];}$names=[];$dups=0;foreach(($e["data"]["items"]??[]) as $x){$n=mb_strtolower(trim((string)($x["display_name"]??"")));if(isset($names[$n]))$dups++;$names[$n]=1;}$tp=$te["data"]["players"]??[];
-              exit($found&&$tid===13&&$dups===0&&count($tp)===7?0:1);
-            '; then echo "ROUND6_PUBLIC_READBACK_OK=yes tournament_id=13 elo_players=7"; exit 0; fi
+              exit($found&&$tid===15&&$dups===0&&count($tp)===7?0:1);
+            '; then echo "ROUND6_PUBLIC_READBACK_OK=yes tournament_id=15 elo_players=7"; exit 0; fi
             sleep 10
           done
           echo "Public PROD readback did not expose round six cleanly." >&2
