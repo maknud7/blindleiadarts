@@ -151,5 +151,15 @@ jobs:
       - name: Run concurrent tournament mixed load
         run: php infra/sql/tournament_mixed_load_test.php
 
+      - name: Dump InnoDB lock diagnostics
+        if: failure()
+        run: |
+          php -r '
+          $db = new mysqli("127.0.0.1", "root", "ci-root-only", "blindleiadarts_ci", 3306);
+          $row = $db->query("SHOW ENGINE INNODB STATUS")->fetch_assoc();
+          fwrite(STDERR, (string) ($row["Status"] ?? "No InnoDB status available.") . PHP_EOL);
+          $db->close();
+          '
+
       - name: Run 10-board virtual Scolia queue test
         run: php infra/sql/scolia_queue_virtual_test.php
