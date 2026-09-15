@@ -11,6 +11,8 @@ $app = new BackendV2IdentityAuditProxyApplication(dirname(__DIR__));
 $yes = [
     ['GET', '/v1/player-identities/history'],
     ['GET', '/v1/player-identities/health'],
+    ['GET', '/v1/clubs/1/player-identities/duplicates'],
+    ['POST', '/v1/clubs/1/player-identities/preview'],
 ];
 foreach ($yes as [$method, $path]) {
     if (!$app->handles($method, $path)) {
@@ -23,8 +25,10 @@ $no = [
     ['POST', '/v1/player-identities/history'],
     ['POST', '/v1/player-identities/health'],
     ['GET', '/v1/player-identities/preview'],
-    ['GET', '/v1/clubs/1/player-identities/duplicates'],
+    ['POST', '/v1/clubs/1/player-identities/duplicates'],
+    ['GET', '/v1/clubs/1/player-identities/preview'],
     ['POST', '/v1/clubs/1/player-identities/merge'],
+    ['GET', '/v1/clubs/1/player-identities/merge'],
 ];
 foreach ($no as [$method, $path]) {
     if ($app->handles($method, $path)) {
@@ -39,6 +43,10 @@ if ($app->targetPath('/v1/player-identities/history', 'limit=25&secret=ignore') 
 }
 if ($app->targetPath('/v1/player-identities/health', 'limit=25') !== '/v1/player-identities/health') {
     fwrite(STDERR, "Identity-audit health must not forward query parameters.\n");
+    exit(1);
+}
+if ($app->targetPath('/v1/clubs/1/player-identities/duplicates', 'anything=ignored') !== '/v1/clubs/1/player-identities/duplicates') {
+    fwrite(STDERR, "Identity diagnostics must not forward query parameters.\n");
     exit(1);
 }
 
