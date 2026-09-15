@@ -38,6 +38,7 @@ final class PlayerIdentityApplication
             return false;
         }
 
+        $action = null;
         if ($globalAction === null) {
             $clubId = (int) $matches[1];
             $action = (string) $matches[2];
@@ -47,10 +48,12 @@ final class PlayerIdentityApplication
             }
         }
 
-        // Global identity audit is read-only. Select Node before the legacy DB is
-        // opened; preview/merge remain PHP-owned in this migration slice.
+        // Audit plus duplicate/preview diagnostics are read-only. Select Node
+        // before opening the legacy DB. The canonical merge mutation remains
+        // PHP-owned until shared identity/runtime write semantics are migrated.
+        $routeReadToNode = $globalAction !== null || in_array($action, ['duplicates', 'preview'], true);
         $routingConfig = null;
-        if ($globalAction !== null) {
+        if ($routeReadToNode) {
             $routingConfig = Config::load($this->rootPath);
             if ($routingConfig->backendV2IdentityAuditRoutingMode() === 'node') {
                 return (new BackendV2IdentityAuditProxyApplication($this->rootPath))->run();
