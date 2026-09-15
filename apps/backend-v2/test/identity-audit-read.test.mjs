@@ -8,7 +8,17 @@ function request(authorization = "Bearer audit-session", url = "/v1/player-ident
   return { headers: authorization === null ? {} : { authorization }, url };
 }
 
-function identity(role = "super_admin") {
+function jsonRequest(body, authorization = "Bearer audit-session", url = "/") {
+  return {
+    headers: authorization === null ? {} : { authorization },
+    url,
+    async *[Symbol.asyncIterator]() {
+      yield Buffer.from(JSON.stringify(body));
+    },
+  };
+}
+
+function identity(role = "super_admin", adminClubIds = "") {
   const touches = [];
   return {
     touches,
@@ -27,7 +37,7 @@ function identity(role = "super_admin") {
         player_display_name: null,
         player_club_id: null,
         member_id: null,
-        admin_club_ids: "",
+        admin_club_ids: adminClubIds,
         global_roles: role === "super_admin" ? "super_admin" : "",
       };
     },
@@ -65,6 +75,50 @@ test("identity audit router is GET-only, superadmin-only and never touches share
   await assert.rejects(
     router.handle("GET", "/v1/player-identities/health", request(null)),
     (error) => error?.code === "authentication_required" && error?.statusCode === 401,
+  );
+});
+
+test("club identity diagnostics allow the owning manager, never touch identity sessions and exclude merge", async () => {
+  const clubId = "90071992547409930";
+  const auth = identity("club_admin", `7,${clubId}`);
+  const calls = [];
+  const audit = {
+    async duplicateCandidates(id) { calls.push(["duplicates", id]); return [{ id: "90071992547409931" }]; },
+    async preview(id, source, target) {
+      calls.push(["preview", id, source, target]);
+      return { source: { id: source }, target: { id: target }, conflicts: [], safe_to_merge: true };
+    },
+  };
+  const router = new IdentityAuditReadRouter(auth, audit);
+
+  const duplicates = await router.handle(
+    "GET",
+    `/v1/clubs/${clubId}/player-identities/duplicates`,
+    request(),
+  );
+  assert.equal(duplicates?.payload.items[0].id, "90071992547409931");
+
+  const preview = await router.handle(
+    "POST",
+    `/v1/clubs/${clubId}/player-identities/preview`,
+    jsonRequest({ source_player_id: "90071992547409931", target_player_id: "90071992547409932" }),
+  );
+  assert.equal(preview?.payload.safe_to_merge, true);
+  assert.deepEqual(calls, [
+    ["duplicates", clubId],
+    ["preview", clubId, "90071992547409931", "90071992547409932"],
+  ]);
+  assert.deepEqual(auth.touches, [false, false]);
+
+  assert.equal(
+    await router.handle("POST", `/v1/clubs/${clubId}/player-identities/merge`, jsonRequest({})),
+    null,
+  );
+
+  const wrongClub = new IdentityAuditReadRouter(identity("club_admin", "7"), audit);
+  await assert.rejects(
+    wrongClub.handle("GET", `/v1/clubs/${clubId}/player-identities/duplicates`, request()),
+    (error) => error?.code === "club_access_denied" && error?.statusCode === 403,
   );
 });
 
@@ -159,4 +213,111 @@ test("identity health reports duplicate groups and preserves unsafe ids", async 
   assert.equal(health.duplicates[0].club_id, "90071992547409931");
   assert.deepEqual(health.duplicates[0].ids, ["90071992547409932", 7]);
   assert.equal(informationSchemaCalls, 1);
+});
+
+test("duplicate candidates preserve exact ids and legacy cross-prefix account scope", async () => {
+  let identityQueries = 0;
+  const db = {
+    async query(sql, params = []) {
+      if (sql.includes("information_schema.TABLES")) {
+        assert.equal(params[0], "bd_test_elo_current_ratings");
+        return [{ present: 1 }];
+      }
+      if (sql.includes("HAVING COUNT(*) > 1") && sql.includes("match_count")) {
+        assert.deepEqual(params, ["42", "42"]);
+        return [{
+          id: "90071992547409931",
+          club_id: "42",
+          display_name: "Same Name",
+          first_name: null,
+          last_name: null,
+          nickname: null,
+          avatar_url: null,
+          member_id: "90071992547409932",
+          member_link_source: "manual",
+          is_active: "1",
+          elo_seasons: "2",
+          top_elo: "1188",
+          match_count: "12",
+          visit_count: "3",
+          tournament_count: "4",
+        }];
+      }
+      if (sql.includes("bd_prod_user_accounts")) identityQueries += 1;
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const sessions = { async withConnection(work) { return work(db); } };
+  const repo = new MySqlIdentityAuditReadRepository(sessions, "bd_test_", "bd_prod_");
+  const items = await repo.duplicateCandidates("42");
+  assert.equal(items.length, 1);
+  assert.equal(items[0].id, "90071992547409931");
+  assert.equal(items[0].member_id, "90071992547409932");
+  assert.equal(items[0].club_id, 42);
+  assert.equal(items[0].has_account, false);
+  assert.equal(items[0].canonical_score, 601203);
+  assert.equal(items[0].elo_seasons, 2);
+  assert.equal(identityQueries, 0);
+});
+
+test("preview reproduces merge conflicts and reference counts without cross-prefix identity reads", async () => {
+  const clubId = "90071992547409930";
+  const sourceId = "90071992547409931";
+  const targetId = "90071992547409932";
+  let identityQueries = 0;
+  const db = {
+    async query(sql, params = []) {
+      if (sql.includes("FROM `bd_test_players` WHERE id=? LIMIT 1")) {
+        const id = params[0];
+        return [{
+          id,
+          club_id: clubId,
+          display_name: id === sourceId ? "Duplicate" : "duplicate",
+          first_name: null,
+          last_name: null,
+          nickname: null,
+          avatar_url: null,
+          member_id: id === sourceId ? "100" : "101",
+          member_link_source: "manual",
+          is_active: "1",
+          merged_into_player_id: null,
+          merged_at: null,
+        }];
+      }
+      if (sql.includes("information_schema.TABLES")) {
+        const table = params[0];
+        return ["bd_test_tournament_players", "bd_test_season_ranking_events"].includes(table)
+          ? [{ present: 1 }]
+          : [];
+      }
+      if (sql.includes("FROM `bd_test_tournament_players` a")) return [{ c: "1" }];
+      if (sql.includes("FROM `bd_test_season_ranking_events` a")) return [{ c: "1" }];
+      if (sql.includes("information_schema.KEY_COLUMN_USAGE")) {
+        assert.deepEqual(params, ["bd_test_players"]);
+        return [{ TABLE_NAME: "bd_test_matches", COLUMN_NAME: "player_a_id" }];
+      }
+      if (sql.includes("FROM `bd_test_matches` WHERE `player_a_id`=?")) return [{ c: "4" }];
+      if (sql.includes("bd_prod_user_accounts")) identityQueries += 1;
+      throw new Error(`Unexpected query: ${sql} ${JSON.stringify(params)}`);
+    },
+  };
+  const sessions = { async withConnection(work) { return work(db); } };
+  const repo = new MySqlIdentityAuditReadRepository(sessions, "bd_test_", "bd_prod_");
+  const preview = await repo.preview(clubId, sourceId, targetId);
+  assert.equal(preview.source.id, sourceId);
+  assert.equal(preview.target.id, targetId);
+  assert.equal(preview.source.club_id, clubId);
+  assert.deepEqual(preview.references, { "bd_test_matches.player_a_id": 4 });
+  assert.deepEqual(preview.conflicts.map((conflict) => conflict.code), [
+    "different_members",
+    "same_tournament",
+    "same_ranking_event",
+  ]);
+  assert.equal(preview.safe_to_merge, false);
+  assert.equal(identityQueries, 0);
+
+  await assert.rejects(
+    repo.preview(clubId, sourceId, sourceId),
+    (error) => error?.code === "validation_error" && error?.statusCode === 422,
+  );
 });
