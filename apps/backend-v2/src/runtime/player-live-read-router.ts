@@ -109,8 +109,14 @@ function isActivityRoute(method: string, path: string): boolean {
 }
 
 function isIdentityAuditRoute(method: string, path: string): boolean {
-  return method === "GET"
-    && (path === "/v1/player-identities/history" || path === "/v1/player-identities/health");
+  if (method === "GET" && (path === "/v1/player-identities/history" || path === "/v1/player-identities/health")) {
+    return true;
+  }
+  if (method === "GET" && /^\/v1\/clubs\/[1-9][0-9]*\/player-identities\/duplicates$/.test(path)) {
+    return true;
+  }
+  return method === "POST"
+    && /^\/v1\/clubs\/[1-9][0-9]*\/player-identities\/preview$/.test(path);
 }
 
 function requiredCapture(match: RegExpExecArray, index: number): string {
