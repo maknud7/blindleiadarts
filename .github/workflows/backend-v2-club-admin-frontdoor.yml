@@ -36,6 +36,20 @@ jobs:
           extensions: mysqli, mbstring, curl, dom
           coverage: none
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Verify club admin Node contract
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:build
+          node --test apps/backend-v2/test/club-admin.test.mjs
+
       - name: Verify fail-closed club admin frontdoor
         run: |
           set -Eeuo pipefail
