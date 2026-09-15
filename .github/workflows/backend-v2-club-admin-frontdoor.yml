@@ -1,0 +1,84 @@
+name: Backend v2 Club Admin Frontdoor
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/index.php'
+      - 'apps/api/src/BackendV2ClubAdminProxyApplication.php'
+      - 'apps/api/src/Support/Config.php'
+      - 'apps/api/config.example.php'
+      - 'apps/api/tests/backend_v2_club_admin_proxy_routing_test.php'
+      - 'apps/api/tests/backend_v2_club_admin_frontdoor_order_test.php'
+      - 'apps/backend-v2/src/mysql/club-admin-repository.ts'
+      - 'apps/backend-v2/src/runtime/club-admin-router.ts'
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/club-admin.test.mjs'
+      - 'infra/deploy/generate_api_config.php'
+      - '.github/workflows/backend-v2-club-admin-frontdoor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  routing-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl, dom
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Verify club admin Node contract
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:build
+          node --test apps/backend-v2/test/club-admin.test.mjs
+
+      - name: Verify fail-closed club admin frontdoor
+        run: |
+          set -Eeuo pipefail
+          php -l apps/api/src/BackendV2ClubAdminProxyApplication.php
+          php -l apps/api/src/Support/Config.php
+          php -l apps/api/tests/backend_v2_club_admin_proxy_routing_test.php
+          php -l apps/api/tests/backend_v2_club_admin_frontdoor_order_test.php
+          php apps/api/tests/backend_v2_club_admin_proxy_routing_test.php
+          php apps/api/tests/backend_v2_club_admin_frontdoor_order_test.php
+          grep -Fq 'backendV2ClubAdminRoutingMode()' apps/api/src/BackendV2ClubAdminProxyApplication.php
+          grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2ClubAdminProxyApplication.php
+
+      - name: Verify TEST-only club admin routing default
+        env:
+          SCOLIA_BRIDGE_SECRET: club-admin-routing-contract
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_NAME: test
+          DB_USERNAME: test
+          DB_PASSWORD: test
+        run: |
+          set -Eeuo pipefail
+          APP_ENV=test BASE_URL=https://test.blindleiadarts.ingenting.org STATIC_BASE_URL=https://test.blindleiadarts.ingenting.org \
+            DB_TABLE_PREFIX=bd_test_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            BACKEND_V2_BASE_URL=https://blindleia-backend-v2-test.onrender.com \
+            php infra/deploy/generate_api_config.php --output=/tmp/club-admin-test.php
+          php -r '$c=require "/tmp/club-admin-test.php"; $b=$c["backend_v2"]??[]; if (($b["club_admin_routing_mode"]??null)!=="node") exit(1);'
+
+          APP_ENV=prod BASE_URL=https://blindleiadarts.ingenting.org STATIC_BASE_URL=https://blindleiadarts.ingenting.org \
+            DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
+            php infra/deploy/generate_api_config.php --output=/tmp/club-admin-prod.php
+          php -r '$c=require "/tmp/club-admin-prod.php"; $b=$c["backend_v2"]??[]; if (($b["club_admin_routing_mode"]??null)!=="php") exit(1);'
