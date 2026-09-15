@@ -21,6 +21,7 @@ on:
       - 'infra/sql/migrations/0082_prioritize_scolia_runtime_queues.sql'
       - 'infra/sql/migrations/0083_assign_scolia_queue_priorities.sql'
       - 'infra/sql/migrations/0084_index_scolia_fifo_claims.sql'
+      - 'infra/sql/migrations/0086_index_match_kiosk_scoring_claims.sql'
       - 'infra/sql/db_concurrency_probe.php'
       - 'infra/sql/scolia_queue_virtual_test.php'
       - 'infra/sql/scolia_mixed_load_test.php'
