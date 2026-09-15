@@ -13,8 +13,9 @@ use InvalidArgumentException;
 use Throwable;
 
 /**
- * Same-origin front door for read-only player identity audit data. Routing is
- * selected before the legacy database is opened and Node attempts fail closed.
+ * Same-origin front door for read-only player identity audit and diagnostics.
+ * Routing is selected before the legacy database is opened and Node attempts
+ * fail closed. The canonical merge mutation deliberately remains PHP-owned.
  */
 final class BackendV2IdentityAuditProxyApplication
 {
@@ -42,7 +43,8 @@ final class BackendV2IdentityAuditProxyApplication
             if ($authorization !== null) $headers['authorization'] = $authorization;
 
             $targetPath = $this->targetPath($path, (string) ($_SERVER['QUERY_STRING'] ?? ''));
-            $result = $client->request('GET', $targetPath, null, $headers);
+            $body = $method === 'POST' ? $request->jsonBody() : null;
+            $result = $client->request($method, $targetPath, $body, $headers);
             $status = $result['status'];
             $payload = $result['payload'];
             header('X-BD-Backend-V2: identity-audit');
@@ -84,8 +86,15 @@ final class BackendV2IdentityAuditProxyApplication
 
     public function handles(string $method, string $path): bool
     {
-        return strtoupper($method) === 'GET'
-            && preg_match('#^/v1/player-identities/(?:history|health)$#', $path) === 1;
+        $method = strtoupper($method);
+        if ($method === 'GET' && preg_match('#^/v1/player-identities/(?:history|health)$#', $path) === 1) {
+            return true;
+        }
+        if ($method === 'GET' && preg_match('#^/v1/clubs/\d+/player-identities/duplicates$#', $path) === 1) {
+            return true;
+        }
+        return $method === 'POST'
+            && preg_match('#^/v1/clubs/\d+/player-identities/preview$#', $path) === 1;
     }
 
     public function targetPath(string $path, string $queryString): string
