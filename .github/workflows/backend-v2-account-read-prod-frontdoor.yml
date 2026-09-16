@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
       - 'apps/backend-v2/src/mysql/account-profile-repository.ts'
       - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/src/mysql/membership-eligibility-repository.ts'
@@ -41,15 +42,16 @@ jobs:
       - name: Install JavaScript toolchain
         run: npm install --no-package-lock --ignore-scripts
 
-      - name: Verify backend-v2 account read build and PHP front door
+      - name: Verify backend-v2 account reads are side-effect free
         run: |
           set -Eeuo pipefail
           npm run backend-v2:typecheck
           npm run backend-v2:build
+          node --test apps/backend-v2/test/account-read-side-effects.test.mjs
           php -l apps/api/src/BackendV2AccountReadProxyApplication.php
           php apps/api/tests/backend_v2_account_read_proxy_routing_test.php
 
-      - name: Verify PROD routing contract without deploying PROD
+      - name: Verify PROD routing remains on PHP until backend promotion
         env:
           SCOLIA_BRIDGE_SECRET: account-read-prod-contract
           DB_HOST: 127.0.0.1
@@ -63,15 +65,15 @@ jobs:
           APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org \
             DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/account-read-prod.php
-          php -r '$c=require "/tmp/account-read-prod.php"; $b=$c["backend_v2"]??[]; if (($b["account_read_routing_mode"]??null)!=="node") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2);'
+          php -r '$c=require "/tmp/account-read-prod.php"; $b=$c["backend_v2"]??[]; if (($b["account_read_routing_mode"]??null)!=="php") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2);'
 
-      - name: Verify current readonly PROD backend against canonical identity schema
+      - name: Verify current PROD backend exposes the account read surface
         env:
           HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
         run: |
           set -Eeuo pipefail
           health="$(curl -fsS --max-time 30 "${HOST_URL%/}/health")"
-          jq -e '.ok == true and .environment == "prod" and .mode == "prod-canary" and .writes_armed == false and .runtime_prefix == "bd_prod_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections <= 2 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
+          jq -e '.ok == true and .environment == "prod" and .mode == "prod-canary" and .writes_armed == true and .runtime_prefix == "bd_prod_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse"' <<<"$health" >/dev/null
 
           for path in \
             /v1/auth/me \
@@ -85,7 +87,7 @@ jobs:
               -o "$body" -w '%{http_code}' "${HOST_URL%/}$path" || true)"
             echo "$path HTTP ${status:-unknown}: $(cat "$body")"
             if [[ "$status" != "401" ]]; then
-              echo "$path is not ready on the readonly PROD backend." >&2
+              echo "$path is not exposed by the current PROD backend." >&2
               rm -f "$body"
               exit 1
             fi
@@ -99,4 +101,4 @@ jobs:
             rm -f "$body"
           done
 
-          echo 'Readonly PROD account reads are reachable on canonical bd_prod_ with writes disabled.'
+          echo 'Current PROD backend exposes canonical bd_prod_ account reads; candidate code guarantees those GET routes use touch=false. PROD frontdoor stays on PHP until the candidate backend is promoted.'
