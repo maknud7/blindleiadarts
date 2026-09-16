@@ -22,6 +22,22 @@ export class ClubAdminRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<ClubAdminRouteResult | null> {
+    if (method === "GET" && path === "/v1/health") {
+      return {
+        statusCode: 200,
+        payload: {
+          ok: true,
+          status: "ok",
+          environment: this.config.environment,
+          database: {
+            connected: await this.clubs.ping(),
+            name: this.config.mysql.database,
+            table_prefix: this.config.prefixes.runtime,
+          },
+        },
+      };
+    }
+
     const matchCalls = /^\/v1\/clubs\/([1-9][0-9]*)\/match-calls$/.exec(path);
     if (method === "GET" && matchCalls) {
       const clubId = matchCalls[1]!;

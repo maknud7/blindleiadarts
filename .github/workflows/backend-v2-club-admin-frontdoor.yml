@@ -16,6 +16,7 @@ on:
       - 'apps/backend-v2/src/runtime/club-admin-router.ts'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/test/club-admin.test.mjs'
+      - 'apps/backend-v2/test/api-health-read.test.mjs'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-club-admin-frontdoor.yml'
   workflow_dispatch:
@@ -49,7 +50,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           npm run backend-v2:build
-          node --test apps/backend-v2/test/club-admin.test.mjs
+          node --test apps/backend-v2/test/club-admin.test.mjs apps/backend-v2/test/api-health-read.test.mjs
 
       - name: Verify fail-closed club admin frontdoor
         run: |

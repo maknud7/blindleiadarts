@@ -11,6 +11,7 @@ $app = new BackendV2ClubAdminProxyApplication(dirname(__DIR__));
 foreach ([
     ['POST', '/v1/clubs'],
     ['POST', '/v1/public/kiosk/connect'],
+    ['GET', '/v1/health'],
     ['GET', '/v1/clubs/1/match-calls'],
     ['GET', '/v1/clubs/90071992547409931/match-calls'],
 ] as [$method, $path]) {
@@ -31,6 +32,7 @@ $no = [
     ['POST', '/v1/clubs/1/match-calls'],
     ['GET', '/v1/clubs/0/match-calls'],
     ['GET', '/v1/public/kiosk/connect'],
+    ['POST', '/v1/health'],
 ];
 foreach ($no as [$method, $path]) {
     if ($app->handles($method, $path)) {
