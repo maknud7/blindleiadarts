@@ -243,25 +243,25 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   }
 
   if (method === "GET" && publicPath === "/v1/auth/me") {
-    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const user = await requireIdentityUser(request, false);
     sendJson(response, 200, { ok: true, user: formatPublicUser(user) });
     return;
   }
 
   if (method === "GET" && publicPath === "/v1/me/profile") {
-    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const user = await requireIdentityUser(request, false);
     sendJson(response, 200, { ok: true, profile: await accountProfiles.profileForUser(user) });
     return;
   }
 
   if (method === "GET" && publicPath === "/v1/me/payments") {
-    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const user = await requireIdentityUser(request, false);
     sendJson(response, 200, { ok: true, ...(await accountProfiles.membershipAndPayments(user)) });
     return;
   }
 
   if (method === "GET" && publicPath === "/v1/me/eligibility") {
-    const user = await requireIdentityUser(request, identityTouchAllowed());
+    const user = await requireIdentityUser(request, false);
     const playerId = safeIdString(user.player_id);
     if (playerId === null) {
       throw new DomainValidationError("player_profile_missing", "Denne kontoen er ikke koblet til en spillerprofil.");
