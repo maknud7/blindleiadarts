@@ -22,6 +22,21 @@ export class ClubAdminRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<ClubAdminRouteResult | null> {
+    if (method === "POST" && path === "/v1/public/kiosk/connect") {
+      const body = await readJsonObject(request);
+      const code = String(body.code ?? "").trim().toUpperCase();
+      if (code === "") {
+        return error(422, "kiosk_club_code_required", "A kiosk club code is required.");
+      }
+
+      const club = await this.clubs.findByKioskPairingCode(code);
+      if (club === null) {
+        return error(404, "kiosk_club_code_invalid", "Club code was not found.");
+      }
+
+      return { statusCode: 200, payload: { ok: true, club } };
+    }
+
     if (method !== "POST" || path !== "/v1/clubs") return null;
 
     assertMutationAllowed(this.config);
@@ -106,4 +121,14 @@ async function readJsonObject(request: IncomingMessage): Promise<Record<string, 
     throw new RuntimeAccessError(400, "invalid_json_object", "Request body must be a JSON object.");
   }
   return parsed as Record<string, unknown>;
+}
+
+function error(statusCode: number, code: string, message: string): ClubAdminRouteResult {
+  return {
+    statusCode,
+    payload: {
+      ok: false,
+      error: { code, message },
+    },
+  };
 }
