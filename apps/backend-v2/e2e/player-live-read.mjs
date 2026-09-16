@@ -122,6 +122,14 @@ try {
   assert.ok(clubs.items.some((club) => String(club.id) === playerClubId));
   assert.ok(clubs.items.every((club) => Number.isInteger(Number(club.player_count))));
 
+  const legacyPlayers = await requestJson(`/v1/clubs/${playerClubId}/players`);
+  assert.equal(legacyPlayers.ok, true);
+  assert.equal(String(legacyPlayers.club_id), playerClubId);
+  assert.ok(Array.isArray(legacyPlayers.items));
+  assert.ok(legacyPlayers.items.some((player) => String(player.id) === playerId));
+  assert.ok(legacyPlayers.items.every((player) => Object.hasOwn(player, "is_active")));
+  assert.ok(legacyPlayers.items.every((player) => Object.hasOwn(player, "user_account_id")));
+
   const directory = await requestJson(`/v1/clubs/${playerClubId}/player-directory`);
   assert.equal(directory.ok, true);
   assert.equal(String(directory.club_id), playerClubId);
@@ -210,6 +218,7 @@ try {
     season_club_id: seasonClubId,
     realtime_config_verified: true,
     realtime_websocket_enabled: expectedRealtimeWebsocketUrl !== "",
+    club_players_legacy_read_verified: true,
     club_directory_verified: true,
     club_elo_verified: true,
     player_matches_verified: true,

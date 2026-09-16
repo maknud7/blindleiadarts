@@ -28,6 +28,37 @@ export class MySqlTournamentCatalogReadRepository {
     });
   }
 
+  async listClubPlayers(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
+    const clubId = requiredId(clubIdInput, "club_id");
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT p.id,p.display_name,p.first_name,p.last_name,p.nickname,p.avatar_url,p.is_active,
+                mp.contact_email,mp.contact_phone,
+                ua.id AS user_account_id,ua.username,ua.role
+           FROM \`${this.prefix}players\` p
+           LEFT JOIN \`${this.prefix}member_profiles\` mp ON mp.player_id=p.id
+           LEFT JOIN \`${this.prefix}user_accounts\` ua ON ua.id=mp.user_account_id
+          WHERE p.club_id=?
+          ORDER BY p.display_name ASC`,
+        [clubId],
+      );
+      return rows.map((row) => ({
+        id: requiredId(row.id, "player_id"),
+        display_name: row.display_name ?? null,
+        first_name: row.first_name ?? null,
+        last_name: row.last_name ?? null,
+        nickname: row.nickname ?? null,
+        avatar_url: row.avatar_url ?? null,
+        is_active: integer(row.is_active),
+        contact_email: row.contact_email ?? null,
+        contact_phone: row.contact_phone ?? null,
+        user_account_id: nullableId(row.user_account_id),
+        username: row.username ?? null,
+        role: row.role ?? null,
+      }));
+    });
+  }
+
   async listClubElo(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
     const clubId = requiredId(clubIdInput, "club_id");
     return this.sessions.withConnection(async (db) => {
