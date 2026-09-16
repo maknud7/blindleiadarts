@@ -7,6 +7,7 @@ use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
 use Blindleia\Dartkiosk\Api\BackendV2AccountReadProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ActivityProxyApplication;
+use Blindleia\Dartkiosk\Api\BackendV2ClubAdminProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2EquipmentProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ScoliaProxyApplication;
@@ -103,6 +104,13 @@ if ($passwordReset->run()) {
 // touching shared identity sessions on these reads.
 $accountReadV2 = new BackendV2AccountReadProxyApplication(__DIR__);
 if ($accountReadV2->run()) {
+    return;
+}
+
+// Club creation writes only to the isolated runtime registry in TEST. Decide
+// Node ownership before the generic legacy Application opens a database session.
+$clubAdminV2 = new BackendV2ClubAdminProxyApplication(__DIR__);
+if ($clubAdminV2->run()) {
     return;
 }
 
