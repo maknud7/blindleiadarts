@@ -5,6 +5,8 @@ on:
     branches:
       - develop
     paths:
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
       - 'apps/api/index.php'
       - 'apps/api/config.example.php'
       - 'apps/api/src/Support/Config.php'
@@ -12,10 +14,13 @@ on:
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
+      - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   push:
     branches:
       - develop
     paths:
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
       - 'apps/api/index.php'
       - 'apps/api/config.example.php'
       - 'apps/api/src/Support/Config.php'
@@ -23,6 +28,7 @@ on:
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
+      - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   workflow_dispatch:
 
 permissions:
@@ -49,10 +55,11 @@ jobs:
           php -l apps/api/src/BackendV2AccountReadProxyApplication.php
           php -l apps/api/src/Support/Config.php
           php apps/api/tests/backend_v2_account_read_proxy_routing_test.php
+          node --test apps/backend-v2/test/account-read-side-effects.test.mjs
           grep -Fq 'BackendV2AccountReadProxyApplication' apps/api/index.php
           grep -Fq "'account_read_routing_mode' => 'php'" apps/api/config.example.php
 
-      - name: Verify TEST-only generated routing defaults
+      - name: Verify generated routing defaults
         env:
           DB_HOST: example.invalid
           DB_PORT: '3306'
