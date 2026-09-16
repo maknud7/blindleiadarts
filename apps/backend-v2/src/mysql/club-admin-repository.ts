@@ -19,6 +19,17 @@ export class MySqlClubAdminRepository {
     private readonly prefix: TablePrefix,
   ) {}
 
+  async ping(): Promise<boolean> {
+    try {
+      return await this.sessions.withConnection(async (db) => {
+        const rows = await db.query<QueryResultRow>("SELECT 1 AS ok");
+        return Number(rows[0]?.ok ?? 0) === 1;
+      });
+    } catch {
+      return false;
+    }
+  }
+
   async create(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     const name = requiredName(payload.name);
     const slug = slugify(payload.slug ?? name);
