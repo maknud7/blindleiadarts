@@ -30,9 +30,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
       - name: Install JavaScript toolchain
-        run: npm ci
+        run: npm install --no-package-lock --ignore-scripts
       - name: Verify GET-only player/live frontdoor
         run: |
           set -Eeuo pipefail
