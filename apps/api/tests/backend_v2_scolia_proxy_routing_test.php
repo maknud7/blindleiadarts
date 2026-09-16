@@ -13,6 +13,7 @@ $assert = static function (bool $condition, string $message): void {
 $proxy = new BackendV2ScoliaProxyApplication(dirname(__DIR__));
 
 foreach ([
+    ['GET', '/v1/scolia/health'],
     ['GET', '/v1/scolia/bridge/config'],
     ['POST', '/v1/scolia/bridge/events'],
     ['POST', '/v1/scolia/bridge/drain'],
@@ -41,6 +42,7 @@ foreach ([
 }
 
 foreach ([
+    ['POST', '/v1/scolia/health'],
     ['PATCH', '/v1/scolia/bridge/config'],
     ['GET', '/v1/scolia/bridge/events'],
     ['POST', '/v1/scolia/bridge/commands/not-an-id/result'],
