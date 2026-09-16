@@ -53,6 +53,7 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
   const identityRepository = identity(role);
   const calls = [];
   const lookups = [];
+  const matchCalls = [];
   const clubs = {
     async create(body) {
       calls.push(body);
@@ -71,12 +72,34 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
         updated_at: "2026-09-16 10:00:00",
       };
     },
+    async listMatchCallsByClubId(clubId) {
+      matchCalls.push(clubId);
+      return [{
+        id: "90071992547409941",
+        tournament_id: "90071992547409942",
+        tournament_name: "Mandagsserien",
+        kiosk_id: "90071992547409943",
+        round_label: "Runde 4",
+        bracket_label: null,
+        status: "assigned",
+        best_of_legs: 5,
+        legs_to_win: 3,
+        player_a_id: "90071992547409944",
+        player_a_name: "Spiller A",
+        player_b_id: "90071992547409945",
+        player_b_name: "Spiller B",
+        kiosk_code: "BOARD-1",
+        kiosk_name: "Skive 1",
+        board_number: 1,
+      }];
+    },
   };
   return {
     router: new ClubAdminRouter(config(mode), identityRepository, clubs),
     identityRepository,
     calls,
     lookups,
+    matchCalls,
   };
 }
 
@@ -162,8 +185,24 @@ test("public kiosk connect preserves legacy validation and not-found errors", as
   assert.deepEqual(lookups, ["NOPE"]);
 });
 
-test("club admin router owns only the intended POST surfaces", async () => {
+test("club match calls read works in readonly mode without touching shared identity", async () => {
+  const { router, identityRepository, matchCalls } = routerFixture({ mode: "readonly" });
+  const result = await router.handle("GET", "/v1/clubs/90071992547409940/match-calls", request({}, null));
+
+  assert.equal(result?.statusCode, 200);
+  assert.equal(result?.payload.ok, true);
+  assert.equal(result?.payload.club_id, "90071992547409940");
+  assert.equal(result?.payload.items[0].id, "90071992547409941");
+  assert.equal(result?.payload.items[0].tournament_id, "90071992547409942");
+  assert.equal(result?.payload.items[0].player_a_id, "90071992547409944");
+  assert.deepEqual(matchCalls, ["90071992547409940"]);
+  assert.deepEqual(identityRepository.touches, []);
+});
+
+test("club admin router owns only intended club surfaces", async () => {
   const { router } = routerFixture();
+  assert.equal((await router.handle("GET", "/v1/clubs/42/match-calls", request()))?.statusCode, 200);
+  assert.equal(await router.handle("POST", "/v1/clubs/42/match-calls", request()), null);
   assert.equal(await router.handle("GET", "/v1/clubs", request()), null);
   assert.equal(await router.handle("PATCH", "/v1/clubs", request()), null);
   assert.equal(await router.handle("POST", "/v1/clubs/42", request()), null);
@@ -229,6 +268,55 @@ test("club repository kiosk pairing lookup uses only the runtime prefix and pres
   assert.match(queries[0].sql, /`bd_test_clubs`/);
   assert.doesNotMatch(queries[0].sql, /bd_prod_/);
   assert.deepEqual(queries[0].params, ["BDK-1234"]);
+});
+
+test("club match calls repository preserves legacy active queue and TEST-only runtime scope", async () => {
+  const queries = [];
+  const db = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return [{
+        id: "90071992547409941",
+        tournament_id: "90071992547409942",
+        tournament_name: "Mandagsserien",
+        kiosk_id: "90071992547409943",
+        round_label: "Runde 4",
+        bracket_label: null,
+        status: "in_progress",
+        best_of_legs: "5",
+        legs_to_win: "3",
+        player_a_id: "90071992547409944",
+        player_a_name: "Spiller A",
+        player_b_id: "90071992547409945",
+        player_b_name: "Spiller B",
+        kiosk_code: "BOARD-1",
+        kiosk_name: "Skive 1",
+        board_number: "1",
+      }];
+    },
+  };
+  const sessions = {
+    async withConnection(work) { return work(db); },
+  };
+  const repo = new MySqlClubAdminRepository(sessions, "bd_test_");
+  const items = await repo.listMatchCallsByClubId("90071992547409940");
+
+  assert.equal(queries.length, 1);
+  assert.deepEqual(queries[0].params, ["90071992547409940"]);
+  assert.match(queries[0].sql, /`bd_test_matches`/);
+  assert.match(queries[0].sql, /`bd_test_tournaments`/);
+  assert.match(queries[0].sql, /`bd_test_players`/);
+  assert.match(queries[0].sql, /`bd_test_kiosks`/);
+  assert.doesNotMatch(queries[0].sql, /bd_prod_/);
+  assert.match(queries[0].sql, /m\.status IN \('pending','assigned','in_progress'\)/);
+  assert.match(queries[0].sql, /FIELD\(m\.status,'in_progress','assigned','pending'\)/);
+  assert.equal(items[0].id, "90071992547409941");
+  assert.equal(items[0].tournament_id, "90071992547409942");
+  assert.equal(items[0].kiosk_id, "90071992547409943");
+  assert.equal(items[0].player_a_id, "90071992547409944");
+  assert.equal(items[0].player_b_id, "90071992547409945");
+  assert.equal(items[0].best_of_legs, 5);
+  assert.equal(items[0].board_number, 1);
 });
 
 test("club repository rejects missing name before database access", async () => {
