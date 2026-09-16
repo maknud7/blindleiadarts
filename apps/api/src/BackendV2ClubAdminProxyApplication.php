@@ -103,7 +103,7 @@ final class BackendV2ClubAdminProxyApplication
     {
         $method = strtoupper($method);
 
-        if ($method === 'GET' && preg_match('#^/v1/clubs/\d+/match-calls$#', $path) === 1) {
+        if ($method === 'GET' && preg_match('#^/v1/clubs/[1-9][0-9]*/match-calls$#', $path) === 1) {
             return true;
         }
 
