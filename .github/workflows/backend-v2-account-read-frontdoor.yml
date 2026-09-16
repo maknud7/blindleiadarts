@@ -12,6 +12,7 @@ on:
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
+      - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   push:
     branches:
       - develop
@@ -23,6 +24,7 @@ on:
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
+      - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   workflow_dispatch:
 
 permissions:
@@ -52,7 +54,7 @@ jobs:
           grep -Fq 'BackendV2AccountReadProxyApplication' apps/api/index.php
           grep -Fq "'account_read_routing_mode' => 'php'" apps/api/config.example.php
 
-      - name: Verify TEST-only generated routing defaults
+      - name: Verify generated routing defaults
         env:
           DB_HOST: example.invalid
           DB_PORT: '3306'
@@ -67,7 +69,7 @@ jobs:
           APP_ENV=prod DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/account-read-prod.php
           php -r '$c=require "/tmp/account-read-test.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="node") exit(1);'
-          php -r '$c=require "/tmp/account-read-prod.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="php") exit(1);'
+          php -r '$c=require "/tmp/account-read-prod.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="node") exit(1);'
 
   runtime-smoke:
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
