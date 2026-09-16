@@ -52,16 +52,31 @@ function identity(role = "super_admin") {
 function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
   const identityRepository = identity(role);
   const calls = [];
+  const lookups = [];
   const clubs = {
     async create(body) {
       calls.push(body);
       return { id: "90071992547409931", name: body.name, slug: "ny-klubb" };
+    },
+    async findByKioskPairingCode(code) {
+      lookups.push(code);
+      if (code !== "BDK-1234") return null;
+      return {
+        id: "90071992547409932",
+        name: "Blindleia Dartklubb",
+        slug: "blindleia-dartklubb",
+        logo_url: null,
+        kiosk_pairing_code: code,
+        created_at: "2026-09-16 10:00:00",
+        updated_at: "2026-09-16 10:00:00",
+      };
     },
   };
   return {
     router: new ClubAdminRouter(config(mode), identityRepository, clubs),
     identityRepository,
     calls,
+    lookups,
   };
 }
 
@@ -111,11 +126,48 @@ test("club create preserves legacy authentication and super-admin boundary", asy
   }
 });
 
-test("club admin router owns only POST /v1/clubs", async () => {
+test("public kiosk connect is a read-only runtime lookup with legacy response contract", async () => {
+  const { router, identityRepository, lookups } = routerFixture({ mode: "readonly" });
+  const result = await router.handle("POST", "/v1/public/kiosk/connect", request({ code: " bdk-1234 " }, null));
+
+  assert.equal(result?.statusCode, 200);
+  assert.equal(result?.payload.ok, true);
+  assert.equal(result?.payload.club.id, "90071992547409932");
+  assert.equal(result?.payload.club.kiosk_pairing_code, "BDK-1234");
+  assert.deepEqual(lookups, ["BDK-1234"]);
+  assert.deepEqual(identityRepository.touches, []);
+});
+
+test("public kiosk connect preserves legacy validation and not-found errors", async () => {
+  const { router, lookups } = routerFixture({ mode: "readonly" });
+
+  const missing = await router.handle("POST", "/v1/public/kiosk/connect", request({ code: "   " }, null));
+  assert.deepEqual(missing, {
+    statusCode: 422,
+    payload: {
+      ok: false,
+      error: { code: "kiosk_club_code_required", message: "A kiosk club code is required." },
+    },
+  });
+  assert.deepEqual(lookups, []);
+
+  const unknown = await router.handle("POST", "/v1/public/kiosk/connect", request({ code: "nope" }, null));
+  assert.deepEqual(unknown, {
+    statusCode: 404,
+    payload: {
+      ok: false,
+      error: { code: "kiosk_club_code_invalid", message: "Club code was not found." },
+    },
+  });
+  assert.deepEqual(lookups, ["NOPE"]);
+});
+
+test("club admin router owns only the intended POST surfaces", async () => {
   const { router } = routerFixture();
   assert.equal(await router.handle("GET", "/v1/clubs", request()), null);
   assert.equal(await router.handle("PATCH", "/v1/clubs", request()), null);
   assert.equal(await router.handle("POST", "/v1/clubs/42", request()), null);
+  assert.equal(await router.handle("GET", "/v1/public/kiosk/connect", request()), null);
 });
 
 test("club repository matches legacy slug, nullable logo and pairing-code shape", async () => {
@@ -148,6 +200,35 @@ test("club repository matches legacy slug, nullable logo and pairing-code shape"
   assert.deepEqual(executed[0].params.slice(0, 3), ["Østre Å Æra", "ostre-a-aera", null]);
   assert.match(executed[0].params[3], /^OST-K[0-9A-F]{4}$/);
   assert.equal(club.id, "90071992547409931");
+});
+
+test("club repository kiosk pairing lookup uses only the runtime prefix and preserves exact ids", async () => {
+  const queries = [];
+  const db = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return [{
+        id: "90071992547409939",
+        name: "Blindleia Dartklubb",
+        slug: "blindleia-dartklubb",
+        logo_url: null,
+        kiosk_pairing_code: "BDK-1234",
+        created_at: "2026-09-16 10:00:00",
+        updated_at: "2026-09-16 10:00:00",
+      }];
+    },
+  };
+  const sessions = {
+    async withConnection(work) { return work(db); },
+  };
+  const repo = new MySqlClubAdminRepository(sessions, "bd_test_");
+  const club = await repo.findByKioskPairingCode(" bdk-1234 ");
+
+  assert.equal(club?.id, "90071992547409939");
+  assert.equal(queries.length, 1);
+  assert.match(queries[0].sql, /`bd_test_clubs`/);
+  assert.doesNotMatch(queries[0].sql, /bd_prod_/);
+  assert.deepEqual(queries[0].params, ["BDK-1234"]);
 });
 
 test("club repository rejects missing name before database access", async () => {
