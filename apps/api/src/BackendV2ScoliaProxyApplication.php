@@ -17,6 +17,7 @@ use Throwable;
  *
  * The paired-kiosk surface also owns the canonical kiosk scoring/session front door in
  * TEST: state, start-match, visit, undo and unpair all stay in backend-v2 once selected.
+ * Scolia health is read-only and follows the same already-completed Scolia cutover.
  * PROD remains on PHP while scolia_routing_mode is php.
  *
  * Routing is decided before any mutation. Once Node has been attempted the
@@ -94,6 +95,8 @@ final class BackendV2ScoliaProxyApplication
     public function handles(string $method, string $path): bool
     {
         $method = strtoupper($method);
+
+        if ($method === 'GET' && $path === '/v1/scolia/health') return true;
 
         if (str_starts_with($path, '/v1/scolia/bridge/')) {
             if ($method === 'GET' && $path === '/v1/scolia/bridge/config') return true;
