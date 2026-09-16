@@ -8,9 +8,16 @@ use Blindleia\Dartkiosk\Api\BackendV2ClubAdminProxyApplication;
 
 $app = new BackendV2ClubAdminProxyApplication(dirname(__DIR__));
 
-if (!$app->handles('POST', '/v1/clubs')) {
-    fwrite(STDERR, "Expected club-admin frontdoor to handle POST /v1/clubs\n");
-    exit(1);
+foreach ([
+    ['POST', '/v1/clubs'],
+    ['POST', '/v1/public/kiosk/connect'],
+    ['GET', '/v1/clubs/1/match-calls'],
+    ['GET', '/v1/clubs/90071992547409931/match-calls'],
+] as [$method, $path]) {
+    if (!$app->handles($method, $path)) {
+        fwrite(STDERR, "Expected club-admin frontdoor to handle {$method} {$path}\n");
+        exit(1);
+    }
 }
 
 $no = [
@@ -21,6 +28,9 @@ $no = [
     ['POST', '/v1/clubs/1'],
     ['POST', '/v1/clubs/1/players'],
     ['POST', '/v1/clubs/1/kiosks'],
+    ['POST', '/v1/clubs/1/match-calls'],
+    ['GET', '/v1/clubs/0/match-calls'],
+    ['GET', '/v1/public/kiosk/connect'],
 ];
 foreach ($no as [$method, $path]) {
     if ($app->handles($method, $path)) {
