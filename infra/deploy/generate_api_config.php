@@ -60,9 +60,10 @@ $defaultBackendV2TournamentRoutingMode = $isTest ? 'node' : 'php';
 // Player/public/live is GET-only and explicitly side-effect-free in backend-v2.
 // Keep Node ownership in TEST and PROD once the production read gate has passed.
 $defaultBackendV2PlayerLiveRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
-// Authenticated account reads get their own boundary. They are enabled only in
-// TEST until their dedicated production gate is explicitly completed.
-$defaultBackendV2AccountReadRoutingMode = $isTest ? 'node' : 'php';
+// Authenticated account reads are GET-only and resolve sessions without mutation
+// whenever the backend is not write-armed. Keep Node ownership in TEST and PROD
+// after the dedicated production read gate has proved the canonical identity path.
+$defaultBackendV2AccountReadRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 // Realtime client config is a side-effect-free slice with an independent gate.
 // It is safe to preserve on Node in TEST and PROD without moving the wider player/live surface.
 $defaultBackendV2RealtimeConfigRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
