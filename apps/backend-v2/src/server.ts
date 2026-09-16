@@ -4,6 +4,7 @@ import type { ScoringSource } from "./contracts/canonical-scoring.js";
 import { asDbId, type DbId, type VisitInput } from "./contracts/scoring.js";
 import { DomainValidationError } from "./domain/errors.js";
 import { MySqlAccountProfileRepository } from "./mysql/account-profile-repository.js";
+import { MySqlClubAdminRepository } from "./mysql/club-admin-repository.js";
 import { MySqlCanonicalEloLedger } from "./mysql/canonical-elo-ledger.js";
 import { MySqlCanonicalPlayoffReconciliation } from "./mysql/canonical-playoff-reconciliation.js";
 import { MySqlCanonicalScoringRepository } from "./mysql/canonical-scoring-repository.js";
@@ -32,6 +33,7 @@ import { MySqlTournamentPlayerBreakRepository } from "./mysql/tournament-player-
 import { MySqlTournamentPlayoffRepository } from "./mysql/tournament-playoff-repository.js";
 import { MySqlTournamentRuntimeRepository } from "./mysql/tournament-runtime-repository.js";
 import { CanonicalRealtimePublisher } from "./runtime/canonical-realtime-publisher.js";
+import { ClubAdminRouter } from "./runtime/club-admin-router.js";
 import {
   assertIdentityMutationAllowed,
   assertInternalToken,
@@ -107,6 +109,8 @@ const accountProfiles = new MySqlAccountProfileRepository(
   config.prefixes.runtime,
   config.prefixes.identity,
 );
+const clubAdmin = new MySqlClubAdminRepository(sessions, config.prefixes.runtime);
+const clubAdminRuntime = new ClubAdminRouter(config, identityRepository, clubAdmin);
 const playerLiveReads = new MySqlPlayerLiveReadRepository(sessions, config.prefixes.runtime);
 const playerLiveRuntime = new PlayerLiveReadRouter(config, identityRepository, playerLiveReads);
 const publicLiveReads = new MySqlPublicLiveReadRepository(
@@ -287,6 +291,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const clubAdminRoute = await clubAdminRuntime.handle(method, publicPath, request);
+  if (clubAdminRoute !== null) {
+    sendJson(response, clubAdminRoute.statusCode, clubAdminRoute.payload);
     return;
   }
 

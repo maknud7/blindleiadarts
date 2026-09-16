@@ -29,6 +29,7 @@ return [
         'activity_routing_mode' => 'php',
         'payment_settings_routing_mode' => 'php',
         'identity_audit_routing_mode' => 'php',
+        'club_admin_routing_mode' => 'php',
         'base_url' => '',
         'canary_kiosk_ids' => '',
         'internal_token' => '',
