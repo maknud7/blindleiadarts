@@ -1,5 +1,6 @@
 name: Backend v2 Club Admin Frontdoor
 
+# Revalidated against the current develop baseline before merge.
 on:
   pull_request:
     branches:
