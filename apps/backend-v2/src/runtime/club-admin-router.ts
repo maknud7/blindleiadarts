@@ -22,16 +22,39 @@ export class ClubAdminRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<ClubAdminRouteResult | null> {
-    if (method !== "POST" || path !== "/v1/clubs") return null;
+    if (method === "POST" && path === "/v1/clubs") {
+      assertMutationAllowed(this.config);
+      const user = await this.requireUser(request);
+      this.requireSuperAdmin(user);
+      const body = await readJsonObject(request);
+      return {
+        statusCode: 201,
+        payload: { ok: true, club: await this.clubs.create(body) },
+      };
+    }
 
-    assertMutationAllowed(this.config);
-    const user = await this.requireUser(request);
-    this.requireSuperAdmin(user);
-    const body = await readJsonObject(request);
-    return {
-      statusCode: 201,
-      payload: { ok: true, club: await this.clubs.create(body) },
-    };
+    const screenDevices = /^\/v1\/clubs\/([1-9][0-9]*)\/screen-devices$/.exec(path);
+    if (screenDevices && (method === "GET" || method === "POST")) {
+      const clubId = requiredCapture(screenDevices, 1);
+      const user = await this.requireUser(request);
+      this.requireAdmin(user, clubId);
+
+      if (method === "GET") {
+        return {
+          statusCode: 200,
+          payload: { ok: true, club_id: clubId, items: await this.clubs.listScreenDevices(clubId) },
+        };
+      }
+
+      assertMutationAllowed(this.config);
+      const body = await readJsonObject(request);
+      return {
+        statusCode: 201,
+        payload: { ok: true, device: await this.clubs.createScreenDevice(clubId, body.label) },
+      };
+    }
+
+    return null;
   }
 
   private async requireUser(request: IncomingMessage): Promise<IdentityUser> {
@@ -63,12 +86,35 @@ export class ClubAdminRouter {
     );
   }
 
+  private requireAdmin(user: IdentityUser, clubId: string): void {
+    const role = String(user.role ?? "");
+    if (role === "super_admin") return;
+    if (role !== "club_admin") {
+      throw new RuntimeAccessError(403, "admin_required", "Admin role is required for this endpoint.");
+    }
+    const clubIds = new Set(
+      String(user.admin_club_ids ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => /^[1-9][0-9]*$/.test(value)),
+    );
+    if (!clubIds.has(clubId)) {
+      throw new RuntimeAccessError(403, "club_access_denied", "You do not have access to this club.");
+    }
+  }
+
   private identityTouchAllowed(): boolean {
     return (
       (this.config.environment === "prod" && this.config.prefixes.identity === "bd_prod_" && mutationsAllowed(this.config)) ||
       (this.config.environment === "test" && this.config.prefixes.identity === "bd_test_" && mutationsAllowed(this.config))
     );
   }
+}
+
+function requiredCapture(match: RegExpExecArray, index: number): string {
+  const value = match[index];
+  if (value === undefined) throw new RuntimeAccessError(400, "invalid_route", "Route parameter is missing.");
+  return value;
 }
 
 function bearerToken(request: IncomingMessage): string | null {
