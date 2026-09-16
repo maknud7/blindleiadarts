@@ -40,10 +40,6 @@ try {
     assert.match(playerId, /^[1-9][0-9]*$/, "TEST runtime has no active player fixture");
     assert.match(playerClubId, /^[1-9][0-9]*$/, "TEST player fixture has no club id");
 
-    // Pick canonical historical data rather than the newest active tournament.
-    // Other hosted E2Es create/delete active fixtures concurrently, so choosing
-    // a completed tournament with completed matches keeps this read-only test
-    // independent of those temporary lifecycle fixtures.
     const tournaments = await sql.query(
       `SELECT t.id
          FROM \`${config.prefixes.runtime}tournaments\` t
@@ -102,8 +98,6 @@ try {
   assert.ok(Array.isArray(dashboard.registrations));
   assert.ok(dashboard.stats && typeof dashboard.stats === "object");
 
-  // Never keep a discovery connection open alongside the server under the
-  // single-connection hosted TEST budget.
   await provider.close();
 
   server = startServer();
@@ -121,6 +115,15 @@ try {
   assert.ok(Array.isArray(clubs.items));
   assert.ok(clubs.items.some((club) => String(club.id) === playerClubId));
   assert.ok(clubs.items.every((club) => Number.isInteger(Number(club.player_count))));
+
+  const clubDashboard = await requestJson(`/v1/clubs/${playerClubId}/dashboard`);
+  assert.equal(clubDashboard.ok, true);
+  assert.equal(String(clubDashboard.club.id), playerClubId);
+  assert.ok(Array.isArray(clubDashboard.players));
+  assert.ok(Array.isArray(clubDashboard.kiosks));
+  assert.ok(Array.isArray(clubDashboard.tournaments));
+  assert.ok(Array.isArray(clubDashboard.recent_matches));
+  assert.ok(clubDashboard.players.some((player) => String(player.id) === playerId));
 
   const legacyPlayers = await requestJson(`/v1/clubs/${playerClubId}/players`);
   assert.equal(legacyPlayers.ok, true);
@@ -218,6 +221,7 @@ try {
     season_club_id: seasonClubId,
     realtime_config_verified: true,
     realtime_websocket_enabled: expectedRealtimeWebsocketUrl !== "",
+    club_dashboard_verified: true,
     club_players_legacy_read_verified: true,
     club_directory_verified: true,
     club_elo_verified: true,

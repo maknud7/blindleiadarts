@@ -30,32 +30,44 @@ export class MySqlTournamentCatalogReadRepository {
 
   async listClubPlayers(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
     const clubId = requiredId(clubIdInput, "club_id");
+    return this.sessions.withConnection((db) => this.listClubPlayersWith(db, clubId));
+  }
+
+  async getClubDashboard(clubIdInput: unknown): Promise<Record<string, unknown> | null> {
+    const clubId = requiredId(clubIdInput, "club_id");
     return this.sessions.withConnection(async (db) => {
-      const rows = await db.query<QueryResultRow>(
-        `SELECT p.id,p.display_name,p.first_name,p.last_name,p.nickname,p.avatar_url,p.is_active,
-                mp.contact_email,mp.contact_phone,
-                ua.id AS user_account_id,ua.username,ua.role
-           FROM \`${this.prefix}players\` p
-           LEFT JOIN \`${this.prefix}member_profiles\` mp ON mp.player_id=p.id
-           LEFT JOIN \`${this.prefix}user_accounts\` ua ON ua.id=mp.user_account_id
-          WHERE p.club_id=?
-          ORDER BY p.display_name ASC`,
+      const clubRows = await db.query<QueryResultRow>(
+        `SELECT id,name,slug,logo_url,kiosk_pairing_code,created_at,updated_at
+           FROM \`${this.prefix}clubs\`
+          WHERE id=?
+          LIMIT 1`,
         [clubId],
       );
-      return rows.map((row) => ({
-        id: requiredId(row.id, "player_id"),
-        display_name: row.display_name ?? null,
-        first_name: row.first_name ?? null,
-        last_name: row.last_name ?? null,
-        nickname: row.nickname ?? null,
-        avatar_url: row.avatar_url ?? null,
-        is_active: integer(row.is_active),
-        contact_email: row.contact_email ?? null,
-        contact_phone: row.contact_phone ?? null,
-        user_account_id: nullableId(row.user_account_id),
-        username: row.username ?? null,
-        role: row.role ?? null,
-      }));
+      const club = clubRows[0];
+      if (!club) return null;
+
+      const [players, kiosks, tournaments, recentMatches] = await Promise.all([
+        this.listClubPlayersWith(db, clubId),
+        this.listClubKiosksWith(db, clubId),
+        this.listClubTournamentSummariesWith(db, clubId),
+        this.listRecentClubMatchesWith(db, clubId),
+      ]);
+
+      return {
+        club: {
+          id: requiredId(club.id, "club_id"),
+          name: club.name ?? null,
+          slug: club.slug ?? null,
+          logo_url: club.logo_url ?? null,
+          kiosk_pairing_code: club.kiosk_pairing_code ?? null,
+          created_at: club.created_at ?? null,
+          updated_at: club.updated_at ?? null,
+        },
+        players,
+        kiosks,
+        tournaments,
+        recent_matches: recentMatches,
+      };
     });
   }
 
@@ -147,6 +159,122 @@ export class MySqlTournamentCatalogReadRepository {
   async listMatches(tournamentIdInput: unknown): Promise<Record<string, unknown>[]> {
     const tournamentId = requiredId(tournamentIdInput, "tournament_id");
     return this.sessions.withConnection((db) => this.listMatchesWith(db, tournamentId));
+  }
+
+  private async listClubPlayersWith(db: SqlExecutor, clubId: string): Promise<Record<string, unknown>[]> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT p.id,p.display_name,p.first_name,p.last_name,p.nickname,p.avatar_url,p.is_active,
+              mp.contact_email,mp.contact_phone,
+              ua.id AS user_account_id,ua.username,ua.role
+         FROM \`${this.prefix}players\` p
+         LEFT JOIN \`${this.prefix}member_profiles\` mp ON mp.player_id=p.id
+         LEFT JOIN \`${this.prefix}user_accounts\` ua ON ua.id=mp.user_account_id
+        WHERE p.club_id=?
+        ORDER BY p.display_name ASC`,
+      [clubId],
+    );
+    return rows.map((row) => ({
+      id: requiredId(row.id, "player_id"),
+      display_name: row.display_name ?? null,
+      first_name: row.first_name ?? null,
+      last_name: row.last_name ?? null,
+      nickname: row.nickname ?? null,
+      avatar_url: row.avatar_url ?? null,
+      is_active: integer(row.is_active),
+      contact_email: row.contact_email ?? null,
+      contact_phone: row.contact_phone ?? null,
+      user_account_id: nullableId(row.user_account_id),
+      username: row.username ?? null,
+      role: row.role ?? null,
+    }));
+  }
+
+  private async listClubKiosksWith(db: SqlExecutor, clubId: string): Promise<Record<string, unknown>[]> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT id,code,name,board_number,sponsor_label,sponsor_logo_url,scoring_mode,
+              CASE WHEN pairing_token_hash IS NULL OR pairing_token_hash='' THEN 0 ELSE 1 END AS is_paired,
+              paired_device_name,paired_at,is_active,last_seen_at
+         FROM \`${this.prefix}kiosks\`
+        WHERE club_id=?
+        ORDER BY board_number ASC,name ASC`,
+      [clubId],
+    );
+    return rows.map((row) => ({
+      id: requiredId(row.id, "kiosk_id"),
+      code: row.code ?? null,
+      name: row.name ?? null,
+      board_number: integer(row.board_number),
+      sponsor_label: row.sponsor_label ?? null,
+      sponsor_logo_url: row.sponsor_logo_url ?? null,
+      scoring_mode: row.scoring_mode ?? null,
+      is_paired: integer(row.is_paired),
+      paired_device_name: row.paired_device_name ?? null,
+      paired_at: row.paired_at ?? null,
+      is_active: integer(row.is_active),
+      last_seen_at: row.last_seen_at ?? null,
+    }));
+  }
+
+  private async listClubTournamentSummariesWith(db: SqlExecutor, clubId: string): Promise<Record<string, unknown>[]> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT t.id,t.name,t.slug,t.provider_system,t.status,t.start_at,t.end_at,
+              COUNT(DISTINCT tp.id) AS registration_count,
+              COUNT(DISTINCT m.id) AS match_count,
+              COUNT(DISTINCT CASE WHEN m.status='completed' THEN m.id END) AS completed_match_count
+         FROM \`${this.prefix}tournaments\` t
+         LEFT JOIN \`${this.prefix}tournament_players\` tp ON tp.tournament_id=t.id AND tp.status<>'withdrawn'
+         LEFT JOIN \`${this.prefix}matches\` m ON m.tournament_id=t.id
+        WHERE t.club_id=?
+        GROUP BY t.id,t.name,t.slug,t.provider_system,t.status,t.start_at,t.end_at
+        ORDER BY COALESCE(t.start_at,'2999-12-31 23:59:59') ASC,t.id DESC`,
+      [clubId],
+    );
+    return rows.map((row) => ({
+      id: requiredId(row.id, "tournament_id"),
+      name: row.name ?? null,
+      slug: row.slug ?? null,
+      provider_system: row.provider_system ?? null,
+      status: row.status ?? null,
+      start_at: row.start_at ?? null,
+      end_at: row.end_at ?? null,
+      registration_count: integer(row.registration_count),
+      match_count: integer(row.match_count),
+      completed_match_count: integer(row.completed_match_count),
+    }));
+  }
+
+  private async listRecentClubMatchesWith(db: SqlExecutor, clubId: string): Promise<Record<string, unknown>[]> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT m.id,m.status,m.round_label,m.bracket_label,m.starts_at,m.finished_at,
+              t.id AS tournament_id,t.name AS tournament_name,
+              k.code AS kiosk_code,k.board_number,
+              pa.display_name AS player_a_name,pb.display_name AS player_b_name,pw.display_name AS winner_name
+         FROM \`${this.prefix}matches\` m
+         INNER JOIN \`${this.prefix}tournaments\` t ON t.id=m.tournament_id
+         INNER JOIN \`${this.prefix}players\` pa ON pa.id=m.player_a_id
+         INNER JOIN \`${this.prefix}players\` pb ON pb.id=m.player_b_id
+         LEFT JOIN \`${this.prefix}players\` pw ON pw.id=m.winner_player_id
+         LEFT JOIN \`${this.prefix}kiosks\` k ON k.id=m.kiosk_id
+        WHERE t.club_id=?
+        ORDER BY COALESCE(m.finished_at,m.starts_at,m.id) DESC
+        LIMIT 12`,
+      [clubId],
+    );
+    return rows.map((row) => ({
+      id: requiredId(row.id, "match_id"),
+      status: row.status ?? null,
+      round_label: row.round_label ?? null,
+      bracket_label: row.bracket_label ?? null,
+      starts_at: row.starts_at ?? null,
+      finished_at: row.finished_at ?? null,
+      tournament_id: requiredId(row.tournament_id, "tournament_id"),
+      tournament_name: row.tournament_name ?? null,
+      kiosk_code: row.kiosk_code ?? null,
+      board_number: row.board_number == null ? null : integer(row.board_number),
+      player_a_name: row.player_a_name ?? null,
+      player_b_name: row.player_b_name ?? null,
+      winner_name: row.winner_name ?? null,
+    }));
   }
 
   private async resolveEloSeasonId(db: SqlExecutor, clubId: string): Promise<string> {

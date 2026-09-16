@@ -11,6 +11,18 @@ export class TournamentCatalogReadRouter {
   async handle(method: string, path: string): Promise<TournamentCatalogReadRouteResult | null> {
     if (method !== "GET") return null;
 
+    const clubDashboard = /^\/v1\/clubs\/([1-9][0-9]*)\/dashboard$/.exec(path);
+    if (clubDashboard) {
+      const dashboard = await this.catalog.getClubDashboard(clubDashboard[1]!);
+      if (dashboard === null) {
+        return {
+          statusCode: 404,
+          payload: { ok: false, error: { code: "club_not_found", message: "Club was not found." } },
+        };
+      }
+      return ok(dashboard);
+    }
+
     const clubPlayers = /^\/v1\/clubs\/([1-9][0-9]*)\/players$/.exec(path);
     if (clubPlayers) {
       const clubId = clubPlayers[1]!;
