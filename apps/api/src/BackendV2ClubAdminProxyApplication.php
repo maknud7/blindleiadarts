@@ -13,12 +13,13 @@ use InvalidArgumentException;
 use Throwable;
 
 /**
- * Same-origin front door for runtime club administration and kiosk bootstrap.
+ * Same-origin front door for runtime club administration, kiosk bootstrap and
+ * isolated club runtime reads.
  *
- * TEST may create isolated bd_test_ clubs through backend-v2 and resolve the
- * public kiosk pairing code from the same isolated runtime. The kiosk connect
- * route is read-only even though its public HTTP contract is POST. PROD keeps
- * the legacy PHP owner while club_admin_routing_mode is php.
+ * TEST may create isolated bd_test_ clubs through backend-v2, resolve the
+ * public kiosk pairing code and read active match calls from the same isolated
+ * runtime. Read routes do not require or mutate shared identity. PROD keeps the
+ * legacy PHP owner while club_admin_routing_mode is php.
  *
  * Routing is decided before the legacy Application opens its database
  * connection. Once Node has been attempted the request fails closed and never
@@ -54,8 +55,11 @@ final class BackendV2ClubAdminProxyApplication
             if ($authorization !== null) {
                 $headers['authorization'] = $authorization;
             }
+            $body = in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)
+                ? $request->jsonBody()
+                : null;
 
-            $result = $client->request('POST', $path, $request->jsonBody(), $headers);
+            $result = $client->request($method, $path, $body, $headers);
             $status = $result['status'];
             $payload = $result['payload'];
             header('X-BD-Backend-V2: club-admin');
@@ -97,7 +101,13 @@ final class BackendV2ClubAdminProxyApplication
 
     public function handles(string $method, string $path): bool
     {
-        if (strtoupper($method) !== 'POST') {
+        $method = strtoupper($method);
+
+        if ($method === 'GET' && preg_match('#^/v1/clubs/[1-9][0-9]*/match-calls$#', $path) === 1) {
+            return true;
+        }
+
+        if ($method !== 'POST') {
             return false;
         }
 

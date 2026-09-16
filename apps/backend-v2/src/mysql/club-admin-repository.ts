@@ -58,6 +58,45 @@ export class MySqlClubAdminRepository {
     });
   }
 
+  async listMatchCallsByClubId(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
+    const clubId = requiredId(clubIdInput, "club_id");
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT m.id,m.tournament_id,t.name AS tournament_name,m.kiosk_id,m.round_label,m.bracket_label,
+                m.status,m.best_of_legs,m.legs_to_win,m.player_a_id,pa.display_name AS player_a_name,
+                m.player_b_id,pb.display_name AS player_b_name,k.code AS kiosk_code,k.name AS kiosk_name,k.board_number
+           FROM \`${this.prefix}matches\` m
+           INNER JOIN \`${this.prefix}tournaments\` t ON t.id=m.tournament_id
+           INNER JOIN \`${this.prefix}players\` pa ON pa.id=m.player_a_id
+           INNER JOIN \`${this.prefix}players\` pb ON pb.id=m.player_b_id
+           LEFT JOIN \`${this.prefix}kiosks\` k ON k.id=m.kiosk_id
+          WHERE t.club_id=?
+            AND m.status IN ('pending','assigned','in_progress')
+          ORDER BY FIELD(m.status,'in_progress','assigned','pending'),m.id ASC`,
+        [clubId],
+      );
+
+      return rows.map((row) => ({
+        id: requiredId(row.id, "match_id"),
+        tournament_id: requiredId(row.tournament_id, "tournament_id"),
+        tournament_name: row.tournament_name ?? null,
+        kiosk_id: nullableId(row.kiosk_id),
+        round_label: row.round_label ?? null,
+        bracket_label: row.bracket_label ?? null,
+        status: row.status ?? null,
+        best_of_legs: integer(row.best_of_legs),
+        legs_to_win: integer(row.legs_to_win),
+        player_a_id: requiredId(row.player_a_id, "player_a_id"),
+        player_a_name: row.player_a_name ?? null,
+        player_b_id: requiredId(row.player_b_id, "player_b_id"),
+        player_b_name: row.player_b_name ?? null,
+        kiosk_code: row.kiosk_code ?? null,
+        kiosk_name: row.kiosk_name ?? null,
+        board_number: row.board_number == null ? null : integer(row.board_number),
+      }));
+    });
+  }
+
   private async requireById(clubId: string): Promise<Record<string, unknown>> {
     const row = await this.findById(clubId);
     if (row === null) {
@@ -136,6 +175,16 @@ function nullableString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
   return normalized === "" ? null : normalized;
+}
+
+function nullableId(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  return requiredId(value, "id");
+}
+
+function integer(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
 }
 
 function requiredId(value: unknown, name: string): string {
