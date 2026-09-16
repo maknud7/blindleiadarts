@@ -19,6 +19,7 @@ foreach ([
     ['GET', '/v1/public/clubs/blindleia-dartklubb/live'],
     ['GET', '/v1/public/tournaments/429/live'],
     ['GET', '/v1/public/check-in-display'],
+    ['GET', '/v1/clubs/1/players'],
     ['GET', '/v1/clubs/1/player-directory'],
     ['GET', '/v1/clubs/1/elo'],
     ['GET', '/v1/clubs/1/summaries'],
@@ -86,6 +87,10 @@ $assert(
     $proxy->targetPath('/v1/public/clubs/blindleia-dartklubb/live', 'screen_token=secret&ignored=1')
         === '/v1/public/clubs/blindleia-dartklubb/live',
     'Public live routes must not forward unrelated query parameters.'
+);
+$assert(
+    $proxy->targetPath('/v1/clubs/1/players', 'include=inactive&secret=1') === '/v1/clubs/1/players',
+    'Club player list must preserve the legacy no-query contract.'
 );
 
 echo "BackendV2PlayerLiveProxy routing OK\n";
