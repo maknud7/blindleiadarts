@@ -7,6 +7,10 @@ on:
     paths:
       - 'apps/api/src/BackendV2PlayerLiveProxyApplication.php'
       - 'apps/api/tests/backend_v2_player_live_proxy_routing_test.php'
+      - 'apps/backend-v2/src/mysql/tournament-catalog-read-repository.ts'
+      - 'apps/backend-v2/src/runtime/tournament-catalog-read-router.ts'
+      - 'apps/backend-v2/test/club-dashboard-read.test.mjs'
+      - 'apps/backend-v2/test/club-players-read.test.mjs'
       - '.github/workflows/backend-v2-player-live-routing.yml'
   workflow_dispatch:
 
@@ -23,9 +27,22 @@ jobs:
           php-version: '8.3'
           extensions: mysqli, mbstring, curl, dom
           coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install JavaScript toolchain
+        run: npm ci
       - name: Verify GET-only player/live frontdoor
         run: |
           set -Eeuo pipefail
           php -l apps/api/src/BackendV2PlayerLiveProxyApplication.php
           php -l apps/api/tests/backend_v2_player_live_proxy_routing_test.php
           php apps/api/tests/backend_v2_player_live_proxy_routing_test.php
+      - name: Verify player/live Node read contracts
+        run: |
+          set -Eeuo pipefail
+          npm run backend-v2:build
+          node --test \
+            apps/backend-v2/test/club-dashboard-read.test.mjs \
+            apps/backend-v2/test/club-players-read.test.mjs
