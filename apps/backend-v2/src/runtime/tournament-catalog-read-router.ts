@@ -11,6 +11,12 @@ export class TournamentCatalogReadRouter {
   async handle(method: string, path: string): Promise<TournamentCatalogReadRouteResult | null> {
     if (method !== "GET") return null;
 
+    const clubPlayers = /^\/v1\/clubs\/([1-9][0-9]*)\/players$/.exec(path);
+    if (clubPlayers) {
+      const clubId = clubPlayers[1]!;
+      return ok({ club_id: publicId(clubId), items: await this.catalog.listClubPlayers(clubId) });
+    }
+
     const clubElo = /^\/v1\/clubs\/([1-9][0-9]*)\/elo$/.exec(path);
     if (clubElo) {
       const clubId = clubElo[1]!;
@@ -55,6 +61,11 @@ export class TournamentCatalogReadRouter {
 
     return null;
   }
+}
+
+function publicId(value: string): number | string {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : value;
 }
 
 function ok(payload: Record<string, unknown>): TournamentCatalogReadRouteResult {
