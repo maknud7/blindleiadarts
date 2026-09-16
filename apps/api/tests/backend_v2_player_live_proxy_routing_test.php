@@ -19,6 +19,7 @@ foreach ([
     ['GET', '/v1/public/clubs/blindleia-dartklubb/live'],
     ['GET', '/v1/public/tournaments/429/live'],
     ['GET', '/v1/public/check-in-display'],
+    ['GET', '/v1/clubs/1/dashboard'],
     ['GET', '/v1/clubs/1/players'],
     ['GET', '/v1/clubs/1/player-directory'],
     ['GET', '/v1/clubs/1/elo'],
@@ -43,6 +44,7 @@ foreach ([
 foreach ([
     ['POST', '/v1/clubs'],
     ['POST', '/v1/clubs/1/players'],
+    ['POST', '/v1/clubs/1/dashboard'],
     ['PATCH', '/v1/players/17/profile'],
     ['POST', '/v1/clubs/1/seasons'],
     ['PATCH', '/v1/seasons/1'],
@@ -87,6 +89,10 @@ $assert(
     $proxy->targetPath('/v1/public/clubs/blindleia-dartklubb/live', 'screen_token=secret&ignored=1')
         === '/v1/public/clubs/blindleia-dartklubb/live',
     'Public live routes must not forward unrelated query parameters.'
+);
+$assert(
+    $proxy->targetPath('/v1/clubs/1/dashboard', 'secret=1') === '/v1/clubs/1/dashboard',
+    'Club dashboard must preserve the legacy no-query contract.'
 );
 $assert(
     $proxy->targetPath('/v1/clubs/1/players', 'include=inactive&secret=1') === '/v1/clubs/1/players',
