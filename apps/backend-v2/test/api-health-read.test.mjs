@@ -113,4 +113,4 @@ test("API health route is GET-only", async () => {
   const router = new ClubAdminRouter(config(), identityRepository, clubs);
 
   assert.equal(await router.handle("POST", "/v1/health", request()), null);
-}
+});
