@@ -41,6 +41,23 @@ export class MySqlClubAdminRepository {
     return this.sessions.withConnection((db) => this.findByIdWith(db, clubId));
   }
 
+  async findByKioskPairingCode(codeInput: unknown): Promise<Record<string, unknown> | null> {
+    const code = String(codeInput ?? "").trim().toUpperCase();
+    if (code === "") return null;
+
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<ClubRow>(
+        `SELECT id,name,slug,logo_url,kiosk_pairing_code,created_at,updated_at
+           FROM \`${this.prefix}clubs\`
+          WHERE kiosk_pairing_code=? LIMIT 1`,
+        [code],
+      );
+      const row = rows[0];
+      if (!row) return null;
+      return formatClub(row);
+    });
+  }
+
   private async requireById(clubId: string): Promise<Record<string, unknown>> {
     const row = await this.findById(clubId);
     if (row === null) {
@@ -57,11 +74,7 @@ export class MySqlClubAdminRepository {
       [clubId],
     );
     const row = rows[0];
-    if (!row) return null;
-    return {
-      ...row,
-      id: requiredId(row.id, "club_id"),
-    };
+    return row ? formatClub(row) : null;
   }
 
   private async generateKioskPairingCode(db: SqlExecutor, clubReference: string): Promise<string> {
@@ -84,6 +97,13 @@ export class MySqlClubAdminRepository {
       500,
     );
   }
+}
+
+function formatClub(row: ClubRow): Record<string, unknown> {
+  return {
+    ...row,
+    id: requiredId(row.id, "club_id"),
+  };
 }
 
 function requiredName(value: unknown): string {
