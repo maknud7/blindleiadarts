@@ -43,7 +43,7 @@ export class MySqlTournamentCatalogReadRepository {
         [clubId],
       );
       return rows.map((row) => ({
-        id: publicId(requiredId(row.id, "player_id")),
+        id: requiredId(row.id, "player_id"),
         display_name: row.display_name ?? null,
         first_name: row.first_name ?? null,
         last_name: row.last_name ?? null,
@@ -52,7 +52,7 @@ export class MySqlTournamentCatalogReadRepository {
         is_active: integer(row.is_active),
         contact_email: row.contact_email ?? null,
         contact_phone: row.contact_phone ?? null,
-        user_account_id: publicId(nullableId(row.user_account_id)),
+        user_account_id: nullableId(row.user_account_id),
         username: row.username ?? null,
         role: row.role ?? null,
       }));
@@ -282,12 +282,6 @@ function requiredId(value: unknown, name: string): string {
 function nullableId(value: unknown): string | null {
   if (value === null || value === undefined || String(value).trim() === "") return null;
   return requiredId(value, "id");
-}
-
-function publicId(value: string | null): number | string | null {
-  if (value === null) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : value;
 }
 
 function integer(value: unknown): number {
