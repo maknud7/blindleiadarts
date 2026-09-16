@@ -62,7 +62,7 @@ test("club players read preserves the legacy runtime-only contract", async () =>
 
   assert.deepEqual(result, [
     {
-      id: 17,
+      id: "17",
       display_name: "Aktiv Spiller",
       first_name: "Aktiv",
       last_name: "Spiller",
@@ -71,7 +71,7 @@ test("club players read preserves the legacy runtime-only contract", async () =>
       is_active: 1,
       contact_email: "aktiv@example.invalid",
       contact_phone: null,
-      user_account_id: 8,
+      user_account_id: "8",
       username: "aktiv@example.invalid",
       role: "player",
     },
@@ -92,7 +92,7 @@ test("club players read preserves the legacy runtime-only contract", async () =>
   ]);
 });
 
-test("club players router owns GET only and keeps public BIGINT ids exact", async () => {
+test("club players router owns GET only and keeps all database ids as decimal strings", async () => {
   const calls = [];
   const catalog = {
     async listClubPlayers(clubId) {
@@ -107,7 +107,7 @@ test("club players router owns GET only and keeps public BIGINT ids exact", asyn
     statusCode: 200,
     payload: {
       ok: true,
-      club_id: 42,
+      club_id: "42",
       items: [{ id: "90071992547409931", display_name: "Stor ID" }],
     },
   });
