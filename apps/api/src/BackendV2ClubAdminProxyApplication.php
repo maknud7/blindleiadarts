@@ -13,11 +13,16 @@ use InvalidArgumentException;
 use Throwable;
 
 /**
- * Same-origin single-writer front door for runtime club administration.
+ * Same-origin front door for runtime club administration and kiosk bootstrap.
  *
- * TEST may create isolated bd_test_ clubs through backend-v2 while PROD keeps
- * the legacy PHP owner. Routing is decided before the legacy Application opens
- * its database connection, and Node attempts fail closed.
+ * TEST may create isolated bd_test_ clubs through backend-v2 and resolve the
+ * public kiosk pairing code from the same isolated runtime. The kiosk connect
+ * route is read-only even though its public HTTP contract is POST. PROD keeps
+ * the legacy PHP owner while club_admin_routing_mode is php.
+ *
+ * Routing is decided before the legacy Application opens its database
+ * connection. Once Node has been attempted the request fails closed and never
+ * falls through to PHP.
  */
 final class BackendV2ClubAdminProxyApplication
 {
@@ -92,6 +97,13 @@ final class BackendV2ClubAdminProxyApplication
 
     public function handles(string $method, string $path): bool
     {
-        return strtoupper($method) === 'POST' && $path === '/v1/clubs';
+        if (strtoupper($method) !== 'POST') {
+            return false;
+        }
+
+        return in_array($path, [
+            '/v1/clubs',
+            '/v1/public/kiosk/connect',
+        ], true);
     }
 }
