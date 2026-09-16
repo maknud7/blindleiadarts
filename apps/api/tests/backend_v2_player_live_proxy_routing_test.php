@@ -13,6 +13,7 @@ $assert = static function (bool $condition, string $message): void {
 $proxy = new BackendV2PlayerLiveProxyApplication(dirname(__DIR__));
 
 foreach ([
+    ['GET', '/v1/health'],
     ['GET', '/v1/realtime/config'],
     ['GET', '/v1/me/dashboard'],
     ['GET', '/v1/clubs'],
@@ -40,6 +41,7 @@ foreach ([
 // This front door is deliberately read-only. Club/player/season/tournament/check-in
 // mutations remain with their explicit writers until a dedicated single-writer cutover.
 foreach ([
+    ['POST', '/v1/health'],
     ['POST', '/v1/clubs'],
     ['POST', '/v1/clubs/1/players'],
     ['PATCH', '/v1/players/17/profile'],
@@ -67,6 +69,14 @@ $assert(!$proxy->handles('GET', '/v1/tournaments/429/summary/admin'), 'Admin sum
 // heartbeat are explicit mutation concerns and must not be reintroduced from GET.
 $assert(!$proxy->handles('POST', '/v1/public/check-in-display'), 'Public display route must remain GET-only.');
 $assert(!$proxy->handles('PATCH', '/v1/public/tournaments/429/live'), 'Public live route must remain GET-only.');
+
+// Public same-origin health delegates to backend-v2 /ready. That Node endpoint owns
+// the actual MySQL/schema readiness probe; the PHP front door only preserves the
+// existing public response contract.
+$assert(
+    $proxy->targetPath('/v1/health', 'ignored=1') === '/ready',
+    'Public health must dispatch to backend-v2 readiness without forwarding query parameters.'
+);
 
 // Query forwarding is deliberately narrower than route matching. Only the two
 // check-in display context parameters may cross the same-origin Node boundary.
