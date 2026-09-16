@@ -22,6 +22,15 @@ export class ClubAdminRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<ClubAdminRouteResult | null> {
+    const matchCalls = /^\/v1\/clubs\/([1-9][0-9]*)\/match-calls$/.exec(path);
+    if (method === "GET" && matchCalls) {
+      const clubId = matchCalls[1]!;
+      return {
+        statusCode: 200,
+        payload: { ok: true, club_id: clubId, items: await this.clubs.listMatchCallsByClubId(clubId) },
+      };
+    }
+
     if (method === "POST" && path === "/v1/public/kiosk/connect") {
       const body = await readJsonObject(request);
       const code = String(body.code ?? "").trim().toUpperCase();
