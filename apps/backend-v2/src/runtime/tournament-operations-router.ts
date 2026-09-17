@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import type { MySqlSessionProvider, TablePrefix } from "../mysql/contracts.js";
 import type { MySqlIdentityAuthRepository } from "../mysql/identity-auth-repository.js";
 import { MySqlTournamentBoardAdminRepository } from "../mysql/tournament-board-admin-repository.js";
+import { MySqlTournamentHardDeleteRepository } from "../mysql/tournament-hard-delete-repository.js";
 import type { MySqlTournamentOperationsRepository } from "../mysql/tournament-operations-repository.js";
 import type { MySqlTournamentPlayoffRepository } from "../mysql/tournament-playoff-repository.js";
 import type { BackendRuntimeConfig } from "./config.js";
@@ -26,9 +27,17 @@ export class TournamentOperationsRouter {
     // The legacy operations repository already owns the canonical shared session provider.
     // Reuse it so this migration does not create a second pool/connection budget.
     const shared = operations as unknown as { sessions: MySqlSessionProvider; prefix: TablePrefix };
-    const repository = new MySqlTournamentBoardAdminRepository(shared.sessions, shared.prefix);
-    this.boardAdmin = new TournamentBoardAdminRouter(config, identityRepository, repository, realtime);
-    this.legacy = new TournamentOperationsLegacyRouter(config, identityRepository, operations, playoffs, realtime);
+    const boardRepository = new MySqlTournamentBoardAdminRepository(shared.sessions, shared.prefix);
+    const hardDeleteRepository = new MySqlTournamentHardDeleteRepository(shared.sessions, shared.prefix);
+    this.boardAdmin = new TournamentBoardAdminRouter(config, identityRepository, boardRepository, realtime);
+    this.legacy = new TournamentOperationsLegacyRouter(
+      config,
+      identityRepository,
+      operations,
+      playoffs,
+      hardDeleteRepository,
+      realtime,
+    );
   }
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentOperationsRouteResult | null> {
