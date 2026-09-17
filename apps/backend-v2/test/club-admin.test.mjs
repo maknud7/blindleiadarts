@@ -53,8 +53,22 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
   const identityRepository = identity(role);
   const calls = [];
   const lookups = [];
+  const lists = [];
   const matchCalls = [];
   const clubs = {
+    async list() {
+      lists.push(true);
+      return [{
+        id: "90071992547409930",
+        name: "Blindleia Dartklubb",
+        slug: "blindleia-dartklubb",
+        logo_url: null,
+        kiosk_pairing_code: "BDK-1234",
+        player_count: "17",
+        kiosk_count: "4",
+        active_tournament_count: "1",
+      }];
+    },
     async create(body) {
       calls.push(body);
       return { id: "90071992547409931", name: body.name, slug: "ny-klubb" };
@@ -99,6 +113,7 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
     identityRepository,
     calls,
     lookups,
+    lists,
     matchCalls,
   };
 }
@@ -185,6 +200,18 @@ test("public kiosk connect preserves legacy validation and not-found errors", as
   assert.deepEqual(lookups, ["NOPE"]);
 });
 
+test("club list read works in readonly mode without touching shared identity", async () => {
+  const { router, identityRepository, lists } = routerFixture({ mode: "readonly" });
+  const result = await router.handle("GET", "/v1/clubs", request({}, null));
+
+  assert.equal(result?.statusCode, 200);
+  assert.equal(result?.payload.ok, true);
+  assert.equal(result?.payload.items[0].id, "90071992547409930");
+  assert.equal(result?.payload.items[0].player_count, "17");
+  assert.deepEqual(lists, [true]);
+  assert.deepEqual(identityRepository.touches, []);
+});
+
 test("club match calls read works in readonly mode without touching shared identity", async () => {
   const { router, identityRepository, matchCalls } = routerFixture({ mode: "readonly" });
   const result = await router.handle("GET", "/v1/clubs/90071992547409940/match-calls", request({}, null));
@@ -201,12 +228,58 @@ test("club match calls read works in readonly mode without touching shared ident
 
 test("club admin router owns only intended club surfaces", async () => {
   const { router } = routerFixture();
+  assert.equal((await router.handle("GET", "/v1/clubs", request()))?.statusCode, 200);
   assert.equal((await router.handle("GET", "/v1/clubs/42/match-calls", request()))?.statusCode, 200);
   assert.equal(await router.handle("POST", "/v1/clubs/42/match-calls", request()), null);
-  assert.equal(await router.handle("GET", "/v1/clubs", request()), null);
   assert.equal(await router.handle("PATCH", "/v1/clubs", request()), null);
   assert.equal(await router.handle("POST", "/v1/clubs/42", request()), null);
   assert.equal(await router.handle("GET", "/v1/public/kiosk/connect", request()), null);
+});
+
+test("club list repository preserves legacy aggregate shape and TEST-only runtime scope", async () => {
+  const queries = [];
+  const db = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return [{
+        id: "90071992547409930",
+        name: "Blindleia Dartklubb",
+        slug: "blindleia-dartklubb",
+        logo_url: null,
+        kiosk_pairing_code: "BDK-1234",
+        player_count: 17,
+        kiosk_count: "4",
+        active_tournament_count: 1n,
+      }];
+    },
+  };
+  const sessions = {
+    async withConnection(work) { return work(db); },
+  };
+  const repo = new MySqlClubAdminRepository(sessions, "bd_test_");
+  const items = await repo.list();
+
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0].params, undefined);
+  assert.match(queries[0].sql, /`bd_test_clubs`/);
+  assert.match(queries[0].sql, /`bd_test_players`/);
+  assert.match(queries[0].sql, /`bd_test_kiosks`/);
+  assert.match(queries[0].sql, /`bd_test_tournaments`/);
+  assert.doesNotMatch(queries[0].sql, /bd_prod_/);
+  assert.match(queries[0].sql, /p\.is_active=1/);
+  assert.match(queries[0].sql, /k\.is_active=1/);
+  assert.match(queries[0].sql, /t\.status IN \('draft','ready','in_progress'\)/);
+  assert.match(queries[0].sql, /ORDER BY c\.name ASC/);
+  assert.deepEqual(items, [{
+    id: "90071992547409930",
+    name: "Blindleia Dartklubb",
+    slug: "blindleia-dartklubb",
+    logo_url: null,
+    kiosk_pairing_code: "BDK-1234",
+    player_count: "17",
+    kiosk_count: "4",
+    active_tournament_count: "1",
+  }]);
 });
 
 test("club repository matches legacy slug, nullable logo and pairing-code shape", async () => {
