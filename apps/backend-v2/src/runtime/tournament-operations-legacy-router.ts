@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 
 import { DomainValidationError } from "../domain/errors.js";
 import type { IdentityUser, MySqlIdentityAuthRepository } from "../mysql/identity-auth-repository.js";
+import type { MySqlTournamentHardDeleteRepository } from "../mysql/tournament-hard-delete-repository.js";
 import type { MySqlTournamentOperationsRepository } from "../mysql/tournament-operations-repository.js";
 import type { MySqlTournamentPlayoffRepository } from "../mysql/tournament-playoff-repository.js";
 import { assertMutationAllowed, mutationsAllowed, RuntimeAccessError, type BackendRuntimeConfig } from "./config.js";
@@ -15,6 +16,7 @@ export class TournamentOperationsLegacyRouter {
     private readonly identityRepository: MySqlIdentityAuthRepository,
     private readonly operations: MySqlTournamentOperationsRepository,
     private readonly playoffs: MySqlTournamentPlayoffRepository,
+    private readonly hardDelete: MySqlTournamentHardDeleteRepository,
     private readonly realtime: TournamentRealtimePublisher,
   ) {}
 
@@ -81,6 +83,26 @@ export class TournamentOperationsLegacyRouter {
       snapshot.move = move;
       await this.realtime.publishClubRefresh(clubId, "tournament_match_move");
       return ok(snapshot);
+    }
+
+    const hardDeleteMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/hard-delete$/.exec(path);
+    if (method === "DELETE" && hardDeleteMatch) {
+      assertMutationAllowed(this.config);
+      const tournamentId = requiredCapture(hardDeleteMatch, 1);
+      const tournament = await this.requireTournament(tournamentId);
+      const clubId = requiredId(tournament.club_id, "club_id");
+      await this.requireAdmin(request, clubId);
+      const body = await readJsonObject(request);
+      if (body.confirm_delete !== true) {
+        throw new DomainValidationError(
+          "hard_delete_confirmation_required",
+          "Permanent deletion requires explicit confirmation.",
+          422,
+        );
+      }
+      const result = await this.hardDelete.hardDeleteTournament(tournamentId);
+      await this.realtime.publishClubRefresh(clubId, "tournament_deleted");
+      return ok(result);
     }
 
     const playoffMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/playoffs$/.exec(path);
