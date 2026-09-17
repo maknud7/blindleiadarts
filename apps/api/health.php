@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Repository\PlayerPortalRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
+use Blindleia\Dartkiosk\Api\Service\BackendV2ApiClient;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 use Blindleia\Dartkiosk\Api\Support\MembershipDatabase;
@@ -27,6 +28,62 @@ $status = 503;
 
 try {
     $config = Config::load(__DIR__);
+
+    // TEST health is Node-owned. Decide this before opening the legacy PHP
+    // database connection. Once backend-v2 is attempted, fail closed and never
+    // fall through to the PHP diagnostics because the remote outcome is no
+    // longer safe to reinterpret.
+    if ($config->appEnv() === 'test' && $config->backendV2ClubAdminRoutingMode() === 'node') {
+        try {
+            $client = new BackendV2ApiClient(
+                $config->backendV2BaseUrl(),
+                $config->backendV2InternalToken()
+            );
+            $result = $client->request('GET', '/v1/health?deep=1');
+            $nodePayload = $result['payload'];
+            $health = is_array($nodePayload['health'] ?? null) ? $nodePayload['health'] : null;
+
+            if ($result['status'] < 200 || $result['status'] >= 300 || ($nodePayload['ok'] ?? null) !== true || $health === null) {
+                throw new RuntimeException('Backend-v2 returned an invalid deep health response.');
+            }
+
+            if (!$deep) {
+                $health['mode'] = 'basic';
+                $health['diagnostics'] = array_values(array_filter(
+                    is_array($health['diagnostics'] ?? null) ? $health['diagnostics'] : [],
+                    static fn (mixed $diagnostic): bool => is_array($diagnostic)
+                        && (string) ($diagnostic['name'] ?? '') === 'database'
+                ));
+            }
+
+            http_response_code(($health['ok'] ?? false) === true ? 200 : 503);
+            echo json_encode($health, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        } catch (Throwable $error) {
+            http_response_code(502);
+            echo json_encode([
+                'ok' => false,
+                'service' => 'blindleiadarts',
+                'app_env' => 'test',
+                'mode' => $deep ? 'deep' : 'basic',
+                'generated_at' => gmdate('c'),
+                'duration_ms' => round((microtime(true) - $startedAt) * 1000, 1),
+                'checks' => [
+                    'database' => false,
+                    'core_schema' => false,
+                    'member_registry' => false,
+                ],
+                'diagnostics' => [],
+                'error' => [
+                    'code' => 'backend_v2_health_failed',
+                    'message' => 'Backend-v2 health request failed after dispatch; PHP fallback is disabled.',
+                    'detail' => $error->getMessage(),
+                ],
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+    }
+
     $database = new Database($config);
 
     $diagnostics = [];

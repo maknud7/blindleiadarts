@@ -16,6 +16,7 @@ import { MySqlMembershipEligibilityRepository } from "./mysql/membership-eligibi
 import { MySql2SessionProvider } from "./mysql/mysql2-session-provider.js";
 import { MySqlPlayerLiveReadRepository } from "./mysql/player-live-read-repository.js";
 import { MySqlPublicLiveReadRepository } from "./mysql/public-live-read-repository.js";
+import { MySqlRuntimeHealthRepository } from "./mysql/runtime-health-repository.js";
 import { MySqlSeasonAdminRepository } from "./mysql/season-admin-repository.js";
 import { MySqlSeasonPublicReadRepository } from "./mysql/season-public-read-repository.js";
 import { MySqlScoliaAdminRepository } from "./mysql/scolia-admin-repository.js";
@@ -46,6 +47,7 @@ import { EquipmentAdminRouter } from "./runtime/equipment-admin-router.js";
 import { PlayerLiveReadRouter } from "./runtime/player-live-read-router.js";
 import { BackendScoringPreflight } from "./runtime/preflight.js";
 import { PublicLiveReadRouter } from "./runtime/public-live-read-router.js";
+import { RuntimeHealthRouter } from "./runtime/runtime-health-router.js";
 import { SeasonAdminRouter } from "./runtime/season-admin-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
@@ -111,6 +113,12 @@ const accountProfiles = new MySqlAccountProfileRepository(
 );
 const clubAdmin = new MySqlClubAdminRepository(sessions, config.prefixes.runtime);
 const clubAdminRuntime = new ClubAdminRouter(config, identityRepository, clubAdmin);
+const runtimeHealth = new MySqlRuntimeHealthRepository(
+  sessions,
+  config.prefixes.runtime,
+  config.prefixes.identity,
+);
+const runtimeHealthRouter = new RuntimeHealthRouter(config, runtimeHealth);
 const playerLiveReads = new MySqlPlayerLiveReadRepository(sessions, config.prefixes.runtime);
 const playerLiveRuntime = new PlayerLiveReadRouter(config, identityRepository, playerLiveReads);
 const publicLiveReads = new MySqlPublicLiveReadRepository(
@@ -235,6 +243,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
       realtime_publish_enabled: config.realtime.publishEnabled,
       release_sha: config.releaseSha,
     });
+    return;
+  }
+
+  const runtimeHealthRoute = await runtimeHealthRouter.handle(method, publicPath, request);
+  if (runtimeHealthRoute !== null) {
+    sendJson(response, runtimeHealthRoute.statusCode, runtimeHealthRoute.payload);
     return;
   }
 

@@ -60,7 +60,8 @@ final class BackendV2ClubAdminProxyApplication
                 ? $request->jsonBody()
                 : null;
 
-            $result = $client->request($method, $path, $body, $headers);
+            $targetPath = $this->targetPath($path, (string) ($_SERVER['QUERY_STRING'] ?? ''));
+            $result = $client->request($method, $targetPath, $body, $headers);
             $status = $result['status'];
             $payload = $result['payload'];
             header('X-BD-Backend-V2: club-admin');
@@ -120,5 +121,18 @@ final class BackendV2ClubAdminProxyApplication
             '/v1/clubs',
             '/v1/public/kiosk/connect',
         ], true);
+    }
+
+    public function targetPath(string $path, string $queryString): string
+    {
+        if ($path !== '/v1/health') {
+            return $path;
+        }
+
+        $parsed = [];
+        parse_str($queryString, $parsed);
+        return (string) ($parsed['deep'] ?? '') === '1'
+            ? '/v1/health?deep=1'
+            : '/v1/health';
     }
 }

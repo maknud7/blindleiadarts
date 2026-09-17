@@ -41,4 +41,18 @@ foreach ($no as [$method, $path]) {
     }
 }
 
+$targets = [
+    ['/v1/health', 'deep=1&cb=123', '/v1/health?deep=1'],
+    ['/v1/health', 'deep=0&foo=bar', '/v1/health'],
+    ['/v1/health', 'foo=bar', '/v1/health'],
+    ['/v1/clubs/1/match-calls', 'deep=1', '/v1/clubs/1/match-calls'],
+];
+foreach ($targets as [$path, $query, $expected]) {
+    $actual = $app->targetPath($path, $query);
+    if ($actual !== $expected) {
+        fwrite(STDERR, "Unexpected club-admin target path: {$actual}; expected {$expected}\n");
+        exit(1);
+    }
+}
+
 echo "BackendV2ClubAdminProxy routing OK\n";
