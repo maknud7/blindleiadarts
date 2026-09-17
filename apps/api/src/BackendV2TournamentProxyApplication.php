@@ -124,6 +124,7 @@ final class BackendV2TournamentProxyApplication
         if (in_array($method, ['GET', 'PUT', 'PATCH'], true) && preg_match('#^/v1/tournaments/\d+/operations/boards$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/operations/reconcile$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/operations/matches/\d+/move$#', $path) === 1) return true;
+        if ($method === 'DELETE' && preg_match('#^/v1/tournaments/\d+/hard-delete$#', $path) === 1) return true;
 
         if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+/playoffs$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/playoffs/(?:generate|reconcile)$#', $path) === 1) return true;
