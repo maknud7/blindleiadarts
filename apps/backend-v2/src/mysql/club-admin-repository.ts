@@ -13,6 +13,12 @@ interface ClubRow extends QueryResultRow {
   readonly updated_at?: unknown;
 }
 
+interface ClubListRow extends ClubRow {
+  readonly player_count?: unknown;
+  readonly kiosk_count?: unknown;
+  readonly active_tournament_count?: unknown;
+}
+
 export class MySqlClubAdminRepository {
   constructor(
     private readonly sessions: MySqlSessionProvider,
@@ -28,6 +34,34 @@ export class MySqlClubAdminRepository {
     } catch {
       return false;
     }
+  }
+
+  async list(): Promise<Record<string, unknown>[]> {
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<ClubListRow>(
+        `SELECT c.id,c.name,c.slug,c.logo_url,c.kiosk_pairing_code,
+                COUNT(DISTINCT p.id) AS player_count,
+                COUNT(DISTINCT k.id) AS kiosk_count,
+                COUNT(DISTINCT CASE WHEN t.status IN ('draft','ready','in_progress') THEN t.id END) AS active_tournament_count
+           FROM \`${this.prefix}clubs\` c
+           LEFT JOIN \`${this.prefix}players\` p ON p.club_id=c.id AND p.is_active=1
+           LEFT JOIN \`${this.prefix}kiosks\` k ON k.club_id=c.id AND k.is_active=1
+           LEFT JOIN \`${this.prefix}tournaments\` t ON t.club_id=c.id
+          GROUP BY c.id,c.name,c.slug,c.logo_url,c.kiosk_pairing_code
+          ORDER BY c.name ASC`,
+      );
+
+      return rows.map((row) => ({
+        id: requiredId(row.id, "club_id"),
+        name: row.name ?? null,
+        slug: row.slug ?? null,
+        logo_url: row.logo_url ?? null,
+        kiosk_pairing_code: row.kiosk_pairing_code ?? null,
+        player_count: String(row.player_count ?? "0"),
+        kiosk_count: String(row.kiosk_count ?? "0"),
+        active_tournament_count: String(row.active_tournament_count ?? "0"),
+      }));
+    });
   }
 
   async create(payload: Record<string, unknown>): Promise<Record<string, unknown>> {

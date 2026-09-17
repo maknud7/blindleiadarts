@@ -9,6 +9,7 @@ use Blindleia\Dartkiosk\Api\BackendV2ClubAdminProxyApplication;
 $app = new BackendV2ClubAdminProxyApplication(dirname(__DIR__));
 
 foreach ([
+    ['GET', '/v1/clubs'],
     ['POST', '/v1/clubs'],
     ['POST', '/v1/public/kiosk/connect'],
     ['GET', '/v1/health'],
@@ -22,7 +23,6 @@ foreach ([
 }
 
 $no = [
-    ['GET', '/v1/clubs'],
     ['PUT', '/v1/clubs'],
     ['PATCH', '/v1/clubs'],
     ['DELETE', '/v1/clubs'],
@@ -45,6 +45,7 @@ $targets = [
     ['/v1/health', 'deep=1&cb=123', '/v1/health?deep=1'],
     ['/v1/health', 'deep=0&foo=bar', '/v1/health'],
     ['/v1/health', 'foo=bar', '/v1/health'],
+    ['/v1/clubs', 'foo=bar', '/v1/clubs'],
     ['/v1/clubs/1/match-calls', 'deep=1', '/v1/clubs/1/match-calls'],
 ];
 foreach ($targets as [$path, $query, $expected]) {

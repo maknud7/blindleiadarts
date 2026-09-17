@@ -16,11 +16,11 @@ use Throwable;
  * Same-origin front door for runtime club administration, kiosk bootstrap and
  * isolated runtime reads.
  *
- * TEST may create isolated bd_test_ clubs through backend-v2, resolve the
- * public kiosk pairing code, read active match calls and serve the read-only
- * API health contract from Node. Read routes do not require or mutate shared
- * identity. PROD keeps the legacy PHP owner while club_admin_routing_mode is
- * php.
+ * TEST may create isolated bd_test_ clubs through backend-v2, list runtime
+ * clubs, resolve the public kiosk pairing code, read active match calls and
+ * serve the read-only API health contract from Node. Read routes do not require
+ * or mutate shared identity. PROD keeps the legacy PHP owner while
+ * club_admin_routing_mode is php.
  *
  * Routing is decided before the legacy Application opens its database
  * connection. Once Node has been attempted the request fails closed and never
@@ -105,7 +105,7 @@ final class BackendV2ClubAdminProxyApplication
     {
         $method = strtoupper($method);
 
-        if ($method === 'GET' && $path === '/v1/health') {
+        if ($method === 'GET' && in_array($path, ['/v1/health', '/v1/clubs'], true)) {
             return true;
         }
 
