@@ -21,10 +21,10 @@ export class TournamentOperationsRouter {
   constructor(
     config: BackendRuntimeConfig,
     identityRepository: MySqlIdentityAuthRepository,
-    kioskAuth: MySqlScoliaKioskAuthRepository,
     operations: MySqlTournamentOperationsRepository,
     playoffs: MySqlTournamentPlayoffRepository,
     realtime: TournamentRealtimePublisher,
+    kioskAuth?: MySqlScoliaKioskAuthRepository,
   ) {
     // The legacy operations repository already owns the canonical shared session provider.
     // Reuse it so this migration does not create a second pool/connection budget.
@@ -35,11 +35,11 @@ export class TournamentOperationsRouter {
     this.legacy = new TournamentOperationsLegacyRouter(
       config,
       identityRepository,
-      kioskAuth,
       operations,
       playoffs,
       hardDeleteRepository,
       realtime,
+      kioskAuth,
     );
   }
 
