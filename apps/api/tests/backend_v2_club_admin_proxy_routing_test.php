@@ -13,6 +13,7 @@ foreach ([
     ['POST', '/v1/clubs'],
     ['POST', '/v1/public/kiosk/connect'],
     ['GET', '/v1/health'],
+    ['GET', '/v1/system/status'],
     ['GET', '/v1/clubs/1/match-calls'],
     ['GET', '/v1/clubs/90071992547409931/match-calls'],
 ] as [$method, $path]) {
@@ -33,6 +34,7 @@ $no = [
     ['GET', '/v1/clubs/0/match-calls'],
     ['GET', '/v1/public/kiosk/connect'],
     ['POST', '/v1/health'],
+    ['POST', '/v1/system/status'],
 ];
 foreach ($no as [$method, $path]) {
     if ($app->handles($method, $path)) {
@@ -45,6 +47,8 @@ $targets = [
     ['/v1/health', 'deep=1&cb=123', '/v1/health?deep=1'],
     ['/v1/health', 'deep=0&foo=bar', '/v1/health'],
     ['/v1/health', 'foo=bar', '/v1/health'],
+    ['/v1/system/status', 'club_id=90071992547409931&foo=bar', '/v1/system/status?club_id=90071992547409931'],
+    ['/v1/system/status', 'club_id=0', '/v1/system/status'],
     ['/v1/clubs', 'foo=bar', '/v1/clubs'],
     ['/v1/clubs/1/match-calls', 'deep=1', '/v1/clubs/1/match-calls'],
 ];
