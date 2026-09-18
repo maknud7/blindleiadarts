@@ -70,6 +70,9 @@ jobs:
       - name: Retired public screen API contract checks
         run: node infra/tests/retired_screen_api_contract_test.mjs
 
+      - name: Verify retired legacy SSE contract
+        run: node infra/tests/retired_legacy_sse_contract_test.mjs
+
       - name: Retired Challonge runtime contract checks
         run: node infra/tests/retired_challonge_runtime_contract_test.mjs
 
