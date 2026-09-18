@@ -20,7 +20,6 @@ The platform is designed to run the venue locally without depending on Challonge
   /player
 /packages
   /domain
-  /connectors
   /ui-assets
 /docs
   /architecture
@@ -37,7 +36,7 @@ The platform is designed to run the venue locally without depending on Challonge
 
 - API-first: all frontends talk to the internal API only.
 - Internal domain first: local entities and rules are the source of truth.
-- Provider boundaries: external systems plug in through bounded adapters and must not become runtime truth.
+- Integration boundaries: external systems, when needed, must stay behind bounded adapters and must not become runtime truth.
 - Event-oriented design: state changes should align with explicit domain events.
 - Venue runtime independence: local tournament operations must continue without external availability.
 - Reuse before duplication: when the same domain data, meaning, calculation or interaction already exists elsewhere in the platform, reuse the existing canonical API field, calculation, component or UI pattern instead of creating a parallel variant. Only introduce a new variant when the context genuinely requires different semantics or behavior, and document why.
