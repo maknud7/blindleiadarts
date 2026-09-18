@@ -6,7 +6,6 @@ import type { IdentityUser, MySqlIdentityAuthRepository } from "../mysql/identit
 import type { MySqlScoliaDashboardRepository } from "../mysql/scolia-dashboard-repository.js";
 import type { MySqlTournamentCatalogReadRepository } from "../mysql/tournament-catalog-read-repository.js";
 import {
-  mutationsAllowed,
   RuntimeAccessError,
   type BackendRuntimeConfig,
 } from "./config.js";
@@ -86,7 +85,7 @@ export class SystemStatusRouter {
             label: "Realtime relay",
             status: realtimeEnabled ? "ok" : "warning",
             detail: realtimeEnabled
-              ? "Websocket/SSE er konfigurert."
+              ? "Websocket er konfigurert."
               : "Fallback til polling. Ingen websocket-URL konfigurert.",
           },
           {
@@ -114,7 +113,7 @@ export class SystemStatusRouter {
         "Authorization header with Bearer token is required.",
       );
     }
-    const user = await this.identityRepository.findBySessionToken(token, this.identityTouchAllowed());
+    const user = await this.identityRepository.findBySessionToken(token, false);
     if (user === null) throw new RuntimeAccessError(401, "invalid_session", "Session token is invalid or expired.");
     const role = String(user.role ?? "player");
     if (role !== "club_admin" && role !== "super_admin") {
@@ -133,12 +132,6 @@ export class SystemStatusRouter {
     );
   }
 
-  private identityTouchAllowed(): boolean {
-    return (
-      (this.config.environment === "prod" && this.config.prefixes.identity === "bd_prod_" && mutationsAllowed(this.config)) ||
-      (this.config.environment === "test" && this.config.prefixes.identity === "bd_test_" && mutationsAllowed(this.config))
-    );
-  }
 }
 
 function bearerToken(request: IncomingMessage): string | null {
