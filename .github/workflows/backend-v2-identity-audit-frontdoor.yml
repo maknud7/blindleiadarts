@@ -47,7 +47,7 @@ jobs:
           grep -Fq 'backendV2IdentityAuditRoutingMode()' apps/api/src/BackendV2IdentityAuditProxyApplication.php
           grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2IdentityAuditProxyApplication.php
 
-      - name: Verify TEST-only identity audit routing default
+      - name: Verify TEST and PROD identity audit routing defaults
         env:
           SCOLIA_BRIDGE_SECRET: identity-audit-routing-contract
           DB_HOST: 127.0.0.1
@@ -66,7 +66,7 @@ jobs:
           APP_ENV=prod BASE_URL=https://blindleiadarts.ingenting.org STATIC_BASE_URL=https://blindleiadarts.ingenting.org \
             DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/identity-audit-prod.php
-          php -r '$c=require "/tmp/identity-audit-prod.php"; $b=$c["backend_v2"]??[]; if (($b["identity_audit_routing_mode"]??null)!=="php") exit(1);'
+          php -r '$c=require "/tmp/identity-audit-prod.php"; $b=$c["backend_v2"]??[]; if (($b["identity_audit_routing_mode"]??null)!=="node") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2);'
 
       - name: Verify owner selection precedes legacy database work
         run: |
@@ -74,3 +74,33 @@ jobs:
           php -r '$s=file_get_contents("apps/api/src/PlayerIdentityApplication.php"); $r=strpos($s,"backendV2IdentityAuditRoutingMode()"); $d=strpos($s,"new Database"); if ($r===false||$d===false||$r>=$d) exit(1);'
           grep -Fq "return (new BackendV2IdentityAuditProxyApplication" apps/api/src/PlayerIdentityApplication.php
           grep -Fq 'findBySessionToken(token, false)' apps/backend-v2/src/runtime/identity-audit-read-router.ts
+
+
+      - name: Verify current PROD backend exposes identity audit diagnostics
+        env:
+          HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
+        run: |
+          set -Eeuo pipefail
+          declare -a probes=(
+            "GET /v1/player-identities/history"
+            "GET /v1/player-identities/health"
+            "GET /v1/clubs/1/player-identities/duplicates"
+            "POST /v1/clubs/1/player-identities/preview"
+          )
+          for probe in "${probes[@]}"; do
+            method="${probe%% *}"
+            path="${probe#* }"
+            body="$(mktemp)"
+            status="$(curl -sS --max-time 30 -X "$method"               -H 'Authorization: Bearer definitely-invalid-identity-audit-prod-probe'               -H 'Content-Type: application/json'               -o "$body" -w '%{http_code}' "${HOST_URL%/}$path")"
+            echo "$method $path HTTP $status: $(cat "$body")"
+            test "$status" = "401"
+            code="$(jq -r '.error.code // empty' "$body")"
+            [[ "$code" == "invalid_session" || "$code" == "authentication_required" ]]
+            rm -f "$body"
+          done
+
+          merge_body="$(mktemp)"
+          merge_status="$(curl -sS --max-time 30 -X POST             -H 'Authorization: Bearer definitely-invalid-identity-audit-prod-probe'             -H 'Content-Type: application/json'             -o "$merge_body" -w '%{http_code}'             "${HOST_URL%/}/v1/clubs/1/player-identities/merge")"
+          echo "POST /v1/clubs/1/player-identities/merge HTTP $merge_status: $(cat "$merge_body")"
+          test "$merge_status" = "404"
+          rm -f "$merge_body"

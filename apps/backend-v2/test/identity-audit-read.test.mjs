@@ -321,3 +321,56 @@ test("preview reproduces merge conflicts and reference counts without cross-pref
     (error) => error?.code === "validation_error" && error?.statusCode === 422,
   );
 });
+
+
+test("PROD preview reads same-prefix accounts without mutation", async () => {
+  const clubId = "42";
+  const sourceId = "1001";
+  const targetId = "1002";
+  const queries = [];
+  const db = {
+    async query(sql, params = []) {
+      queries.push({ sql, params });
+      if (sql.includes("FROM \`bd_prod_players\` WHERE id=? LIMIT 1")) {
+        const id = params[0];
+        return [{
+          id,
+          club_id: clubId,
+          display_name: id === sourceId ? "Same Name" : "same name",
+          first_name: null,
+          last_name: null,
+          nickname: null,
+          avatar_url: null,
+          member_id: null,
+          member_link_source: null,
+          is_active: "1",
+          merged_into_player_id: null,
+          merged_at: null,
+        }];
+      }
+      if (sql.includes("information_schema.TABLES")) {
+        const table = params[0];
+        return table === "bd_prod_user_accounts" ? [{ present: 1 }] : [];
+      }
+      if (sql.includes("SELECT COUNT(*) AS c FROM \`bd_prod_user_accounts\` WHERE player_id IN (?,?)")) {
+        assert.deepEqual(params, [sourceId, targetId]);
+        return [{ c: "2" }];
+      }
+      if (sql.includes("information_schema.KEY_COLUMN_USAGE")) {
+        assert.deepEqual(params, ["bd_prod_players"]);
+        return [];
+      }
+      throw new Error(`Unexpected query: ${sql} ${JSON.stringify(params)}`);
+    },
+  };
+  const sessions = { async withConnection(work) { return work(db); } };
+  const repo = new MySqlIdentityAuditReadRepository(sessions, "bd_prod_", "bd_prod_");
+  const preview = await repo.preview(clubId, sourceId, targetId);
+
+  assert.equal(preview.safe_to_merge, false);
+  assert.deepEqual(preview.conflicts.map((item) => item.code), ["two_accounts"]);
+  assert.equal(
+    queries.some(({ sql }) => /\b(?:INSERT|UPDATE|DELETE|REPLACE|ALTER|DROP|CREATE)\b/i.test(sql)),
+    false,
+  );
+});

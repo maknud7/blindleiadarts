@@ -72,9 +72,10 @@ $defaultBackendV2ActivityRoutingMode = $isTest ? 'node' : 'php';
 // Payment settings are runtime-only club configuration. Move the TEST writer to
 // backend-v2 while leaving PROD on the legacy PHP owner until its own cutover.
 $defaultBackendV2PaymentSettingsRoutingMode = $isTest ? 'node' : 'php';
-// Player identity audit is read-only. TEST may read shared PROD identity without
-// touching sessions, while PROD remains on PHP until a dedicated production gate.
-$defaultBackendV2IdentityAuditRoutingMode = $isTest ? 'node' : 'php';
+// Player identity audit is read-only and uses no-touch identity authorization.
+// Keep the canonical merge mutation PHP-owned, but serve diagnostics from Node
+// in both TEST and PROD.
+$defaultBackendV2IdentityAuditRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 // Club creation mutates only the isolated runtime club registry in TEST. Shared
 // canonical identity is used for no-touch super-admin authorization; PROD stays PHP.
 $defaultBackendV2ClubAdminRoutingMode = $isTest ? 'node' : 'php';
