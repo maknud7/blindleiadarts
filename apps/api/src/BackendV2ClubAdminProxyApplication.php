@@ -105,7 +105,7 @@ final class BackendV2ClubAdminProxyApplication
     {
         $method = strtoupper($method);
 
-        if ($method === 'GET' && in_array($path, ['/v1/health', '/v1/clubs'], true)) {
+        if ($method === 'GET' && in_array($path, ['/v1/health', '/v1/clubs', '/v1/system/status'], true)) {
             return true;
         }
 
@@ -125,14 +125,22 @@ final class BackendV2ClubAdminProxyApplication
 
     public function targetPath(string $path, string $queryString): string
     {
-        if ($path !== '/v1/health') {
-            return $path;
-        }
-
         $parsed = [];
         parse_str($queryString, $parsed);
-        return (string) ($parsed['deep'] ?? '') === '1'
-            ? '/v1/health?deep=1'
-            : '/v1/health';
+
+        if ($path === '/v1/health') {
+            return (string) ($parsed['deep'] ?? '') === '1'
+                ? '/v1/health?deep=1'
+                : '/v1/health';
+        }
+
+        if ($path === '/v1/system/status') {
+            $clubId = trim((string) ($parsed['club_id'] ?? ''));
+            return preg_match('/^[1-9][0-9]*$/', $clubId) === 1
+                ? '/v1/system/status?club_id=' . rawurlencode($clubId)
+                : '/v1/system/status';
+        }
+
+        return $path;
     }
 }
