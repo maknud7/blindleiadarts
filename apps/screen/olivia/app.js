@@ -30,7 +30,7 @@ function eventMatchesFocusDate(e,date){
   return e?.day===wd(date);
 }
 function presentationDate(data,now=new Date()){
-  const currentWeek=weekForDate(data,now)||data.weeks?.[0]||null;
+  const currentWeek=weekForDate(data,now)||null;
   const summary=currentWeek?.summary||{};
   return moreThanHourAfterSchool(now,summary)?nextSchoolDate(now):new Date(now);
 }
@@ -124,6 +124,9 @@ function renderUpcoming(data,displayDate){
     for(const w of node?.weeks||[]){
       if(w.iso_year<displayIso.year||(w.iso_year===displayIso.year&&w.iso_week<=displayIso.week))continue;
       for(const e of w.summary?.events||[]){
+        if(e.calendar===false)continue;
+        const routeEvent=e.source==='lillesand-school-route'||e.source==='lillesand-kindergarten-route'||e.school_free===true;
+        if(e.calendar!==true&&!routeEvent)continue;
         const date=e.start_date||e.end_date;
         if(!date||date<fromKey||date>untilKey)continue;
         items.push({date,child,e});
@@ -148,19 +151,19 @@ async function main(){
   const data=await r.json();
   const displayDate=presentationDate(data,new Date());
   const n=isoForDate(displayDate);
-  const w=weekForDate(data,displayDate)||data.weeks?.[0];if(!w)throw new Error('Ingen ukeplan tilgjengelig');
-  const s=w.summary||{},odd=n.week%2===1;
+  const w=weekForDate(data,displayDate);
+  const s=w?.summary||{},odd=n.week%2===1;
   $('weekBadge').textContent=`Uke ${n.week}`;
   $('subhead').textContent=odd?'Detaljert uke – Olivia og Othilie hos dere':'Kort oversikt – partallsuke';
   $('weekTitle').textContent=`Uke ${n.week}`;
-  $('sourceLink').href=w.source_url||data.household.source_url;$('timetableLink').href=data.household.timetable_url;$('schoolRouteLink').href=data.school_route_url||'https://www.lillesand.kommune.no/Skolerute.html';$('barnehageLink').href=data.othilie?.household?.source_url||'https://www.lillesand.kommune.no/Barnehagerute.html';$('calendarLink').href=data.calendar_url.replace(/^https:/,'webcal:');
+  $('sourceLink').href=w?.source_url||data.household.source_url;$('timetableLink').href=data.household.timetable_url;$('schoolRouteLink').href=data.school_route_url||'https://www.lillesand.kommune.no/Skolerute.html';$('barnehageLink').href=data.othilie?.household?.source_url||'https://www.lillesand.kommune.no/Barnehagerute.html';$('calendarLink').href=data.calendar_url.replace(/^https:/,'webcal:');
   const oWeek=weekForDate(data.othilie,displayDate);
-  const stamps=[w.updated_at||w.fetched_at,oWeek?.updated_at||oWeek?.fetched_at].filter(Boolean).map(x=>new Date(x).getTime());
+  const stamps=[w?.updated_at||w?.fetched_at,oWeek?.updated_at||oWeek?.fetched_at].filter(Boolean).map(x=>new Date(x).getTime());
   const latest=stamps.length?new Date(Math.max(...stamps)):new Date();
   $('updated').textContent=`Oppdatert ${latest.toLocaleString('nb-NO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}`;
   const ev=s.events||[],hw=s.homework||[],nt=s.notices||[];
-  $('events').innerHTML=ev.length?ev.map(e=>row(e.icon||'•',e.title,e.detail,eventMeta(e))).join(''):'<p class="empty">Ingen spesielle hendelser registrert.</p>';
-  $('homework').innerHTML=hw.length?hw.map(h=>row('📚',h.subject,h.task||h.detail,h.due?`Til ${h.due.toLowerCase()}`:'')).join(''):'<p class="empty">Ingen lekser registrert.</p>';
+  $('events').innerHTML=ev.length?ev.map(e=>row(e.icon||'•',e.title,e.detail,eventMeta(e))).join(''):`<p class="empty">${w?'Ingen spesielle hendelser registrert.':`Ukeplan for uke ${n.week} er ikke publisert ennå.`}</p>`;
+  $('homework').innerHTML=hw.length?hw.map(h=>row('📚',h.subject,h.task||h.detail,h.due?`Til ${h.due.toLowerCase()}`:'')).join(''):`<p class="empty">${w?'Ingen lekser registrert.':'Ingen ukeplan publisert ennå.'}</p>`;
   if(nt.length){$('noticeCard').classList.remove('hidden');$('notices').innerHTML=nt.map(x=>row('ℹ️','Beskjed',x)).join('')}else{$('noticeCard').classList.add('hidden')}
   renderOthilie(data,displayDate);
   renderFocus(data,displayDate);
