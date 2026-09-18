@@ -196,6 +196,18 @@ export class MySqlEquipmentAdminRepository {
     return this.sessions.withTransaction((db) => this.ensureRuntimeAliasWith(db, environmentClubId, physicalId));
   }
 
+  async listAllPendingPairingRequests(): Promise<Record<string, unknown>[]> {
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT id,club_id,request_code,device_name,status,requested_at,expires_at
+           FROM \`${this.runtimePrefix}kiosk_pairing_requests\`
+          WHERE status='pending' AND expires_at>=NOW()
+          ORDER BY requested_at DESC`,
+      );
+      return rows.map(publicPairingRequest);
+    });
+  }
+
   async listPendingPairingRequests(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
     const clubId = requiredId(clubIdInput, "club_id");
     return this.sessions.withConnection(async (db) => {
