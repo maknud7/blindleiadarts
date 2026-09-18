@@ -11,6 +11,7 @@ $app = new BackendV2ClubAdminProxyApplication(dirname(__DIR__));
 foreach ([
     ['GET', '/v1/clubs'],
     ['POST', '/v1/clubs'],
+    ['POST', '/v1/clubs/42/players'],
     ['POST', '/v1/public/kiosk/connect'],
     ['GET', '/v1/health'],
     ['GET', '/v1/system/status'],
