@@ -5,17 +5,17 @@ import { MySqlEquipmentAdminRepository } from "../dist/mysql/equipment-admin-rep
 import { MySqlTournamentCatalogReadRepository } from "../dist/mysql/tournament-catalog-read-repository.js";
 import { SystemStatusRouter } from "../dist/runtime/system-status-router.js";
 
-function config() {
+function config({ environment = "test", mode = "test-write", runtimePrefix = "bd_test_", identityPrefix = "bd_prod_", hardwarePrefix = "bd_prod_" } = {}) {
   return {
-    environment: "test",
-    mode: "test-write",
+    environment,
+    mode,
     host: "127.0.0.1",
     port: 18082,
     releaseSha: "test",
     internalToken: "internal",
     prodCanaryWritesEnabled: false,
     canonicalSideEffectsReady: true,
-    prefixes: { runtime: "bd_test_", identity: "bd_prod_", hardware: "bd_prod_" },
+    prefixes: { runtime: runtimePrefix, identity: identityPrefix, hardware: hardwarePrefix },
     mysql: {
       host: "localhost", port: 3306, database: "test", username: "test", password: "test",
       connectTimeoutMs: 1000, idleConnectionTimeoutMs: 1000,
@@ -38,7 +38,7 @@ function request(url = "/v1/system/status", authorization = "Bearer admin-sessio
   };
 }
 
-function fixture({ role = "super_admin", playerClubId = null } = {}) {
+function fixture({ role = "super_admin", playerClubId = null, runtimeConfig = config() } = {}) {
   const touches = [];
   const identity = {
     async findBySessionToken(token, touchSession) {
@@ -106,7 +106,7 @@ function fixture({ role = "super_admin", playerClubId = null } = {}) {
     },
   };
   return {
-    router: new SystemStatusRouter(config(), identity, clubs, tournaments, equipment, scoliaDashboard),
+    router: new SystemStatusRouter(runtimeConfig, identity, clubs, tournaments, equipment, scoliaDashboard),
     touches,
     calls,
   };
@@ -124,6 +124,22 @@ test("system status is read-only and does not touch shared PROD identity session
   assert.equal(result?.payload.club, null);
   assert.deepEqual(touches, [false]);
   assert.deepEqual(calls, ["ping", "clubs", "pairings:all"]);
+});
+
+test("system status stays write-free against PROD identity in PROD", async () => {
+  const runtimeConfig = config({
+    environment: "prod",
+    mode: "prod-canary",
+    runtimePrefix: "bd_prod_",
+    identityPrefix: "bd_prod_",
+    hardwarePrefix: "bd_prod_",
+  });
+  const { router, touches } = fixture({ runtimeConfig });
+  const result = await router.handle("GET", "/v1/system/status", request());
+
+  assert.equal(result?.statusCode, 200);
+  assert.equal(result?.payload.environment, "prod");
+  assert.deepEqual(touches, [false]);
 });
 
 test("system status preserves exact BIGINT club ids and legacy club scope", async () => {
