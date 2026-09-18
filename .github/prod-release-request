@@ -1,5 +1,5 @@
-release_sha=f3d7210bdbf14bb2b815c06a7ff6a64a1166ab50
+release_sha=596aed5c3ae095197a063352f293ac0e5d2576bf
 backup_confirmed=YES
-migration_review_confirmed=YES
-purpose=backend_v2_system_status_prod_cutover
-backup_prefix=bd_backup_20260918_073806_
+migration_review_confirmed=NO
+purpose=backend_v2_identity_audit_prod_cutover
+backup_prefix=bd_backup_20260918_075740_
