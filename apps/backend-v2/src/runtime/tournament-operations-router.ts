@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 
 import type { MySqlSessionProvider, TablePrefix } from "../mysql/contracts.js";
 import type { MySqlIdentityAuthRepository } from "../mysql/identity-auth-repository.js";
+import type { MySqlScoliaKioskAuthRepository } from "../mysql/scolia-kiosk-auth-repository.js";
 import { MySqlTournamentBoardAdminRepository } from "../mysql/tournament-board-admin-repository.js";
 import { MySqlTournamentHardDeleteRepository } from "../mysql/tournament-hard-delete-repository.js";
 import type { MySqlTournamentOperationsRepository } from "../mysql/tournament-operations-repository.js";
@@ -20,6 +21,7 @@ export class TournamentOperationsRouter {
   constructor(
     config: BackendRuntimeConfig,
     identityRepository: MySqlIdentityAuthRepository,
+    kioskAuth: MySqlScoliaKioskAuthRepository,
     operations: MySqlTournamentOperationsRepository,
     playoffs: MySqlTournamentPlayoffRepository,
     realtime: TournamentRealtimePublisher,
@@ -33,6 +35,7 @@ export class TournamentOperationsRouter {
     this.legacy = new TournamentOperationsLegacyRouter(
       config,
       identityRepository,
+      kioskAuth,
       operations,
       playoffs,
       hardDeleteRepository,
