@@ -104,11 +104,11 @@ function fixture() {
   const router = new TournamentOperationsLegacyRouter(
     config(),
     {},
-    kioskAuth,
     operations,
     {},
     {},
     realtime,
+    kioskAuth,
   );
   return { router, calls };
 }
