@@ -40,10 +40,6 @@ final class Application
             $config = Config::load($this->rootPath);
             $database = new Database($config);
 
-            if ($this->handleStreamRequest($request, $database, $config)) {
-                return;
-            }
-
             $response = $this->dispatch($request, $config, $database);
         } catch (KioskAccessException $exception) {
             $response = JsonResponse::error(
