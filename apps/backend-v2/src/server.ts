@@ -262,11 +262,23 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   }
 
   if (method === "POST" && publicPath === "/v1/auth/login") {
-    assertIdentityMutationAllowed(config);
+    // TEST login reads canonical PROD credentials but creates only a bd_test_ session.
+    assertMutationAllowed(config);
     const body = await readJsonObject(request);
     const result = await identityAuth.login(body.email ?? body.username, body.password);
     sendJson(response, 200, { ok: true, ...result });
     return;
+  }
+
+  if (
+    method === "POST" &&
+    (publicPath === "/v1/auth/password-reset/request" || publicPath === "/v1/auth/password-reset/confirm")
+  ) {
+    throw new RuntimeAccessError(
+      403,
+      "password_reset_prod_identity_only",
+      "Passord kan bare endres mot canonical PROD-identitet.",
+    );
   }
 
   if (method === "GET" && publicPath === "/v1/auth/me") {
@@ -300,7 +312,8 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
   }
 
   if ((method === "PUT" || method === "PATCH") && publicPath === "/v1/me/profile") {
-    assertIdentityMutationAllowed(config);
+    // With split identity/runtime prefixes this updates only the local TEST player actor.
+    assertMutationAllowed(config);
     const user = await requireIdentityUser(request, true);
     const body = await readJsonObject(request);
     const profile = await accountProfiles.updateProfile(user, body.display_name, body.nickname);
