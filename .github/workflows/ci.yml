@@ -73,6 +73,9 @@ jobs:
       - name: Verify retired legacy SSE contract
         run: node infra/tests/retired_legacy_sse_contract_test.mjs
 
+      - name: Verify TEST modernization readiness contract
+        run: node infra/tests/test_runtime_modernization_readiness.mjs
+
       - name: Retired Challonge runtime contract checks
         run: node infra/tests/retired_challonge_runtime_contract_test.mjs
 
