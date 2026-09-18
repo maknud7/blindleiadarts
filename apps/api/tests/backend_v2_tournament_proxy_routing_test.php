@@ -63,6 +63,9 @@ $yes = [
     ['POST', '/v1/tournaments/9/operations/reconcile'],
     ['POST', '/v1/tournaments/9/operations/matches/22/move'],
     ['DELETE', '/v1/tournaments/9/hard-delete'],
+    ['GET', '/v1/kiosks/BOARD-1/post-match'],
+    ['POST', '/v1/kiosks/BOARD-1/next-match'],
+    ['POST', '/v1/kiosks/BOARD-1/release-next-match'],
     ['GET', '/v1/tournaments/9/playoffs'],
     ['POST', '/v1/tournaments/9/playoffs/generate'],
     ['POST', '/v1/tournaments/9/playoffs/reconcile'],
@@ -99,6 +102,9 @@ $no = [
     ['POST', '/v1/tournaments/9/operations/matches/22/start'],
     ['GET', '/v1/tournaments/9/hard-delete'],
     ['POST', '/v1/tournaments/9/hard-delete'],
+    ['POST', '/v1/kiosks/BOARD-1/post-match'],
+    ['GET', '/v1/kiosks/BOARD-1/next-match'],
+    ['GET', '/v1/kiosks/BOARD-1/release-next-match'],
     ['GET', '/v1/tournaments/9/summary'],
 ];
 
