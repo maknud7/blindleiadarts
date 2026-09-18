@@ -38,6 +38,19 @@ export class ClubAdminRouter {
       };
     }
 
+    const createPlayerMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/players$/.exec(path);
+    if (method === "POST" && createPlayerMatch) {
+      assertMutationAllowed(this.config);
+      const clubId = createPlayerMatch[1]!;
+      const user = await this.requireUser(request);
+      this.requireClubManager(user, clubId);
+      const body = await readJsonObject(request);
+      return {
+        statusCode: 201,
+        payload: { ok: true, player: await this.clubs.createLocalPlayer(clubId, body) },
+      };
+    }
+
     if (method === "POST" && path === "/v1/public/kiosk/connect") {
       const body = await readJsonObject(request);
       const code = String(body.code ?? "").trim().toUpperCase();
@@ -79,6 +92,20 @@ export class ClubAdminRouter {
       throw new RuntimeAccessError(401, "invalid_session", "Session token is invalid or expired.");
     }
     return user;
+  }
+
+  private requireClubManager(user: IdentityUser, clubId: string): void {
+    const role = String(user.role ?? "player");
+    if (role === "super_admin") return;
+    if (role !== "club_admin") {
+      throw new RuntimeAccessError(403, "admin_required", "Admin role is required for this endpoint.");
+    }
+    const ids = String(user.admin_club_ids ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => /^[1-9][0-9]*$/.test(value));
+    if (ids.includes(clubId)) return;
+    throw new RuntimeAccessError(403, "club_access_denied", "This admin account does not manage the selected club.");
   }
 
   private requireSuperAdmin(user: IdentityUser): void {
