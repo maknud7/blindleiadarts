@@ -19,8 +19,8 @@ use Throwable;
  * TEST may create isolated bd_test_ clubs through backend-v2, list runtime
  * clubs, resolve the public kiosk pairing code, read active match calls and
  * serve the read-only API health contract from Node. Read routes do not require
- * or mutate shared identity. PROD keeps the legacy PHP owner while
- * club_admin_routing_mode is php.
+ * or mutate shared identity. System status has an independent read-only routing
+ * mode so PROD can move that route without moving club mutations.
  *
  * Routing is decided before the legacy Application opens its database
  * connection. Once Node has been attempted the request fails closed and never
@@ -42,7 +42,10 @@ final class BackendV2ClubAdminProxyApplication
         }
 
         $config = Config::load($this->rootPath);
-        if ($config->backendV2ClubAdminRoutingMode() !== 'node') {
+        $routingMode = $path === '/v1/system/status'
+            ? $config->backendV2SystemStatusRoutingMode()
+            : $config->backendV2ClubAdminRoutingMode();
+        if ($routingMode !== 'node') {
             return false;
         }
 
