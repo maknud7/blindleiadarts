@@ -63,6 +63,10 @@ $defaultBackendV2PlayerLiveRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 // Authenticated account reads are GET-only and side-effect-free. Keep Node
 // ownership in TEST and PROD after the dedicated production backend promotion.
 $defaultBackendV2AccountReadRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
+// TEST account mutations use local bd_test_ sessions/runtime actors while
+// canonical credentials remain read-only in bd_prod_. PROD stays on PHP until
+// the full identity write surface is cut over.
+$defaultBackendV2AccountMutationRoutingMode = $isTest ? 'node' : 'php';
 // Realtime client config is a side-effect-free slice with an independent gate.
 // It is safe to preserve on Node in TEST and PROD without moving the wider player/live surface.
 $defaultBackendV2RealtimeConfigRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
@@ -109,6 +113,7 @@ $config = [
         'tournament_routing_mode' => env_optional('BACKEND_V2_TOURNAMENT_ROUTING_MODE', $defaultBackendV2TournamentRoutingMode) ?? $defaultBackendV2TournamentRoutingMode,
         'player_live_routing_mode' => env_optional('BACKEND_V2_PLAYER_LIVE_ROUTING_MODE', $defaultBackendV2PlayerLiveRoutingMode) ?? $defaultBackendV2PlayerLiveRoutingMode,
         'account_read_routing_mode' => env_optional('BACKEND_V2_ACCOUNT_READ_ROUTING_MODE', $defaultBackendV2AccountReadRoutingMode) ?? $defaultBackendV2AccountReadRoutingMode,
+        'account_mutation_routing_mode' => env_optional('BACKEND_V2_ACCOUNT_MUTATION_ROUTING_MODE', $defaultBackendV2AccountMutationRoutingMode) ?? $defaultBackendV2AccountMutationRoutingMode,
         'realtime_config_routing_mode' => env_optional('BACKEND_V2_REALTIME_CONFIG_ROUTING_MODE', $defaultBackendV2RealtimeConfigRoutingMode) ?? $defaultBackendV2RealtimeConfigRoutingMode,
         'activity_routing_mode' => env_optional('BACKEND_V2_ACTIVITY_ROUTING_MODE', $defaultBackendV2ActivityRoutingMode) ?? $defaultBackendV2ActivityRoutingMode,
         'payment_settings_routing_mode' => env_optional('BACKEND_V2_PAYMENT_SETTINGS_ROUTING_MODE', $defaultBackendV2PaymentSettingsRoutingMode) ?? $defaultBackendV2PaymentSettingsRoutingMode,
