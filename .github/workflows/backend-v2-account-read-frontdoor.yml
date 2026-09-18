@@ -74,7 +74,7 @@ jobs:
           APP_ENV=prod DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/account-read-prod.php
           php -r '$c=require "/tmp/account-read-test.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="node") exit(1);'
-          php -r '$c=require "/tmp/account-read-prod.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="php") exit(1);'
+          php -r '$c=require "/tmp/account-read-prod.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="node") exit(1);'
 
   runtime-smoke:
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
