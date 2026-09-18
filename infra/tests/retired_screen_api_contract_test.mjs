@@ -13,8 +13,8 @@ assert.doesNotMatch(application, /\$path === 'v1\/public\/screen\/connect'/);
 assert.match(application, /GET \/v1\/clubs\/\{id\}\/screen-devices/);
 assert.match(application, /POST \/v1\/clubs\/\{id\}\/screen-devices/);
 
-assert.match(screenReadme, /standalone \/screen\/ venue display has been retired/i);
-assert.match(screenReadme, /\/live\/ is now the single canonical wall\/public live surface/i);
+assert.ok(screenReadme.includes("The former standalone `/screen/` venue display has been retired."));
+assert.ok(screenReadme.includes("`/live/` is now the single canonical wall/public live surface."));
 assert.match(screenIndex, /url=\.\.\/live\//);
 assert.match(screenIndex, /window\.location\.replace\(target\.toString\(\)\)/);
 
