@@ -6,6 +6,12 @@ on:
       - develop
     paths:
       - 'apps/api/src/BackendV2TournamentProxyApplication.php'
+      - 'infra/tests/test_runtime_modernization_readiness.mjs'
+      - 'apps/backend-v2/test/tournament-kiosk-operations.test.mjs'
+      - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/src/runtime/tournament-operations-router.ts'
+      - 'apps/backend-v2/src/runtime/tournament-operations-legacy-router.ts'
+      - 'apps/backend-v2/src/mysql/tournament-operations-repository.ts'
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/index.php'
       - 'apps/api/tests/backend_v2_tournament_proxy_routing_test.php'
@@ -31,6 +37,17 @@ jobs:
           extensions: mysqli, mbstring, curl, dom
           coverage: none
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install JavaScript toolchain
+        run: npm install --no-package-lock --ignore-scripts
+
+      - name: Build backend v2
+        run: npm run backend-v2:build
+
       - name: Verify fail-closed tournament frontdoor
         run: |
           set -Eeuo pipefail
@@ -44,6 +61,13 @@ jobs:
           grep -Fq 'backendV2TournamentRoutingMode()' apps/api/src/BackendV2TournamentProxyApplication.php
           grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2TournamentProxyApplication.php
           grep -Fq 'BackendV2TournamentProxyApplication' apps/api/index.php
+
+      - name: Verify kiosk operations Node contract
+        run: |
+          set -Eeuo pipefail
+          node --test apps/backend-v2/test/tournament-kiosk-operations.test.mjs
+          node --test apps/backend-v2/test/tournament-operations-repository.test.mjs
+          node infra/tests/test_runtime_modernization_readiness.mjs
 
       - name: Verify tournament routing defaults
         env:
