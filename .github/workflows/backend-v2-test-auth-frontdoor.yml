@@ -56,12 +56,13 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: apps/backend-v2/package-lock.json
 
       - name: Install JavaScript toolchain
-        run: npm ci
+        run: npm --prefix apps/backend-v2 ci
 
       - name: Build backend v2
-        run: npm run backend-v2:build
+        run: npm --prefix apps/backend-v2 run build
 
       - name: Verify isolated TEST auth contract
         run: |
