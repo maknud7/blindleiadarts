@@ -6,13 +6,18 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
+      - 'apps/backend-v2/test/test-local-auth-sessions.test.mjs'
       - 'apps/api/index.php'
       - 'apps/api/config.example.php'
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/src/BackendV2AccountReadProxyApplication.php'
+      - 'apps/api/src/BackendV2AccountMutationProxyApplication.php'
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
+      - 'apps/api/tests/backend_v2_account_mutation_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
+      - 'infra/sql/migrations/0088_isolate_test_auth_sessions.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
       - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   push:
@@ -20,13 +25,18 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
+      - 'apps/backend-v2/test/test-local-auth-sessions.test.mjs'
       - 'apps/api/index.php'
       - 'apps/api/config.example.php'
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/src/BackendV2AccountReadProxyApplication.php'
+      - 'apps/api/src/BackendV2AccountMutationProxyApplication.php'
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
+      - 'apps/api/tests/backend_v2_account_mutation_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
+      - 'infra/sql/migrations/0088_isolate_test_auth_sessions.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
       - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   workflow_dispatch:
@@ -53,10 +63,17 @@ jobs:
         run: |
           set -Eeuo pipefail
           php -l apps/api/src/BackendV2AccountReadProxyApplication.php
+          php -l apps/api/src/BackendV2AccountMutationProxyApplication.php
           php -l apps/api/src/Support/Config.php
+          php -l infra/sql/migrations/0088_isolate_test_auth_sessions.php
           php apps/api/tests/backend_v2_account_read_proxy_routing_test.php
-          node --test apps/backend-v2/test/account-read-side-effects.test.mjs
+          php apps/api/tests/backend_v2_account_mutation_proxy_routing_test.php
+          npm install --no-package-lock --ignore-scripts
+          npm run backend-v2:typecheck
+          npm run backend-v2:build
+          node --test apps/backend-v2/test/account-read-side-effects.test.mjs apps/backend-v2/test/test-local-auth-sessions.test.mjs
           grep -Fq 'BackendV2AccountReadProxyApplication' apps/api/index.php
+          grep -Fq 'BackendV2AccountMutationProxyApplication' apps/api/index.php
           grep -Fq "'account_read_routing_mode' => 'php'" apps/api/config.example.php
 
       - name: Verify generated routing defaults
@@ -73,8 +90,8 @@ jobs:
             php infra/deploy/generate_api_config.php --output=/tmp/account-read-test.php
           APP_ENV=prod DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/account-read-prod.php
-          php -r '$c=require "/tmp/account-read-test.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="node") exit(1);'
-          php -r '$c=require "/tmp/account-read-prod.php"; if (($c["backend_v2"]["account_read_routing_mode"]??null)!=="node") exit(1);'
+          php -r '$c=require "/tmp/account-read-test.php"; $b=$c["backend_v2"]??[]; if (($b["account_read_routing_mode"]??null)!=="node") exit(1); if (($b["account_mutation_routing_mode"]??null)!=="node") exit(2);'
+          php -r '$c=require "/tmp/account-read-prod.php"; $b=$c["backend_v2"]??[]; if (($b["account_read_routing_mode"]??null)!=="node") exit(1); if (($b["account_mutation_routing_mode"]??null)!=="php") exit(2);'
 
   runtime-smoke:
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
@@ -144,5 +161,31 @@ jobs:
               cat "$body" >&2
               exit 1
             fi
+            rm -f "$headers" "$body"
+          done
+
+
+      - name: Verify TEST account mutation frontdoor
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          base="${BASE_URL%/}"
+
+          login_headers="$(mktemp)"
+          login_body="$(mktemp)"
+          login_status="$(curl -sS --max-time 30             -X POST -H 'Content-Type: application/json'             -d '{"email":"definitely-missing-test-login@example.invalid","password":"not-a-real-password"}'             -D "$login_headers" -o "$login_body" -w '%{http_code}'             "$base/api/v1/auth/login")"
+          test "$login_status" = "401"
+          grep -Eiq '^X-BD-Backend-V2:[[:space:]]*account-mutation' "$login_headers"
+          test "$(jq -r '.error.code // empty' "$login_body")" = "invalid_credentials"
+          rm -f "$login_headers" "$login_body"
+
+          for path in /api/v1/me/password /api/v1/auth/password-reset/request /api/v1/auth/password-reset/confirm
+          do
+            headers="$(mktemp)"
+            body="$(mktemp)"
+            status="$(curl -sS --max-time 30               -X POST -H 'Content-Type: application/json'               -H 'Authorization: Bearer definitely-invalid-test-account-mutation-probe'               -d '{}' -D "$headers" -o "$body" -w '%{http_code}'               "$base$path")"
+            test "$status" = "403" || test "$status" = "401"
+            grep -Eiq '^X-BD-Backend-V2:[[:space:]]*account-mutation' "$headers"
             rm -f "$headers" "$body"
           done

@@ -32,6 +32,15 @@ export class IdentityAuditReadRouter {
       return ok({ items: await this.audit.duplicateCandidates(clubId) });
     }
 
+    const mergeMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/player-identities\/merge$/.exec(path);
+    if (method === "POST" && mergeMatch) {
+      throw new RuntimeAccessError(
+        403,
+        "player_identity_merge_prod_only",
+        "Sammenslåing av spilleridentitet er deaktivert i TEST og må utføres i PROD.",
+      );
+    }
+
     const previewMatch = /^\/v1\/clubs\/([1-9][0-9]*)\/player-identities\/preview$/.exec(path);
     if (method === "POST" && previewMatch) {
       const clubId = capture(previewMatch, 1);

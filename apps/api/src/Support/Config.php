@@ -131,6 +131,12 @@ final class Config
         return $mode === 'node' ? 'node' : 'php';
     }
 
+    public function backendV2AccountMutationRoutingMode(): string
+    {
+        $mode = strtolower(trim((string) (($this->config['backend_v2']['account_mutation_routing_mode'] ?? 'php') ?: 'php')));
+        return $mode === 'node' ? 'node' : 'php';
+    }
+
     public function backendV2RealtimeConfigRoutingMode(): string
     {
         $mode = strtolower(trim((string) (($this->config['backend_v2']['realtime_config_routing_mode'] ?? 'php') ?: 'php')));

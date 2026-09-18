@@ -110,9 +110,9 @@ test("club identity diagnostics allow the owning manager, never touch identity s
   ]);
   assert.deepEqual(auth.touches, [false, false]);
 
-  assert.equal(
-    await router.handle("POST", `/v1/clubs/${clubId}/player-identities/merge`, jsonRequest({})),
-    null,
+  await assert.rejects(
+    router.handle("POST", `/v1/clubs/${clubId}/player-identities/merge`, jsonRequest({})),
+    (error) => error?.code === "player_identity_merge_prod_only" && error?.statusCode === 403,
   );
 
   const wrongClub = new IdentityAuditReadRouter(identity("club_admin", "7"), audit);

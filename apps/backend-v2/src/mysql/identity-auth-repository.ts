@@ -76,37 +76,47 @@ export class MySqlIdentityAuthRepository {
 
   async findBySessionToken(token: string, touchSession: boolean): Promise<IdentityUser | null> {
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const row = await this.sessions.withConnection(async (db) => {
-      const rows = await db.query<IdentityUser>(
-        this.identitySelectSql(
-          `WHERE s.session_token_hash = ?
-             AND s.revoked_at IS NULL
-             AND ua.is_active = 1
-             AND ua.account_status = 'active'
-           LIMIT 1`,
-          true,
-        ),
-        [tokenHash],
-      );
-      return rows[0] ?? null;
-    });
-    if (row === null) return null;
-    if (row.expires_at && Date.parse(`${row.expires_at.replace(" ", "T")}Z`) < Date.now()) return null;
+    const sessionPrefixes = this.runtimePrefix === this.identityPrefix
+      ? [this.identityPrefix]
+      : [this.runtimePrefix, this.identityPrefix];
 
-    if (touchSession && shouldTouch(row.last_used_at ?? null)) {
-      const sessionId = decimalId(row.session_id);
-      if (sessionId !== null) {
-        await this.sessions.withConnection(async (db) => {
-          await db.execute(
-            `UPDATE \`${this.identityPrefix}auth_sessions\`
-                SET last_used_at = NOW(), expires_at = DATE_ADD(NOW(), INTERVAL 180 DAY)
-              WHERE id = ?`,
-            [sessionId],
-          );
-        });
+    for (const sessionPrefix of sessionPrefixes) {
+      const row = await this.sessions.withConnection(async (db) => {
+        const rows = await db.query<IdentityUser>(
+          this.identitySelectSql(
+            `WHERE s.session_token_hash = ?
+               AND s.revoked_at IS NULL
+               AND ua.is_active = 1
+               AND ua.account_status = 'active'
+             LIMIT 1`,
+            true,
+            sessionPrefix,
+          ),
+          [tokenHash],
+        );
+        return rows[0] ?? null;
+      });
+      if (row === null) continue;
+      if (row.expires_at && Date.parse(`${row.expires_at.replace(" ", "T")}Z`) < Date.now()) continue;
+
+      // TEST may accept an existing PROD session read-only for compatibility,
+      // but only runtime-local sessions may be touched/refreshed.
+      if (touchSession && sessionPrefix === this.runtimePrefix && shouldTouch(row.last_used_at ?? null)) {
+        const sessionId = decimalId(row.session_id);
+        if (sessionId !== null) {
+          await this.sessions.withConnection(async (db) => {
+            await db.execute(
+              `UPDATE \`${this.runtimePrefix}auth_sessions\`
+                  SET last_used_at = NOW(), expires_at = DATE_ADD(NOW(), INTERVAL 180 DAY)
+                WHERE id = ?`,
+              [sessionId],
+            );
+          });
+        }
       }
+      return row;
     }
-    return row;
+    return null;
   }
 
   async createSession(userAccountId: string): Promise<SessionToken> {
@@ -117,15 +127,17 @@ export class MySqlIdentityAuthRepository {
 
     await this.sessions.withTransaction(async (db) => {
       await db.execute(
-        `INSERT INTO \`${this.identityPrefix}auth_sessions\`
+        `INSERT INTO \`${this.runtimePrefix}auth_sessions\`
           (user_account_id, session_token_hash, expires_at, last_used_at)
          VALUES (?, ?, ?, NOW())`,
         [userAccountId, tokenHash, expiresAt],
       );
-      await db.execute(
-        `UPDATE \`${this.identityPrefix}user_accounts\` SET last_login_at = NOW() WHERE id = ?`,
-        [userAccountId],
-      );
+      if (this.runtimePrefix === this.identityPrefix) {
+        await db.execute(
+          `UPDATE \`${this.identityPrefix}user_accounts\` SET last_login_at = NOW() WHERE id = ?`,
+          [userAccountId],
+        );
+      }
     });
     return { token, expiresAt };
   }
@@ -148,7 +160,11 @@ export class MySqlIdentityAuthRepository {
     });
   }
 
-  private identitySelectSql(whereSql: string, withSession: boolean): string {
+  private identitySelectSql(
+    whereSql: string,
+    withSession: boolean,
+    sessionPrefix: TablePrefix = this.identityPrefix,
+  ): string {
     const users = `${this.identityPrefix}user_accounts`;
     const globalRoles = `${this.identityPrefix}global_user_roles`;
     const clubRoles = `${this.identityPrefix}club_user_roles`;
@@ -156,7 +172,7 @@ export class MySqlIdentityAuthRepository {
     const identityClubs = `${this.identityPrefix}clubs`;
     const localPlayers = `${this.runtimePrefix}players`;
     const localClubs = `${this.runtimePrefix}clubs`;
-    const sessions = `${this.identityPrefix}auth_sessions`;
+    const sessions = `${sessionPrefix}auth_sessions`;
 
     const adminClubIdsSql = this.identityPrefix === this.runtimePrefix
       ? `(SELECT GROUP_CONCAT(cur.club_id ORDER BY cur.club_id SEPARATOR ',')

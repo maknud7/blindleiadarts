@@ -81,6 +81,55 @@ export class MySqlClubAdminRepository {
     return this.requireById(clubId);
   }
 
+  async createLocalPlayer(clubIdInput: unknown, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const clubId = requiredId(clubIdInput, "club_id");
+    const displayName = requiredPlayerName(payload.display_name);
+    for (const key of ["username", "password", "email", "contact_email", "role"]) {
+      if (payload[key] !== undefined && payload[key] !== null && String(payload[key]).trim() !== "") {
+        throw new DomainValidationError(
+          "test_identity_fields_not_allowed",
+          "TEST-spillere kan opprettes lokalt uten brukerkonto. Identitets- og passordfelter er ikke tillatt.",
+          422,
+        );
+      }
+    }
+    const firstName = nullableString(payload.first_name);
+    const lastName = nullableString(payload.last_name);
+    const nickname = nullableString(payload.nickname);
+    const avatarUrl = nullableString(payload.avatar_url);
+
+    const playerId = await this.sessions.withTransaction(async (db) => {
+      const club = await this.findByIdWith(db, clubId);
+      if (club === null) {
+        throw new DomainValidationError("club_not_found", "Club was not found.", 404);
+      }
+      const inserted = await db.execute(
+        `INSERT INTO \`${this.prefix}players\`
+          (club_id,display_name,first_name,last_name,nickname,avatar_url,is_active)
+         VALUES (?,?,?,?,?,?,1)`,
+        [clubId, displayName, firstName, lastName, nickname, avatarUrl],
+      );
+      return requiredId(inserted.insertId, "player_id");
+    });
+
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT id,club_id,display_name,first_name,last_name,nickname,avatar_url,is_active,member_id
+           FROM \`${this.prefix}players\` WHERE id=? LIMIT 1`,
+        [playerId],
+      );
+      const row = rows[0];
+      if (!row) throw new DomainValidationError("player_not_found", "Player was not found after creation.", 500);
+      return {
+        ...row,
+        id: requiredId(row.id, "player_id"),
+        club_id: requiredId(row.club_id, "club_id"),
+        is_active: integer(row.is_active),
+        member_id: nullableId(row.member_id),
+      };
+    });
+  }
+
   async findById(clubIdInput: unknown): Promise<Record<string, unknown> | null> {
     const clubId = requiredId(clubIdInput, "club_id");
     return this.sessions.withConnection((db) => this.findByIdWith(db, clubId));
@@ -238,4 +287,13 @@ function requiredId(value: unknown, name: string): string {
     throw new DomainValidationError("invalid_id", `${name} must be a positive decimal id.`, 400);
   }
   return normalized;
+}
+
+
+function requiredPlayerName(value: unknown): string {
+  const name = typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
+  if (name.length < 2 || name.length > 150) {
+    throw new DomainValidationError("player_name_required", "Player display name must be between 2 and 150 characters.", 422);
+  }
+  return name;
 }

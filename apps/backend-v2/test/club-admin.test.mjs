@@ -55,6 +55,7 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
   const lookups = [];
   const lists = [];
   const matchCalls = [];
+  const playerCreates = [];
   const clubs = {
     async list() {
       lists.push(true);
@@ -86,6 +87,17 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
         updated_at: "2026-09-16 10:00:00",
       };
     },
+    async createLocalPlayer(clubId, body) {
+      playerCreates.push([clubId, body]);
+      return {
+        id: "90071992547409950",
+        club_id: clubId,
+        display_name: body.display_name,
+        nickname: body.nickname ?? null,
+        is_active: 1,
+        member_id: null,
+      };
+    },
     async listMatchCallsByClubId(clubId) {
       matchCalls.push(clubId);
       return [{
@@ -115,6 +127,7 @@ function routerFixture({ mode = "test-write", role = "super_admin" } = {}) {
     lookups,
     lists,
     matchCalls,
+    playerCreates,
   };
 }
 
@@ -401,5 +414,89 @@ test("club repository rejects missing name before database access", async () => 
   await assert.rejects(
     repo.create({ name: "  " }),
     (error) => error?.code === "club_name_required" && error?.statusCode === 422 && error?.message === "Club name is required.",
+  );
+});
+
+test("TEST-local player create preserves club-admin scope and exact ids", async () => {
+  const { router, identityRepository, playerCreates } = routerFixture({ role: "club_admin" });
+  const result = await router.handle(
+    "POST",
+    "/v1/clubs/42/players",
+    request({ display_name: "Test Spiller", nickname: "Tester" }),
+  );
+
+  assert.equal(result?.statusCode, 201);
+  assert.equal(result?.payload.player.id, "90071992547409950");
+  assert.equal(result?.payload.player.club_id, "42");
+  assert.deepEqual(identityRepository.touches, [false]);
+  assert.deepEqual(playerCreates, [["42", { display_name: "Test Spiller", nickname: "Tester" }]]);
+
+  const denied = routerFixture({ role: "club_admin" });
+  denied.identityRepository.findBySessionToken = async (token, touchSession) => {
+    denied.identityRepository.touches.push(touchSession);
+    if (token !== "club-admin-session") return null;
+    return {
+      id: "7", email: "admin@example.invalid", display_name: "Admin", role: "club_admin",
+      is_active: 1, account_status: "active", contact_phone: null,
+      player_id: null, player_display_name: null, player_club_id: null,
+      member_id: null, admin_club_ids: "7", global_roles: "",
+    };
+  };
+  await assert.rejects(
+    denied.router.handle("POST", "/v1/clubs/42/players", request({ display_name: "Nope" })),
+    (error) => error?.code === "club_access_denied" && error?.statusCode === 403,
+  );
+  assert.deepEqual(denied.playerCreates, []);
+});
+
+test("TEST-local player repository writes only runtime player data and rejects identity fields", async () => {
+  const queries = [];
+  const executes = [];
+  const db = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      if (sql.includes("FROM `bd_test_clubs`") && sql.includes("WHERE id=?")) {
+        return [{
+          id: "42", name: "Blindleia", slug: "blindleia",
+          logo_url: null, kiosk_pairing_code: "BDK-1234",
+          created_at: null, updated_at: null,
+        }];
+      }
+      if (sql.includes("FROM `bd_test_players` WHERE id=?")) {
+        return [{
+          id: "90071992547409950",
+          club_id: "42",
+          display_name: "Test Spiller",
+          first_name: null,
+          last_name: null,
+          nickname: "Tester",
+          avatar_url: null,
+          is_active: "1",
+          member_id: null,
+        }];
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+    async execute(sql, params) {
+      executes.push({ sql, params });
+      return { affectedRows: 1, insertId: "90071992547409950" };
+    },
+  };
+  const sessions = {
+    async withTransaction(work) { return work(db); },
+    async withConnection(work) { return work(db); },
+  };
+  const repo = new MySqlClubAdminRepository(sessions, "bd_test_");
+  const player = await repo.createLocalPlayer("42", { display_name: " Test   Spiller ", nickname: "Tester" });
+
+  assert.equal(player.id, "90071992547409950");
+  assert.equal(player.club_id, "42");
+  assert.equal(executes.length, 1);
+  assert.match(executes[0].sql, /INSERT INTO `bd_test_players`/);
+  assert.doesNotMatch(executes[0].sql, /user_accounts|member_profiles|bd_prod_/);
+
+  await assert.rejects(
+    repo.createLocalPlayer("42", { display_name: "Test Spiller", username: "test@example.invalid", password: "secret123" }),
+    (error) => error?.code === "test_identity_fields_not_allowed" && error?.statusCode === 422,
   );
 });

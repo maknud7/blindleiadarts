@@ -13,6 +13,7 @@ $yes = [
     ['GET', '/v1/player-identities/health'],
     ['GET', '/v1/clubs/1/player-identities/duplicates'],
     ['POST', '/v1/clubs/1/player-identities/preview'],
+    ['POST', '/v1/clubs/1/player-identities/merge'],
 ];
 foreach ($yes as [$method, $path]) {
     if (!$app->handles($method, $path)) {
@@ -27,7 +28,6 @@ $no = [
     ['GET', '/v1/player-identities/preview'],
     ['POST', '/v1/clubs/1/player-identities/duplicates'],
     ['GET', '/v1/clubs/1/player-identities/preview'],
-    ['POST', '/v1/clubs/1/player-identities/merge'],
     ['GET', '/v1/clubs/1/player-identities/merge'],
 ];
 foreach ($no as [$method, $path]) {
