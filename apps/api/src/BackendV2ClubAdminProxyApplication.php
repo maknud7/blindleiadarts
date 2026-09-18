@@ -120,6 +120,10 @@ final class BackendV2ClubAdminProxyApplication
             return false;
         }
 
+        if (preg_match('#^/v1/clubs/[1-9][0-9]*/players$#', $path) === 1) {
+            return true;
+        }
+
         return in_array($path, [
             '/v1/clubs',
             '/v1/public/kiosk/connect',
