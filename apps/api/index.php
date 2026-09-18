@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Blindleia\Dartkiosk\Api\AccountProfileApplication;
 use Blindleia\Dartkiosk\Api\ActivityApplication;
 use Blindleia\Dartkiosk\Api\Application;
+use Blindleia\Dartkiosk\Api\BackendV2AccountMutationProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2AccountReadProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ActivityProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ClubAdminProxyApplication;
@@ -91,6 +92,14 @@ if ($activityV2->run()) {
 
 $activity = new ActivityApplication(__DIR__);
 if ($activity->run()) {
+    return;
+}
+
+// TEST login/profile mutations are isolated in backend-v2. The proxy also owns
+// password-change/reset requests in TEST so they fail closed before legacy PHP
+// can write canonical PROD identity.
+$accountMutationV2 = new BackendV2AccountMutationProxyApplication(__DIR__);
+if ($accountMutationV2->run()) {
     return;
 }
 
