@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { MySqlEquipmentAdminRepository } from "../dist/mysql/equipment-admin-repository.js";
+import { MySqlTournamentCatalogReadRepository } from "../dist/mysql/tournament-catalog-read-repository.js";
 import { SystemStatusRouter } from "../dist/runtime/system-status-router.js";
 
 function config() {
@@ -177,4 +179,69 @@ test("system status router ignores unrelated routes and methods", async () => {
   assert.equal(await router.handle("GET", "/v1/clubs", request()), null);
   assert.deepEqual(touches, []);
   assert.deepEqual(calls, []);
+});
+
+
+test("global pending pairing read stays in TEST runtime tables", async () => {
+  const queries = [];
+  const db = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return [{
+        id: "90071992547409961",
+        club_id: "90071992547409931",
+        request_code: "ABC123",
+        device_name: "Test terminal",
+        status: "pending",
+        requested_at: "2026-09-18 08:00:00",
+        expires_at: "2026-09-18 08:30:00",
+      }];
+    },
+  };
+  const sessions = { async withConnection(work) { return work(db); } };
+  const repository = new MySqlEquipmentAdminRepository(sessions, "bd_test_", "bd_prod_");
+  const items = await repository.listAllPendingPairingRequests();
+
+  assert.equal(items[0].id, "90071992547409961");
+  assert.equal(items[0].club_id, "90071992547409931");
+  assert.equal(queries.length, 1);
+  assert.match(queries[0].sql, /`bd_test_kiosk_pairing_requests`/);
+  assert.doesNotMatch(queries[0].sql, /bd_prod_/);
+  assert.equal(queries[0].params, undefined);
+});
+
+test("active screen tournament read stays in TEST runtime tables and preserves BIGINT ids", async () => {
+  const queries = [];
+  const db = {
+    async query(sql, params) {
+      queries.push({ sql, params });
+      return [{
+        id: "90071992547409970",
+        club_id: "90071992547409931",
+        season_id: "90071992547409971",
+        name: "Mandagsserien",
+        slug: "mandagsserien",
+        provider_system: "blindleia",
+        status: "in_progress",
+        max_visits_per_leg: 20,
+        start_at: "2026-09-18 18:30:00",
+        end_at: null,
+        registration_count: 16,
+        match_count: 20,
+        completed_match_count: 8,
+      }];
+    },
+  };
+  const sessions = { async withConnection(work) { return work(db); } };
+  const repository = new MySqlTournamentCatalogReadRepository(sessions, "bd_test_");
+  const tournament = await repository.findScreenTournamentByClubId("90071992547409931");
+
+  assert.equal(tournament.id, "90071992547409970");
+  assert.equal(tournament.club_id, "90071992547409931");
+  assert.equal(tournament.season_id, "90071992547409971");
+  assert.deepEqual(queries[0].params, ["90071992547409931"]);
+  assert.match(queries[0].sql, /`bd_test_tournaments`/);
+  assert.match(queries[0].sql, /`bd_test_tournament_players`/);
+  assert.match(queries[0].sql, /`bd_test_matches`/);
+  assert.doesNotMatch(queries[0].sql, /bd_prod_/);
 });
