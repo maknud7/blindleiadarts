@@ -54,15 +54,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: apps/backend-v2/package-lock.json
+          node-version: '22'
 
       - name: Install JavaScript toolchain
-        run: npm --prefix apps/backend-v2 ci
+        run: npm install --no-package-lock --ignore-scripts
 
       - name: Build backend v2
-        run: npm --prefix apps/backend-v2 run build
+        run: npm run backend-v2:build
 
       - name: Verify isolated TEST auth contract
         run: |
