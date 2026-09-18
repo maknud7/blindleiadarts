@@ -66,9 +66,9 @@ $defaultBackendV2AccountReadRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 // Realtime client config is a side-effect-free slice with an independent gate.
 // It is safe to preserve on Node in TEST and PROD without moving the wider player/live surface.
 $defaultBackendV2RealtimeConfigRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
-// Activity writes are runtime-only in TEST. Keep PROD on PHP until a dedicated
-// production activity cutover proves both telemetry writes and admin reads.
-$defaultBackendV2ActivityRoutingMode = $isTest ? 'node' : 'php';
+// Activity is runtime-only telemetry plus admin reads. Keep it on Node in TEST
+// and PROD after the dedicated production route/write-readiness gate.
+$defaultBackendV2ActivityRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 // Payment settings are runtime-only club configuration. Move the TEST writer to
 // backend-v2 while leaving PROD on the legacy PHP owner until its own cutover.
 $defaultBackendV2PaymentSettingsRoutingMode = $isTest ? 'node' : 'php';
