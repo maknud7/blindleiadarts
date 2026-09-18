@@ -25,6 +25,7 @@ return [
         'tournament_routing_mode' => 'php',
         'player_live_routing_mode' => 'php',
         'account_read_routing_mode' => 'php',
+        'account_mutation_routing_mode' => 'php',
         'realtime_config_routing_mode' => 'php',
         'activity_routing_mode' => 'php',
         'payment_settings_routing_mode' => 'php',
