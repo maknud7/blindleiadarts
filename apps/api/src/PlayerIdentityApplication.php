@@ -53,9 +53,11 @@ final class PlayerIdentityApplication
         // PHP-owned until shared identity/runtime write semantics are migrated.
         $routeReadToNode = $globalAction !== null || in_array($action, ['duplicates', 'preview'], true);
         $routingConfig = null;
-        if ($routeReadToNode) {
+        if ($routeReadToNode || $action === 'merge') {
             $routingConfig = Config::load($this->rootPath);
-            if ($routingConfig->backendV2IdentityAuditRoutingMode() === 'node') {
+            $routeMergeToNode = $action === 'merge' && $routingConfig->appEnv() === 'test';
+            if (($routeReadToNode || $routeMergeToNode)
+                && $routingConfig->backendV2IdentityAuditRoutingMode() === 'node') {
                 return (new BackendV2IdentityAuditProxyApplication($this->rootPath))->run();
             }
         }
