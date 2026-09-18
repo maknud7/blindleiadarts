@@ -51,6 +51,7 @@ import { RuntimeHealthRouter } from "./runtime/runtime-health-router.js";
 import { SeasonAdminRouter } from "./runtime/season-admin-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
+import { SystemStatusRouter } from "./runtime/system-status-router.js";
 import { TournamentAttendanceRouter } from "./runtime/tournament-attendance-router.js";
 import { TournamentCatalogReadRouter } from "./runtime/tournament-catalog-read-router.js";
 import { TournamentPlayerBreakRouter } from "./runtime/tournament-player-break-router.js";
@@ -158,6 +159,14 @@ const equipmentRuntime = new EquipmentAdminRouter(
 );
 const tournaments = new MySqlTournamentRuntimeRepository(sessions, config.prefixes.runtime);
 const tournamentCatalogReads = new MySqlTournamentCatalogReadRepository(sessions, config.prefixes.runtime);
+const systemStatusRuntime = new SystemStatusRouter(
+  config,
+  identityRepository,
+  clubAdmin,
+  tournamentCatalogReads,
+  equipment,
+  scoliaDashboard,
+);
 const tournamentAttendance = new MySqlTournamentAttendanceRepository(sessions, config.prefixes.runtime);
 const tournamentFlow = new MySqlTournamentFlowRepository(sessions, config.prefixes.runtime);
 const tournamentOperations = new MySqlTournamentOperationsRepository(sessions, config.prefixes.runtime);
@@ -305,6 +314,12 @@ async function dispatch(request: IncomingMessage, response: ServerResponse): Pro
     const body = await readJsonObject(request);
     await accountProfiles.changePassword(user, body.current_password, body.new_password);
     sendJson(response, 200, { ok: true, message: "Passordet er endret. Andre innlogginger er logget ut." });
+    return;
+  }
+
+  const systemStatusRoute = await systemStatusRuntime.handle(method, publicPath, request);
+  if (systemStatusRoute !== null) {
+    sendJson(response, systemStatusRoute.statusCode, systemStatusRoute.payload);
     return;
   }
 
