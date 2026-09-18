@@ -94,7 +94,7 @@ final class BackendV2IdentityAuditProxyApplication
             return true;
         }
         return $method === 'POST'
-            && preg_match('#^/v1/clubs/\d+/player-identities/preview$#', $path) === 1;
+            && preg_match('#^/v1/clubs/\d+/player-identities/(?:preview|merge)$#', $path) === 1;
     }
 
     public function targetPath(string $path, string $queryString): string
