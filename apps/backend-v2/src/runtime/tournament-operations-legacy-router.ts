@@ -14,6 +14,7 @@ export class TournamentOperationsLegacyRouter {
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly identityRepository: MySqlIdentityAuthRepository,
+    private readonly kioskAuth: MySqlScoliaKioskAuthRepository,
     private readonly operations: MySqlTournamentOperationsRepository,
     private readonly playoffs: MySqlTournamentPlayoffRepository,
     private readonly hardDelete: MySqlTournamentHardDeleteRepository,
@@ -21,6 +22,51 @@ export class TournamentOperationsLegacyRouter {
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentOperationsRouteResult | null> {
+    const kioskOperationMatch = /^\/v1\/kiosks\/([^/]+)\/(post-match|next-match|release-next-match)$/.exec(path);
+    if (kioskOperationMatch) {
+      const action = requiredCapture(kioskOperationMatch, 2);
+      if (
+        (action === "post-match" && method !== "GET") ||
+        ((action === "next-match" || action === "release-next-match") && method !== "POST")
+      ) {
+        return null;
+      }
+
+      const kiosk = await this.kioskAuth.resolveScoring(
+        requiredCapture(kioskOperationMatch, 1),
+        header(request, "x-kiosk-pairing-token"),
+        true,
+      );
+
+      if (action === "post-match") {
+        let postMatch = await this.operations.kioskPostMatch(kiosk.kiosk_id);
+        if (
+          postMatch.active_match !== true &&
+          postMatch.last_completed_match !== null &&
+          postMatch.reservation === null &&
+          Number(postMatch.remaining_seconds ?? 0) > 0
+        ) {
+          assertMutationAllowed(this.config);
+          await this.operations.reserveNextForKiosk(kiosk.kiosk_id);
+          postMatch = await this.operations.kioskPostMatch(kiosk.kiosk_id);
+        }
+        return ok(postMatch);
+      }
+
+      assertMutationAllowed(this.config);
+      if (action === "release-next-match") {
+        await this.operations.releaseReservationForKiosk(kiosk.kiosk_id);
+        return ok({ released: true });
+      }
+
+      const assignment = await this.operations.assignNextToKiosk(kiosk.kiosk_id);
+      const state = await this.kioskAuth.scoringSnapshot(kiosk.kiosk_id);
+      if (assignment.assigned === true) {
+        await this.realtime.publishClubRefresh(kiosk.club_id, "board_ready_for_next_match");
+      }
+      return ok({ assignment, state });
+    }
+
     const operationsMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/operations$/.exec(path);
     if (operationsMatch) {
       const tournamentId = requiredCapture(operationsMatch, 1);
