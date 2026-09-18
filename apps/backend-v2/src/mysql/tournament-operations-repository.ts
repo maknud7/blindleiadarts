@@ -297,6 +297,198 @@ export class MySqlTournamentOperationsRepository {
     return snapshot;
   }
 
+  async kioskPostMatch(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    return this.sessions.withConnection(async (db) => {
+      const active = await this.activeMatchForKioskWith(db, kioskId);
+      const reservation = await this.reservationForKioskWith(db, kioskId, false);
+      if (active !== null) {
+        return {
+          active_match: true,
+          last_completed_match: null,
+          reservation: reservation === null ? null : formatReservation(reservation),
+          remaining_seconds: reservation === null ? 0 : Math.max(0, numberValue(reservation.remaining_seconds)),
+          result_display_seconds: RESULT_HOLD_SECONDS,
+        };
+      }
+
+      const rows = await db.query<QueryResultRow>(
+        `SELECT m.id,m.tournament_id,m.round_label,m.bracket_label,m.finished_at,
+                m.player_a_id,pa.display_name AS player_a_name,
+                m.player_b_id,pb.display_name AS player_b_name,
+                m.winner_player_id,pw.display_name AS winner_name,
+                SUM(CASE WHEN l.winner_player_id=m.player_a_id THEN 1 ELSE 0 END) AS legs_a,
+                SUM(CASE WHEN l.winner_player_id=m.player_b_id THEN 1 ELSE 0 END) AS legs_b,
+                t.name AS tournament_name,
+                GREATEST(0, ? - TIMESTAMPDIFF(SECOND,m.finished_at,NOW())) AS result_remaining_seconds
+           FROM \`${this.prefix}matches\` m
+           INNER JOIN \`${this.prefix}tournaments\` t ON t.id=m.tournament_id
+           INNER JOIN \`${this.prefix}players\` pa ON pa.id=m.player_a_id
+           INNER JOIN \`${this.prefix}players\` pb ON pb.id=m.player_b_id
+           LEFT JOIN \`${this.prefix}players\` pw ON pw.id=m.winner_player_id
+           LEFT JOIN \`${this.prefix}legs\` l ON l.match_id=m.id AND l.status='completed'
+          WHERE m.kiosk_id=? AND m.status='completed'
+            AND m.finished_at>=DATE_SUB(NOW(),INTERVAL 2 MINUTE)
+          GROUP BY m.id,m.tournament_id,m.round_label,m.bracket_label,m.finished_at,
+                   m.player_a_id,pa.display_name,m.player_b_id,pb.display_name,
+                   m.winner_player_id,pw.display_name,t.name
+          ORDER BY m.finished_at DESC,m.id DESC LIMIT 1`,
+        [RESULT_HOLD_SECONDS, kioskId],
+      );
+      const last = rows[0] ? formatCompletedKioskMatch(rows[0]) : null;
+      const remaining = reservation !== null
+        ? Math.max(0, numberValue(reservation.remaining_seconds))
+        : Math.max(0, numberValue(last?.result_remaining_seconds));
+
+      return {
+        active_match: false,
+        last_completed_match: last,
+        reservation: reservation === null ? null : formatReservation(reservation),
+        remaining_seconds: remaining,
+        result_display_seconds: RESULT_HOLD_SECONDS,
+      };
+    });
+  }
+
+  async reserveNextForKiosk(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.sessions.withTransaction(async (db) => {
+          const boardRows = await db.query<QueryResultRow>(
+            `SELECT id,club_id,board_number,is_active FROM \`${this.prefix}kiosks\` WHERE id=? LIMIT 1 FOR UPDATE`,
+            [kioskId],
+          );
+          const board = boardRows[0];
+          if (!board || numberValue(board.is_active) !== 1) {
+            return { reserved: false, reason: "board_unavailable", reservation: null };
+          }
+          if (await this.activeMatchForKioskWith(db, kioskId) !== null) {
+            return { reserved: false, reason: "board_busy", reservation: null };
+          }
+          const existing = await this.reservationForKioskWith(db, kioskId, true);
+          if (existing !== null) {
+            return { reserved: true, reason: null, reservation: formatReservation(existing) };
+          }
+
+          const tournament = await this.operationalTournamentForKioskWith(db, kioskId);
+          if (tournament === null || numberValue(tournament.auto_assign_enabled) !== 1) {
+            return { reserved: false, reason: "no_auto_tournament", reservation: null };
+          }
+          const tournamentId = requiredId(tournament.id, "tournament_id");
+          const clubId = requiredId(tournament.club_id, "club_id");
+          const candidate = await this.bestCandidateWith(db, tournamentId, clubId);
+          if (!candidate) {
+            return { reserved: false, reason: "no_ready_match", reservation: null };
+          }
+          const matchId = requiredId(candidate.id, "match_id");
+          await db.execute(
+            `INSERT INTO \`${this.prefix}tournament_board_reservations\`
+              (tournament_id,kiosk_id,match_id,reserved_at,activates_at)
+             VALUES (?,?,?,NOW(),DATE_ADD(NOW(),INTERVAL ${RESULT_HOLD_SECONDS} SECOND))`,
+            [tournamentId, kioskId, matchId],
+          );
+          const reservation = await this.reservationForKioskWith(db, kioskId, true);
+          return { reserved: true, reason: null, reservation: reservation === null ? null : formatReservation(reservation) };
+        });
+      } catch (error) {
+        if (!isDuplicateEntry(error) || attempt > 0) throw error;
+      }
+    }
+    return { reserved: false, reason: "reservation_conflict", reservation: null };
+  }
+
+  async releaseReservationForKiosk(kioskIdInput: unknown): Promise<void> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    await this.sessions.withConnection(async (db) => {
+      await db.execute(
+        `DELETE FROM \`${this.prefix}tournament_board_reservations\` WHERE kiosk_id=?`,
+        [kioskId],
+      );
+    });
+  }
+
+  async assignNextToKiosk(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const outcome = await this.sessions.withTransaction(async (db) => {
+        const boardRows = await db.query<QueryResultRow>(
+          `SELECT id,club_id,board_number,is_active FROM \`${this.prefix}kiosks\` WHERE id=? LIMIT 1 FOR UPDATE`,
+          [kioskId],
+        );
+        const board = boardRows[0];
+        if (!board || numberValue(board.is_active) !== 1) {
+          return { retry: false, result: { assigned: false, reason: "board_unavailable", match: null, reservation: null } };
+        }
+        if (await this.activeMatchForKioskWith(db, kioskId) !== null) {
+          return { retry: false, result: { assigned: false, reason: "board_busy", match: null, reservation: null } };
+        }
+
+        const reservation = await this.reservationForKioskWith(db, kioskId, true);
+        if (reservation !== null) {
+          if (Math.max(0, numberValue(reservation.remaining_seconds)) > 0) {
+            return {
+              retry: false,
+              result: { assigned: false, reason: "reservation_wait", match: null, reservation: formatReservation(reservation) },
+            };
+          }
+          const reservationId = requiredId(reservation.id, "reservation_id");
+          const matchId = requiredId(reservation.match_id, "match_id");
+          const matchRows = await db.query<QueryResultRow>(
+            `SELECT id,tournament_id,status,player_a_id,player_b_id
+               FROM \`${this.prefix}matches\`
+              WHERE id=? AND status='pending' LIMIT 1 FOR UPDATE`,
+            [matchId],
+          );
+          const match = matchRows[0] ?? null;
+          const busy = match === null || await this.playersBusyElsewhereWith(
+            db,
+            requiredId(reservation.club_id, "club_id"),
+            requiredId(reservation.player_a_id, "player_a_id"),
+            requiredId(reservation.player_b_id, "player_b_id"),
+            reservationId,
+          );
+          if (busy) {
+            await db.execute(
+              `DELETE FROM \`${this.prefix}tournament_board_reservations\` WHERE id=?`,
+              [reservationId],
+            );
+            return { retry: true, result: null };
+          }
+          await this.assignPendingMatchWith(db, matchId, kioskId);
+          await db.execute(
+            `DELETE FROM \`${this.prefix}tournament_board_reservations\` WHERE id=?`,
+            [reservationId],
+          );
+          return {
+            retry: false,
+            result: { assigned: true, reason: null, match: await this.matchByIdWith(db, matchId), reservation: null },
+          };
+        }
+
+        const tournament = await this.operationalTournamentForKioskWith(db, kioskId);
+        if (tournament === null || numberValue(tournament.auto_assign_enabled) !== 1) {
+          return { retry: false, result: { assigned: false, reason: "no_active_tournament", match: null, reservation: null } };
+        }
+        const tournamentId = requiredId(tournament.id, "tournament_id");
+        const clubId = requiredId(tournament.club_id, "club_id");
+        const candidate = await this.bestCandidateWith(db, tournamentId, clubId);
+        if (!candidate) {
+          return { retry: false, result: { assigned: false, reason: "no_ready_match", match: null, reservation: null } };
+        }
+        const matchId = requiredId(candidate.id, "match_id");
+        await this.assignPendingMatchWith(db, matchId, kioskId);
+        return {
+          retry: false,
+          result: { assigned: true, reason: null, match: await this.matchByIdWith(db, matchId), reservation: null },
+        };
+      });
+
+      if (!outcome.retry && outcome.result !== null) return outcome.result;
+    }
+    return { assigned: false, reason: "reservation_conflict", match: null, reservation: null };
+  }
+
   private async snapshotWith(db: SqlExecutor, tournamentId: string): Promise<Record<string, unknown>> {
     const tournament = await this.requireTournamentWith(db, tournamentId);
     const clubId = requiredId(tournament.club_id, "club_id");
@@ -471,6 +663,112 @@ export class MySqlTournamentOperationsRepository {
       boards,
       selected_count: boards.filter((board) => board.selected).length,
     };
+  }
+
+  private async activeMatchForKioskWith(db: SqlExecutor, kioskId: string): Promise<QueryResultRow | null> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT id,tournament_id,status,player_a_id,player_b_id
+         FROM \`${this.prefix}matches\`
+        WHERE kiosk_id=? AND status IN ('assigned','in_progress')
+        ORDER BY FIELD(status,'in_progress','assigned'),id ASC LIMIT 1`,
+      [kioskId],
+    );
+    return rows[0] ?? null;
+  }
+
+  private async operationalTournamentForKioskWith(db: SqlExecutor, kioskId: string): Promise<QueryResultRow | null> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT t.id,t.club_id,t.status,t.auto_assign_enabled
+         FROM \`${this.prefix}tournament_kiosks\` tk
+         INNER JOIN \`${this.prefix}tournaments\` t ON t.id=tk.tournament_id
+        WHERE tk.kiosk_id=? AND t.status IN ('ready','in_progress')
+        ORDER BY FIELD(t.status,'in_progress','ready'),COALESCE(t.start_at,'2999-12-31 23:59:59') ASC,t.id ASC
+        LIMIT 1`,
+      [kioskId],
+    );
+    return rows[0] ?? null;
+  }
+
+  private async reservationForKioskWith(
+    db: SqlExecutor,
+    kioskId: string,
+    forUpdate: boolean,
+  ): Promise<QueryResultRow | null> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT r.id,r.tournament_id,r.kiosk_id,r.match_id,r.reserved_at,r.activates_at,
+              GREATEST(0,TIMESTAMPDIFF(SECOND,NOW(),r.activates_at)) AS remaining_seconds,
+              t.club_id,t.name AS tournament_name,m.round_label,m.bracket_label,m.best_of_legs,
+              m.player_a_id,pa.display_name AS player_a_name,m.player_b_id,pb.display_name AS player_b_name,
+              k.board_number
+         FROM \`${this.prefix}tournament_board_reservations\` r
+         INNER JOIN \`${this.prefix}tournaments\` t ON t.id=r.tournament_id
+         INNER JOIN \`${this.prefix}matches\` m ON m.id=r.match_id
+         INNER JOIN \`${this.prefix}players\` pa ON pa.id=m.player_a_id
+         INNER JOIN \`${this.prefix}players\` pb ON pb.id=m.player_b_id
+         INNER JOIN \`${this.prefix}kiosks\` k ON k.id=r.kiosk_id
+        WHERE r.kiosk_id=? LIMIT 1${forUpdate ? " FOR UPDATE" : ""}`,
+      [kioskId],
+    );
+    return rows[0] ?? null;
+  }
+
+  private async playersBusyElsewhereWith(
+    db: SqlExecutor,
+    clubId: string,
+    playerAId: string,
+    playerBId: string,
+    reservationId: string,
+  ): Promise<boolean> {
+    const active = await db.query<QueryResultRow>(
+      `SELECT 1
+         FROM \`${this.prefix}matches\` m
+         INNER JOIN \`${this.prefix}tournaments\` t ON t.id=m.tournament_id
+        WHERE t.club_id=? AND m.status IN ('assigned','in_progress')
+          AND (m.player_a_id IN (?,?) OR m.player_b_id IN (?,?))
+        LIMIT 1`,
+      [clubId, playerAId, playerBId, playerAId, playerBId],
+    );
+    if (active.length > 0) return true;
+    const reserved = await db.query<QueryResultRow>(
+      `SELECT 1
+         FROM \`${this.prefix}tournament_board_reservations\` r
+         INNER JOIN \`${this.prefix}matches\` m ON m.id=r.match_id
+         INNER JOIN \`${this.prefix}tournaments\` t ON t.id=r.tournament_id
+        WHERE t.club_id=? AND r.id<>?
+          AND (m.player_a_id IN (?,?) OR m.player_b_id IN (?,?))
+        LIMIT 1`,
+      [clubId, reservationId, playerAId, playerBId, playerAId, playerBId],
+    );
+    return reserved.length > 0;
+  }
+
+  private async assignPendingMatchWith(db: SqlExecutor, matchId: string, kioskId: string): Promise<void> {
+    const result = await db.execute(
+      `UPDATE \`${this.prefix}matches\`
+          SET kiosk_id=?,status='assigned',starts_at=NULL,finished_at=NULL
+        WHERE id=? AND status='pending'`,
+      [kioskId, matchId],
+    );
+    if (result.affectedRows !== 1) {
+      throw new DomainValidationError(
+        "match_assignment_conflict",
+        "Kampen kunne ikke tildeles fordi kampstatus ble endret.",
+        409,
+      );
+    }
+  }
+
+  private async matchByIdWith(db: SqlExecutor, matchId: string): Promise<Record<string, unknown> | null> {
+    const rows = await db.query<QueryResultRow>(
+      `SELECT m.id,m.tournament_id,m.kiosk_id,m.status,m.round_label,m.bracket_label,m.best_of_legs,
+              m.player_a_id,pa.display_name AS player_a_name,m.player_b_id,pb.display_name AS player_b_name
+         FROM \`${this.prefix}matches\` m
+         INNER JOIN \`${this.prefix}players\` pa ON pa.id=m.player_a_id
+         INNER JOIN \`${this.prefix}players\` pb ON pb.id=m.player_b_id
+        WHERE m.id=? LIMIT 1`,
+      [matchId],
+    );
+    return rows[0] ? publicIds(rows[0], ["id","tournament_id","kiosk_id","player_a_id","player_b_id"]) : null;
   }
 
   private async bestCandidateWith(db: SqlExecutor, tournamentId: string, clubId: string): Promise<QueryResultRow | null> {
@@ -662,4 +960,20 @@ function formatReservation(row: QueryResultRow): Record<string, unknown> {
     remaining_seconds: Math.max(0, numberValue(row.remaining_seconds)),
     result_display_seconds: RESULT_HOLD_SECONDS,
   };
+}
+
+
+function formatCompletedKioskMatch(row: QueryResultRow): Record<string, unknown> {
+  return {
+    ...publicIds(row, ["id","tournament_id","player_a_id","player_b_id","winner_player_id"]),
+    legs_a: numberValue(row.legs_a),
+    legs_b: numberValue(row.legs_b),
+    result_remaining_seconds: Math.max(0, numberValue(row.result_remaining_seconds)),
+  };
+}
+
+function isDuplicateEntry(error: unknown): boolean {
+  if (error === null || typeof error !== "object") return false;
+  const candidate = error as { errno?: unknown; code?: unknown };
+  return candidate.errno === 1062 || candidate.code === "ER_DUP_ENTRY";
 }
