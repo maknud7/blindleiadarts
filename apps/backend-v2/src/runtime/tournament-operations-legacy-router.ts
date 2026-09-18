@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 
 import { DomainValidationError } from "../domain/errors.js";
 import type { IdentityUser, MySqlIdentityAuthRepository } from "../mysql/identity-auth-repository.js";
+import type { MySqlScoliaKioskAuthRepository } from "../mysql/scolia-kiosk-auth-repository.js";
 import type { MySqlTournamentHardDeleteRepository } from "../mysql/tournament-hard-delete-repository.js";
 import type { MySqlTournamentOperationsRepository } from "../mysql/tournament-operations-repository.js";
 import type { MySqlTournamentPlayoffRepository } from "../mysql/tournament-playoff-repository.js";
