@@ -15,11 +15,11 @@ export class TournamentOperationsLegacyRouter {
   constructor(
     private readonly config: BackendRuntimeConfig,
     private readonly identityRepository: MySqlIdentityAuthRepository,
-    private readonly kioskAuth: MySqlScoliaKioskAuthRepository,
     private readonly operations: MySqlTournamentOperationsRepository,
     private readonly playoffs: MySqlTournamentPlayoffRepository,
     private readonly hardDelete: MySqlTournamentHardDeleteRepository,
     private readonly realtime: TournamentRealtimePublisher,
+    private readonly kioskAuth?: MySqlScoliaKioskAuthRepository,
   ) {}
 
   async handle(method: string, path: string, request: IncomingMessage): Promise<TournamentOperationsRouteResult | null> {
@@ -33,6 +33,7 @@ export class TournamentOperationsLegacyRouter {
         return null;
       }
 
+      if (!this.kioskAuth) throw new RuntimeAccessError(500, "kiosk_operations_auth_unconfigured", "Kiosk operations auth is not configured.");
       const kiosk = await this.kioskAuth.resolveScoring(
         requiredCapture(kioskOperationMatch, 1),
         header(request, "x-kiosk-pairing-token"),
