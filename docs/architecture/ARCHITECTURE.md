@@ -58,14 +58,6 @@ The review must cover workflow, navigation, terminology, status semantics, permi
 - state machine rules
 - shared schemas
 
-### `packages/connectors`
-
-- provider interfaces
-- provider-specific mappers
-- sync/import jobs
-- webhook receivers
-- optional result publishing
-
 ### `packages/ui-assets`
 
 - canonical shared UI components
@@ -75,7 +67,7 @@ The review must cover workflow, navigation, terminology, status semantics, permi
 
 ## Suggested Bounded Contexts
 
-Keep these areas separated even if they start inside the same PHP codebase:
+Keep these areas separated even when they share deployment infrastructure:
 
 ### Venue Runtime
 

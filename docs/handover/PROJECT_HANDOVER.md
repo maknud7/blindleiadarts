@@ -25,12 +25,10 @@ Longer term, the same platform should also support player/member self-service an
 
 ## Current Deployment Shape
 
-- `ingenting.org/BD/` -> main project root
-- `ingenting.org/BD/api/` -> PHP API
-- `kiosk.ingenting.org` -> `/www/BD/kiosk/`
-- `screen.ingenting.org` -> `/www/BD/screen/`
-
-If hosting remains PHP-first, preserve that operational reality while still separating app surfaces, domain rules, connectors, and infrastructure.
+- Domeneshop hosts frontend/static assets, canonical MySQL and domain/DNS.
+- Render hosts backend-v2 Node/TypeScript runtime.
+- `develop` is the canonical development branch.
+- The migration target is zero PHP application logic while keeping canonical MySQL on Domeneshop.
 
 ## Recommended Next Steps
 
@@ -40,15 +38,15 @@ If hosting remains PHP-first, preserve that operational reality while still sepa
 4. Clean API response contracts.
 5. Build admin pages for club logo and kiosk sponsor logo.
 6. Add upload and storage conventions for images.
-7. Build the generic provider framework.
-8. Implement Challonge as the first provider.
-9. Prepare for future member login and registration flows without coupling them to kiosk runtime.
-10. Prepare a separate club-operations domain for payments and bookkeeping support.
+7. Continue moving active PHP application routes into backend-v2 or delete them when the surface is retired.
+8. Keep external providers optional and bounded; do not add a provider runtime without an active product need.
+9. Continue member login and registration work without coupling shared identity writes to TEST runtime.
+10. Continue club-operations support for payments and bookkeeping without coupling it to kiosk runtime.
 
 ## Working Rules For Future Contributors
 
-- Preserve generic provider boundaries.
-- Avoid direct Challonge coupling in UI or core domain logic.
+- Keep optional external integrations bounded and outside canonical runtime truth.
+- Do not reintroduce retired Challonge runtime without an explicit active product requirement.
 - Write migrations separately from application code.
 - Keep API responses stable and versionable.
 - Prefer small, reviewable commits.
