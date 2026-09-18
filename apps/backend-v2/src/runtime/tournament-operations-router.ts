@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 
 import type { MySqlSessionProvider, TablePrefix } from "../mysql/contracts.js";
 import type { MySqlIdentityAuthRepository } from "../mysql/identity-auth-repository.js";
+import type { MySqlScoliaKioskAuthRepository } from "../mysql/scolia-kiosk-auth-repository.js";
 import { MySqlTournamentBoardAdminRepository } from "../mysql/tournament-board-admin-repository.js";
 import { MySqlTournamentHardDeleteRepository } from "../mysql/tournament-hard-delete-repository.js";
 import type { MySqlTournamentOperationsRepository } from "../mysql/tournament-operations-repository.js";
@@ -23,6 +24,7 @@ export class TournamentOperationsRouter {
     operations: MySqlTournamentOperationsRepository,
     playoffs: MySqlTournamentPlayoffRepository,
     realtime: TournamentRealtimePublisher,
+    kioskAuth?: MySqlScoliaKioskAuthRepository,
   ) {
     // The legacy operations repository already owns the canonical shared session provider.
     // Reuse it so this migration does not create a second pool/connection budget.
@@ -37,6 +39,7 @@ export class TournamentOperationsRouter {
       playoffs,
       hardDeleteRepository,
       realtime,
+      kioskAuth,
     );
   }
 

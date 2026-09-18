@@ -51,6 +51,15 @@ assert.ok(identitySelector.includes("appEnv() === 'test'"));
 const identityRouter = read("apps/backend-v2/src/runtime/identity-audit-read-router.ts");
 assert.ok(identityRouter.includes("player_identity_merge_prod_only"));
 
+// Active kiosk post-match operations must not fall through to legacy PHP in TEST.
+const tournamentProxy = read("apps/api/src/BackendV2TournamentProxyApplication.php");
+const kioskOperations = read("apps/kiosk/operations-runtime.js");
+for (const route of ["post-match","next-match","release-next-match"]) {
+  assert.ok(kioskOperations.includes(route), `Expected active kiosk operation in frontend: ${route}`);
+  assert.ok(tournamentProxy.includes(route), `Active kiosk operation is not captured by Node frontdoor: ${route}`);
+}
+assert.ok(tournamentProxy.includes("x-kiosk-pairing-token"), "Tournament frontdoor must forward kiosk pairing token.");
+
 const migration = read("infra/sql/migrations/0088_isolate_test_auth_sessions.php");
 assert.ok(migration.includes("bd_test_"));
 assert.ok(migration.includes("DROP FOREIGN KEY"));

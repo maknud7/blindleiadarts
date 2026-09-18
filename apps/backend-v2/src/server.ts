@@ -203,6 +203,7 @@ const tournamentOperationsRuntime = new TournamentOperationsRouter(
   tournamentOperations,
   tournamentPlayoffs,
   tournamentRealtime,
+  scoliaKioskAuth,
 );
 const preflight = new BackendScoringPreflight(sessions, config.prefixes.runtime);
 

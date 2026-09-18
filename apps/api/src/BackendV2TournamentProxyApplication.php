@@ -44,6 +44,8 @@ final class BackendV2TournamentProxyApplication
             $headers = [];
             $authorization = $request->header('authorization');
             if ($authorization !== null) $headers['authorization'] = $authorization;
+            $pairingToken = $request->header('x-kiosk-pairing-token');
+            if ($pairingToken !== null) $headers['x-kiosk-pairing-token'] = $pairingToken;
 
             $result = $client->request($method, $path, $body, $headers);
             $status = $result['status'];
@@ -125,6 +127,9 @@ final class BackendV2TournamentProxyApplication
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/operations/reconcile$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/operations/matches/\d+/move$#', $path) === 1) return true;
         if ($method === 'DELETE' && preg_match('#^/v1/tournaments/\d+/hard-delete$#', $path) === 1) return true;
+
+        if ($method === 'GET' && preg_match('#^/v1/kiosks/[^/]+/post-match$#', $path) === 1) return true;
+        if ($method === 'POST' && preg_match('#^/v1/kiosks/[^/]+/(?:next-match|release-next-match)$#', $path) === 1) return true;
 
         if ($method === 'GET' && preg_match('#^/v1/tournaments/\d+/playoffs$#', $path) === 1) return true;
         if ($method === 'POST' && preg_match('#^/v1/tournaments/\d+/playoffs/(?:generate|reconcile)$#', $path) === 1) return true;
