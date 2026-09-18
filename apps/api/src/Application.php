@@ -7,7 +7,6 @@ namespace Blindleia\Dartkiosk\Api;
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
 use Blindleia\Dartkiosk\Api\Http\Request;
 use Blindleia\Dartkiosk\Api\Repository\ClubRepository;
-use Blindleia\Dartkiosk\Api\Repository\ConnectorAuthorizationRepository;
 use Blindleia\Dartkiosk\Api\Repository\KioskAccessException;
 use Blindleia\Dartkiosk\Api\Repository\KioskRepository;
 use Blindleia\Dartkiosk\Api\Repository\ScreenRepository;
@@ -15,15 +14,8 @@ use Blindleia\Dartkiosk\Api\Repository\ValidationException;
 use Blindleia\Dartkiosk\Api\Repository\UserAccountRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentLiveRepository;
 use Blindleia\Dartkiosk\Api\Repository\TournamentRepository;
-use Blindleia\Dartkiosk\Api\Service\ChallongeImportService;
 use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
-use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeApiClient;
-use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuth;
-use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeOAuthClient;
-use Blindleia\Dartkiosk\Connectors\Challonge\ChallongeTournamentProvider;
-use DateInterval;
-use DateTimeImmutable;
 use mysqli_sql_exception;
 use Throwable;
 
@@ -151,13 +143,6 @@ final class Application
                     'POST /v1/kiosks/{code}/start-match',
                     'POST /v1/kiosks/{code}/visit',
                     'POST /v1/kiosks/{code}/undo',
-                    'GET /v1/connectors/challonge/authorizations',
-                    'GET /v1/connectors/challonge/authorize-url',
-                    'GET /v1/connectors/challonge/authorizations/{id}/tournaments',
-                    'GET /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/participants',
-                    'GET /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/matches',
-                    'POST /v1/connectors/challonge/authorizations/{id}/tournaments/{tournamentId}/import',
-                    'GET /v1/connectors/challonge/callback',
                 ],
             ]);
         }
@@ -964,209 +949,6 @@ final class Application
             return JsonResponse::ok($state);
         }
 
-        if ($method === 'GET' && $path === 'v1/connectors/challonge/authorize-url') {
-            $challonge = $config->challonge();
-
-            if (!$challonge->isConfigured()) {
-                return JsonResponse::error(
-                    503,
-                    'challonge_not_configured',
-                    'Challonge OAuth credentials are not configured on the server.'
-                );
-            }
-
-            $redirectUri = isset($_GET['redirect_uri']) ? trim((string) $_GET['redirect_uri']) : '';
-            $scopes = isset($_GET['scopes'])
-                ? array_values(array_filter(array_map('trim', explode(',', (string) $_GET['scopes']))))
-                : [];
-            $communityId = isset($_GET['community_id']) ? trim((string) $_GET['community_id']) : null;
-            $stateToken = isset($_GET['state']) ? trim((string) $_GET['state']) : null;
-
-            $oauth = new ChallongeOAuth($challonge);
-            $resolvedRedirectUri = $oauth->resolveRedirectUri($redirectUri);
-
-            if ($resolvedRedirectUri === '') {
-                return JsonResponse::error(
-                    503,
-                    'challonge_redirect_uri_not_configured',
-                    'Challonge redirect URI is not configured.'
-                );
-            }
-
-            return JsonResponse::ok([
-                'provider' => 'challonge',
-                'authorize_url' => $oauth->buildAuthorizationUrl($resolvedRedirectUri, $scopes, $communityId, $stateToken),
-                'redirect_uri' => $resolvedRedirectUri,
-                'scopes' => $scopes !== [] ? $scopes : $challonge->defaultScopes(),
-            ]);
-        }
-
-        if ($method === 'GET' && $path === 'v1/connectors/challonge/authorizations') {
-            $repository = new ConnectorAuthorizationRepository($database);
-
-            return JsonResponse::ok([
-                'items' => $repository->listByProvider('challonge'),
-            ]);
-        }
-
-        if ($method === 'GET' && $path === 'v1/connectors/challonge/callback') {
-            $challonge = $config->challonge();
-
-            if (!$challonge->isConfigured()) {
-                return JsonResponse::error(
-                    503,
-                    'challonge_not_configured',
-                    'Challonge OAuth credentials are not configured on the server.'
-                );
-            }
-
-            $code = isset($_GET['code']) ? trim((string) $_GET['code']) : '';
-            $error = isset($_GET['error']) ? trim((string) $_GET['error']) : '';
-
-            if ($error !== '') {
-                return JsonResponse::error(
-                    400,
-                    'challonge_oauth_error',
-                    'Challonge returned an OAuth error.',
-                    [
-                        'error' => $error,
-                        'error_description' => isset($_GET['error_description']) ? (string) $_GET['error_description'] : null,
-                    ]
-                );
-            }
-
-            if ($code === '') {
-                return JsonResponse::error(422, 'authorization_code_required', 'Query parameter code is required.');
-            }
-
-            $oauth = new ChallongeOAuth($challonge);
-            $oauthClient = new ChallongeOAuthClient($challonge);
-            $tokenPayload = $oauthClient->exchangeAuthorizationCode($code, $oauth->resolveRedirectUri());
-
-            $accessToken = isset($tokenPayload['access_token']) ? (string) $tokenPayload['access_token'] : '';
-
-            if ($accessToken === '') {
-                return JsonResponse::error(
-                    502,
-                    'challonge_token_missing',
-                    'Challonge did not return an access token.',
-                    ['payload' => $tokenPayload]
-                );
-            }
-
-            $apiClient = new ChallongeApiClient($challonge);
-            $me = $apiClient->get('/me.json', $accessToken);
-
-            $userData = is_array($me['data'] ?? null) ? $me['data'] : [];
-            $userAttributes = is_array($userData['attributes'] ?? null) ? $userData['attributes'] : [];
-            $expiresAt = $this->resolveExpiresAt($tokenPayload);
-
-            $authorizationRepository = new ConnectorAuthorizationRepository($database);
-            $authorizationId = $authorizationRepository->storeOAuthAuthorization(
-                'challonge',
-                isset($userData['id']) ? (string) $userData['id'] : null,
-                isset($userAttributes['username']) ? (string) $userAttributes['username'] : null,
-                $accessToken,
-                isset($tokenPayload['refresh_token']) ? (string) $tokenPayload['refresh_token'] : null,
-                isset($tokenPayload['token_type']) ? (string) $tokenPayload['token_type'] : null,
-                isset($tokenPayload['scope']) ? (string) $tokenPayload['scope'] : null,
-                $expiresAt,
-                [
-                    'token' => $tokenPayload,
-                    'me' => $me,
-                ]
-            );
-
-            return JsonResponse::ok([
-                'provider' => 'challonge',
-                'authorization_id' => $authorizationId,
-                'account' => [
-                    'id' => $userData['id'] ?? null,
-                    'username' => $userAttributes['username'] ?? null,
-                    'email' => $userAttributes['email'] ?? null,
-                ],
-                'scope' => $tokenPayload['scope'] ?? null,
-                'expires_at' => $expiresAt?->format(DATE_ATOM),
-                'message' => 'Challonge authorization stored successfully.',
-            ]);
-        }
-
-        if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments$#', $path, $matches) === 1) {
-            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
-
-            if ($authorization instanceof JsonResponse) {
-                return $authorization;
-            }
-
-            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
-
-            return JsonResponse::ok([
-                'authorization_id' => (int) $authorization['id'],
-                'items' => $provider->listTournaments((string) $authorization['access_token']),
-            ]);
-        }
-
-        if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/participants$#', $path, $matches) === 1) {
-            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
-
-            if ($authorization instanceof JsonResponse) {
-                return $authorization;
-            }
-
-            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
-
-            return JsonResponse::ok([
-                'authorization_id' => (int) $authorization['id'],
-                'tournament_id' => urldecode($matches[2]),
-                'items' => $provider->listParticipants((string) $authorization['access_token'], urldecode($matches[2])),
-            ]);
-        }
-
-        if (preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/matches$#', $path, $matches) === 1) {
-            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
-
-            if ($authorization instanceof JsonResponse) {
-                return $authorization;
-            }
-
-            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
-
-            return JsonResponse::ok([
-                'authorization_id' => (int) $authorization['id'],
-                'tournament_id' => urldecode($matches[2]),
-                'items' => $provider->listMatches((string) $authorization['access_token'], urldecode($matches[2])),
-            ]);
-        }
-
-        if (
-            $method === 'POST'
-            && preg_match('#^v1/connectors/challonge/authorizations/(\d+)/tournaments/([^/]+)/import$#', $path, $matches) === 1
-        ) {
-            $authorization = $this->requireAuthorization($database, (int) $matches[1]);
-
-            if ($authorization instanceof JsonResponse) {
-                return $authorization;
-            }
-
-            $provider = new ChallongeTournamentProvider(new ChallongeApiClient($config->challonge()));
-            $tournamentId = urldecode($matches[2]);
-            $accessToken = (string) $authorization['access_token'];
-
-            $tournament = $provider->getTournament($accessToken, $tournamentId);
-            $participants = $provider->listParticipants($accessToken, $tournamentId);
-            $matchesData = $provider->listMatches($accessToken, $tournamentId);
-
-            $importService = new ChallongeImportService($database);
-            $summary = $importService->importTournament($tournament, $participants, $matchesData);
-
-            return JsonResponse::ok([
-                'provider' => 'challonge',
-                'authorization_id' => (int) $authorization['id'],
-                'tournament_id' => $tournamentId,
-                'import_summary' => $summary,
-            ], 201);
-        }
-
         return JsonResponse::error(404, 'not_found', 'The requested endpoint was not found.');
     }
 
@@ -1410,7 +1192,6 @@ final class Application
         $tournamentRepository = new TournamentRepository($database);
         $kioskRepository = new KioskRepository($database);
         $screenRepository = new ScreenRepository($database);
-        $challonge = $config->challonge();
 
         $services = [
             [
@@ -1434,14 +1215,6 @@ final class Application
                 'detail' => $config->realtimeEnabled()
                     ? 'Websocket/SSE er konfigurert.'
                     : 'Fallback til SSE/polling. Ingen websocket-URL konfigurert.',
-            ],
-            [
-                'key' => 'challonge',
-                'label' => 'Challonge connector',
-                'status' => $challonge->clientId() !== '' && $challonge->clientSecret() !== '' ? 'ok' : 'warning',
-                'detail' => $challonge->clientId() !== '' && $challonge->clientSecret() !== ''
-                    ? 'OAuth-klient er konfigurert.'
-                    : 'Connectoren er tilgjengelig, men mangler client credentials.',
             ],
             [
                 'key' => 'screen',
@@ -1685,25 +1458,6 @@ final class Application
     }
 
     /**
-     * @return array<string, mixed>|JsonResponse
-     */
-    private function requireAuthorization(Database $database, int $authorizationId): array|JsonResponse
-    {
-        $repository = new ConnectorAuthorizationRepository($database);
-        $authorization = $repository->findById($authorizationId);
-
-        if ($authorization === null || (string) ($authorization['provider_key'] ?? '') !== 'challonge') {
-            return JsonResponse::error(
-                404,
-                'authorization_not_found',
-                'No Challonge authorization exists for the supplied id.'
-            );
-        }
-
-        return $authorization;
-    }
-
-    /**
      * @param array<string, mixed> $user
      * @return array<string, mixed>
      */
@@ -1725,21 +1479,4 @@ final class Application
         ];
     }
 
-    /**
-     * @param array<string, mixed> $tokenPayload
-     */
-    private function resolveExpiresAt(array $tokenPayload): ?DateTimeImmutable
-    {
-        if (!isset($tokenPayload['expires_in'])) {
-            return null;
-        }
-
-        $expiresIn = (int) $tokenPayload['expires_in'];
-
-        if ($expiresIn <= 0) {
-            return null;
-        }
-
-        return (new DateTimeImmutable())->add(new DateInterval('PT' . $expiresIn . 'S'));
-    }
 }
