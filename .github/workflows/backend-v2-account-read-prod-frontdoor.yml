@@ -51,7 +51,7 @@ jobs:
           php -l apps/api/src/BackendV2AccountReadProxyApplication.php
           php apps/api/tests/backend_v2_account_read_proxy_routing_test.php
 
-      - name: Verify PROD routing remains on PHP until backend promotion
+      - name: Verify PROD routing selects backend-v2 after promotion
         env:
           SCOLIA_BRIDGE_SECRET: account-read-prod-contract
           DB_HOST: 127.0.0.1
@@ -65,7 +65,7 @@ jobs:
           APP_ENV=prod BASE_URL=https://blindleiadart.ingenting.org STATIC_BASE_URL=https://blindleiadart.ingenting.org \
             DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/account-read-prod.php
-          php -r '$c=require "/tmp/account-read-prod.php"; $b=$c["backend_v2"]??[]; if (($b["account_read_routing_mode"]??null)!=="php") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2);'
+          php -r '$c=require "/tmp/account-read-prod.php"; $b=$c["backend_v2"]??[]; if (($b["account_read_routing_mode"]??null)!=="node") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2);'
 
       - name: Verify current PROD backend exposes the account read surface
         env:
@@ -101,4 +101,4 @@ jobs:
             rm -f "$body"
           done
 
-          echo 'Current PROD backend exposes canonical bd_prod_ account reads; candidate code guarantees those GET routes use touch=false. PROD frontdoor stays on PHP until the candidate backend is promoted.'
+          echo 'Current PROD backend exposes canonical bd_prod_ account reads; candidate code guarantees those GET routes use touch=false and the PROD frontdoor selects backend-v2.'
