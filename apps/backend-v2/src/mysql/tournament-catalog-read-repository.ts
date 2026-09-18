@@ -28,6 +28,30 @@ export class MySqlTournamentCatalogReadRepository {
     });
   }
 
+  async findScreenTournamentByClubId(clubIdInput: unknown): Promise<Record<string, unknown> | null> {
+    const clubId = requiredId(clubIdInput, "club_id");
+    return this.sessions.withConnection(async (db) => {
+      const rows = await db.query<QueryResultRow>(
+        `SELECT t.id,t.club_id,t.season_id,t.name,t.slug,t.provider_system,t.status,t.max_visits_per_leg,
+                t.start_at,t.end_at,
+                COUNT(DISTINCT tp.id) AS registration_count,
+                COUNT(DISTINCT m.id) AS match_count,
+                COUNT(DISTINCT CASE WHEN m.status='completed' THEN m.id END) AS completed_match_count
+           FROM \`${this.prefix}tournaments\` t
+           LEFT JOIN \`${this.prefix}tournament_players\` tp ON tp.tournament_id=t.id AND tp.status<>'withdrawn'
+           LEFT JOIN \`${this.prefix}matches\` m ON m.tournament_id=t.id
+          WHERE t.club_id=? AND t.status IN ('in_progress','ready')
+          GROUP BY t.id,t.club_id,t.season_id,t.name,t.slug,t.provider_system,t.status,t.max_visits_per_leg,t.start_at,t.end_at
+          ORDER BY FIELD(t.status,'in_progress','ready'),
+                   CASE WHEN t.start_at IS NULL THEN 1 ELSE 0 END ASC,
+                   t.start_at DESC,t.id DESC
+          LIMIT 1`,
+        [clubId],
+      );
+      return rows[0] ? formatTournamentListItem(rows[0]) : null;
+    });
+  }
+
   async listClubPlayers(clubIdInput: unknown): Promise<Record<string, unknown>[]> {
     const clubId = requiredId(clubIdInput, "club_id");
     return this.sessions.withConnection((db) => this.listClubPlayersWith(db, clubId));
