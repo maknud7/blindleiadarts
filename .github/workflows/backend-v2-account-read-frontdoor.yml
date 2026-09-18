@@ -25,13 +25,18 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/server.ts'
+      - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
+      - 'apps/backend-v2/test/test-local-auth-sessions.test.mjs'
       - 'apps/api/index.php'
       - 'apps/api/config.example.php'
       - 'apps/api/src/Support/Config.php'
       - 'apps/api/src/BackendV2AccountReadProxyApplication.php'
+      - 'apps/api/src/BackendV2AccountMutationProxyApplication.php'
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
+      - 'apps/api/tests/backend_v2_account_mutation_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
+      - 'infra/sql/migrations/0088_isolate_test_auth_sessions.php'
       - '.github/workflows/backend-v2-account-read-frontdoor.yml'
       - '.github/workflows/backend-v2-account-read-prod-frontdoor.yml'
   workflow_dispatch:
