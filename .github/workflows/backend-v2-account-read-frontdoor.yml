@@ -68,9 +68,9 @@ jobs:
           php -l infra/sql/migrations/0088_isolate_test_auth_sessions.php
           php apps/api/tests/backend_v2_account_read_proxy_routing_test.php
           php apps/api/tests/backend_v2_account_mutation_proxy_routing_test.php
-          npm --prefix apps/backend-v2 ci
-          npm --prefix apps/backend-v2 run typecheck
-          npm --prefix apps/backend-v2 run build
+          npm install --no-package-lock --ignore-scripts
+          npm run backend-v2:typecheck
+          npm run backend-v2:build
           node --test apps/backend-v2/test/account-read-side-effects.test.mjs apps/backend-v2/test/test-local-auth-sessions.test.mjs
           grep -Fq 'BackendV2AccountReadProxyApplication' apps/api/index.php
           grep -Fq 'BackendV2AccountMutationProxyApplication' apps/api/index.php
