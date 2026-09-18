@@ -14,11 +14,15 @@ on:
       - 'apps/api/tests/backend_v2_club_admin_proxy_routing_test.php'
       - 'apps/api/tests/backend_v2_club_admin_frontdoor_order_test.php'
       - 'apps/backend-v2/src/mysql/club-admin-repository.ts'
+      - 'apps/backend-v2/src/mysql/tournament-catalog-read-repository.ts'
+      - 'apps/backend-v2/src/mysql/equipment-admin-repository.ts'
       - 'apps/backend-v2/src/mysql/runtime-health-repository.ts'
       - 'apps/backend-v2/src/runtime/club-admin-router.ts'
       - 'apps/backend-v2/src/runtime/runtime-health-router.ts'
+      - 'apps/backend-v2/src/runtime/system-status-router.ts'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/test/club-admin.test.mjs'
+      - 'apps/backend-v2/test/system-status.test.mjs'
       - 'apps/backend-v2/test/api-health-read.test.mjs'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-club-admin-frontdoor.yml'
@@ -53,7 +57,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           npm run backend-v2:build
-          node --test apps/backend-v2/test/club-admin.test.mjs apps/backend-v2/test/api-health-read.test.mjs
+          node --test apps/backend-v2/test/club-admin.test.mjs apps/backend-v2/test/api-health-read.test.mjs apps/backend-v2/test/system-status.test.mjs
 
       - name: Verify fail-closed club admin frontdoor
         run: |
