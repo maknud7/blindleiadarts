@@ -200,6 +200,7 @@ const tournamentRuntime = new TournamentRuntimeRouter(
 const tournamentOperationsRuntime = new TournamentOperationsRouter(
   config,
   identityRepository,
+  scoliaKioskAuth,
   tournamentOperations,
   tournamentPlayoffs,
   tournamentRealtime,
