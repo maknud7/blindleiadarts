@@ -78,6 +78,9 @@ $defaultBackendV2IdentityAuditRoutingMode = $isTest ? 'node' : 'php';
 // Club creation mutates only the isolated runtime club registry in TEST. Shared
 // canonical identity is used for no-touch super-admin authorization; PROD stays PHP.
 $defaultBackendV2ClubAdminRoutingMode = $isTest ? 'node' : 'php';
+// System status is read-only and has passed TEST. Keep it on Node in TEST and
+// PROD without moving the wider club-admin mutation surface.
+$defaultBackendV2SystemStatusRoutingMode = ($isTest || $isProd) ? 'node' : 'php';
 $defaultBackendV2BaseUrl = $isProd ? 'https://blindleia-backend-v2-readonly.onrender.com' : '';
 $defaultBackendV2CanaryKioskIds = $isProd ? '1,2,3,4' : '';
 $defaultBackendV2InternalToken = $isProd ? $bridgeSecret : '';
@@ -110,6 +113,7 @@ $config = [
         'payment_settings_routing_mode' => env_optional('BACKEND_V2_PAYMENT_SETTINGS_ROUTING_MODE', $defaultBackendV2PaymentSettingsRoutingMode) ?? $defaultBackendV2PaymentSettingsRoutingMode,
         'identity_audit_routing_mode' => env_optional('BACKEND_V2_IDENTITY_AUDIT_ROUTING_MODE', $defaultBackendV2IdentityAuditRoutingMode) ?? $defaultBackendV2IdentityAuditRoutingMode,
         'club_admin_routing_mode' => env_optional('BACKEND_V2_CLUB_ADMIN_ROUTING_MODE', $defaultBackendV2ClubAdminRoutingMode) ?? $defaultBackendV2ClubAdminRoutingMode,
+        'system_status_routing_mode' => env_optional('BACKEND_V2_SYSTEM_STATUS_ROUTING_MODE', $defaultBackendV2SystemStatusRoutingMode) ?? $defaultBackendV2SystemStatusRoutingMode,
         'base_url' => env_optional('BACKEND_V2_BASE_URL', $defaultBackendV2BaseUrl) ?? $defaultBackendV2BaseUrl,
         'canary_kiosk_ids' => env_optional('BACKEND_V2_CANARY_KIOSK_IDS', $defaultBackendV2CanaryKioskIds) ?? $defaultBackendV2CanaryKioskIds,
         'internal_token' => env_optional('BACKEND_V2_INTERNAL_TOKEN', $defaultBackendV2InternalToken) ?? $defaultBackendV2InternalToken,
