@@ -111,8 +111,6 @@ final class Application
                     'GET /v1/system/status',
                     'GET /v1/realtime/config',
                     'POST /v1/public/kiosk/connect',
-                    'POST /v1/public/screen/connect',
-                    'GET /v1/public/screen',
                     'POST /v1/auth/login',
                     'GET /v1/auth/me',
                     'GET /v1/me/dashboard',
@@ -204,50 +202,6 @@ final class Application
             return JsonResponse::ok(
                 $this->buildSystemStatus($database, $config, $clubId > 0 ? $clubId : null)
             );
-        }
-
-        if ($method === 'GET' && $path === 'v1/public/screen') {
-            $screenToken = $request->header('x-screen-token') ?? $this->queryParam('screen_token');
-            $screen = $this->buildScreenPayload($database, $config, $this->queryParam('club_slug'), null, $screenToken);
-
-            if ($screen === null) {
-                return JsonResponse::error(404, 'screen_club_not_found', 'No club could be resolved for the screen.');
-            }
-
-            return JsonResponse::ok($screen);
-        }
-
-        if ($method === 'POST' && $path === 'v1/public/screen/connect') {
-            $payload = $request->jsonBody();
-            $code = strtoupper(trim((string) ($payload['code'] ?? '')));
-
-            if ($code === '') {
-                return JsonResponse::error(422, 'screen_code_required', 'A screen code is required.');
-            }
-
-            $screenRepository = new ScreenRepository($database);
-            $connection = $screenRepository->connectByCode($code);
-
-            if ($connection === null) {
-                return JsonResponse::error(404, 'screen_code_invalid', 'Screen code was not found or is inactive.');
-            }
-
-            $club = is_array($connection['club'] ?? null) ? $connection['club'] : null;
-            $device = is_array($connection['device'] ?? null) ? $connection['device'] : null;
-            $screen = $this->buildScreenPayload(
-                $database,
-                $config,
-                null,
-                $club !== null ? (int) $club['id'] : null,
-                $device['access_token'] ?? null
-            );
-
-            return JsonResponse::ok([
-                'club' => $club,
-                'device' => $device,
-                'access_token' => $device['access_token'] ?? null,
-                'screen' => $screen,
-            ]);
         }
 
         if ($method === 'POST' && $path === 'v1/public/kiosk/connect') {
