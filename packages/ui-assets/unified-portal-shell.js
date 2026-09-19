@@ -353,17 +353,21 @@ function setMobileDrawer(open) {
 function syncMobileNavigationMode() {
   if (!nav) return;
   const mobile = window.matchMedia("(max-width: 760px)").matches;
+  const overlay = document.getElementById("unifiedMobileDrawerOverlay");
+  const more = document.getElementById("unifiedMobileMore");
   if (!mobile) {
     document.body.classList.remove("unified-mobile-drawer-open");
     nav.removeAttribute("aria-hidden");
     if ("inert" in nav) nav.inert = false;
-    const overlay = document.getElementById("unifiedMobileDrawerOverlay");
     if (overlay) overlay.hidden = true;
+    if (more) more.setAttribute("aria-expanded", "false");
     return;
   }
   const open = document.body.classList.contains("unified-mobile-drawer-open");
   nav.setAttribute("aria-hidden", open ? "false" : "true");
   if ("inert" in nav) nav.inert = !open;
+  if (overlay) overlay.hidden = !open;
+  if (more) more.setAttribute("aria-expanded", open ? "true" : "false");
 }
 
 function syncMobileBottomNav() {
@@ -447,12 +451,20 @@ function ensureMobileNavigation() {
     });
     window.addEventListener("hashchange", syncMobileBottomNav);
     window.addEventListener("resize", syncMobileNavigationMode);
+    window.addEventListener("pageshow", () => setMobileDrawer(false));
+    window.addEventListener("pagehide", () => setMobileDrawer(false));
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) setMobileDrawer(false);
+    });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") setMobileDrawer(false);
     });
     mobileNavBound = true;
   }
 
+  // Always start from a closed drawer. Safari can restore DOM/body classes from bfcache,
+  // which must not leave the full-screen overlay active after returning to admin.
+  setMobileDrawer(false);
   syncMobileNavigationMode();
   syncMobileBottomNav();
 }
