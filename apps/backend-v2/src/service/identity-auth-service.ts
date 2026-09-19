@@ -4,7 +4,7 @@ import { RuntimeAccessError } from "../runtime/config.js";
 import type { IdentityUser, MySqlIdentityAuthRepository } from "../mysql/identity-auth-repository.js";
 
 export interface AuthUserPayload {
-  id: number | null;
+  id: string | null;
   email: string | null;
   username: string | null;
   display_name: string | null;
@@ -13,9 +13,9 @@ export interface AuthUserPayload {
   contact_email: string | null;
   contact_phone: string | null;
   player: {
-    id: number | null;
+    id: string | null;
     display_name: string | null;
-    club_id: number | null;
+    club_id: string | null;
   };
 }
 
@@ -80,7 +80,7 @@ export function formatAuthUser(user: IdentityUser): AuthUserPayload {
   const email = typeof user.email === "string" && user.email !== "" ? user.email : null;
   const role = typeof user.role === "string" ? user.role : null;
   return {
-    id: safeNumber(user.id),
+    id: decimalId(user.id),
     email,
     username: email,
     display_name: typeof user.display_name === "string" ? user.display_name : null,
@@ -89,9 +89,9 @@ export function formatAuthUser(user: IdentityUser): AuthUserPayload {
     contact_email: email,
     contact_phone: typeof user.contact_phone === "string" ? user.contact_phone : null,
     player: {
-      id: safeNumber(user.player_id),
+      id: decimalId(user.player_id),
       display_name: typeof user.player_display_name === "string" ? user.player_display_name : null,
-      club_id: safeNumber(user.player_club_id),
+      club_id: decimalId(user.player_club_id),
     },
   };
 }
@@ -100,12 +100,6 @@ export function normalizePhpBcrypt(hash: string): string {
   return hash.startsWith("$2y$") ? `$2b$${hash.slice(4)}` : hash;
 }
 
-function safeNumber(value: unknown): number | null {
-  const normalized = String(value ?? "").trim();
-  if (!/^[1-9][0-9]*$/.test(normalized)) return null;
-  const parsed = Number(normalized);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
 
 function decimalId(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
