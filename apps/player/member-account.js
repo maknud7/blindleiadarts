@@ -225,7 +225,7 @@ function renderProfileIfChanged(profile) {
     nickname: profile?.nickname || "",
     email: profile?.email || "",
     avatar_url: profile?.avatar_url || "",
-    player_id: Number(profile?.player_id || 0),
+    player_id: String(profile?.player_id || ""),
   });
   if (next === profileFingerprint) return;
   profileFingerprint = next;
@@ -385,7 +385,7 @@ async function load(force = false) {
 
     const [payments, playerStats] = await Promise.all([
       api("/me/payments"),
-      profile.player_id ? api(`/players/${Number(profile.player_id)}/profile`) : Promise.resolve(null),
+      profile.player_id ? api(`/players/${encodeURIComponent(String(profile.player_id))}/profile`) : Promise.resolve(null),
     ]);
     const nextHtml = `${renderMembership(payments)}${renderStats(playerStats)}`;
     if (nextHtml !== accountHtml) {
