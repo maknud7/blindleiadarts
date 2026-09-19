@@ -35,14 +35,14 @@ export class MySqlAccountProfileRepository {
     }
 
     return {
-      user_id: safeNumber(user.id) ?? 0,
+      user_id: decimalId(user.id),
       email: stringValue(user.email),
       display_name: stringValue(player?.display_name) || stringValue(user.display_name),
       nickname: nullableString(player?.nickname),
       avatar_url: nullableString(player?.avatar_url),
-      player_id: safeNumber(playerId),
-      club_id: safeNumber(player?.club_id),
-      member_id: safeNumber(player?.member_id) ?? safeNumber(user.member_id),
+      player_id: decimalId(playerId),
+      club_id: decimalId(player?.club_id),
+      member_id: decimalId(player?.member_id) ?? decimalId(user.member_id),
     };
   }
 
@@ -78,7 +78,7 @@ export class MySqlAccountProfileRepository {
           source: row.kilde ?? null,
         }));
         return {
-          member_id: safeNumber(member.id),
+          member_id: decimalId(member.id),
           member_number: safeNumber(memberNumber) ?? 0,
           member_name: member.navn ?? null,
           joined_at: member.innmeldingsdato ?? null,

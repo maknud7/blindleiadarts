@@ -34,3 +34,18 @@ test("authenticated account GET routes never touch identity sessions", async () 
     );
   }
 });
+
+
+test("auth/me formats BIGINT identity ids as exact decimal strings", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const start = source.indexOf("function formatPublicUser(user: IdentityUser)");
+  assert.notEqual(start, -1, "missing formatPublicUser");
+  const end = source.indexOf("\nfunction safeIdString", start);
+  assert.notEqual(end, -1, "missing safeIdString boundary");
+  const block = source.slice(start, end);
+
+  assert.match(block, /id: safeIdString\(user\.id\)/);
+  assert.match(block, /id: safeIdString\(user\.player_id\)/);
+  assert.match(block, /club_id: safeIdString\(user\.player_club_id\)/);
+  assert.doesNotMatch(source, /safePublicNumber/);
+});

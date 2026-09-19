@@ -6,6 +6,9 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
+      - 'apps/backend-v2/src/mysql/account-profile-repository.ts'
+      - 'apps/backend-v2/src/service/identity-auth-service.ts'
+      - 'apps/backend-v2/test/identity-auth-service.test.mjs'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/test/test-local-auth-sessions.test.mjs'
       - 'apps/api/index.php'
@@ -21,6 +24,9 @@ on:
       - develop
     paths:
       - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
+      - 'apps/backend-v2/src/mysql/account-profile-repository.ts'
+      - 'apps/backend-v2/src/service/identity-auth-service.ts'
+      - 'apps/backend-v2/test/identity-auth-service.test.mjs'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/test/test-local-auth-sessions.test.mjs'
       - 'apps/api/index.php'
@@ -69,7 +75,7 @@ jobs:
           php -l apps/api/src/Support/Config.php
           php -l infra/sql/migrations/0088_isolate_test_auth_sessions.php
           php apps/api/tests/backend_v2_account_mutation_proxy_routing_test.php
-          node --test apps/backend-v2/test/test-local-auth-sessions.test.mjs
+          node --test apps/backend-v2/test/identity-auth-service.test.mjs apps/backend-v2/test/test-local-auth-sessions.test.mjs
           grep -Fq 'BackendV2AccountMutationProxyApplication' apps/api/index.php
           grep -Fq "'account_mutation_routing_mode' => 'php'" apps/api/config.example.php
 

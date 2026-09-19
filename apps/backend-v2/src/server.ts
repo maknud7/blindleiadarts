@@ -534,7 +534,7 @@ function formatPublicUser(user: IdentityUser): Record<string, unknown> {
   const email = typeof user.email === "string" ? user.email : null;
   const role = typeof user.role === "string" ? user.role : null;
   return {
-    id: safePublicNumber(user.id),
+    id: safeIdString(user.id),
     email,
     username: email,
     display_name: user.display_name ?? null,
@@ -543,9 +543,9 @@ function formatPublicUser(user: IdentityUser): Record<string, unknown> {
     contact_email: email,
     contact_phone: user.contact_phone ?? null,
     player: {
-      id: safePublicNumber(user.player_id),
+      id: safeIdString(user.player_id),
       display_name: user.player_display_name ?? null,
-      club_id: safePublicNumber(user.player_club_id),
+      club_id: safeIdString(user.player_club_id),
     },
   };
 }
@@ -555,12 +555,6 @@ function safeIdString(value: unknown): string | null {
   return /^[1-9][0-9]*$/.test(normalized) ? normalized : null;
 }
 
-function safePublicNumber(value: unknown): number | null {
-  const normalized = safeIdString(value);
-  if (normalized === null) return null;
-  const parsed = Number(normalized);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
 
 function sendError(response: ServerResponse, error: unknown): void {
   if (error instanceof RuntimeAccessError || error instanceof DomainValidationError) {
