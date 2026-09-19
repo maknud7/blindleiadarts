@@ -8,6 +8,8 @@ on:
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/src/mysql/account-profile-repository.ts'
+      - 'apps/backend-v2/src/mysql/membership-eligibility-repository.ts'
+      - 'apps/backend-v2/test/membership-eligibility-exact-ids.test.mjs'
       - 'apps/backend-v2/src/service/identity-auth-service.ts'
       - 'apps/backend-v2/test/identity-auth-service.test.mjs'
       - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
@@ -30,6 +32,8 @@ on:
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/src/mysql/account-profile-repository.ts'
+      - 'apps/backend-v2/src/mysql/membership-eligibility-repository.ts'
+      - 'apps/backend-v2/test/membership-eligibility-exact-ids.test.mjs'
       - 'apps/backend-v2/src/service/identity-auth-service.ts'
       - 'apps/backend-v2/test/identity-auth-service.test.mjs'
       - 'apps/backend-v2/test/account-read-side-effects.test.mjs'
@@ -77,7 +81,7 @@ jobs:
           npm install --no-package-lock --ignore-scripts
           npm run backend-v2:typecheck
           npm run backend-v2:build
-          node --test apps/backend-v2/test/account-read-side-effects.test.mjs apps/backend-v2/test/identity-auth-service.test.mjs apps/backend-v2/test/test-local-auth-sessions.test.mjs
+          node --test apps/backend-v2/test/account-read-side-effects.test.mjs apps/backend-v2/test/identity-auth-service.test.mjs apps/backend-v2/test/membership-eligibility-exact-ids.test.mjs apps/backend-v2/test/test-local-auth-sessions.test.mjs
           grep -Fq 'BackendV2AccountReadProxyApplication' apps/api/index.php
           grep -Fq 'BackendV2AccountMutationProxyApplication' apps/api/index.php
           grep -Fq "'account_read_routing_mode' => 'php'" apps/api/config.example.php
