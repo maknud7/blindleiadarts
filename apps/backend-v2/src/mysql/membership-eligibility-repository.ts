@@ -20,7 +20,7 @@ export class MySqlMembershipEligibilityRepository {
     const clubId = decimalId(player.club_id);
     const memberId = decimalId(player.member_id);
     if (memberId === null) {
-      return { ...unavailable("member_not_linked"), club_id: safeNumber(clubId), player_id: safeNumber(playerId) };
+      return { ...unavailable("member_not_linked"), club_id: clubId, player_id: playerId };
     }
     return this.forMember(memberId, clubId, playerId);
   }
@@ -86,7 +86,7 @@ export class MySqlMembershipEligibilityRepository {
     });
 
     if (snapshot === null) {
-      return { ...unavailable("member_not_found"), club_id: safeNumber(clubId), player_id: safeNumber(playerId), member_id: safeNumber(memberId) };
+      return { ...unavailable("member_not_found"), club_id: clubId, player_id: playerId, member_id: memberId };
     }
     return evaluateMember(snapshot.member, snapshot.payments, snapshot.stripe, snapshot.blockAfter, clubId, playerId);
   }
@@ -111,7 +111,7 @@ export class MySqlMembershipEligibilityRepository {
         );
       }
     });
-    return { tournament_id: safeNumber(tournamentId), player_id: safeNumber(playerId), status: "registered" };
+    return { tournament_id: tournamentId, player_id: playerId, status: "registered" };
   }
 }
 
@@ -142,9 +142,9 @@ function evaluateMember(
   const override = String(member.betalingsstatus_override ?? "automatisk").trim().toLowerCase() || "automatisk";
 
   const base: Record<string, unknown> = {
-    player_id: safeNumber(playerId),
-    club_id: safeNumber(clubId),
-    member_id: safeNumber(memberId),
+    player_id: playerId,
+    club_id: clubId,
+    member_id: memberId,
     member_number: safeNumber(memberNumber),
     member_name: String(member.navn ?? ""),
     member_active: true,
