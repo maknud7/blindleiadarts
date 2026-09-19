@@ -10,6 +10,7 @@ on:
       - 'apps/backend-v2/src/mysql/account-profile-repository.ts'
       - 'apps/backend-v2/src/mysql/identity-auth-repository.ts'
       - 'apps/backend-v2/src/mysql/membership-eligibility-repository.ts'
+      - 'apps/backend-v2/test/membership-eligibility-exact-ids.test.mjs'
       - 'apps/api/src/BackendV2AccountReadProxyApplication.php'
       - 'apps/api/tests/backend_v2_account_read_proxy_routing_test.php'
       - 'infra/deploy/generate_api_config.php'
@@ -47,7 +48,7 @@ jobs:
           set -Eeuo pipefail
           npm run backend-v2:typecheck
           npm run backend-v2:build
-          node --test apps/backend-v2/test/account-read-side-effects.test.mjs
+          node --test apps/backend-v2/test/account-read-side-effects.test.mjs apps/backend-v2/test/membership-eligibility-exact-ids.test.mjs
           php -l apps/api/src/BackendV2AccountReadProxyApplication.php
           php apps/api/tests/backend_v2_account_read_proxy_routing_test.php
 
