@@ -150,6 +150,10 @@ test("TEST profile update mutates only the local player actor", async () => {
   const profile = await repository.updateProfile(activeUser(), "New Name", "Nick");
 
   assert.equal(profile.display_name, "New Name");
+  assert.equal(profile.user_id, "42");
+  assert.equal(profile.player_id, "77");
+  assert.equal(profile.club_id, "1");
+  assert.equal(profile.member_id, "9");
   assert.equal(executes.length, 1);
   assert.match(executes[0].sql, /UPDATE `bd_test_players`/);
   assert.doesNotMatch(executes[0].sql, /bd_prod_/);
