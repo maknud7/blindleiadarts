@@ -28,7 +28,7 @@ class FakeRepository {
   }
 }
 
-function user(passwordHash) {
+function user(passwordHash, overrides = {}) {
   return {
     id: "7",
     email: "player@example.com",
@@ -44,6 +44,7 @@ function user(passwordHash) {
     member_id: "42",
     admin_club_ids: "2",
     global_roles: null,
+    ...overrides,
   };
 }
 
@@ -67,7 +68,9 @@ test("login accepts existing PHP bcrypt identity and creates the same bearer-ses
   assert.equal(result.user.email, "player@example.com");
   assert.equal(result.user.username, "player@example.com");
   assert.equal(result.user.role, "club_admin");
-  assert.equal(result.user.player.id, 11);
+  assert.equal(result.user.id, "7");
+  assert.equal(result.user.player.id, "11");
+  assert.equal(result.user.player.club_id, "2");
 });
 
 test("invalid password never creates a session", async () => {
@@ -88,5 +91,20 @@ test("me reuses existing bearer sessions and preserves 180-day touch intent", as
   const service = new IdentityAuthService(repository);
   const result = await service.me("existing-session", true);
   assert.deepEqual(repository.lastSession, { token: "existing-session", touch: true });
-  assert.equal(result.user.id, 7);
+  assert.equal(result.user.id, "7");
+});
+
+test("auth payload preserves decimal BIGINT ids beyond JavaScript safe integer range", async () => {
+  const repository = new FakeRepository(null);
+  repository.sessionUser = user(null, {
+    id: "9007199254740993",
+    player_id: "9007199254740995",
+    player_club_id: "9007199254740997",
+  });
+  const service = new IdentityAuthService(repository);
+  const result = await service.me("bigint-session", false);
+
+  assert.equal(result.user.id, "9007199254740993");
+  assert.equal(result.user.player.id, "9007199254740995");
+  assert.equal(result.user.player.club_id, "9007199254740997");
 });
