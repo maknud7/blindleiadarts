@@ -80,7 +80,14 @@
     pointer-events:none;
     transition:opacity .22s ease;
   }
-  body.unified-mobile-drawer-open .unified-mobile-drawer-overlay{
+  /* Never allow a stale/hidden drawer overlay to become a full-page click target.
+     Author CSS can otherwise override the browser's default [hidden] rule. */
+  .unified-mobile-drawer-overlay[hidden]{
+    display:none!important;
+    opacity:0!important;
+    pointer-events:none!important;
+  }
+  body.unified-mobile-drawer-open .unified-mobile-drawer-overlay:not([hidden]){
     opacity:1;
     pointer-events:auto;
   }
