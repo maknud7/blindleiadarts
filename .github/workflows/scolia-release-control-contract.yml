@@ -10,6 +10,8 @@ on:
       - 'apps/admin/scolia-release-control.js'
       - 'apps/admin/test-hardware-readonly.js'
       - 'apps/admin/index.html'
+      - 'apps/admin/pairing-claim.js'
+      - 'apps/admin/admin-section-loader.js'
       - 'infra/tests/scolia_release_control_contract_test.mjs'
       - '.github/workflows/scolia-release-control-contract.yml'
   push:
@@ -21,6 +23,8 @@ on:
       - 'apps/admin/scolia-release-control.js'
       - 'apps/admin/test-hardware-readonly.js'
       - 'apps/admin/index.html'
+      - 'apps/admin/pairing-claim.js'
+      - 'apps/admin/admin-section-loader.js'
       - 'infra/tests/scolia_release_control_contract_test.mjs'
       - '.github/workflows/scolia-release-control-contract.yml'
 
