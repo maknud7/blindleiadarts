@@ -106,6 +106,23 @@ jobs:
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
           grep -Fq './tournament-leader-v2.js' apps/admin/tournament-loader.js
           grep -Fq 'data-leader-step=' apps/admin/tournament-leader-v2.js
+          grep -Fq 'admin-section-loader.js' apps/admin/index.html
+          for eager in member-onboarding-admin.js scolia-admin.js payment-settings.js activity-admin.js player-identity-admin.js; do
+            if grep -Fq "<script src=\"./$eager" apps/admin/index.html; then
+              echo "Admin feature $eager must be lazy-loaded by section."
+              exit 1
+            fi
+          done
+          for unrelated in member-onboarding-admin.js tournament-admin.js season-admin.js activity-admin.js; do
+            if grep -Fq "$unrelated" apps/admin/pairing-claim.js; then
+              echo "Equipment bundle must not import unrelated admin module $unrelated."
+              exit 1
+            fi
+          done
+          if grep -Fq 'observer.observe(document.documentElement, { childList: true, subtree: true })' packages/ui-assets/portal-menu.js; then
+            echo 'Portal navigation must not observe the full document subtree.'
+            exit 1
+          fi
 
       - name: Public live and first-party activity check
         run: |
