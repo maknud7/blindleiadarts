@@ -5,7 +5,6 @@ const deferredLoaded = new Set();
 const sectionStyles = Object.freeze({
   statistics: [
     "./statistics-desktop-match-cards.css",
-    "./elo-tournament-history.css",
   ],
   profile: [
     "./profile-v2.css",
@@ -109,9 +108,9 @@ function scheduleDeferred(key, paths) {
   };
 
   if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 700 });
+    window.requestIdleCallback(run, { timeout: 1000 });
   } else {
-    window.setTimeout(run, 120);
+    window.setTimeout(run, 250);
   }
 }
 
