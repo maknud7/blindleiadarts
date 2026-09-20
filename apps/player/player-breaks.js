@@ -241,8 +241,14 @@ async function requestBreak(event) {
   }
 }
 
+function breakViewActive() {
+  const active = document.body.dataset.portalActive || "home";
+  return active === "home" || active === "tournaments";
+}
+
 async function refresh() {
   if (refreshBusy && !context) return;
+  if (!breakViewActive()) return;
   if (!token()) {
     context = null;
     lastError = "";
@@ -288,11 +294,16 @@ const observer = new MutationObserver(() => {
   .forEach((node) => observer.observe(node, { childList: true, subtree: true }));
 
 window.addEventListener("storage", (event) => {
-  if (event.key === TOKEN_KEY) refresh().catch(() => undefined);
+  if (event.key === TOKEN_KEY && breakViewActive()) refresh().catch(() => undefined);
+});
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "home" || event.detail?.target === "tournaments") refresh().catch(() => undefined);
 });
 
 ensureStyles();
 render();
 refresh().catch(() => undefined);
 startTicker();
-setInterval(() => refresh().catch(() => undefined), 5000);
+setInterval(() => {
+  if (!document.hidden && breakViewActive()) refresh().catch(() => undefined);
+}, 5000);
