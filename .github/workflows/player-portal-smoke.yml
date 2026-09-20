@@ -59,8 +59,17 @@ jobs:
           grep -Fq 'Enkeltbetaling med Vipps' <<<"$member_account_js"
 
           admin_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/?cb=$RANDOM")"
-          grep -Eq 'payment-settings\.js(\?v=[^"[:space:]]+)?' <<<"$admin_html"
+          grep -Eq 'admin-section-loader\.js(\?v=[^"[:space:]]+)?' <<<"$admin_html"
           grep -Eq 'payment-settings\.css(\?v=[^"[:space:]]+)?' <<<"$admin_html"
+          if grep -Eq '<script[^>]+src="\./payment-settings\.js' <<<"$admin_html"; then
+            echo "Payment settings must stay lazy-loaded from the admin section loader." >&2
+            exit 1
+          fi
+
+          admin_section_loader_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/admin-section-loader.js?cb=$RANDOM")"
+          grep -Fq './payment-settings.js' <<<"$admin_section_loader_js"
+          grep -Fq './pairing-claim.js' <<<"$admin_section_loader_js"
+          grep -Fq './member-onboarding-admin.js' <<<"$admin_section_loader_js"
 
           payment_settings_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/admin/payment-settings.js?cb=$RANDOM")"
           grep -Fq '/payment-settings' <<<"$payment_settings_js"
