@@ -1,4 +1,4 @@
-const sharedApp = window.BlindleiaApp || (await import(new URL("../packages/ui-assets/app-core.js?v=20260920-player-perf-01", import.meta.url).href)).default;
+const sharedApp = window.BlindleiaApp || (await import(new URL("../packages/ui-assets/app-core.js?v=20260920-player-perf-02", import.meta.url).href)).default;
 const API_ROOT = "../api/v1";
 
 const state = {
