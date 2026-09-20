@@ -105,7 +105,9 @@ function syncNowBreakAction() {
 
 const observer = new MutationObserver(() => window.requestAnimationFrame(syncNowBreakAction));
 if (breakCard) observer.observe(breakCard, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["disabled"] });
-observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-player-situation"] });
+const nowCard = document.getElementById("playerNowCard");
+if (nowCard) observer.observe(nowCard, { childList: true, subtree: true });
+observer.observe(document.body, { attributes: true, attributeFilter: ["data-player-situation"] });
 
 window.addEventListener("bd:player-state-changed", syncNowBreakAction);
 window.addEventListener("storage", (event) => {
