@@ -6,6 +6,7 @@ const router = readFileSync("apps/backend-v2/src/runtime/equipment-admin-router.
 const ui = readFileSync("apps/admin/scolia-release-control.js", "utf8");
 const readonly = readFileSync("apps/admin/test-hardware-readonly.js", "utf8");
 const admin = readFileSync("apps/admin/index.html", "utf8");
+const equipmentBundle = readFileSync("apps/admin/pairing-claim.js", "utf8");
 
 assert.match(repository, /payload\.bridge_attached !== undefined/);
 assert.match(repository, /SET mode=\?,updated_by_user_id=\?/);
@@ -48,6 +49,7 @@ assert.match(readonly, /function lockBoardEditor\(\)/);
 assert.match(readonly, /#boardScoliaActions button/);
 assert.doesNotMatch(readonly, /test-hardware-readonly \.board-edit-button/);
 assert.doesNotMatch(readonly, /#newBoardButton, \.board-edit-button/);
-assert.match(admin, /scolia-release-control\.js\?v=/);
+assert.match(admin, /admin-section-loader\.js\?v=/);
+assert.match(equipmentBundle, /scolia-release-control\.js\?v=/);
 
 console.log("Scolia release control contract: backend-v2 OK");
