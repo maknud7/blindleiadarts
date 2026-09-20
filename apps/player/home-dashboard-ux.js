@@ -283,13 +283,12 @@ function bindEloChartInteractions(root = rankingList) {
 
 async function loadModel() {
   if (!token()) return null;
-  const clubId = await resolveClubId();
-  const [meData, dashboardData] = await Promise.all([
-    api("/auth/me", { auth: true }),
-    api("/me/dashboard", { auth: true }),
-  ]);
-  const me = meData.user || null;
-  const dashboard = dashboardData.dashboard || {};
+  const runtime = window.BlindleiaPlayerRuntime;
+  if (runtime?.ready) await runtime.ready.catch(() => undefined);
+  const snapshot = runtime?.snapshot?.() || {};
+  const clubId = number(snapshot.selectedClubId) || await resolveClubId();
+  const me = snapshot.me || null;
+  const dashboard = snapshot.dashboard || {};
   const playerId = number(me?.player?.id);
   if (!playerId) return { clubId, me, dashboard, profile: null, season: null, seasonRow: null, totalPlayers: 0, tournamentElo: [] };
 
@@ -535,7 +534,12 @@ function initialize() {
     if (!["bd:token", "bd:playerClubId"].includes(event.key)) return;
     modelCache = null;
     lastPlayerId = 0;
-    refresh().catch(() => undefined);
+    if ((document.body.dataset.portalActive || "home") === "home") refresh().catch(() => undefined);
+  });
+  window.addEventListener("bd:player-data", () => {
+    modelCache = null;
+    lastPlayerId = 0;
+    if ((document.body.dataset.portalActive || "home") === "home") scheduleRefresh(20);
   });
   refresh().catch(() => undefined);
 }
