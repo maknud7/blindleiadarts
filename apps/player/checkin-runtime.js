@@ -327,7 +327,11 @@ document.addEventListener("click", (event) => {
 }, true);
 
 const gateObserver = new MutationObserver(scheduleMutationRefresh);
-gateObserver.observe(document.body, { childList: true, subtree: true });
+[
+  document.getElementById("registrationList"),
+  document.getElementById("tournamentList"),
+  document.getElementById("playerNowCard"),
+].filter(Boolean).forEach((node) => gateObserver.observe(node, { childList: true, subtree: true }));
 window.addEventListener("bd:player-state-changed", () => {
   homeResolution = { key: "", tournamentId: 0, at: 0 };
   refreshCheckinGates(true);
