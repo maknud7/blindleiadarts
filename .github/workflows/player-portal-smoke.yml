@@ -48,11 +48,24 @@ jobs:
           base="${BASE_URL%/}"
 
           player_html="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/?cb=$RANDOM")"
-          grep -Eq 'member-account\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
-          grep -Eq 'portal-content\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
-          grep -Eq 'elo-history-exact\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
-          grep -Eq 'tournament-elo-summary\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
-          grep -Eq 'elo-tournament-history\.css(\?v=[^"[:space:]]+)?' <<<"$player_html"
+          grep -Eq 'player-section-loader\.js(\?v=[^"[:space:]]+)?' <<<"$player_html"
+          for eager in member-account.js portal-content.js elo-history-exact.js tournament-elo-summary.js tournament-hub.js player-breaks.js; do
+            if grep -Eq "<script[^>]+src=\"\\./$eager" <<<"$player_html"; then
+              echo "Player feature $eager must be lazy-loaded by active section." >&2
+              exit 1
+            fi
+          done
+          if grep -Eq 'elo-tournament-history\.css(\?v=[^"[:space:]]+)?' <<<"$player_html"; then
+            echo "Statistics ELO CSS must not block the initial player page." >&2
+            exit 1
+          fi
+
+          player_loader_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/player-section-loader.js?cb=$RANDOM")"
+          grep -Fq './member-account.js' <<<"$player_loader_js"
+          grep -Fq './portal-content.js' <<<"$player_loader_js"
+          grep -Fq './tournament-hub.js' <<<"$player_loader_js"
+          grep -Fq './home-dashboard-ux.js' <<<"$player_loader_js"
+          grep -Fq './elo-tournament-history.css' <<<"$player_loader_js"
 
           member_account_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/member-account.js?cb=$RANDOM")"
           grep -Fq 'Start fast betaling via Stripe' <<<"$member_account_js"
