@@ -50,7 +50,7 @@ ensureStylesheet("./mobile-app-nav.css?v=20260920-admin-perf-01");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
-  import(new URL("./admin-shell-v2.js?v=20260827-1238", import.meta.url).href)
+  import(new URL("./admin-shell-v2.js?v=20260920-admin-perf-01", import.meta.url).href)
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
