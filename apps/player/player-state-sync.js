@@ -32,6 +32,11 @@ function notify(reason) {
 
 async function loadClubSlugMap() {
   if (clubSlugMap) return clubSlugMap;
+  const runtimeItems = window.BlindleiaPlayerRuntime?.snapshot?.()?.clubs || [];
+  if (runtimeItems.some((club) => String(club.slug || "").trim())) {
+    clubSlugMap = new Map(runtimeItems.map((club) => [Number(club.id), String(club.slug || "").trim()]).filter(([, slug]) => slug));
+    return clubSlugMap;
+  }
   const response = await fetch("../api/v1/clubs", { cache: "no-store" });
   const payload = await response.json().catch(() => null);
   const items = response.ok && payload?.ok ? payload?.data?.items || [] : [];
@@ -70,8 +75,16 @@ if (watched.length) {
 }
 
 const liveLinkObserver = new MutationObserver(() => scheduleLiveLinkSync());
-liveLinkObserver.observe(document.body, { childList: true, subtree: true });
+[
+  document.getElementById("playerNowCard"),
+  document.getElementById("activeTournamentHub"),
+].filter(Boolean).forEach((node) => liveLinkObserver.observe(node, { childList: true, subtree: true }));
 window.addEventListener("bd:player-state-changed", scheduleLiveLinkSync);
+window.addEventListener("bd:player-data", () => {
+  clubSlugMap = null;
+  scheduleLiveLinkSync();
+});
+window.addEventListener("bd:portal-view", scheduleLiveLinkSync);
 
 document.getElementById("clubSelect")?.addEventListener("change", () => {
   lastSignature = "";
