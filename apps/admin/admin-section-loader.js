@@ -1,17 +1,38 @@
 const loaded = new Map();
 
 const sectionModules = Object.freeze({
-  players: "./member-onboarding-admin.js?v=20260904-lazy-admin-01",
-  integrations: "./payment-settings.js?v=20260904-lazy-admin-01",
-  kiosks: "./scolia-admin.js?v=20260904-lazy-admin-01",
+  overview: [
+    "./club-live-admin.js?v=20260920-admin-perf-01",
+  ],
+  players: [
+    "./member-onboarding-admin.js?v=20260920-admin-perf-01",
+  ],
+  playerbase: [
+    "./player-identity-admin.js?v=20260920-admin-perf-01",
+    "./player-member-link-admin.js?v=20260920-admin-perf-01",
+  ],
+  integrations: [
+    "./payment-settings.js?v=20260920-admin-perf-01",
+  ],
+  kiosks: [
+    "./pairing-claim.js?v=20260920-admin-perf-01",
+  ],
+  superadmin: [
+    "./health-tracker.js?v=20260920-admin-perf-01",
+    "./activity-admin.js?v=20260920-admin-perf-01",
+    "./superadmin-identity-audit.js?v=20260920-admin-perf-01",
+  ],
 });
 
 const canonicalToLocal = Object.freeze({
   club: "overview",
   "tournament-admin": "tournaments",
+  seasons: "seasons",
+  playerbase: "playerbase",
   members: "players",
   equipment: "kiosks",
   settings: "integrations",
+  superadmin: "superadmin",
 });
 
 function normalizeTarget(value) {
@@ -26,11 +47,11 @@ function currentTarget() {
 
 async function loadSection(target) {
   const key = normalizeTarget(target);
-  const path = sectionModules[key];
-  if (!path) return;
+  const paths = sectionModules[key];
+  if (!paths?.length) return;
 
   if (!loaded.has(key)) {
-    loaded.set(key, import(new URL(path, import.meta.url).href).catch((error) => {
+    loaded.set(key, Promise.all(paths.map((path) => import(new URL(path, import.meta.url).href))).catch((error) => {
       loaded.delete(key);
       console.warn(`Adminseksjonen ${key} kunne ikke lastes`, error);
       throw error;
@@ -39,13 +60,11 @@ async function loadSection(target) {
 
   try {
     await loaded.get(key);
-    // Scolia predates the canonical #admin/equipment route and only polls the
-    // old short hashes. Trigger its own refresh button whenever Utstyr opens.
     if (key === "kiosks") {
       window.setTimeout(() => document.getElementById("scoliaRefresh")?.click(), 0);
     }
   } catch {
-    // The section module owns its visible error handling after a retry.
+    // Section modules own their visible error handling after a retry.
   }
 }
 
