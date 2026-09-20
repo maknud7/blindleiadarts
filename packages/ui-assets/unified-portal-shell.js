@@ -517,13 +517,8 @@ function initialize() {
   ensureMobileNavigation();
   syncMenu();
   resolveRole().catch(() => undefined);
-  if (surface === "admin") {
-    window.setTimeout(syncMenu, 250);
-    window.setTimeout(syncMenu, 900);
-    window.setTimeout(syncMenu, 1800);
-  } else {
+  if (surface !== "admin") {
     window.setTimeout(syncSingleClubChooser, 250);
-    window.setTimeout(syncSingleClubChooser, 900);
   }
 }
 
