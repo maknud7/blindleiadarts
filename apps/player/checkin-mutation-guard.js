@@ -34,6 +34,7 @@
     initialReady = true;
     window.clearTimeout(settleTimer);
     window.clearTimeout(safetyTimer);
+    initialObserver?.disconnect();
     document.body.classList.add("bd-player-now-ready");
   }
 
