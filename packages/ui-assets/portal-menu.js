@@ -9,7 +9,10 @@ const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=202608
 
 function ensureStylesheet(url) {
   const href = new URL(url, import.meta.url).href;
-  if ([...document.styleSheets].some((sheet) => sheet.href === href)) return;
+  const targetPath = new URL(href).pathname;
+  if ([...document.querySelectorAll('link[rel="stylesheet"]')].some((link) => {
+    try { return new URL(link.href, window.location.href).pathname === targetPath; } catch { return false; }
+  })) return;
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = href;
@@ -42,8 +45,8 @@ ensureFavicon();
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260919-admin-overlay-lock-01");
-ensureStylesheet("./mobile-app-nav.css?v=20260919-admin-overlay-lock-01");
+ensureStylesheet("./unified-portal-shell.css?v=20260920-admin-perf-01");
+ensureStylesheet("./mobile-app-nav.css?v=20260920-admin-perf-01");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
@@ -51,7 +54,7 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260919-admin-overlay-lock-01", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260920-admin-perf-01", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
