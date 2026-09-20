@@ -49,8 +49,6 @@ if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
   import(new URL("./admin-shell-v2.js?v=20260827-1238", import.meta.url).href)
     .catch((error) => console.warn("Admin shell unavailable", error));
-  import(new URL("../../admin/player-member-link-admin.js?v=20260903-01", import.meta.url).href)
-    .catch((error) => console.warn("Player/member link admin unavailable", error));
 }
 
 import(new URL("./unified-portal-shell.js?v=20260919-admin-overlay-lock-01", import.meta.url).href)
@@ -243,18 +241,25 @@ window.addEventListener("hashchange", () => {
 });
 window.addEventListener("storage", () => syncRoleAccess().catch(() => undefined));
 window.addEventListener("bd:session", () => syncRoleAccess().catch(() => undefined));
-window.setInterval(() => syncRoleAccess().catch(() => undefined), 5000);
 
 let refreshQueued = false;
-const observer = new MutationObserver(() => {
+function scheduleRefresh() {
   if (refreshQueued) return;
   refreshQueued = true;
   window.requestAnimationFrame(() => {
     refreshQueued = false;
     refresh();
   });
-});
-observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+// Only structural navigation changes need a menu refresh. Observing the entire
+// document subtree meant every list render, table update and status message in
+// admin scheduled another navigation pass.
+const structuralObserver = new MutationObserver(scheduleRefresh);
+const portalMenu = document.querySelector(".portal-menu");
+const portalMain = document.querySelector("main");
+if (portalMenu) structuralObserver.observe(portalMenu, { childList: true });
+if (portalMain) structuralObserver.observe(portalMain, { childList: true });
 
 const drawerStateObserver = new MutationObserver(() => {
   if (!document.body.classList.contains("unified-mobile-drawer-open")) return;
