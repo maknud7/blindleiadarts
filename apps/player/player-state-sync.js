@@ -75,16 +75,29 @@ if (watched.length) {
 }
 
 const liveLinkObserver = new MutationObserver(() => scheduleLiveLinkSync());
-[
-  document.getElementById("playerNowCard"),
-  document.getElementById("activeTournamentHub"),
-].filter(Boolean).forEach((node) => liveLinkObserver.observe(node, { childList: true, subtree: true }));
+const observedLiveLinkTargets = new WeakSet();
+function observeLiveLinkTargets() {
+  [
+    document.getElementById("playerNowCard"),
+    document.getElementById("activeTournamentHub"),
+  ].filter(Boolean).forEach((node) => {
+    if (observedLiveLinkTargets.has(node)) return;
+    observedLiveLinkTargets.add(node);
+    liveLinkObserver.observe(node, { childList: true, subtree: true });
+  });
+}
+observeLiveLinkTargets();
 window.addEventListener("bd:player-state-changed", scheduleLiveLinkSync);
 window.addEventListener("bd:player-data", () => {
   clubSlugMap = null;
   scheduleLiveLinkSync();
 });
-window.addEventListener("bd:portal-view", scheduleLiveLinkSync);
+window.addEventListener("bd:portal-view", () => {
+  window.setTimeout(observeLiveLinkTargets, 0);
+  scheduleLiveLinkSync();
+});
+window.addEventListener("bd:player-section-ready", () => window.setTimeout(observeLiveLinkTargets, 0));
+window.addEventListener("bd:player-section-deferred-ready", () => window.setTimeout(observeLiveLinkTargets, 0));
 
 document.getElementById("clubSelect")?.addEventListener("change", () => {
   lastSignature = "";
