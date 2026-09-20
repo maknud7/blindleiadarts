@@ -11,6 +11,10 @@ let homeResolution = { key: "", tournamentId: 0, at: 0 };
 function token() { return localStorage.getItem("bd:token") || ""; }
 function clubId() { return Number(localStorage.getItem("bd:playerClubId") || document.getElementById("clubSelect")?.value || 0); }
 function statusArea() { return document.getElementById("statusArea"); }
+function checkinViewActive() {
+  const active = document.body.dataset.portalActive || "home";
+  return active === "home" || active === "tournaments";
+}
 
 function parseDate(value) {
   if (!value) return null;
@@ -217,6 +221,10 @@ function scheduleGateRefresh(delay = CHECKIN_REFRESH_MS) {
 }
 
 async function refreshCheckinGates(force = false) {
+  if (!checkinViewActive()) {
+    window.clearTimeout(gateRefreshTimer);
+    return;
+  }
   if (gateBusy || !token()) {
     scheduleGateRefresh();
     return;
@@ -343,7 +351,14 @@ window.addEventListener("storage", (event) => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshCheckinGates(true);
+  if (!document.hidden && checkinViewActive()) refreshCheckinGates(true);
+});
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "home" || event.detail?.target === "tournaments") {
+    refreshCheckinGates(true);
+  } else {
+    window.clearTimeout(gateRefreshTimer);
+  }
 });
 
 window.BlindleiaCheckinWindow = Object.freeze({
