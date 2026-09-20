@@ -65,7 +65,8 @@ jobs:
           grep -Fq './portal-content.js' <<<"$player_loader_js"
           grep -Fq './tournament-hub.js' <<<"$player_loader_js"
           grep -Fq './home-dashboard-ux.js' <<<"$player_loader_js"
-          grep -Fq './elo-tournament-history.css' <<<"$player_loader_js"
+          elo_history_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/elo-history-exact.js?cb=$RANDOM")"
+          grep -Fq './elo-tournament-history.css' <<<"$elo_history_js"
 
           member_account_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/member-account.js?cb=$RANDOM")"
           grep -Fq 'Start fast betaling via Stripe' <<<"$member_account_js"
