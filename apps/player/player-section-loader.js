@@ -33,6 +33,8 @@ const sectionModules = Object.freeze({
       "./tournament-registration-ux.js",
     ],
     deferred: [
+      "./player-breaks.js",
+      "./player-tournament-summaries.js",
       "./player-tournament-enhancements.js",
       "./player-state-sync.js",
     ],
