@@ -109,14 +109,23 @@ function api(path, options = {}) {
 async function loadMe() {
   if (!state.token) return false;
   try {
-    const data = await api("/auth/me", { auth: true });
-    state.me = data.user;
+    const sharedSession = window.BlindleiaApp?.session;
+    const snapshot = sharedSession?.snapshot?.();
+    if (snapshot?.resolved && snapshot.token === state.token && snapshot.user) {
+      state.me = snapshot.user;
+    } else if (sharedSession?.resolve) {
+      state.me = await sharedSession.resolve();
+    } else {
+      const data = await api("/auth/me", { auth: true });
+      state.me = data.user;
+    }
     if (!["club_admin", "super_admin"].includes(state.me?.role || "")) {
       throw new Error("Denne kontoen har ikke administratortilgang.");
     }
     return true;
   } catch (error) {
     persistToken("");
+    window.BlindleiaApp?.session?.clear?.();
     state.me = null;
     showMessage(el.loginMessage, error.message, "error");
     return false;
@@ -381,6 +390,7 @@ el.loginForm.addEventListener("submit", async (event) => {
     const data = await api("/auth/login", { method: "POST", body: { username: el.loginUsername.value.trim(), password: el.loginPassword.value } });
     persistToken(data.access_token);
     state.me = data.user;
+    window.BlindleiaApp?.session?.prime?.(state.me);
     if (!["club_admin", "super_admin"].includes(state.me?.role || "")) throw new Error("Denne kontoen har ikke administratortilgang.");
     await loadClubs();
     showAdmin();
@@ -395,6 +405,7 @@ el.loginForm.addEventListener("submit", async (event) => {
 
 el.logoutButton.addEventListener("click", () => {
   persistToken("");
+  window.BlindleiaApp?.session?.clear?.();
   state.me = null;
   state.data = { club: null, players: [], tournaments: [], screens: [] };
   showLogin();
