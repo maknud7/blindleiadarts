@@ -2,6 +2,17 @@ const VERSION = "20260920-player-perf-02";
 const loaded = new Map();
 const deferredLoaded = new Set();
 
+const sectionStyles = Object.freeze({
+  statistics: [
+    "./statistics-desktop-match-cards.css",
+    "./elo-tournament-history.css",
+  ],
+  profile: [
+    "./profile-v2.css",
+    "./account-pwa.css",
+  ],
+});
+
 const sectionModules = Object.freeze({
   home: {
     critical: [
@@ -63,6 +74,17 @@ function moduleUrl(path) {
   return url.href;
 }
 
+function ensureStyles(key) {
+  for (const path of sectionStyles[key] || []) {
+    const href = moduleUrl(path);
+    if ([...document.querySelectorAll('link[rel="stylesheet"]')].some((link) => link.href === href)) continue;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+}
+
 async function importSequence(paths) {
   for (const path of paths || []) {
     await import(moduleUrl(path));
@@ -97,6 +119,7 @@ async function loadSection(target) {
   const key = normalizeTarget(target);
   const config = sectionModules[key];
   if (!config) return;
+  ensureStyles(key);
 
   if (!loaded.has(key)) {
     loaded.set(key, importSequence(config.critical).then(() => {
