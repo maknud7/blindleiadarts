@@ -412,9 +412,24 @@ async function load(force = false) {
   }
 }
 
-refreshButton?.addEventListener("click", () => window.setTimeout(() => load(true), 50));
+function profileActive() {
+  return document.body.dataset.portalActive === "profile" || window.location.hash === "#profile";
+}
+
+refreshButton?.addEventListener("click", () => {
+  if (profileActive()) window.setTimeout(() => load(true), 50);
+});
 loginForm?.addEventListener("submit", () => window.setTimeout(() => load(true), 700));
-window.addEventListener("storage", () => load(true));
-window.addEventListener("bd:player-state-changed", () => load(true));
-window.setInterval(() => load(false), 60000);
+window.addEventListener("storage", () => {
+  if (profileActive()) load(true);
+});
+window.addEventListener("bd:player-state-changed", () => {
+  if (profileActive()) load(true);
+});
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "profile") load(true);
+});
+window.setInterval(() => {
+  if (!document.hidden && profileActive()) load(false);
+}, 60000);
 load(true);
