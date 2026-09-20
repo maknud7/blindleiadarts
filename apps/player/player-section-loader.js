@@ -1,36 +1,50 @@
-const VERSION = "20260920-player-perf-01";
+const VERSION = "20260920-player-perf-02";
 const loaded = new Map();
+const deferredLoaded = new Set();
 
 const sectionModules = Object.freeze({
-  home: [
-    "./checkin-mutation-guard.js",
-    "./player-ux.js",
-    "./checkin-runtime.js",
-    "./player-breaks.js",
-    "./player-break-now.js",
-    "./home-dashboard-ux.js",
-    "./player-state-sync.js",
-  ],
-  tournaments: [
-    "./checkin-mutation-guard.js",
-    "./checkin-runtime.js",
-    "./tournament-hub.js",
-    "./tournament-registration-ux.js",
-    "./player-tournament-enhancements.js",
-    "./player-state-sync.js",
-  ],
-  statistics: [
-    "./portal-content.js",
-    "./match-detail-ux.js",
-    "./portal-playoffs.js",
-    "./statistics-ux.js",
-    "./tournament-elo-summary.js",
-    "./elo-history-exact.js",
-  ],
-  profile: [
-    "./member-account.js",
-    "./account-onboarding-ux.js",
-  ],
+  home: {
+    critical: [
+      "./checkin-mutation-guard.js",
+      "./player-ux.js",
+      "./checkin-runtime.js",
+    ],
+    deferred: [
+      "./player-breaks.js",
+      "./player-break-now.js",
+      "./home-dashboard-ux.js",
+      "./player-state-sync.js",
+    ],
+  },
+  tournaments: {
+    critical: [
+      "./checkin-runtime.js",
+      "./tournament-hub.js",
+      "./tournament-registration-ux.js",
+    ],
+    deferred: [
+      "./player-tournament-enhancements.js",
+      "./player-state-sync.js",
+    ],
+  },
+  statistics: {
+    critical: [
+      "./portal-content.js",
+      "./match-detail-ux.js",
+      "./portal-playoffs.js",
+      "./statistics-ux.js",
+      "./tournament-elo-summary.js",
+      "./elo-history-exact.js",
+    ],
+    deferred: [],
+  },
+  profile: {
+    critical: [
+      "./member-account.js",
+      "./account-onboarding-ux.js",
+    ],
+    deferred: [],
+  },
 });
 
 function normalizeTarget(value) {
@@ -49,22 +63,52 @@ function moduleUrl(path) {
   return url.href;
 }
 
+async function importSequence(paths) {
+  for (const path of paths || []) {
+    await import(moduleUrl(path));
+  }
+}
+
+function scheduleDeferred(key, paths) {
+  if (!paths?.length || deferredLoaded.has(key)) return;
+  deferredLoaded.add(key);
+
+  const run = () => {
+    if (currentTarget() !== key) {
+      deferredLoaded.delete(key);
+      return;
+    }
+    importSequence(paths)
+      .then(() => window.dispatchEvent(new CustomEvent("bd:player-section-deferred-ready", { detail: { target: key } })))
+      .catch((error) => {
+        deferredLoaded.delete(key);
+        console.warn(`Sekundære spillerfunksjoner for ${key} kunne ikke lastes`, error);
+      });
+  };
+
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 700 });
+  } else {
+    window.setTimeout(run, 120);
+  }
+}
+
 async function loadSection(target) {
   const key = normalizeTarget(target);
-  const modules = sectionModules[key];
-  if (!modules?.length) return;
+  const config = sectionModules[key];
+  if (!config) return;
 
   if (!loaded.has(key)) {
-    loaded.set(key, (async () => {
-      for (const path of modules) {
-        await import(moduleUrl(path));
-      }
+    loaded.set(key, importSequence(config.critical).then(() => {
       window.dispatchEvent(new CustomEvent("bd:player-section-ready", { detail: { target: key } }));
-    })().catch((error) => {
+      scheduleDeferred(key, config.deferred);
+    }).catch((error) => {
       loaded.delete(key);
       console.warn(`Spillerseksjonen ${key} kunne ikke lastes`, error);
       throw error;
     }));
+  } else {
+    scheduleDeferred(key, config.deferred);
   }
 
   return loaded.get(key);
