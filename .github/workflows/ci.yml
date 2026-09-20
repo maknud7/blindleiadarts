@@ -103,6 +103,22 @@ jobs:
           grep -Fq '>Min profil</a>' apps/player/index.html
           grep -Fq '>Statistikk</a>' apps/player/index.html
           grep -Fq 'data-tournament-view="matches"' apps/player/index.html
+          grep -Fq 'player-section-loader.js' apps/player/index.html
+          for eager in member-account.js portal-content.js tournament-hub.js player-breaks.js statistics-ux.js elo-history-exact.js; do
+            if grep -Fq "<script src=\"./$eager" apps/player/index.html; then
+              echo "Player feature $eager must be lazy-loaded by active section."
+              exit 1
+            fi
+          done
+          for unrelated in tournament-discovery-ux.js tournament-groups-detail.js tournament-inline-admin.js; do
+            if grep -Fq "$unrelated" apps/player/player-mobile-consolidation.js; then
+              echo "Global player shell must not import tournament module $unrelated."
+              exit 1
+            fi
+          done
+          grep -Fq './tournament-hub.js' apps/player/player-section-loader.js
+          grep -Fq './member-account.js' apps/player/player-section-loader.js
+          grep -Fq './portal-content.js' apps/player/player-section-loader.js
           grep -Fq 'Akkurat nå' apps/player/player-ux.js
           grep -Fq './tournament-leader-v2.js' apps/admin/tournament-loader.js
           grep -Fq 'data-leader-step=' apps/admin/tournament-leader-v2.js

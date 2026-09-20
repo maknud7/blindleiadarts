@@ -553,14 +553,15 @@ async function loadTournamentHub({ force = false } = {}) {
   }
   hubState.loading = true;
   try {
-    const token = hubToken();
-    const [tournamentsData, meData, dashboardData] = await Promise.all([
-      hubApi(`/clubs/${clubId}/registration-tournaments`),
-      token ? hubApi("/auth/me", { auth: true }).catch(() => null) : Promise.resolve(null),
-      token ? hubApi("/me/dashboard", { auth: true }).catch(() => null) : Promise.resolve(null),
-    ]);
-    hubState.me = meData?.user || null;
-    const choice = chooseActiveTournament(tournamentsData.items || [], dashboardData?.dashboard || null);
+    const runtime = window.BlindleiaPlayerRuntime;
+    if (runtime?.ready) await runtime.ready.catch(() => undefined);
+    const snapshot = runtime?.snapshot?.() || {};
+    const sameClub = Number(snapshot.selectedClubId || 0) === Number(clubId);
+    const tournaments = sameClub && Array.isArray(snapshot.tournaments)
+      ? snapshot.tournaments
+      : (await hubApi(`/clubs/${clubId}/registration-tournaments`)).items || [];
+    hubState.me = snapshot.me || null;
+    const choice = chooseActiveTournament(tournaments, snapshot.dashboard || null);
     if (!choice) {
       hubState.tournamentId = 0;
       hubRoot.classList.add("hidden");
@@ -602,13 +603,17 @@ function refreshHubSoon() {
 
 document.getElementById("refreshButton")?.addEventListener("click", refreshHubSoon);
 document.getElementById("clubSelect")?.addEventListener("change", refreshHubSoon);
-window.addEventListener("focus", () => loadTournamentHub().catch(() => undefined));
+window.addEventListener("focus", () => {
+  if (document.body.dataset.portalActive === "tournaments") loadTournamentHub().catch(() => undefined);
+});
 window.addEventListener("hashchange", () => {
   if (window.location.hash === "#tournaments") loadTournamentHub({ force: true }).catch(() => undefined);
 });
 
 window.setInterval(() => {
-  if (!document.hidden && hubState.tournamentId) loadTournamentHub({ force: true }).catch(() => undefined);
+  if (!document.hidden && document.body.dataset.portalActive === "tournaments" && hubState.tournamentId) {
+    loadTournamentHub({ force: true }).catch(() => undefined);
+  }
 }, HUB_REFRESH_MS);
 
 loadTournamentHub({ force: true }).catch(() => undefined);

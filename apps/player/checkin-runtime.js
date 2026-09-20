@@ -11,6 +11,10 @@ let homeResolution = { key: "", tournamentId: 0, at: 0 };
 function token() { return localStorage.getItem("bd:token") || ""; }
 function clubId() { return Number(localStorage.getItem("bd:playerClubId") || document.getElementById("clubSelect")?.value || 0); }
 function statusArea() { return document.getElementById("statusArea"); }
+function checkinViewActive() {
+  const active = document.body.dataset.portalActive || "home";
+  return active === "home" || active === "tournaments";
+}
 
 function parseDate(value) {
   if (!value) return null;
@@ -217,6 +221,10 @@ function scheduleGateRefresh(delay = CHECKIN_REFRESH_MS) {
 }
 
 async function refreshCheckinGates(force = false) {
+  if (!checkinViewActive()) {
+    window.clearTimeout(gateRefreshTimer);
+    return;
+  }
   if (gateBusy || !token()) {
     scheduleGateRefresh();
     return;
@@ -327,7 +335,11 @@ document.addEventListener("click", (event) => {
 }, true);
 
 const gateObserver = new MutationObserver(scheduleMutationRefresh);
-gateObserver.observe(document.body, { childList: true, subtree: true });
+[
+  document.getElementById("registrationList"),
+  document.getElementById("tournamentList"),
+  document.getElementById("playerNowCard"),
+].filter(Boolean).forEach((node) => gateObserver.observe(node, { childList: true, subtree: true }));
 window.addEventListener("bd:player-state-changed", () => {
   homeResolution = { key: "", tournamentId: 0, at: 0 };
   refreshCheckinGates(true);
@@ -339,7 +351,14 @@ window.addEventListener("storage", (event) => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshCheckinGates(true);
+  if (!document.hidden && checkinViewActive()) refreshCheckinGates(true);
+});
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "home" || event.detail?.target === "tournaments") {
+    refreshCheckinGates(true);
+  } else {
+    window.clearTimeout(gateRefreshTimer);
+  }
 });
 
 window.BlindleiaCheckinWindow = Object.freeze({

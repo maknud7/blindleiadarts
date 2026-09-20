@@ -241,8 +241,14 @@ async function requestBreak(event) {
   }
 }
 
+function breakViewActive() {
+  const active = document.body.dataset.portalActive || "home";
+  return active === "home" || active === "tournaments";
+}
+
 async function refresh() {
   if (refreshBusy && !context) return;
+  if (!breakViewActive()) return;
   if (!token()) {
     context = null;
     lastError = "";
@@ -279,20 +285,36 @@ const observer = new MutationObserver(() => {
   patchPortalRendering();
   patchActiveTournamentRendering();
 });
-[
-  document.getElementById("registrationList"),
-  document.getElementById("tournamentList"),
-  document.getElementById("activeTournamentHub"),
-]
-  .filter(Boolean)
-  .forEach((node) => observer.observe(node, { childList: true, subtree: true }));
+const observedBreakTargets = new WeakSet();
+function observeBreakTargets() {
+  [
+    document.getElementById("registrationList"),
+    document.getElementById("tournamentList"),
+    document.getElementById("activeTournamentHub"),
+  ].filter(Boolean).forEach((node) => {
+    if (observedBreakTargets.has(node)) return;
+    observedBreakTargets.add(node);
+    observer.observe(node, { childList: true, subtree: true });
+  });
+}
+observeBreakTargets();
 
 window.addEventListener("storage", (event) => {
-  if (event.key === TOKEN_KEY) refresh().catch(() => undefined);
+  if (event.key === TOKEN_KEY && breakViewActive()) refresh().catch(() => undefined);
 });
+window.addEventListener("bd:portal-view", (event) => {
+  if (event.detail?.target === "home" || event.detail?.target === "tournaments") {
+    window.setTimeout(observeBreakTargets, 0);
+    refresh().catch(() => undefined);
+  }
+});
+window.addEventListener("bd:player-section-ready", () => window.setTimeout(observeBreakTargets, 0));
+window.addEventListener("bd:player-section-deferred-ready", () => window.setTimeout(observeBreakTargets, 0));
 
 ensureStyles();
 render();
 refresh().catch(() => undefined);
 startTicker();
-setInterval(() => refresh().catch(() => undefined), 5000);
+setInterval(() => {
+  if (!document.hidden && breakViewActive()) refresh().catch(() => undefined);
+}, 5000);

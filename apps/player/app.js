@@ -1,3 +1,4 @@
+const sharedApp = window.BlindleiaApp || (await import(new URL("../packages/ui-assets/app-core.js?v=20260920-player-perf-02", import.meta.url).href)).default;
 const API_ROOT = "../api/v1";
 
 const state = {
@@ -8,6 +9,29 @@ const state = {
   dashboard: null,
   token: localStorage.getItem("bd:token") || "",
 };
+
+let runtimeReadyResolve;
+const runtimeReady = new Promise((resolve) => { runtimeReadyResolve = resolve; });
+
+function playerSnapshot() {
+  return {
+    clubs: state.clubs,
+    selectedClubId: state.selectedClubId,
+    tournaments: state.tournaments,
+    me: state.me,
+    dashboard: state.dashboard,
+    token: state.token,
+  };
+}
+
+function emitPlayerData(reason) {
+  window.dispatchEvent(new CustomEvent("bd:player-data", { detail: { reason, ...playerSnapshot() } }));
+}
+
+window.BlindleiaPlayerRuntime = Object.freeze({
+  ready: runtimeReady,
+  snapshot: playerSnapshot,
+});
 
 const elements = {
   brandLogo: document.getElementById("brandLogo"),
@@ -105,6 +129,7 @@ async function loadClubs() {
   elements.clubSelect.innerHTML = state.clubs
     .map((club) => `<option value="${club.id}" ${Number(club.id) === state.selectedClubId ? "selected" : ""}>${escapeHtml(club.name)}</option>`)
     .join("");
+  emitPlayerData("clubs");
 }
 
 async function loadClubTournaments() {
@@ -112,6 +137,7 @@ async function loadClubTournaments() {
   const data = await api(`/clubs/${state.selectedClubId}/registration-tournaments`);
   state.tournaments = data.items || [];
   renderTournaments();
+  emitPlayerData("tournaments");
 }
 
 async function loadCurrentUser() {
@@ -121,26 +147,36 @@ async function loadCurrentUser() {
     renderAuth();
     renderDashboard();
     renderTournaments();
+    emitPlayerData("anonymous");
     return;
   }
 
   try {
-    const [meData, dashboardData] = await Promise.all([
-      api("/auth/me", { auth: true }),
+    const sessionSnapshot = sharedApp?.session?.snapshot?.();
+    const mePromise = sessionSnapshot?.resolved && sessionSnapshot.token === state.token && sessionSnapshot.user
+      ? Promise.resolve(sessionSnapshot.user)
+      : sharedApp?.session?.resolve
+        ? sharedApp.session.resolve()
+        : api("/auth/me", { auth: true }).then((data) => data.user);
+    const [user, dashboardData] = await Promise.all([
+      mePromise,
       api("/me/dashboard", { auth: true }),
     ]);
-    state.me = meData.user;
+    state.me = user || null;
     state.dashboard = dashboardData.dashboard;
     renderAuth();
     renderDashboard();
     renderTournaments();
+    emitPlayerData("user");
   } catch (error) {
     persistToken("");
+    sharedApp?.session?.clear?.();
     state.me = null;
     state.dashboard = null;
     renderAuth();
     renderDashboard();
     renderTournaments();
+    emitPlayerData("session_error");
     setStatus(error.message, "error");
   }
 }
@@ -318,6 +354,7 @@ async function handleLogin(event) {
       },
     });
     persistToken(data.access_token);
+    sharedApp?.session?.prime?.(data.user || null);
     await loadCurrentUser();
     setStatus("Innlogging lykkes.", "success");
     elements.loginForm.reset();
@@ -398,6 +435,7 @@ function bindEvents() {
   elements.loginForm.addEventListener("submit", handleLogin);
   elements.logoutButton.addEventListener("click", () => {
     persistToken("");
+    sharedApp?.session?.clear?.();
     state.me = null;
     state.dashboard = null;
     renderAuth();
@@ -413,10 +451,15 @@ function bindEvents() {
 async function bootstrap() {
   bindEvents();
   try {
+    const userPromise = loadCurrentUser();
     await loadClubs();
-    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+    await Promise.all([loadClubTournaments(), userPromise]);
+    runtimeReadyResolve?.(playerSnapshot());
+    emitPlayerData("ready");
     setStatus("Spillerportalen er klar.", "success");
   } catch (error) {
+    runtimeReadyResolve?.(playerSnapshot());
+    emitPlayerData("ready_error");
     setStatus(error.message, "error");
   }
 }

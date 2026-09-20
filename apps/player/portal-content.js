@@ -84,10 +84,11 @@ function hasRecordedStats(player) {
 }
 
 async function resolveClubId() {
+  const runtimeId = Number(window.BlindleiaPlayerRuntime?.snapshot?.()?.selectedClubId || 0);
   const fromStorage = Number(localStorage.getItem("bd:playerClubId") || 0);
   const fromSelect = Number(el.clubSelect?.value || 0);
-  if (fromStorage || fromSelect) {
-    state.clubId = fromStorage || fromSelect;
+  if (runtimeId || fromStorage || fromSelect) {
+    state.clubId = runtimeId || fromStorage || fromSelect;
     return state.clubId;
   }
   const clubs = await api("/clubs");
@@ -95,29 +96,41 @@ async function resolveClubId() {
   return state.clubId;
 }
 
+let directoryLoadedClubId = 0;
+
+async function loadPlayerDirectoryData(force = false) {
+  const clubId = await resolveClubId();
+  if (!clubId || (!force && directoryLoadedClubId === clubId)) return;
+  const [players, elo] = await Promise.all([
+    api(`/clubs/${clubId}/player-directory`),
+    api(`/clubs/${clubId}/elo`),
+  ]);
+  state.players = (players.items || []).filter(hasRecordedStats);
+  state.elo = (elo.items || []).filter(hasRecordedStats);
+  directoryLoadedClubId = clubId;
+  renderElo();
+  renderPlayers();
+}
+
 async function loadPortalContent() {
+  const runtime = window.BlindleiaPlayerRuntime;
+  if (runtime?.ready) await runtime.ready.catch(() => undefined);
   const clubId = await resolveClubId();
   if (!clubId) return;
 
-  const [players, elo, summaries, tournaments, seasons] = await Promise.all([
-    api(`/clubs/${clubId}/player-directory`),
-    api(`/clubs/${clubId}/elo`),
-    api(`/clubs/${clubId}/summaries`),
-    api(`/clubs/${clubId}/registration-tournaments`),
-    api(`/clubs/${clubId}/seasons`),
-  ]);
+  const snapshot = runtime?.snapshot?.() || {};
+  const sameClub = Number(snapshot.selectedClubId || 0) === Number(clubId);
+  state.tournaments = sameClub && Array.isArray(snapshot.tournaments)
+    ? snapshot.tournaments
+    : (await api(`/clubs/${clubId}/registration-tournaments`)).items || [];
 
-  state.players = (players.items || []).filter(hasRecordedStats);
-  state.elo = (elo.items || []).filter(hasRecordedStats);
-  state.summaries = summaries.items || [];
-  state.tournaments = tournaments.items || [];
-  state.seasons = seasons.items || [];
-  renderElo();
-  renderPlayers();
-  renderSummaries();
   renderTournamentPicker();
   bindTournamentTabs();
-  await Promise.all([loadTournamentTable(), loadSeasonStandings()]);
+
+  const view = localStorage.getItem("bd:statisticsView") || "season";
+  if (view === "players") await loadPlayerDirectoryData();
+  if (view === "tournament") await loadTournamentTable();
+  if (view === "mine") await loadMyMatches();
 }
 
 function renderElo() {
@@ -338,8 +351,9 @@ async function loadMyMatches() {
     return;
   }
   try {
-    const me = await api("/auth/me", { auth: true });
-    const playerId = Number(me.user?.player?.id || 0);
+    const runtime = window.BlindleiaPlayerRuntime;
+    if (runtime?.ready) await runtime.ready.catch(() => undefined);
+    const playerId = Number(runtime?.snapshot?.()?.me?.player?.id || 0);
     if (!playerId) {
       el.myMatchList.innerHTML = `<div class="mini-card"><p class="muted">Kontoen din er ikke koblet til en spillerprofil ennå.</p></div>`;
       return;
@@ -457,17 +471,30 @@ function renderPortalLoadError(error) {
 }
 
 el.tableTournamentSelect?.addEventListener("change", loadTournamentTable);
+document.querySelector('[data-statistics-view="players"]')?.addEventListener("click", () => {
+  loadPlayerDirectoryData().catch(renderPortalLoadError);
+});
+document.querySelector('[data-statistics-view="tournament"]')?.addEventListener("click", () => {
+  loadTournamentTable().catch(renderPortalLoadError);
+});
+document.querySelector('[data-statistics-view="mine"]')?.addEventListener("click", () => {
+  loadMyMatches().catch(renderPortalLoadError);
+});
 el.clubSelect?.addEventListener("change", () => {
   state.clubId = Number(el.clubSelect.value || 0);
+  directoryLoadedClubId = 0;
   setTimeout(() => loadPortalContent().catch(renderPortalLoadError), 0);
 });
 el.refreshButton?.addEventListener("click", () => setTimeout(() => {
-  loadMyMatches().catch(() => {});
+  directoryLoadedClubId = 0;
   loadPortalContent().catch(renderPortalLoadError);
+  const view = localStorage.getItem("bd:statisticsView") || "season";
+  if (view === "players") loadPlayerDirectoryData(true).catch(renderPortalLoadError);
+  if (view === "tournament") loadTournamentTable().catch(renderPortalLoadError);
+  if (view === "mine") loadMyMatches().catch(() => {});
 }, 0));
 el.matchDetailDialog?.addEventListener("click", (event) => {
   if (event.target === el.matchDetailDialog) el.matchDetailDialog.close?.();
 });
 
-loadMyMatches().catch(() => {});
 loadPortalContent().catch(renderPortalLoadError);

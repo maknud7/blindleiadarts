@@ -360,27 +360,41 @@ function renderNow({ me, dashboard, tournaments, matchCalls, eligibility }) {
 }
 
 let pxLoading = false;
+function homeActive() {
+  return (document.body.dataset.portalActive || "home") === "home";
+}
+
 async function loadPlayerNow() {
   if (pxLoading) return;
   pxLoading = true;
   try {
     normalizePlayerNavigation();
     ensureNowCard();
-    const clubId = pxClubId();
-    const tournaments = clubId ? (await pxApi(`/clubs/${clubId}/registration-tournaments`)).items || [] : [];
+
+    const runtime = window.BlindleiaPlayerRuntime;
+    if (runtime?.ready) await runtime.ready.catch(() => undefined);
+    const snapshot = runtime?.snapshot?.() || {};
+    const clubId = pxClubId() || Number(snapshot.selectedClubId || 0);
+    const sameClub = Number(snapshot.selectedClubId || 0) === Number(clubId || 0);
+    const tournaments = sameClub && Array.isArray(snapshot.tournaments)
+      ? snapshot.tournaments
+      : clubId
+        ? (await pxApi(`/clubs/${clubId}/registration-tournaments`)).items || []
+        : [];
+
     if (!pxToken()) {
       renderNow({ me: null, dashboard: null, tournaments, matchCalls: [], eligibility: null });
       return;
     }
-    const [meData, dashData, matchCallData, eligibilityData] = await Promise.all([
-      pxApi("/auth/me", true),
-      pxApi("/me/dashboard", true),
+
+    const [matchCallData, eligibilityData] = await Promise.all([
       clubId ? pxApi(`/clubs/${clubId}/match-calls`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       pxApi("/me/eligibility", true).catch(() => ({ eligibility: null })),
     ]);
+
     renderNow({
-      me: meData.user || null,
-      dashboard: dashData.dashboard || null,
+      me: snapshot.me || null,
+      dashboard: snapshot.dashboard || null,
       tournaments,
       matchCalls: matchCallData.items || [],
       eligibility: eligibilityData.eligibility || null,
@@ -400,14 +414,26 @@ function bootPlayerUx() {
   ensureNowCard();
   document.getElementById("clubSelect")?.addEventListener("change", () => window.setTimeout(loadPlayerNow, 80));
   document.getElementById("refreshButton")?.addEventListener("click", () => window.setTimeout(loadPlayerNow, 80));
-  window.addEventListener("bd:player-state-changed", () => window.setTimeout(loadPlayerNow, 20));
+  window.addEventListener("bd:player-state-changed", () => {
+    if (homeActive()) window.setTimeout(loadPlayerNow, 20);
+  });
+  window.addEventListener("bd:player-data", () => {
+    if (homeActive()) window.setTimeout(loadPlayerNow, 20);
+  });
+  window.addEventListener("bd:portal-view", (event) => {
+    if (event.detail?.target === "home") window.setTimeout(loadPlayerNow, 20);
+  });
   window.addEventListener("storage", (event) => {
-    if (!["bd:token", "bd:playerClubId"].includes(event.key)) return;
+    if (!["bd:token", "bd:playerClubId"].includes(event.key) || !homeActive()) return;
     loadPlayerNow();
   });
-  window.addEventListener("focus", () => loadPlayerNow());
-  window.setTimeout(loadPlayerNow, 250);
-  window.setInterval(() => { if (!document.hidden) loadPlayerNow(); }, 10000);
+  window.addEventListener("focus", () => {
+    if (homeActive()) loadPlayerNow();
+  });
+  window.setTimeout(loadPlayerNow, 30);
+  window.setInterval(() => {
+    if (!document.hidden && homeActive()) loadPlayerNow();
+  }, 15000);
 }
 
 bootPlayerUx();
