@@ -182,7 +182,14 @@ async function load() {
 }
 
 ensureView();
-document.getElementById("clubSelect")?.addEventListener("change", () => { seasonState.selectedId = 0; setTimeout(load, 50); });
-window.addEventListener("storage", load);
+document.getElementById("clubSelect")?.addEventListener("change", () => {
+  seasonState.selectedId = 0;
+  if (document.body.dataset.portalActive === "seasons") setTimeout(load, 50);
+});
+window.addEventListener("storage", () => {
+  if (document.body.dataset.portalActive === "seasons") load();
+});
 window.addEventListener("bd:portal-view", (event) => { if (event.detail?.target === "seasons") load(); });
-setTimeout(load, 500);
+if (document.body.dataset.portalActive === "seasons" || window.location.hash.endsWith("/seasons")) {
+  setTimeout(load, 50);
+}

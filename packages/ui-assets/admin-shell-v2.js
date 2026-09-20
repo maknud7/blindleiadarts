@@ -108,8 +108,11 @@ if (isAdminSurface) {
       nav.appendChild(account);
     }
     try {
-      const data = await api("/auth/me", true);
-      const user = data?.user || {};
+      const shared = window.BlindleiaApp?.session;
+      const snapshot = shared?.snapshot?.();
+      const user = snapshot?.resolved && snapshot.user
+        ? snapshot.user
+        : (shared?.resolve ? await shared.resolve() : (await api("/auth/me", true))?.user || {});
       const label = user.display_name || user.name || user.username || user.email || "Admin";
       account.querySelector(".admin-sidebar-avatar").textContent = initials(label);
       account.querySelector("strong").textContent = label;
@@ -178,8 +181,11 @@ if (isAdminSurface) {
     ensurePlayerArea();
     ensureAdminTools();
     ensureAdminIdentity();
-    loadPlayerArea();
     loadSeasonAdmin();
+    const active = document.body.dataset.portalActive;
+    if (active === "playerbase" || window.location.hash.endsWith("/playerbase")) {
+      window.setTimeout(loadPlayerArea, 0);
+    }
   }
 
   document.getElementById("clubSelect")?.addEventListener("change", () => window.setTimeout(loadPlayerArea, 80));

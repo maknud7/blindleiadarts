@@ -9,7 +9,10 @@ const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=202608
 
 function ensureStylesheet(url) {
   const href = new URL(url, import.meta.url).href;
-  if ([...document.styleSheets].some((sheet) => sheet.href === href)) return;
+  const targetPath = new URL(href).pathname;
+  if ([...document.querySelectorAll('link[rel="stylesheet"]')].some((link) => {
+    try { return new URL(link.href, window.location.href).pathname === targetPath; } catch { return false; }
+  })) return;
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = href;
@@ -42,18 +45,16 @@ ensureFavicon();
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260919-admin-overlay-lock-01");
-ensureStylesheet("./mobile-app-nav.css?v=20260919-admin-overlay-lock-01");
+ensureStylesheet("./unified-portal-shell.css?v=20260920-admin-perf-01");
+ensureStylesheet("./mobile-app-nav.css?v=20260920-admin-perf-01");
 
 if (document.body.dataset.bdSurface === "admin") {
   ensureStylesheet("./admin-shell-v2.css?v=20260827-1238");
-  import(new URL("./admin-shell-v2.js?v=20260827-1238", import.meta.url).href)
+  import(new URL("./admin-shell-v2.js?v=20260920-admin-perf-01", import.meta.url).href)
     .catch((error) => console.warn("Admin shell unavailable", error));
-  import(new URL("../../admin/player-member-link-admin.js?v=20260903-01", import.meta.url).href)
-    .catch((error) => console.warn("Player/member link admin unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260919-admin-overlay-lock-01", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20260920-admin-perf-01", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
@@ -243,18 +244,25 @@ window.addEventListener("hashchange", () => {
 });
 window.addEventListener("storage", () => syncRoleAccess().catch(() => undefined));
 window.addEventListener("bd:session", () => syncRoleAccess().catch(() => undefined));
-window.setInterval(() => syncRoleAccess().catch(() => undefined), 5000);
 
 let refreshQueued = false;
-const observer = new MutationObserver(() => {
+function scheduleRefresh() {
   if (refreshQueued) return;
   refreshQueued = true;
   window.requestAnimationFrame(() => {
     refreshQueued = false;
     refresh();
   });
-});
-observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+// Only structural navigation changes need a menu refresh. Observing the entire
+// document subtree meant every list render, table update and status message in
+// admin scheduled another navigation pass.
+const structuralObserver = new MutationObserver(scheduleRefresh);
+const portalMenu = document.querySelector(".portal-menu");
+const portalMain = document.querySelector("main");
+if (portalMenu) structuralObserver.observe(portalMenu, { childList: true });
+if (portalMain) structuralObserver.observe(portalMain, { childList: true });
 
 const drawerStateObserver = new MutationObserver(() => {
   if (!document.body.classList.contains("unified-mobile-drawer-open")) return;
