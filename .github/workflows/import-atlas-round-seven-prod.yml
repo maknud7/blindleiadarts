@@ -40,7 +40,7 @@ jobs:
       - name: Validate frozen round-seven request
         run: |
           set -Eeuo pipefail
-          grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_SIX_TO_PROD=yes' infra/sql/run-import-atlas-round-seven-prod.flag
+          grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_SEVEN_TO_PROD=yes' infra/sql/run-import-atlas-round-seven-prod.flag
           php -l infra/sql/import_atlas_manifest_test.php
           php -l infra/sql/import_atlas_match_visits_test.php
           php -l infra/sql/atlas_history_verify.php
@@ -104,7 +104,7 @@ jobs:
           php -r '
             $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
             $legs=$visits=$darts=0;foreach($ids as $id){$d=json_decode(file_get_contents("/tmp/round-seven-matches/{$id}.json"),true,512,JSON_THROW_ON_ERROR);$legs+=(int)$d["leg_count"];$visits+=(int)$d["visit_count"];$darts+=(int)$d["darts_count"];}
-            if($legs!==34||$visits<68)throw new RuntimeException("Round-six detail drift: legs={$legs} visits={$visits}");
+            if($legs!==34||$visits<68)throw new RuntimeException("Round-seven detail drift: legs={$legs} visits={$visits}");
             echo "ROUND7_FETCH_OK=yes matches=31 legs={$legs} visits={$visits} darts={$darts}\n";
           '
 
@@ -123,7 +123,7 @@ jobs:
           set -Eeuo pipefail
           php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=31 --expected-players=8 --phase=data --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_finalize.php --external=wigXPiwRIME4
-          php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=24 --expected-players=7 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=31 --expected-players=8 --phase=final --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_lifecycle_verify.php --external=wigXPiwRIME4
           php infra/sql/atlas_format_metadata_verify.php --external=wigXPiwRIME4
 
@@ -196,12 +196,12 @@ jobs:
           ALLOW_PROD_ATLAS_FINALIZE: yes
         run: |
           set -Eeuo pipefail
-          php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=24 --expected-players=7 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=31 --expected-players=8 --phase=data --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_finalize.php --external=wigXPiwRIME4
           php infra/sql/run_php_migration.php infra/sql/migrations/0053_rebuild_elo_in_logical_match_order.php bd_prod_
           php infra/sql/run_php_migration.php infra/sql/migrations/0074_add_tournament_elo_snapshots.php bd_prod_
           php infra/sql/elo_ledger_doctor.php
-          php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=24 --expected-players=7 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=31 --expected-players=8 --phase=final --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_lifecycle_verify.php --external=wigXPiwRIME4
           php infra/sql/atlas_format_metadata_verify.php --external=wigXPiwRIME4
           php -r '
@@ -222,7 +222,7 @@ jobs:
             if TOURNAMENTS="$tournaments" ELO="$elo" TOURNAMENT_ELO="$tournament_elo" php -r '
               $t=json_decode(getenv("TOURNAMENTS"),true);$e=json_decode(getenv("ELO"),true);$te=json_decode(getenv("TOURNAMENT_ELO"),true);$items=$t["data"]["items"]??[];$found=false;$tid=0;foreach($items as $x)if(($x["name"]??"")==="Mandagsserien #7"&&($x["status"]??"")==="completed"&&(int)($x["match_count"]??0)===31){$found=true;$tid=(int)$x["id"];}$names=[];$dups=0;foreach(($e["data"]["items"]??[]) as $x){$n=mb_strtolower(trim((string)($x["display_name"]??"")));if(isset($names[$n]))$dups++;$names[$n]=1;}$tp=$te["data"]["players"]??[];
               exit($found&&$tid===16&&$dups===0&&count($tp)===8?0:1);
-            '; then echo "ROUND7_PUBLIC_READBACK_OK=yes tournament_id=16 elo_players=7"; exit 0; fi
+            '; then echo "ROUND7_PUBLIC_READBACK_OK=yes tournament_id=16 elo_players=8"; exit 0; fi
             sleep 10
           done
           echo "Public PROD readback did not expose round seven cleanly." >&2
