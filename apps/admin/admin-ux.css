@@ -130,12 +130,6 @@ th,td{border-bottom-color:var(--line)}
   .topbar-brand strong{font-size:15px!important}
   .topbar-actions{display:none!important}
 
-  /* Fixed four-item mobile navigation. */
-  .section-nav.portal-menu{position:fixed!important;z-index:80!important;left:0!important;right:0!important;bottom:0!important;margin:0!important;padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px))!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:4px!important;background:rgba(255,255,255,.97)!important;border:0!important;border-top:1px solid #dfe6ed!important;border-radius:0!important;box-shadow:0 -8px 24px rgba(17,42,73,.07)!important;overflow:visible!important;backdrop-filter:blur(16px)}
-  .section-nav.portal-menu a{min-width:0!important;min-height:52px!important;padding:8px 4px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:0!important;border-radius:11px!important;background:transparent!important;color:#6b7f92!important;font-size:11px!important;font-weight:800!important;text-align:center!important}
-  .section-nav.portal-menu a.active{background:#2f6fed!important;color:#fff!important}
-  .section-nav.portal-menu a:nth-of-type(n+5){display:none!important}
-
   /* Remove duplicated page framing and excessive vertical labels. */
   .hero{padding:4px 0 12px!important;gap:8px!important}
   .hero .eyebrow{display:none!important}
