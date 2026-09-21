@@ -1,0 +1,62 @@
+name: Publish Round Seven Summary To Production
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-publish-round-seven-summary-prod.flag
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_BASE_URL: https://blindleiadarts.ingenting.org
+      FIXTURE: infra/atlas/manifests/mandagsserien-2026-07-summary.json
+      PROD_ADMIN_BEARER_TOKEN: ${{ secrets.PROD_ADMIN_BEARER_TOKEN }}
+      PROD_ADMIN_API_TOKEN: ${{ secrets.PROD_ADMIN_API_TOKEN }}
+      ADMIN_API_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate frozen article
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'PUBLISH_ROUND_SEVEN_SUMMARY_PROD=yes' infra/sql/run-publish-round-seven-summary-prod.flag
+          php -r '
+            $d=json_decode(file_get_contents(getenv("FIXTURE")),true,512,JSON_THROW_ON_ERROR);
+            if(($d["tournament_external_id"]??"")!=="wigXPiwRIME4"||(int)($d["tournament_id"]??0)!==16)throw new RuntimeException("Wrong tournament");
+            if(($d["status"]??"")!=="published"||trim((string)($d["title"]??""))===""||trim((string)($d["body_text"]??""))==="")throw new RuntimeException("Invalid article");
+            echo "ROUND7_SUMMARY_FIXTURE_OK=yes\n";
+          '
+      - name: Publish through supported PROD API
+        run: |
+          set -Eeuo pipefail
+          token="${PROD_ADMIN_BEARER_TOKEN:-}"
+          [[ -n "$token" ]] || token="${PROD_ADMIN_API_TOKEN:-}"
+          [[ -n "$token" ]] || token="${ADMIN_API_TOKEN:-}"
+          if [[ -z "$token" ]]; then
+            echo "ROUND7_SUMMARY_PUBLISH_BLOCKED=missing_prod_admin_bearer_token"
+            exit 0
+          fi
+          payload="$(php -r '$d=json_decode(file_get_contents(getenv("FIXTURE")),true,512,JSON_THROW_ON_ERROR);echo json_encode(["title"=>$d["title"],"body_text"=>$d["body_text"],"status"=>"published"],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);')"
+          response="$(curl -fsS --connect-timeout 10 --max-time 90 -X PUT             -H "Authorization: Bearer $token" -H "Content-Type: application/json"             --data "$payload" "${PROD_BASE_URL%/}/api/v1/tournaments/16/summary/admin")"
+          RESPONSE="$response" php -r '
+            $d=json_decode(getenv("RESPONSE"),true,512,JSON_THROW_ON_ERROR);$s=$d["data"]["summary"]??[];
+            if(($d["ok"]??false)!==true||(int)($s["tournament_id"]??0)!==16||($s["status"]??"")!=="published"||empty($s["published_at"]))throw new RuntimeException("Admin API write was not confirmed");
+          '
+          for attempt in $(seq 1 6); do
+            public="$(curl -fsS --connect-timeout 10 --max-time 60 "${PROD_BASE_URL%/}/api/v1/tournaments/16/summary?cb=$RANDOM" || true)"
+            if PUBLIC="$public" FIXTURE="$FIXTURE" php -r '
+              $d=json_decode(getenv("PUBLIC"),true);$f=json_decode(file_get_contents(getenv("FIXTURE")),true);$s=$d["data"]["summary"]??[];
+              exit(($d["ok"]??false)===true&&($s["status"]??"")==="published"&&($s["title"]??"")===$f["title"]&&($s["body_text"]??"")===$f["body_text"]?0:1);
+            '; then
+              echo "ROUND7_SUMMARY_PUBLISHED_OK=yes tournament_id=16"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "ROUND7_SUMMARY_PUBLIC_READBACK_FAILED=yes" >&2
+          exit 1
