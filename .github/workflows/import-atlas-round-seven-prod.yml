@@ -114,7 +114,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
-          for id in "${ids[@]}"; do php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-seven-matches/${id}.json"; done
+          for id in "${ids[@]}"; do
+            imported=no
+            for attempt in $(seq 1 5); do
+              if php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-seven-matches/${id}.json"; then imported=yes; break; fi
+              echo "Retrying TEST write for ${id} after transient database failure (${attempt}/5)"
+              sleep $((attempt * 5))
+            done
+            [[ "$imported" == yes ]] || { echo "TEST write failed permanently for ${id}" >&2; exit 1; }
+          done
 
       - name: Verify and finalize canonical TEST round seven
         env:
@@ -134,7 +142,15 @@ jobs:
           set -Eeuo pipefail
           php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/round-seven-probe.json
           mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\\n";')
-          for id in "${ids[@]}"; do php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-seven-matches/${id}.json"; done
+          for id in "${ids[@]}"; do
+            imported=no
+            for attempt in $(seq 1 5); do
+              if php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-seven-matches/${id}.json"; then imported=yes; break; fi
+              echo "Retrying TEST write for ${id} after transient database failure (${attempt}/5)"
+              sleep $((attempt * 5))
+            done
+            [[ "$imported" == yes ]] || { echo "TEST write failed permanently for ${id}" >&2; exit 1; }
+          done
           php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=31 --expected-players=8 --phase=data --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_finalize.php --external=wigXPiwRIME4
           php infra/sql/atlas_history_verify.php --external=wigXPiwRIME4 --expected-matches=31 --expected-players=8 --phase=final --require-visits=1 --require-playoff=1
