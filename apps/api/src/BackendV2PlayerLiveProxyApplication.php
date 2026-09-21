@@ -17,6 +17,11 @@ use Throwable;
  *
  * These routes are deliberately GET-only. Routing is selected before dispatch;
  * when Node is selected, a remote attempt never falls through to legacy PHP.
+ *
+ * The public health endpoint is also routed through this read-only transport in
+ * TEST. It deliberately reuses the TEST-only account-read routing gate so PROD
+ * keeps the legacy PHP health owner until a dedicated production system-read
+ * gate is introduced. The actual database/schema readiness probe runs in Node.
  */
 final class BackendV2PlayerLiveProxyApplication
 {
@@ -32,10 +37,14 @@ final class BackendV2PlayerLiveProxyApplication
         if (!$this->handles($method, $path)) return false;
 
         $config = Config::load($this->rootPath);
-        $routingMode = $path === '/v1/realtime/config'
-            ? $config->backendV2RealtimeConfigRoutingMode()
-            : $config->backendV2PlayerLiveRoutingMode();
+        $routingMode = match ($path) {
+            '/v1/health' => $config->backendV2AccountReadRoutingMode(),
+            '/v1/realtime/config' => $config->backendV2RealtimeConfigRoutingMode(),
+            default => $config->backendV2PlayerLiveRoutingMode(),
+        };
         if ($routingMode !== 'node') return false;
+
+        $frontdoor = $path === '/v1/health' ? 'system-read' : 'player-live';
 
         try {
             $client = new BackendV2ApiClient(
@@ -50,10 +59,22 @@ final class BackendV2PlayerLiveProxyApplication
             $result = $client->request('GET', $targetPath, null, $headers);
             $status = $result['status'];
             $payload = $result['payload'];
-            header('X-BD-Backend-V2: player-live');
+            header('X-BD-Backend-V2: ' . $frontdoor);
 
             if ($status >= 200 && $status < 300 && ($payload['ok'] ?? null) === true) {
-                unset($payload['ok']);
+                if ($path === '/v1/health') {
+                    $payload = [
+                        'status' => 'ok',
+                        'environment' => (string) ($payload['environment'] ?? $config->appEnv()),
+                        'database' => [
+                            'connected' => true,
+                            'name' => $config->dbName(),
+                            'table_prefix' => (string) ($payload['runtime_prefix'] ?? $config->dbTablePrefix()),
+                        ],
+                    ];
+                } else {
+                    unset($payload['ok']);
+                }
                 JsonResponse::ok($payload, $status)->send();
                 return true;
             }
@@ -65,7 +86,7 @@ final class BackendV2PlayerLiveProxyApplication
             JsonResponse::error($status > 0 ? $status : 502, $code, $message, $meta)->send();
             return true;
         } catch (BackendV2ApiAttemptException $error) {
-            header('X-BD-Backend-V2: player-live');
+            header('X-BD-Backend-V2: ' . $frontdoor);
             JsonResponse::error(
                 502,
                 $error->errorCode,
@@ -73,11 +94,11 @@ final class BackendV2PlayerLiveProxyApplication
             )->send();
             return true;
         } catch (InvalidArgumentException $error) {
-            header('X-BD-Backend-V2: player-live');
+            header('X-BD-Backend-V2: ' . $frontdoor);
             JsonResponse::error(503, 'backend_v2_player_live_unconfigured', $error->getMessage())->send();
             return true;
         } catch (Throwable) {
-            header('X-BD-Backend-V2: player-live');
+            header('X-BD-Backend-V2: ' . $frontdoor);
             JsonResponse::error(500, 'backend_v2_player_live_proxy_failed', 'Player/live proxy failed before a safe response was produced.')->send();
             return true;
         }
@@ -86,6 +107,7 @@ final class BackendV2PlayerLiveProxyApplication
     public function handles(string $method, string $path): bool
     {
         if (strtoupper($method) !== 'GET') return false;
+        if ($path === '/v1/health') return true;
         if ($path === '/v1/realtime/config') return true;
         if ($path === '/v1/me/dashboard') return true;
         if ($path === '/v1/clubs') return true;
@@ -103,6 +125,7 @@ final class BackendV2PlayerLiveProxyApplication
 
     public function targetPath(string $path, string $queryString): string
     {
+        if ($path === '/v1/health') return '/ready';
         if ($path !== '/v1/public/check-in-display') return $path;
 
         $parsed = [];
