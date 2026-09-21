@@ -412,12 +412,16 @@ function ensureMobileNavigation() {
   });
   nav.appendChild(logout);
 
-  const overlay = document.createElement("div");
-  overlay.id = "unifiedMobileDrawerOverlay";
-  overlay.className = "unified-mobile-drawer-overlay";
-  overlay.hidden = true;
-  overlay.addEventListener("click", () => setMobileDrawer(false));
-  document.body.appendChild(overlay);
+  // Admin mobile navigation must never depend on a full-screen click layer.
+  // A stale overlay was able to make the visible admin UI feel completely inert.
+  if (surface !== "admin") {
+    const overlay = document.createElement("div");
+    overlay.id = "unifiedMobileDrawerOverlay";
+    overlay.className = "unified-mobile-drawer-overlay";
+    overlay.hidden = true;
+    overlay.addEventListener("click", () => setMobileDrawer(false));
+    document.body.appendChild(overlay);
+  }
 
   const bottom = document.createElement("nav");
   bottom.id = "unifiedMobileBottomNav";
