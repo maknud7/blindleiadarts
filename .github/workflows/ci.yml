@@ -105,7 +105,6 @@ jobs:
           grep -Fq 'data-tournament-view="matches"' apps/player/index.html
           grep -Fq 'player-section-loader.js' apps/player/index.html
           grep -Fq 'initial.surface === "admin"' index.html
-          grep -Fq 'Do not block player shell on auth resolution' /dev/null 2>/dev/null || true
           php -r '
             $html=file_get_contents("index.html");
             if (!preg_match("/async function boot\(\).*?const source/s", $html, $m)) exit(2);
