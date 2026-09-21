@@ -104,6 +104,16 @@ jobs:
           grep -Fq '>Statistikk</a>' apps/player/index.html
           grep -Fq 'data-tournament-view="matches"' apps/player/index.html
           grep -Fq 'player-section-loader.js' apps/player/index.html
+          grep -Fq 'initial.surface === "admin"' index.html
+          grep -Fq 'Do not block player shell on auth resolution' /dev/null 2>/dev/null || true
+          php -r '
+            $html=file_get_contents("index.html");
+            if (!preg_match("/async function boot\(\).*?const source/s", $html, $m)) exit(2);
+            $boot=$m[0];
+            $gate=strpos($boot, "if (initial.surface === \"admin\")");
+            $auth=strpos($boot, "const user = await app.session.resolve();");
+            if ($gate === false || $auth === false || $auth < $gate) exit(1);
+          '
           for eager in member-account.js portal-content.js tournament-hub.js player-breaks.js statistics-ux.js elo-history-exact.js; do
             if grep -Fq "<script src=\"./$eager" apps/player/index.html; then
               echo "Player feature $eager must be lazy-loaded by active section."
