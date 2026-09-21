@@ -41,7 +41,7 @@
   </main>
 
   <script type="module">
-    const VERSION = "20260920-player-perf-02";
+    const VERSION = "20260921-player-boot-01";
     const app = (await import(`./packages/ui-assets/app-core.js?v=${VERSION}`)).default;
     const bootText = document.getElementById("portalBootText");
     const rootPath = window.location.pathname.endsWith("/")
@@ -104,8 +104,18 @@
       const initial = requestedRoute();
       if (bootText) bootText.textContent = initial.surface === "admin" ? "Kontrollerer tilgang …" : "Åpner portalen …";
 
-      const user = await app.session.resolve();
-      const route = normalizeRoute(initial, user);
+      // Player routes do not need identity resolution before the shell can be
+      // rendered. Waiting here previously made a cold backend-v2 start block
+      // the entire page, and the player app then performed its own bootstrap
+      // reads afterwards. Keep the access gate only for admin routes.
+      let route = initial;
+      if (initial.surface === "admin") {
+        const user = await app.session.resolve();
+        route = normalizeRoute(initial, user);
+      } else {
+        route = normalizeRoute(initial, null);
+      }
+
       const surface = route.surface;
       if (bootText) bootText.textContent = surface === "admin" ? "Åpner klubbdrift …" : "Åpner portalen …";
 
