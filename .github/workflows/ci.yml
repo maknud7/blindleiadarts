@@ -149,6 +149,16 @@ jobs:
             exit 1
           fi
           grep -Fq 'if (surface !== "admin") {' packages/ui-assets/unified-portal-shell.js
+          grep -Fq 'nav.removeAttribute("inert")' packages/ui-assets/unified-portal-shell.js
+          php -r '
+            $js=file_get_contents("packages/ui-assets/unified-portal-shell.js");
+            if (!preg_match("/function setMobileDrawer\(open\).*?\n\}/s", $js, $m)) exit(2);
+            $fn=$m[0];
+            $mobile=strpos($fn, "if (!mobile)");
+            $remove=strpos($fn, "nav.removeAttribute(\"inert\")");
+            $set=strpos($fn, "nav.inert = !open");
+            if ($mobile === false || $remove === false || $set === false || $remove > $set) exit(1);
+          '
           if grep -Fq '.section-nav.portal-menu{position:fixed!important;z-index:80!important' apps/admin/admin-ux.css; then
             echo 'Legacy fixed mobile admin navigation must not compete with the unified drawer.'
             exit 1
