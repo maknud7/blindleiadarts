@@ -1,0 +1,87 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "wigXPiwRIME4",
+  "tournament_name": "Mandagsserien #7",
+  "tournament_date": "2026-09-21",
+  "tournament_start_at": "2026-09-21 18:30:00",
+  "tournament_slug": "mandagsserien-7-2026-09-21",
+  "expected_players": 8,
+  "expected_matches": 31,
+  "expected_legs": 34,
+  "players": {
+    "DUq32rNObrUk": "Thomas Kildal",
+    "5sIceSlYm33a": "Jon-Henning Næss",
+    "0J6SDLVfThUs": "Magnus Knudsen",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen",
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen",
+    "lGf1wBj3yKWV": "Steffen Madsen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "DUq32rNObrUk",
+        "5sIceSlYm33a",
+        "0J6SDLVfThUs",
+        "Rujhhq1jF7Uu",
+        "xTpeuJWBefFN",
+        "GFg9pZkPKrpU",
+        "lGf1wBj3yKWV",
+        "2bhzMxZ5bdyy"
+      ],
+      "match_ids": [
+        "dPWYdbSVEgfd", "WIpf3fg2fL8t", "d9Rxy0LkKQyQ", "rrMXD6EzvRfI",
+        "KBqWomUJOBYx", "SSnl2SdnHicT", "wWMbROmrMyo9", "YIavQ4nQzKF5",
+        "txcTxk7LuhIp", "bdAWo73WCbto", "neJjhH355Mhp", "0zYZzrCC6RWY",
+        "gmGERaoAxTGH", "4Kprb1bdhUE1", "BKXHFphcNVxJ", "uqINvXNbtu5s",
+        "jTM3eNGvaSZ2", "5pwFY7Zat5Ta", "jIfWSbvuWIGI", "xaCfqNILeqzb",
+        "ZToaroDRv9Qw", "rKDkvWFnc1mz", "6ACoXFi5nQMo", "DOMfo1n5ljik",
+        "1l4JIXFrQwFj", "gOgjEUIKh3wQ", "g0DLr5FtxPUu", "HSgTty37UtVF"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": ["DUq32rNObrUk", "5sIceSlYm33a", "0J6SDLVfThUs", "Rujhhq1jF7Uu"],
+    "match_ids": ["3rJhwARAOBEh", "y7fcMdiQR8sF", "luSpGY4f8yF9"],
+    "champion_external_id": "DUq32rNObrUk",
+    "champion_name": "Thomas Kildal"
+  },
+  "ranking_points": {
+    "DUq32rNObrUk": 4,
+    "0J6SDLVfThUs": 3,
+    "5sIceSlYm33a": 2,
+    "Rujhhq1jF7Uu": 2,
+    "xTpeuJWBefFN": 1,
+    "GFg9pZkPKrpU": 1,
+    "lGf1wBj3yKWV": 1,
+    "2bhzMxZ5bdyy": 1
+  },
+  "ranking_stages": {
+    "DUq32rNObrUk": "Winner",
+    "0J6SDLVfThUs": "Final",
+    "5sIceSlYm33a": "Semi-Final",
+    "Rujhhq1jF7Uu": "Semi-Final",
+    "xTpeuJWBefFN": "Group stage",
+    "GFg9pZkPKrpU": "Group stage",
+    "lGf1wBj3yKWV": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #7 Champion Thomas Kildal",
+    "verified_at": "2026-09-21T18:34:00Z"
+  }
+}
