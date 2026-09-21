@@ -95,6 +95,16 @@
     overflow:hidden!important;
     touch-action:none;
   }
+  /* Admin keeps the page interactive even while the drawer is open. The admin
+     drawer has an explicit close button and does not use a full-screen overlay. */
+  body[data-portal-default="overview"].unified-mobile-drawer-open{
+    overflow:auto!important;
+    touch-action:auto!important;
+  }
+  body[data-portal-default="overview"] .unified-mobile-drawer-overlay{
+    display:none!important;
+    pointer-events:none!important;
+  }
 
   body[data-portal-default="home"] .portal-nav.portal-menu,
   body[data-portal-default="overview"] .section-nav.portal-menu{

@@ -392,9 +392,13 @@ el.loginForm.addEventListener("submit", async (event) => {
     state.me = data.user;
     window.BlindleiaApp?.session?.prime?.(state.me);
     if (!["club_admin", "super_admin"].includes(state.me?.role || "")) throw new Error("Denne kontoen har ikke administratortilgang.");
-    await loadClubs();
     showAdmin();
-    await loadAll();
+    try {
+      await loadClubs();
+      await loadAll();
+    } catch (error) {
+      showMessage(el.globalMessage, error.message, "error");
+    }
   } catch (error) {
     persistToken("");
     showMessage(el.loginMessage, error.message, "error");
@@ -483,12 +487,11 @@ async function boot() {
     showLogin();
     return;
   }
+  showAdmin();
   try {
     await loadClubs();
-    showAdmin();
     await loadAll();
   } catch (error) {
-    showAdmin();
     showMessage(el.globalMessage, error.message, "error");
   }
 }
