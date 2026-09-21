@@ -62,7 +62,7 @@ jobs:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           TOKEN: ${{ steps.session.outputs.token }}
         run: |
-          cat >/tmp/probe.mjs <<'EOF'
+          cat >.desktop-hit-test.mjs <<'EOF'
           import { chromium } from "playwright";
           const browser=await chromium.launch({headless:true});
           const page=await browser.newPage({viewport:{width:1440,height:1000}});
@@ -98,7 +98,7 @@ jobs:
           await browser.close();
           if(failures) process.exit(1);
           EOF
-          node /tmp/probe.mjs
+          node .desktop-hit-test.mjs
 
       - name: Cleanup TEST session
         if: always() && steps.session.outputs.session_id != ''
