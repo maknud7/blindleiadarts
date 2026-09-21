@@ -95,6 +95,29 @@ jobs:
             console.log(JSON.stringify(data,null,2));
             if(data.cover.length||data.blocked.length) failures++;
           }
+          console.log("=== TRANSITION player -> admin -> player ===");
+          await page.goto(base+"/#home",{waitUntil:"domcontentloaded",timeout:30000});
+          await page.waitForTimeout(5000);
+          const adminLink=page.locator("#adminPortalLink").filter({visible:true});
+          if(await adminLink.count()===0) throw new Error("Visible admin portal link not found on player home");
+          await adminLink.first().click({timeout:10000});
+          await page.waitForTimeout(8000);
+          console.log("after admin click",await page.url());
+          if(!page.url().includes("#club")) throw new Error("Admin navigation did not reach #club");
+
+          const adminTournament=page.locator('a[href="#tournaments"]').filter({visible:true});
+          if(await adminTournament.count()===0) throw new Error("Visible admin tournament link not found");
+          await adminTournament.first().click({timeout:10000});
+          await page.waitForTimeout(3000);
+          console.log("after admin tournament click",await page.url(),await page.evaluate(()=>document.body.dataset.portalActive||""));
+
+          const homeLink=page.locator('a[href="#home"]').filter({visible:true});
+          if(await homeLink.count()===0) throw new Error("Visible home link not found in admin shell");
+          await homeLink.first().click({timeout:10000});
+          await page.waitForTimeout(5000);
+          console.log("after player home click",await page.url(),await page.evaluate(()=>document.body.dataset.portalActive||""));
+          if(!page.url().includes("#home")) throw new Error("Return to player home did not reach #home");
+
           await browser.close();
           if(failures) process.exit(1);
           EOF
