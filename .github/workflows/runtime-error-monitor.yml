@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/runtime-error-monitor.yml'
       - 'infra/monitor/runtime_errors.php'
+      - 'infra/monitor/runtime_performance.php'
       - 'packages/ui-assets/activity.js'
       - 'packages/ui-assets/runtime-diagnostics.js'
       - 'apps/api/src/Repository/ActivityRepository.php'
@@ -48,6 +49,27 @@ jobs:
           for name in DB_HOST DB_NAME DB_USERNAME DB_PASSWORD; do
             test -n "${!name:-}" || { echo "::error::Missing ${name}"; exit 2; }
           done
+
+      - name: Inspect captured TEST and PROD slow API calls
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MONITOR_WINDOW_MINUTES: '180'
+        run: |
+          set -Eeuo pipefail
+
+          echo "### Runtime Performance Monitor" >> "$GITHUB_STEP_SUMMARY"
+          echo "Browser calls at or above 5,000 ms are captured as api_slow. This report does not fail the workflow; it exposes the endpoint, page and measured elapsed time." >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+
+          MONITOR_ENV=TEST DB_TABLE_PREFIX=bd_test_ php infra/monitor/runtime_performance.php | tee /tmp/test-runtime-performance.txt
+          cat /tmp/test-runtime-performance.txt >> "$GITHUB_STEP_SUMMARY"
+
+          MONITOR_ENV=PROD DB_TABLE_PREFIX=bd_prod_ php infra/monitor/runtime_performance.php | tee /tmp/prod-runtime-performance.txt
+          cat /tmp/prod-runtime-performance.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Inspect captured TEST and PROD runtime errors
         env:
