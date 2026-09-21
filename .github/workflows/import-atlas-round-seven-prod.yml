@@ -141,7 +141,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/round-seven-probe.json
-          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\\n";')
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
           for id in "${ids[@]}"; do
             imported=no
             for attempt in $(seq 1 5); do
