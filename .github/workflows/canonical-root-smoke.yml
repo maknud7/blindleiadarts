@@ -56,7 +56,21 @@ jobs:
 
           grep -Fq 'data-canonical-router="1"' <<<"$root_html"
           grep -Fq 'app-core.js' <<<"$root_html"
-          grep -Fq 'app.session.resolve()' <<<"$root_html"
+          grep -Fq 'initial.surface === "admin"' <<<"$root_html"
+          grep -Fq 'const user = await app.session.resolve();' <<<"$root_html"
+          if php -r '
+            $html=file_get_contents("php://stdin");
+            if (!preg_match("/async function boot\(\).*?const source/s", $html, $m)) exit(2);
+            $boot=$m[0];
+            $playerGate=strpos($boot, "if (initial.surface === \"admin\")");
+            $auth=strpos($boot, "const user = await app.session.resolve();");
+            if ($playerGate === false || $auth === false || $auth < $playerGate) exit(1);
+          ' <<<"$root_html"; then
+            :
+          else
+            echo "Canonical player boot must not resolve auth before the admin-only gate." >&2
+            exit 1
+          fi
           grep -Fq '/packages/ui-assets/canonical-entry.js' <<<"$player_html"
           grep -Fq '/packages/ui-assets/canonical-entry.js' <<<"$admin_html"
           grep -Fq '/packages/ui-assets/blindleia-system.css' <<<"$player_html"
