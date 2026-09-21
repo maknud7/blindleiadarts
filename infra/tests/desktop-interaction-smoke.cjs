@@ -114,11 +114,35 @@ async function inspectInteraction(page, label) {
         const x = Math.max(0, Math.min(vw - 1, Math.round(r.left + r.width / 2)));
         const y = Math.max(0, Math.min(vh - 1, Math.round(r.top + r.height / 2)));
         const hit = document.elementFromPoint(x,y);
+        const ancestors = [];
+        let node = el;
+        while (node && node !== document.documentElement) {
+          const cs = getComputedStyle(node);
+          const nr = node.getBoundingClientRect();
+          ancestors.push({
+            tag: node.tagName,
+            id: node.id || "",
+            class: typeof node.className === "string" ? node.className : "",
+            inert: !!node.inert,
+            inertAttr: node.hasAttribute?.("inert") || false,
+            ariaHidden: node.getAttribute?.("aria-hidden"),
+            pointerEvents: cs.pointerEvents,
+            visibility: cs.visibility,
+            display: cs.display,
+            position: cs.position,
+            zIndex: cs.zIndex,
+            overflow: cs.overflow,
+            transform: cs.transform,
+            rect: { x: Math.round(nr.x), y: Math.round(nr.y), w: Math.round(nr.width), h: Math.round(nr.height) },
+          });
+          node = node.parentElement;
+        }
         return {
           target: desc(el),
           hit: desc(hit),
           hitInsideTarget: !!hit && (hit === el || el.contains(hit)),
           text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
+          ancestors,
         };
       });
 
@@ -138,15 +162,11 @@ async function inspectInteraction(page, label) {
   console.log(JSON.stringify(result, null, 2));
 
   const badNav = result.nav.filter((item) => !item.hitInsideTarget);
-  if (result.blockers.length) {
-    throw new Error(label + ": full-screen pointer blocker(s): " + JSON.stringify(result.blockers));
-  }
-  if (badNav.length) {
-    throw new Error(label + ": navigation hit-test blocked: " + JSON.stringify(badNav));
-  }
-  if (result.bodyPointerEvents === "none") {
-    throw new Error(label + ": body has pointer-events:none");
-  }
+  const failures = [];
+  if (result.blockers.length) failures.push("full-screen pointer blocker(s): " + JSON.stringify(result.blockers));
+  if (badNav.length) failures.push("navigation hit-test blocked: " + JSON.stringify(badNav));
+  if (result.bodyPointerEvents === "none") failures.push("body has pointer-events:none");
+  return failures;
 }
 
 async function main() {
@@ -167,6 +187,7 @@ async function main() {
   });
   await installApiStubs(page);
 
+  const failures = [];
   for (const [label, hash] of [
     ["Player home", "#home"],
     ["Player tournaments", "#tournaments"],
@@ -175,7 +196,8 @@ async function main() {
   ]) {
     await page.goto(base + "/" + hash, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(1200);
-    await inspectInteraction(page, label);
+    const pageFailures = await inspectInteraction(page, label);
+    failures.push(...pageFailures.map((message) => label + ": " + message));
   }
 
   // Reproduce the actual cross-surface transition: player -> admin.
@@ -191,7 +213,11 @@ async function main() {
   await page.waitForTimeout(1500);
   await page.waitForSelector('body[data-bd-surface="admin"]', { timeout: 10000 });
   await page.waitForSelector('#adminApp:not(.hidden)', { timeout: 10000 });
-  await inspectInteraction(page, "Admin overview after player->admin transition");
+  {
+    const label = "Admin overview after player->admin transition";
+    const pageFailures = await inspectInteraction(page, label);
+    failures.push(...pageFailures.map((message) => label + ": " + message));
+  }
 
   const adminRoutes = [
     ["Admin tournaments", "#tournament-admin"],
@@ -207,7 +233,8 @@ async function main() {
     await page.waitForTimeout(1200);
     await page.waitForSelector('body[data-bd-surface="admin"]', { timeout: 10000 });
     await page.waitForSelector('#adminApp:not(.hidden)', { timeout: 10000 });
-    await inspectInteraction(page, label);
+    const pageFailures = await inspectInteraction(page, label);
+    failures.push(...pageFailures.map((message) => label + ": " + message));
   }
 
   if (consoleErrors.length) {
@@ -216,6 +243,11 @@ async function main() {
   }
 
   await browser.close();
+  if (failures.length) {
+    console.error("\nDESKTOP_INTERACTION_SMOKE_FAILED");
+    failures.forEach((failure) => console.error("- " + failure));
+    process.exit(1);
+  }
   console.log("\nDESKTOP_INTERACTION_SMOKE_OK");
 }
 
