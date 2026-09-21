@@ -337,10 +337,24 @@ function normalizedCurrentView() {
 }
 
 function setMobileDrawer(open) {
-  if (!window.matchMedia("(max-width: 760px)").matches) open = false;
-  document.body.classList.toggle("unified-mobile-drawer-open", open);
+  const mobile = window.matchMedia("(max-width: 760px)").matches;
   const overlay = document.getElementById("unifiedMobileDrawerOverlay");
   const more = document.getElementById("unifiedMobileMore");
+
+  if (!mobile) {
+    document.body.classList.remove("unified-mobile-drawer-open");
+    if (overlay) overlay.hidden = true;
+    if (more) more.setAttribute("aria-expanded", "false");
+    if (nav) {
+      nav.removeAttribute("aria-hidden");
+      nav.removeAttribute("inert");
+      if ("inert" in nav) nav.inert = false;
+    }
+    syncMobileBottomNav();
+    return;
+  }
+
+  document.body.classList.toggle("unified-mobile-drawer-open", open);
   if (overlay) overlay.hidden = !open;
   if (more) more.setAttribute("aria-expanded", open ? "true" : "false");
   if (nav) {
