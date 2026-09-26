@@ -1,0 +1,163 @@
+name: Desktop Platform Hit Test
+
+on:
+  push:
+    branches:
+      - diag/desktop-platform-hit-test
+
+permissions:
+  contents: read
+
+jobs:
+  hit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Create temporary TEST admin session
+        id: session
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          token="$(openssl rand -hex 32)"
+          export BROWSER_TEST_TOKEN="$token"
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)(getenv("DB_PORT") ?: 3306));
+            $db->set_charset("utf8mb4");
+            $sql="SELECT ua.id FROM bd_prod_user_accounts ua INNER JOIN bd_prod_global_user_roles gur ON gur.user_account_id=ua.id AND gur.role=\"super_admin\" WHERE ua.is_active=1 AND ua.account_status=\"active\" ORDER BY ua.id LIMIT 1";
+            $row=$db->query($sql)->fetch_assoc();
+            if (!$row) {
+              $sql="SELECT ua.id FROM bd_prod_user_accounts ua INNER JOIN bd_prod_club_user_roles cur ON cur.user_account_id=ua.id AND cur.role=\"club_admin\" WHERE ua.is_active=1 AND ua.account_status=\"active\" ORDER BY ua.id LIMIT 1";
+              $row=$db->query($sql)->fetch_assoc();
+            }
+            if (!$row) { fwrite(STDERR,"No admin identity found\n"); exit(2); }
+            $uid=(string)$row["id"];
+            $hash=hash("sha256",getenv("BROWSER_TEST_TOKEN"));
+            $stmt=$db->prepare("INSERT INTO bd_test_auth_sessions (user_account_id,session_token_hash,expires_at,last_used_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 30 MINUTE),NOW())");
+            $stmt->bind_param("ss",$uid,$hash);
+            $stmt->execute();
+            file_put_contents(getenv("GITHUB_OUTPUT"),"token=".getenv("BROWSER_TEST_TOKEN")."\nsession_id=".$db->insert_id."\n",FILE_APPEND);
+          '
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Probe desktop routes
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          TOKEN: ${{ steps.session.outputs.token }}
+        run: |
+          cat >.desktop-hit-test.mjs <<'EOF'
+          import { chromium } from "playwright";
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1440,height:1000}});
+          await page.addInitScript((token)=>localStorage.setItem("bd:token",token),process.env.TOKEN);
+          const base=process.env.BASE_URL.replace(/\/$/,"");
+          const steps=[
+            {name:"home",goto:"#home"},
+            {name:"tournaments",click:'a[href$="#tournaments"]',expect:"#tournaments"},
+            {name:"statistics",click:'a[href$="#statistics"]',expect:"#statistics"},
+            {name:"admin",click:'a[href$="#club"]',expect:"#club",wait:8000},
+            {name:"admin-tournaments",click:'a[href="#tournaments"]',expect:"#tournament-admin"},
+            {name:"admin-seasons",click:'a[href="#seasons"]',expect:"#seasons"},
+            {name:"admin-players",click:'a[href="#playerbase"]',expect:"#playerbase"},
+            {name:"admin-members",click:'a[href="#players"]',expect:"#members"},
+            {name:"admin-equipment",click:'a[href="#kiosks"]',expect:"#equipment"},
+            {name:"admin-settings",click:'a[href="#integrations"]',expect:"#settings"},
+            {name:"back-player",goto:"#home"}
+          ];
+          let failures=0;
+          for(const step of steps){
+            if(step.goto){
+              await page.goto(base+"/"+step.goto,{waitUntil:"domcontentloaded",timeout:30000});
+            } else {
+              const locator=page.locator(step.click).filter({visible:true}).first();
+              if(await locator.count()===0){
+                console.log("MISSING CLICK TARGET",step.name,step.click);
+                failures++;
+                continue;
+              }
+              await locator.click({timeout:10000});
+              await page.waitForFunction((hash)=>location.hash===hash,step.expect,{timeout:15000}).catch(()=>{});
+            }
+            await page.waitForTimeout(step.wait||3000);
+            const data=await page.evaluate(()=>{
+              const visible=el=>{
+                const cs=getComputedStyle(el), r=el.getBoundingClientRect();
+                return cs.display!=="none"&&cs.visibility!=="hidden"&&+cs.opacity>0.01&&r.width>4&&r.height>4&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth;
+              };
+              const cover=[...document.querySelectorAll("body *")].filter(el=>{
+                if(!visible(el)) return false;
+                const cs=getComputedStyle(el),r=el.getBoundingClientRect();
+                return (cs.position==="fixed"||cs.position==="absolute")&&cs.pointerEvents!=="none"&&r.width>=innerWidth*.8&&r.height>=innerHeight*.8;
+              }).map(el=>({tag:el.tagName,id:el.id,cls:String(el.className||"").slice(0,120),z:getComputedStyle(el).zIndex,pointer:getComputedStyle(el).pointerEvents}));
+              const blocked=[];
+              for(const el of [...document.querySelectorAll("a[href],button,select,input")].filter(visible).slice(0,100)){
+                const r=el.getBoundingClientRect(),x=Math.max(0,Math.min(innerWidth-1,r.left+r.width/2)),y=Math.max(0,Math.min(innerHeight-1,r.top+r.height/2));
+                const top=document.elementFromPoint(x,y);
+                if(top&&top!==el&&!el.contains(top)&&!top.contains(el)) blocked.push({target:el.id||el.getAttribute("href")||el.textContent?.trim().slice(0,50),blocker:top.id||String(top.className||"").slice(0,80)||top.tagName,point:[Math.round(x),Math.round(y)]});
+              }
+              return {href:location.href,active:document.body.dataset.portalActive||"",bodyClass:document.body.className,cover,blocked,center:document.elementsFromPoint(innerWidth/2,innerHeight/2).slice(0,6).map(el=>({tag:el.tagName,id:el.id,cls:String(el.className||"").slice(0,80),pointer:getComputedStyle(el).pointerEvents,z:getComputedStyle(el).zIndex}))};
+            });
+            console.log("=== "+step.name+" "+data.href+" ===");
+            console.log(JSON.stringify(data,null,2));
+            if(data.cover.length||data.blocked.length) failures++;
+          }
+          console.log("=== TRANSITION player -> admin -> player ===");
+          await page.goto(base+"/#home",{waitUntil:"domcontentloaded",timeout:30000});
+          await page.waitForTimeout(5000);
+          const adminLink=page.locator('a[href$="#club"]').filter({visible:true});
+          if(await adminLink.count()===0) throw new Error("Visible admin portal link not found on player home");
+          await adminLink.first().click({timeout:10000});
+          await page.waitForTimeout(8000);
+          console.log("after admin click",await page.url());
+          if(!page.url().includes("#club")) throw new Error("Admin navigation did not reach #club");
+
+          const adminTournament=page.locator('a[href="#tournaments"],a[href$="#tournament-admin"]').filter({visible:true});
+          if(await adminTournament.count()===0) throw new Error("Visible admin tournament link not found");
+          await adminTournament.first().click({timeout:10000});
+          await page.waitForTimeout(3000);
+          console.log("after admin tournament click",await page.url(),await page.evaluate(()=>document.body.dataset.portalActive||""));
+
+          const homeLink=page.locator('a[href="#home"],a[href$="#home"]').filter({visible:true});
+          if(await homeLink.count()===0) throw new Error("Visible home link not found in admin shell");
+          await homeLink.first().click({timeout:10000});
+          await page.waitForTimeout(5000);
+          console.log("after player home click",await page.url(),await page.evaluate(()=>document.body.dataset.portalActive||""));
+          if(!page.url().includes("#home")) throw new Error("Return to player home did not reach #home");
+
+          await browser.close();
+          if(failures) process.exit(1);
+          EOF
+          node .desktop-hit-test.mjs
+
+      - name: Cleanup TEST session
+        if: always() && steps.session.outputs.session_id != ''
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SESSION_ID: ${{ steps.session.outputs.session_id }}
+        run: |
+          php -r '
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)(getenv("DB_PORT") ?: 3306));
+            $stmt=$db->prepare("DELETE FROM bd_test_auth_sessions WHERE id=?");
+            $id=(string)getenv("SESSION_ID"); $stmt->bind_param("s",$id); $stmt->execute();
+          '
