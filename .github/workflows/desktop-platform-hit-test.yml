@@ -73,12 +73,12 @@ jobs:
             {name:"tournaments",click:'a[href$="#tournaments"]',expect:"#tournaments"},
             {name:"statistics",click:'a[href$="#statistics"]',expect:"#statistics"},
             {name:"admin",click:'a[href$="#club"]',expect:"#club",wait:8000},
-            {name:"admin-tournaments",click:'a[href$="#tournament-admin"]',expect:"#tournament-admin"},
-            {name:"admin-seasons",click:'a[href$="#seasons"]',expect:"#seasons"},
-            {name:"admin-players",click:'a[href$="#playerbase"]',expect:"#playerbase"},
-            {name:"admin-members",click:'a[href$="#members"]',expect:"#members"},
-            {name:"admin-equipment",click:'a[href$="#equipment"]',expect:"#equipment"},
-            {name:"admin-settings",click:'a[href$="#settings"]',expect:"#settings"},
+            {name:"admin-tournaments",click:'a[href="#tournaments"]',expect:"#tournament-admin"},
+            {name:"admin-seasons",click:'a[href="#seasons"]',expect:"#seasons"},
+            {name:"admin-players",click:'a[href="#playerbase"]',expect:"#playerbase"},
+            {name:"admin-members",click:'a[href="#players"]',expect:"#members"},
+            {name:"admin-equipment",click:'a[href="#kiosks"]',expect:"#equipment"},
+            {name:"admin-settings",click:'a[href="#integrations"]',expect:"#settings"},
             {name:"back-player",goto:"#home"}
           ];
           let failures=0;
