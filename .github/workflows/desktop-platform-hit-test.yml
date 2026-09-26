@@ -68,11 +68,34 @@ jobs:
           const page=await browser.newPage({viewport:{width:1440,height:1000}});
           await page.addInitScript((token)=>localStorage.setItem("bd:token",token),process.env.TOKEN);
           const base=process.env.BASE_URL.replace(/\/$/,"");
-          const routes=["#home","#tournaments","#statistics","#club"];
+          const steps=[
+            {name:"home",goto:"#home"},
+            {name:"tournaments",click:'a[href$="#tournaments"]',expect:"#tournaments"},
+            {name:"statistics",click:'a[href$="#statistics"]',expect:"#statistics"},
+            {name:"admin",click:'a[href$="#club"]',expect:"#club",wait:8000},
+            {name:"admin-tournaments",click:'a[href$="#tournament-admin"]',expect:"#tournament-admin"},
+            {name:"admin-seasons",click:'a[href$="#seasons"]',expect:"#seasons"},
+            {name:"admin-players",click:'a[href$="#playerbase"]',expect:"#playerbase"},
+            {name:"admin-members",click:'a[href$="#members"]',expect:"#members"},
+            {name:"admin-equipment",click:'a[href$="#equipment"]',expect:"#equipment"},
+            {name:"admin-settings",click:'a[href$="#settings"]',expect:"#settings"},
+            {name:"back-player",goto:"#home"}
+          ];
           let failures=0;
-          for(const route of routes){
-            await page.goto(base+"/"+route,{waitUntil:"domcontentloaded",timeout:30000});
-            await page.waitForTimeout(route==="#club"?8000:5000);
+          for(const step of steps){
+            if(step.goto){
+              await page.goto(base+"/"+step.goto,{waitUntil:"domcontentloaded",timeout:30000});
+            } else {
+              const locator=page.locator(step.click).filter({visible:true}).first();
+              if(await locator.count()===0){
+                console.log("MISSING CLICK TARGET",step.name,step.click);
+                failures++;
+                continue;
+              }
+              await locator.click({timeout:10000});
+              await page.waitForFunction((hash)=>location.hash===hash,step.expect,{timeout:15000}).catch(()=>{});
+            }
+            await page.waitForTimeout(step.wait||3000);
             const data=await page.evaluate(()=>{
               const visible=el=>{
                 const cs=getComputedStyle(el), r=el.getBoundingClientRect();
@@ -91,7 +114,7 @@ jobs:
               }
               return {href:location.href,active:document.body.dataset.portalActive||"",bodyClass:document.body.className,cover,blocked,center:document.elementsFromPoint(innerWidth/2,innerHeight/2).slice(0,6).map(el=>({tag:el.tagName,id:el.id,cls:String(el.className||"").slice(0,80),pointer:getComputedStyle(el).pointerEvents,z:getComputedStyle(el).zIndex}))};
             });
-            console.log("=== "+route+" ===");
+            console.log("=== "+step.name+" "+location.hash+" ===");
             console.log(JSON.stringify(data,null,2));
             if(data.cover.length||data.blocked.length) failures++;
           }
