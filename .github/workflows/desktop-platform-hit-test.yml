@@ -114,7 +114,7 @@ jobs:
               }
               return {href:location.href,active:document.body.dataset.portalActive||"",bodyClass:document.body.className,cover,blocked,center:document.elementsFromPoint(innerWidth/2,innerHeight/2).slice(0,6).map(el=>({tag:el.tagName,id:el.id,cls:String(el.className||"").slice(0,80),pointer:getComputedStyle(el).pointerEvents,z:getComputedStyle(el).zIndex}))};
             });
-            console.log("=== "+step.name+" "+location.hash+" ===");
+            console.log("=== "+step.name+" "+data.href+" ===");
             console.log(JSON.stringify(data,null,2));
             if(data.cover.length||data.blocked.length) failures++;
           }
