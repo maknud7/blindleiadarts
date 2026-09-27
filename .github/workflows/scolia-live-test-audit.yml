@@ -69,13 +69,20 @@ jobs:
             echo "BUFFERS=".$buffers->num_rows.PHP_EOL;
             while($r=$buffers->fetch_assoc()) echo "BUFFER ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
 
-            $matches=$db->query("SELECT m.id,m.kiosk_id,m.status,m.player_a_id,m.player_b_id,m.started_at,m.completed_at
+            $matches=$db->query("SELECT m.id,m.kiosk_id,m.status,m.player_a_id,m.player_b_id
               FROM bd_test_matches m
               INNER JOIN bd_test_kiosks k ON k.id=m.kiosk_id
               WHERE k.source_kiosk_id=4 AND m.status IN (\"assigned\",\"in_progress\")
               ORDER BY m.id DESC LIMIT 10");
             echo "ACTIVE_MATCHES=".$matches->num_rows.PHP_EOL;
             while($r=$matches->fetch_assoc()) echo "MATCH ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+            $prodEvents=$db->query("SELECT id,kiosk_id,match_id,event_type,received_at,processing_status,canonical_visit_id
+              FROM bd_prod_scolia_events
+              WHERE kiosk_id=4 AND received_at>=DATE_SUB(NOW(3),INTERVAL 10 MINUTE)
+              ORDER BY id DESC LIMIT 30");
+            echo "RECENT_PROD_EVENTS=".$prodEvents->num_rows.PHP_EOL;
+            while($r=$prodEvents->fetch_assoc()) echo "PROD_EVENT ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
           '
 
           echo "--- ROUTER ---"
