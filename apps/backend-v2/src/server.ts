@@ -51,6 +51,7 @@ import { RuntimeHealthRouter } from "./runtime/runtime-health-router.js";
 import { SeasonAdminRouter } from "./runtime/season-admin-router.js";
 import { SeasonPublicReadRouter } from "./runtime/season-public-read-router.js";
 import { ScoliaRuntimeRouter } from "./runtime/scolia-runtime-router.js";
+import { ScoliaRealtimePublisher } from "./runtime/scolia-realtime-publisher.js";
 import { SystemStatusRouter } from "./runtime/system-status-router.js";
 import { TournamentAttendanceRouter } from "./runtime/tournament-attendance-router.js";
 import { TournamentCatalogReadRouter } from "./runtime/tournament-catalog-read-router.js";
@@ -141,6 +142,11 @@ const scoliaCommands = new MySqlScoliaCommandRepository(sessions, config.prefixe
 const scoliaKioskAuth = new MySqlScoliaKioskAuthRepository(sessions, config.prefixes.runtime);
 const scoliaKioskRuntime = new MySqlScoliaKioskRuntimeRepository(sessions, config.prefixes.runtime, config.prefixes.hardware);
 const scoliaProcessor = new ScoliaEventProcessor(scoliaBridge, scoring, scoliaKioskRuntime, scoliaCommands);
+const scoliaInputRealtime = new ScoliaRealtimePublisher({
+  publishUrl: config.realtime.publishUrl,
+  publishSecret: config.realtime.publishSecret,
+  timeoutMs: config.realtime.timeoutMs,
+});
 const scoliaRuntime = new ScoliaRuntimeRouter(
   config,
   scoliaBridge,
@@ -149,6 +155,7 @@ const scoliaRuntime = new ScoliaRuntimeRouter(
   scoliaKioskAuth,
   scoliaKioskRuntime,
   scoliaAdmin,
+  scoliaInputRealtime,
 );
 const equipmentRuntime = new EquipmentAdminRouter(
   config,
