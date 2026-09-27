@@ -3,6 +3,7 @@ import { api, ApiError, legacyApi } from "../shared/api";
 import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/storage";
 import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard, Visit } from "../shared/types";
 import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
+import { useScoliaRealtimeInput, type ScoliaRealtimeMessage } from "./useScoliaRealtimeInput";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
 type PairingStatusResponse = { status: string; kiosk?: { code?: string; name?: string }; snapshot?: KioskSnapshot | null };
@@ -18,10 +19,20 @@ type PendingManualVisit = {
   requestId: string;
   clientTimestampMs: number;
   sequence: number;
+  endpoint: "manual" | "scolia";
   body: Record<string, unknown>;
   optimisticMode: InputMode;
   optimisticScore: number;
   optimisticDarts: ManualDart[];
+};
+type ScoliaRealtimeTurn = {
+  matchId: number;
+  playerId: number;
+  playerName: string;
+  startedRemaining: number;
+  darts: ManualDart[];
+  sourceTokens: string[];
+  bridgeSequences: number[];
 };
 type CompletedMatchSummary = {
   id?: number | string;
@@ -99,6 +110,33 @@ function manualDartLabel(dart?: ManualDart | null): string {
 function isDoubleOut(darts: ManualDart[]): boolean {
   const last = [...darts].reverse().find((dart) => dart.value !== 0);
   return Boolean(last && last.multiplier === "D");
+}
+
+function boolValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
+}
+
+function mapRealtimeScoliaDart(payload: Record<string, unknown>): ManualDart | null {
+  const sector = String(payload.sector ?? "").trim();
+  if (boolValue(payload.bounceout) || sector === "" || sector.toLowerCase() === "none") {
+    return { multiplier: "S", value: 0 };
+  }
+  if (sector === "25") return { multiplier: "S", value: "BULL" };
+  if (sector.toLowerCase() === "bull") return { multiplier: "D", value: "BULL" };
+  const match = /^([sSdDtT])(\d{1,2})$/.exec(sector);
+  if (!match) return null;
+  const value = Number(match[2]);
+  if (!Number.isInteger(value) || value < 1 || value > 20) return null;
+  return { multiplier: match[1]!.toUpperCase() as Multiplier, value };
+}
+
+async function scoliaSourceRequestId(tokens: string[]): Promise<string> {
+  const raw = new TextEncoder().encode(tokens.join(","));
+  const digest = await crypto.subtle.digest("SHA-256", raw);
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `scolia-source-${hex}`;
 }
 function optimisticManualSnapshot(
   snapshotValue: KioskSnapshot,
