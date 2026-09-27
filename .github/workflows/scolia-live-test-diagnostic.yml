@@ -56,10 +56,10 @@ jobs:
             echo "VISITS ".json_encode($vis,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
           }
 
-          $events=$db->query("SELECT id,event_type,processing_status,canonical_visit_id,provider_event_id,received_at,processed_at,last_error,processing_meta_json FROM bd_test_scolia_events WHERE kiosk_id={$kid} ORDER BY id DESC LIMIT 30")->fetch_all(MYSQLI_ASSOC);
+          $events=$db->query("SELECT id,event_type,processing_status,canonical_visit_id,provider_event_id,received_at,processed_at,last_error,processing_meta_json,payload_json FROM bd_test_scolia_events WHERE kiosk_id={$kid} ORDER BY id DESC LIMIT 30")->fetch_all(MYSQLI_ASSOC);
           echo "EVENTS ".json_encode($events,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
 
-          $cmd=$db->query("SELECT id,command_type,status,created_at,sent_at,completed_at,last_error FROM bd_test_scolia_commands WHERE kiosk_id={$kid} ORDER BY id DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+          $cmd=$db->query("SELECT id,command_type,status,created_at,completed_at,last_error FROM bd_test_scolia_commands WHERE kiosk_id={$kid} ORDER BY id DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC);
           echo "COMMANDS ".json_encode($cmd,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
 
           $lease=$db->query("SELECT physical_kiosk_id,test_kiosk_id,heartbeat_at,expires_at FROM bd_prod_scolia_test_leases WHERE physical_kiosk_id=4 OR test_kiosk_id={$kid} ORDER BY expires_at DESC LIMIT 5")->fetch_all(MYSQLI_ASSOC);
