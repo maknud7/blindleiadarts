@@ -132,12 +132,6 @@ function mapRealtimeScoliaDart(payload: Record<string, unknown>): ManualDart | n
   return { multiplier: match[1]!.toUpperCase() as Multiplier, value };
 }
 
-async function scoliaSourceRequestId(tokens: string[]): Promise<string> {
-  const raw = new TextEncoder().encode(tokens.join(","));
-  const digest = await crypto.subtle.digest("SHA-256", raw);
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `scolia-source-${hex}`;
-}
 function optimisticManualSnapshot(
   snapshotValue: KioskSnapshot,
   inputMode: InputMode,
@@ -333,8 +327,9 @@ export function KioskWorkspace() {
       }
       if (turn.darts.length >= 3) return;
 
-      const sourceToken = String(message.id || "").trim()
-        || (bridgeSequence > 0 ? `seq:${bridgeSequence}` : "");
+      const sourceToken = bridgeSequence > 0
+        ? `seq:${bridgeSequence}`
+        : String(message.id || "").trim() ? `id:${String(message.id).trim()}` : "";
       const nextTurn: ScoliaRealtimeTurn = {
         ...turn,
         darts: [...turn.darts, dart],
@@ -390,7 +385,7 @@ export function KioskWorkspace() {
       });
     }
 
-    void enqueueScoliaRealtimeVisit(turn);
+    enqueueScoliaRealtimeVisit(turn);
   }, [scoliaConfigured]);
 
   useScoliaRealtimeInput({
@@ -821,19 +816,16 @@ export function KioskWorkspace() {
     }
   }
 
-  async function enqueueScoliaRealtimeVisit(turn: ScoliaRealtimeTurn) {
+  function enqueueScoliaRealtimeVisit(turn: ScoliaRealtimeTurn) {
     if (!kioskCode || turn.darts.length === 0) return;
-    const tokens = turn.sourceTokens.length === turn.darts.length
-      ? turn.sourceTokens
-      : turn.bridgeSequences.map((sequence) => `seq:${sequence}`);
-    if (tokens.length !== turn.darts.length) {
+    if (turn.bridgeSequences.length !== turn.darts.length) {
       setManualQueueError("Scolia-kastet mangler sikker eventrekkefølge. Oppdater status før dere fortsetter.");
       return;
     }
 
-    const requestId = await scoliaSourceRequestId(tokens);
     const firstSequence = turn.bridgeSequences[0] || Date.now();
     const lastSequence = turn.bridgeSequences[turn.bridgeSequences.length - 1] || firstSequence;
+    const requestId = `scolia-seq-${turn.bridgeSequences.join("-")}`;
     const pending: PendingManualVisit = {
       requestId,
       clientTimestampMs: firstSequence,
