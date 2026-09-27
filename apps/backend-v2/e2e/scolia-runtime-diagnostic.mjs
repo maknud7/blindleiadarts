@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { loadRuntimeConfig } from "../dist/runtime/config.js";
 import { MySql2SessionProvider } from "../dist/mysql/mysql2-session-provider.js";
@@ -31,6 +31,44 @@ const provider = new MySql2SessionProvider({
 });
 const bridge = new MySqlScoliaBridgeRepository(provider, config.prefixes.runtime, config.prefixes.hardware);
 const processor = new ScoliaEventProcessor(bridge, {});
+
+await dumpPhysicalBoardSnapshot(provider);
+
+const resetPhaseMessageId = randomUUID();
+const resetPhaseCommandId = await provider.withConnection(async (sql) => {
+  const recent = await sql.query(
+    `SELECT id,status,message_id,created_at
+       FROM \`bd_test_scolia_commands\`
+      WHERE club_id='1' AND kiosk_id='543' AND command_type='RESET_PHASE'
+        AND status IN ('queued','delivered')
+        AND created_at >= DATE_SUB(NOW(3), INTERVAL 2 MINUTE)
+      ORDER BY id DESC LIMIT 1`,
+  );
+  if (recent[0]) return String(recent[0].id);
+  const result = await sql.execute(
+    `INSERT INTO \`bd_test_scolia_commands\`
+      (club_id,kiosk_id,command_type,message_id,payload_json,status,priority,created_by_user_id)
+     VALUES ('1','543','RESET_PHASE',?,NULL,'queued',100,NULL)`,
+    [resetPhaseMessageId],
+  );
+  return String(result.insertId);
+});
+console.log(JSON.stringify({ scenario: "physical-scolia-reset-phase", command_id: resetPhaseCommandId, message_id: resetPhaseMessageId }));
+
+for (let attempt = 0; attempt < 15; attempt += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const command = await provider.withConnection(async (sql) => {
+    const rows = await sql.query(
+      `SELECT id,command_type,message_id,status,attempt_count,created_at,delivered_at,completed_at,last_error
+         FROM \`bd_test_scolia_commands\`
+        WHERE id=? LIMIT 1`,
+      [resetPhaseCommandId],
+    );
+    return rows[0] ?? null;
+  });
+  console.log(JSON.stringify({ scenario: "physical-scolia-reset-phase-status", command }));
+  if (command && ["completed","failed"].includes(String(command.status))) break;
+}
 
 await dumpPhysicalBoardSnapshot(provider);
 await provider.close();
