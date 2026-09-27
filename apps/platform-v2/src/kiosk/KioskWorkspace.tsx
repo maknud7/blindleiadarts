@@ -266,7 +266,13 @@ export function KioskWorkspace() {
   const [visitEditId, setVisitEditId] = useState<number | null>(null);
   const [visitEditValue, setVisitEditValue] = useState("");
   const [visitEditError, setVisitEditError] = useState("");
+  const [scoliaTurnActive, setScoliaTurnActive] = useState(false);
+  const [scoliaRealtimeDarts, setScoliaRealtimeDarts] = useState<ManualDart[]>([]);
+  const [scoliaRealtimeLastVisit, setScoliaRealtimeLastVisit] = useState<ScoliaLastVisit | null>(null);
   const mounted = useRef(true);
+  const snapshotRef = useRef<KioskSnapshot | null>(null);
+  const scoliaTurnRef = useRef<ScoliaRealtimeTurn | null>(null);
+  const scoliaLastSequenceRef = useRef(0);
   const manualQueueRef = useRef<PendingManualVisit[]>([]);
   const manualQueueRunning = useRef(false);
   const manualQueuePaused = useRef(false);
@@ -289,6 +295,109 @@ export function KioskWorkspace() {
 
   const scolia = useScoliaRuntime({ environment: health?.environment, kioskCode, kioskToken, testMode: effectiveTestMode, physicalBoardId, enabled: scoliaConfigured });
   const effectiveScoringMode = !scoliaConfigured ? "manual" : scolia.leasePending ? "scolia-pending" : scolia.leaseFallback ? "manual" : (scolia.effectiveScoringMode || "scolia");
+
+  const handleScoliaRealtimeInput = useCallback((input: ScoliaRealtimeMessage) => {
+    if (!scoliaConfigured) return;
+    const message = input.message;
+    if (!message || typeof message !== "object") return;
+    const type = String(message.type || "").toUpperCase();
+    const rawSequence = input.bridge_sequence ?? message.bridgeSequence ?? 0;
+    const bridgeSequence = Number(rawSequence || 0);
+    if (Number.isFinite(bridgeSequence) && bridgeSequence > 0) {
+      if (bridgeSequence <= scoliaLastSequenceRef.current) return;
+      scoliaLastSequenceRef.current = bridgeSequence;
+    }
+    const payload = message.payload && typeof message.payload === "object" && !Array.isArray(message.payload)
+      ? message.payload
+      : {};
+
+    if (type === "THROW_DETECTED") {
+      const current = snapshotRef.current;
+      const activeMatch = current?.match;
+      const player = currentPlayer(activeMatch);
+      if (!activeMatch?.id || String(activeMatch.status || "") !== "in_progress" || !player) return;
+      const dart = mapRealtimeScoliaDart(payload);
+      if (!dart) return;
+
+      let turn = scoliaTurnRef.current;
+      if (!turn || turn.matchId !== Number(activeMatch.id) || turn.playerId !== Number(player.id)) {
+        turn = {
+          matchId: Number(activeMatch.id),
+          playerId: Number(player.id),
+          playerName: player.display_name,
+          startedRemaining: Number(player.remaining),
+          darts: [],
+          sourceTokens: [],
+          bridgeSequences: [],
+        };
+      }
+      if (turn.darts.length >= 3) return;
+
+      const sourceToken = String(message.id || "").trim()
+        || (bridgeSequence > 0 ? `seq:${bridgeSequence}` : "");
+      const nextTurn: ScoliaRealtimeTurn = {
+        ...turn,
+        darts: [...turn.darts, dart],
+        sourceTokens: sourceToken ? [...turn.sourceTokens, sourceToken] : [...turn.sourceTokens],
+        bridgeSequences: bridgeSequence > 0 ? [...turn.bridgeSequences, bridgeSequence] : [...turn.bridgeSequences],
+      };
+      scoliaTurnRef.current = nextTurn;
+      setScoliaTurnActive(true);
+      setScoliaRealtimeDarts(nextTurn.darts);
+      return;
+    }
+
+    if (type !== "TAKEOUT_FINISHED" || boolValue(payload.falseTakeout ?? payload.false_takeout ?? false)) return;
+
+    const turn = scoliaTurnRef.current;
+    scoliaTurnRef.current = null;
+    setScoliaTurnActive(false);
+    setScoliaRealtimeDarts([]);
+    if (!turn || turn.darts.length === 0) return;
+
+    const current = snapshotRef.current;
+    const activeMatch = current?.match;
+    const player = currentPlayer(activeMatch);
+    if (!current || !activeMatch?.id || Number(activeMatch.id) !== turn.matchId || !player || Number(player.id) !== turn.playerId) {
+      setManualQueueError("Scolia-kastet må avstemmes. Oppdater status før dere fortsetter.");
+      return;
+    }
+
+    const total = turn.darts.reduce((sum, dart) => sum + manualDartScore(dart), 0);
+    const optimistic = optimisticManualSnapshot(current, "per_dart", total, turn.darts);
+    snapshotRef.current = optimistic;
+    skipNextThrowingReset.current = true;
+    setSnapshot(optimistic);
+
+    const recent = ((optimistic.match?.recent_visits || []) as EditableVisit[])[0];
+    setScoliaRealtimeLastVisit({
+      player_name: turn.playerName,
+      score: total,
+      darts: turn.darts,
+      darts_used: turn.darts.length,
+      is_bust: Number(recent?.is_bust || 0) === 1,
+      remaining_after: recent?.remaining_after ?? undefined,
+    });
+
+    if (optimistic.match?.status === "completed" && optimistic.match.id) {
+      setCompletion({
+        matchId: Number(optimistic.match.id),
+        localMatch: optimistic.match,
+        serverMatch: null,
+        reservation: null,
+        remainingSeconds: 30,
+        confirmed: false,
+      });
+    }
+
+    void enqueueScoliaRealtimeVisit(turn);
+  }, [scoliaConfigured]);
+
+  useScoliaRealtimeInput({
+    enabled: scoliaConfigured && !scolia.leaseFallback && !scolia.fallbackActive,
+    kioskCode,
+    onInput: handleScoliaRealtimeInput,
+  });
 
   function resetInput(): void {
     setScore("");
@@ -336,6 +445,18 @@ export function KioskWorkspace() {
       if (mounted.current) setError(text(cause));
     }
   }, [kioskCode, kioskToken, effectiveTestMode, completion]);
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
+
+  useEffect(() => {
+    scoliaTurnRef.current = null;
+    scoliaLastSequenceRef.current = 0;
+    setScoliaTurnActive(false);
+    setScoliaRealtimeDarts([]);
+    setScoliaRealtimeLastVisit(null);
+  }, [kioskCode, match?.id]);
 
   const loadTestBoards = useCallback(async () => {
     try {
@@ -416,14 +537,14 @@ export function KioskWorkspace() {
 
   useEffect(() => {
     const handle = window.setInterval(() => {
-      if (busy || manualQueueDepth > 0 || score !== "" || darts.length > 0 || checkoutScore !== null) return;
+      if (busy || manualQueueDepth > 0 || scoliaTurnActive || score !== "" || darts.length > 0 || checkoutScore !== null) return;
       if (kioskCode) void loadState();
       else if (effectiveTestMode) { if (!testBoards.length) void loadTestBoards(); }
       else if (pairingCode) void checkPairing();
       else void createPairing();
     }, 1500);
     return () => window.clearInterval(handle);
-  }, [busy, manualQueueDepth, score, darts.length, checkoutScore, kioskCode, effectiveTestMode, pairingCode, testBoards.length, loadState, loadTestBoards, checkPairing, createPairing]);
+  }, [busy, manualQueueDepth, scoliaTurnActive, score, darts.length, checkoutScore, kioskCode, effectiveTestMode, pairingCode, testBoards.length, loadState, loadTestBoards, checkPairing, createPairing]);
 
   useEffect(() => {
     if (skipNextThrowingReset.current) {
@@ -596,7 +717,10 @@ export function KioskWorkspace() {
         const next = manualQueueRef.current[0];
         if (!next) break;
         try {
-          await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/visit`, {
+          const visitPath = next.endpoint === "scolia"
+            ? `/kiosks/${encodeURIComponent(kioskCode)}/scolia/visit`
+            : `/kiosks/${encodeURIComponent(kioskCode)}/visit`;
+          await api<Record<string, unknown>>(visitPath, {
             method: "POST",
             kioskToken,
             body: next.body,
@@ -658,6 +782,7 @@ export function KioskWorkspace() {
       requestId,
       clientTimestampMs,
       sequence,
+      endpoint: "manual",
       body: {
         ...body,
         request_id: requestId,
@@ -694,6 +819,46 @@ export function KioskWorkspace() {
     if (!manualQueuePaused.current) {
       void drainManualVisitQueue();
     }
+  }
+
+  async function enqueueScoliaRealtimeVisit(turn: ScoliaRealtimeTurn) {
+    if (!kioskCode || turn.darts.length === 0) return;
+    const tokens = turn.sourceTokens.length === turn.darts.length
+      ? turn.sourceTokens
+      : turn.bridgeSequences.map((sequence) => `seq:${sequence}`);
+    if (tokens.length !== turn.darts.length) {
+      setManualQueueError("Scolia-kastet mangler sikker eventrekkefølge. Oppdater status før dere fortsetter.");
+      return;
+    }
+
+    const requestId = await scoliaSourceRequestId(tokens);
+    const firstSequence = turn.bridgeSequences[0] || Date.now();
+    const lastSequence = turn.bridgeSequences[turn.bridgeSequences.length - 1] || firstSequence;
+    const pending: PendingManualVisit = {
+      requestId,
+      clientTimestampMs: firstSequence,
+      sequence: lastSequence,
+      endpoint: "scolia",
+      body: {
+        request_id: requestId,
+        input_mode: "per_dart",
+        darts_used: turn.darts.length,
+        darts: turn.darts,
+        client_timestamp_ms: firstSequence,
+        client_sequence: lastSequence,
+      },
+      optimisticMode: "per_dart",
+      optimisticScore: turn.darts.reduce((sum, dart) => sum + manualDartScore(dart), 0),
+      optimisticDarts: [...turn.darts],
+    };
+
+    manualQueueRef.current = [...manualQueueRef.current, pending].sort((a, b) =>
+      a.clientTimestampMs === b.clientTimestampMs
+        ? a.sequence - b.sequence
+        : a.clientTimestampMs - b.clientTimestampMs
+    );
+    setManualQueueDepth(manualQueueRef.current.length);
+    if (!manualQueuePaused.current) void drainManualVisitQueue();
   }
 
   function submitSumVisit(value: number, dartsUsed = 3) {
@@ -915,7 +1080,7 @@ export function KioskWorkspace() {
       {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1>{snapshot?.active_tournament?.name ? <><span className="pill">{snapshot.active_tournament.name}</span><p>Venter på kamp i aktiv turnering</p></> : <><span className="pill">Ingen aktiv turnering</span><p>Skiva er klar, men er ikke med i en aktiv turnering akkurat nå.</p></>}</div>}
       {view === "completed" && completion && kiosk && <CompletionView completion={completion} board={kiosk.board_number} busy={busy || nextMatchBusy.current} onNext={() => void finishCompletion()} />}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
-      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
+      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scoliaRealtimeDarts.length > 0 ? { ...(scolia.board || {}), buffer: { ...(scolia.board?.buffer || {}), darts: scoliaRealtimeDarts } } as ScoliaRuntimeBoard : scolia.board} lastScoliaVisit={scoliaRealtimeLastVisit || scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
 
     {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
