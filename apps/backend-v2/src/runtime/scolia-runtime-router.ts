@@ -9,6 +9,7 @@ import type { MySqlScoliaKioskRuntimeRepository } from "../mysql/scolia-kiosk-ru
 import type { ScoliaEventProcessor } from "../service/scolia-event-processor.js";
 import { assertInternalToken, assertMutationAllowed, type BackendRuntimeConfig } from "./config.js";
 import { KioskScoringFrontdoor } from "./kiosk-scoring-frontdoor.js";
+import type { ScoliaRealtimePublisher } from "./scolia-realtime-publisher.js";
 
 export interface ScoliaRuntimeRouteResult {
   readonly statusCode: number;
@@ -34,6 +35,7 @@ export class ScoliaRuntimeRouter {
     private readonly kioskAuth: MySqlScoliaKioskAuthRepository,
     private readonly kioskRuntime: MySqlScoliaKioskRuntimeRepository,
     private readonly scoliaAdmin: MySqlScoliaAdminRepository,
+    private readonly realtime: ScoliaRealtimePublisher | null = null,
   ) {
     this.kioskScoring = new KioskScoringFrontdoor(config, kioskAuth, processor);
   }
@@ -66,8 +68,21 @@ export class ScoliaRuntimeRouter {
         if (!serial || message === null || typeof message !== "object" || Array.isArray(message)) {
           throw new DomainValidationError("scolia_event_invalid", "serial_number and message are required.", 422);
         }
-        const event = await this.bridge.enqueueEvent(serial, message, body.kiosk_id);
-        return ok({ event, queued: true }, event.duplicate === true ? 200 : 202);
+        const bridgeSequence = stringValue(body.bridge_sequence);
+        const kioskCode = stringValue(body.kiosk_code);
+        const routedMessage = bridgeSequence === ""
+          ? message as Record<string, unknown>
+          : { ...(message as Record<string, unknown>), bridgeSequence };
+        if (kioskCode !== "") {
+          void this.realtime?.publishInput(kioskCode, {
+            bridge_sequence: bridgeSequence || null,
+            spooled_at: body.spooled_at ?? null,
+            environment: body.environment ?? null,
+            message: routedMessage,
+          });
+        }
+        const event = await this.bridge.enqueueEvent(serial, routedMessage, body.kiosk_id);
+        return ok({ event, queued: true, realtime_published: kioskCode !== "" }, event.duplicate === true ? 200 : 202);
       }
       if (method === "POST" && path === "/v1/scolia/bridge/drain") {
         const body = await readJsonObject(request);
@@ -125,7 +140,7 @@ export class ScoliaRuntimeRouter {
       return ok(await this.kioskRuntime.releaseTestLease(paired.club_id, paired.kiosk_id, body.physical_kiosk_id));
     }
 
-    const kioskRoute = /^\/v1\/kiosks\/([^/]+)\/scolia(?:\/(status|undo|fallback|resume|reset-phase|delete-throw|correct-throw))?$/.exec(path);
+    const kioskRoute = /^\/v1\/kiosks\/([^/]+)\/scolia(?:\/(status|visit|undo|fallback|resume|reset-phase|delete-throw|correct-throw))?$/.exec(path);
     if (!kioskRoute) return null;
     const code = decodeURIComponent(capture(kioskRoute, 1));
     const action = kioskRoute[2] ?? "status";
@@ -149,6 +164,9 @@ export class ScoliaRuntimeRouter {
 
     if (method !== "POST") return null;
     assertMutationAllowed(this.config);
+    if (action === "visit") {
+      return ok(await this.processor.recordScoliaVisit(paired.kiosk_id, await readJsonObject(request)));
+    }
     if (action === "undo") {
       const state = await this.kioskUiState(paired.club_id, paired.kiosk_id);
       const buffer = objectValue(state.board.buffer);
