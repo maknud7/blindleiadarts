@@ -234,6 +234,7 @@ export function KioskWorkspace() {
   const manualQueuePaused = useRef(false);
   const manualQueueSequence = useRef(0);
   const skipNextThrowingReset = useRef(false);
+  const lastActiveMatchRef = useRef<KioskMatch | null>(null);
   const postMatchBusy = useRef(false);
   const nextMatchBusy = useRef(false);
 
@@ -265,7 +266,24 @@ export function KioskWorkspace() {
     if (!code) return;
     try {
       const data = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(code)}/state`, { kioskToken: token });
-      if (mounted.current) { setSnapshot(data); setError(""); }
+      if (mounted.current) {
+        const previous = lastActiveMatchRef.current;
+        if (!data.match && previous?.id && String(previous.status || "") === "in_progress" && !completion) {
+          setCompletion({
+            matchId: Number(previous.id),
+            localMatch: previous,
+            serverMatch: null,
+            reservation: null,
+            remainingSeconds: 30,
+            confirmed: false,
+          });
+        }
+        if (data.match && ["assigned", "ready", "pending", "in_progress"].includes(String(data.match.status || ""))) {
+          lastActiveMatchRef.current = data.match;
+        }
+        setSnapshot(data);
+        setError("");
+      }
     } catch (cause) {
       if (cause instanceof ApiError && [401, 403, 404, 409].includes(cause.status)) {
         if (mounted.current) {
@@ -278,7 +296,7 @@ export function KioskWorkspace() {
       }
       if (mounted.current) setError(text(cause));
     }
-  }, [kioskCode, kioskToken, effectiveTestMode]);
+  }, [kioskCode, kioskToken, effectiveTestMode, completion]);
 
   const loadTestBoards = useCallback(async () => {
     try {
@@ -375,6 +393,12 @@ export function KioskWorkspace() {
     }
     resetInput();
   }, [throwingPlayerId]);
+
+  useEffect(() => {
+    if (match && ["assigned", "ready", "pending", "in_progress"].includes(String(match.status || ""))) {
+      lastActiveMatchRef.current = match;
+    }
+  }, [match?.id, match?.status, match?.current_leg, match?.current_player_id, match?.player_a?.legs_won, match?.player_b?.legs_won]);
 
   useEffect(() => {
     if (!completion || manualQueueDepth > 0 || manualQueueError) return;
