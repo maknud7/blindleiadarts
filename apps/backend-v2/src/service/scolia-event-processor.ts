@@ -162,7 +162,9 @@ export class ScoliaEventProcessor {
     buffer.darts.push(mapped.dart);
     buffer.event_ids.push(event.id);
     const bridgeSequence = stringValue(message.bridgeSequence);
-    const sourceToken = event.provider_event_id || (bridgeSequence !== "" ? `seq:${bridgeSequence}` : "");
+    const sourceToken = bridgeSequence !== ""
+      ? `seq:${bridgeSequence}`
+      : event.provider_event_id ? `id:${event.provider_event_id}` : "";
     if (sourceToken !== "") buffer.provider_event_ids.push(sourceToken);
     await this.bridge.saveVisitBuffer(buffer);
     const evaluation = evaluateVisit(context.remaining, {
@@ -283,9 +285,12 @@ export class ScoliaEventProcessor {
       return { status: "processed", meta: { empty_buffer: true } };
     }
     const evaluation = evaluateVisit(context.remaining, { input_mode: "per_dart", darts, darts_used: darts.length });
-    const requestKey = buffer.provider_event_ids.length === buffer.darts.length && buffer.provider_event_ids.length > 0
-      ? `scolia-source-${hashIds(buffer.provider_event_ids)}`
-      : `scolia-${hashIds(buffer.event_ids)}`;
+    const sequenceTokens = buffer.provider_event_ids.filter((value) => value.startsWith("seq:"));
+    const requestKey = sequenceTokens.length === buffer.darts.length && sequenceTokens.length > 0
+      ? `scolia-seq-${sequenceTokens.map((value) => value.slice(4)).join("-")}`
+      : buffer.provider_event_ids.length === buffer.darts.length && buffer.provider_event_ids.length > 0
+        ? `scolia-source-${hashIds(buffer.provider_event_ids)}`
+        : `scolia-${hashIds(buffer.event_ids)}`;
     const result = await this.scoring.recordVisit({
       kiosk_id: asDbId(kioskId),
       source: "scolia",
