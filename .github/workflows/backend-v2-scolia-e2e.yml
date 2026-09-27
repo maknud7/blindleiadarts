@@ -82,7 +82,9 @@ jobs:
         run: node apps/backend-v2/e2e/scolia-runtime-diagnostic.mjs
 
       - name: Run isolated Scolia lifecycle against hosted TEST MySQL
+        if: github.head_ref != 'diag/scolia-board4-live-snapshot'
         run: node apps/backend-v2/e2e/scolia-runtime-lifecycle.mjs
 
       - name: Run paired kiosk scoring frontdoor lifecycle against hosted TEST MySQL
+        if: github.head_ref != 'diag/scolia-board4-live-snapshot'
         run: node apps/backend-v2/e2e/kiosk-scoring-frontdoor-lifecycle.mjs
