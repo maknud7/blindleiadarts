@@ -194,6 +194,7 @@ export function KioskWorkspace() {
   const manualQueueRunning = useRef(false);
   const manualQueuePaused = useRef(false);
   const manualQueueSequence = useRef(0);
+  const skipNextThrowingReset = useRef(false);
 
   const kiosk = snapshot?.kiosk || null;
   const match = snapshot?.match || null;
@@ -327,6 +328,10 @@ export function KioskWorkspace() {
   }, [busy, manualQueueDepth, score, darts.length, checkoutScore, kioskCode, effectiveTestMode, pairingCode, testBoards.length, loadState, loadTestBoards, checkPairing, createPairing]);
 
   useEffect(() => {
+    if (skipNextThrowingReset.current) {
+      skipNextThrowingReset.current = false;
+      return;
+    }
     resetInput();
   }, [throwingPlayerId]);
 
@@ -454,6 +459,7 @@ export function KioskWorkspace() {
     );
     setManualQueueDepth(manualQueueRef.current.length);
     setError("");
+    skipNextThrowingReset.current = true;
     setSnapshot((current) =>
       current
         ? optimisticManualSnapshot(current, optimisticMode, optimisticScore, optimisticDarts)
