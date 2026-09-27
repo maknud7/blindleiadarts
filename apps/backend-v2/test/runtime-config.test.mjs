@@ -25,6 +25,7 @@ test("readonly is the safe default after canonical side effects are proven", () 
   const config = loadRuntimeConfig(baseEnv({ BD_BACKEND_V2_MODE: undefined }));
   assert.equal(config.mode, "readonly");
   assert.equal(config.mysql.budget.maxConcurrentConnections, 1);
+  assert.equal(config.mysql.budget.acquireTimeoutMs, 5_000);
   assert.equal(config.mysql.idleConnectionTimeoutMs, 15_000);
   assert.equal(config.canonicalSideEffectsReady, true);
   assert.equal(mutationsAllowed(config), false);

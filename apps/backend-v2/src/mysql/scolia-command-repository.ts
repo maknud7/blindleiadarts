@@ -41,7 +41,29 @@ export class MySqlScoliaCommandRepository {
     const messageId = randomUUID();
     const payloadJson = Object.keys(payload).length === 0 ? null : JSON.stringify(payload);
 
-    return this.sessions.withConnection(async (db) => {
+    return this.sessions.withTransaction(async (db) => {
+      if (type === "GET_SBC_STATUS") {
+        const existing = await db.query<QueryResultRow>(
+          `SELECT id,message_id,status,attempt_count,created_at
+             FROM \`${this.runtimePrefix}scolia_commands\`
+            WHERE club_id=? AND kiosk_id=? AND command_type='GET_SBC_STATUS'
+              AND status IN ('queued','delivered')
+            ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+          [clubId, kioskId],
+        );
+        if (existing[0]) {
+          return {
+            ...publicRow(existing[0]),
+            id: requiredId(existing[0].id, "command_id"),
+            kiosk_id: kioskId,
+            type,
+            command_type: type,
+            payload: {},
+            deduped: true,
+          };
+        }
+      }
+
       const result = await db.execute(
         `INSERT INTO \`${this.runtimePrefix}scolia_commands\`
           (club_id,kiosk_id,command_type,message_id,payload_json,status,priority,created_by_user_id)

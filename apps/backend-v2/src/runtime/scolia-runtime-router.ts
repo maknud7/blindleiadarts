@@ -136,7 +136,7 @@ export class ScoliaRuntimeRouter {
       const isLiveScolia = state.board.mode === "live" && state.board.effective_scoring_mode === "scolia";
       if (state.match_id !== null && isLiveScolia && state.board.bridge_heartbeat_fresh === true) {
         const probeAge = state.last_status_probe_age_seconds;
-        if (probeAge === null || probeAge >= 5) {
+        if (probeAge === null || probeAge >= 15) {
           try {
             await this.commands.queueCommand(paired.club_id, paired.kiosk_id, "GET_SBC_STATUS", {}, null);
           } catch {
@@ -280,7 +280,7 @@ export class ScoliaRuntimeRouter {
     const bridgeAge = snapshot.bridge_heartbeat_age_seconds;
     const connectionState = stringValue(settings.connection_state);
     const bridgeFresh = connectionState === "connected" && bridgeAge !== null && bridgeAge <= 45;
-    const statusFresh = physicalStatus !== "" && physicalStatusAge !== null && physicalStatusAge <= 12;
+    const statusFresh = physicalStatus !== "" && physicalStatusAge !== null && physicalStatusAge <= 20;
     const normalizedPhysicalStatus = physicalStatus.toLowerCase();
     const unavailableStatuses = new Set([
       "offline",
