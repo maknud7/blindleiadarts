@@ -123,12 +123,18 @@
 
   async function releaseLeaseBeforeReturn() {
     if (env() !== "test" || localStorage.getItem(TEST_LEASE_ACTIVE_KEY) !== "1") return;
+
+    if (window.BlindleiaScoliaTestLease?.release) {
+      await window.BlindleiaScoliaTestLease.release({ keepalive: true });
+      return;
+    }
+
     const code = localStorage.getItem(TEST_LEASE_CODE_KEY) || localStorage.getItem("bd:kioskCode") || "";
     const physicalId = Number(localStorage.getItem(TEST_LEASE_PHYSICAL_KEY) || localStorage.getItem(TEST_BOARD_ID_KEY) || 0);
     const token = pairingToken();
     if (!code || !physicalId || !token) return;
     try {
-      await fetch("../api/kiosk-scolia-test-lease.php?action=release", {
+      await fetch(`../api/v1/kiosks/${encodeURIComponent(code)}/scolia/test-lease/release`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Kiosk-Pairing-Token": token },
         body: JSON.stringify({ test_kiosk_code: code, physical_kiosk_id: physicalId }),

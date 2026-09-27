@@ -22,6 +22,8 @@ on:
       - 'apps/api/scolia-bridge-control.php'
       - 'apps/api/tests/backend_v2_scolia_proxy_routing_test.php'
       - 'apps/kiosk/scolia-test-lease.js'
+      - 'apps/kiosk/direct-test-handoff.js'
+      - 'apps/kiosk/prod-test-entry.js'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-scolia-runtime.yml'
       - '.github/workflows/backend-v2-scolia-prod-frontdoor.yml'
@@ -75,7 +77,13 @@ jobs:
           test ! -e apps/api/kiosk-scolia-test-lease.php
           test ! -e apps/api/scolia-bridge-control.php
           ! grep -Fq 'kiosk-scolia-test-lease.php' apps/kiosk/scolia-test-lease.js
+          ! grep -Fq 'kiosk-scolia-test-lease.php' apps/kiosk/direct-test-handoff.js
+          ! grep -Fq 'kiosk-scolia-test-lease.php' apps/kiosk/prod-test-entry.js
           grep -Fq '/scolia/test-lease/' apps/kiosk/scolia-test-lease.js
+          grep -Fq '/scolia/test-lease/release' apps/kiosk/direct-test-handoff.js
+          grep -Fq '/scolia/test-lease/release' apps/kiosk/prod-test-entry.js
+          ! grep -Fq 'startTestLeaseRuntime' apps/kiosk/direct-test-handoff.js
+          ! grep -Fq 'heartbeatTestLease' apps/kiosk/direct-test-handoff.js
 
       - name: Verify TEST and PROD Node routing defaults
         run: |
