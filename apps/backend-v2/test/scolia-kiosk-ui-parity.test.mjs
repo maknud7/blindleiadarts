@@ -125,7 +125,7 @@ test("Scolia kiosk status fails closed when the physical status is stale", async
     uiSnapshot: snapshot({
       physical_status: {
         status: "Ready",
-        age_seconds: 13,
+        age_seconds: 21,
         event_type: "SBC_STATUS_CHANGED",
         received_at: "2026-09-12 13:00:00.000",
       },
@@ -156,6 +156,25 @@ test("GET status rate-limits physical status probes", async () => {
   const result = await router.handle("GET", "/v1/kiosks/BOARD/scolia/status", request());
   assert.equal(result.statusCode, 200);
   assert.equal(queued, 0);
+});
+
+test("GET status refreshes the physical probe only after the relaxed interval", async () => {
+  let queued = 0;
+  const router = routerWith({
+    uiSnapshot: snapshot({ last_status_probe_age_seconds: 15 }),
+    queueCommand: async () => { queued += 1; return { id: "1" }; },
+  });
+  const result = await router.handle("GET", "/v1/kiosks/BOARD/scolia/status", request());
+  assert.equal(result.statusCode, 200);
+  assert.equal(queued, 1);
+});
+
+test("Platform v2 keeps TEST lease heartbeats alive through transient backend pressure", () => {
+  const source = fs.readFileSync("apps/platform-v2/src/kiosk/useScoliaRuntime.ts", "utf8");
+  assert.match(source, /STATUS_INTERVAL_MS = 2_000/);
+  assert.match(source, /LEASE_HEARTBEAT_MS = 30_000/);
+  assert.match(source, /heartbeatFailures\.current >= 4/);
+  assert.match(source, /cause instanceof ApiError && cause\.status === 409/);
 });
 
 test("Scolia undo refuses to remove a latest manual visit", async () => {
