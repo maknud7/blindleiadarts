@@ -149,8 +149,8 @@ export class MySqlScoliaKioskAuthRepository {
         `SELECT t.id,t.name,t.status,t.auto_assign_enabled
            FROM \`${this.runtimePrefix}tournament_kiosks\` tk
            INNER JOIN \`${this.runtimePrefix}tournaments\` t ON t.id=tk.tournament_id
-          WHERE tk.kiosk_id=? AND t.status IN ('ready','in_progress')
-          ORDER BY FIELD(t.status,'in_progress','ready'),COALESCE(t.start_at,'2999-12-31 23:59:59') ASC,t.id ASC
+          WHERE tk.kiosk_id=? AND t.status='in_progress'
+          ORDER BY COALESCE(t.start_at,'2999-12-31 23:59:59') ASC,t.id ASC
           LIMIT 1`,
         [kioskId],
       );
