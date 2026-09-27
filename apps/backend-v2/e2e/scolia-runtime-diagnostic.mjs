@@ -32,6 +32,8 @@ const provider = new MySql2SessionProvider({
 const bridge = new MySqlScoliaBridgeRepository(provider, config.prefixes.runtime, config.prefixes.hardware);
 const processor = new ScoliaEventProcessor(bridge, {});
 
+await dumpPhysicalBoardSnapshot(provider);
+
 try {
   await provider.withConnection(async (sql) => {
     const club = await sql.execute(
@@ -95,6 +97,119 @@ try {
   } finally {
     await provider.close();
   }
+}
+
+async function dumpPhysicalBoardSnapshot(provider) {
+  const physicalBoardId = "4";
+  const snapshot = await provider.withConnection(async (sql) => {
+    const dbNow = await sql.query("SELECT NOW(3) AS db_now");
+    const physicalBoard = await sql.query(
+      `SELECT k.id,k.club_id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,
+              CASE WHEN s.serial_number IS NULL OR s.serial_number='' THEN 0 ELSE 1 END AS serial_configured,
+              s.mode,s.auto_fallback_to_manual,
+              cs.enabled AS club_scolia_enabled,
+              CASE WHEN cs.access_token IS NULL OR cs.access_token='' THEN 0 ELSE 1 END AS access_token_configured
+         FROM \`bd_prod_kiosks\` k
+         LEFT JOIN \`bd_prod_scolia_board_settings\` s ON s.kiosk_id=k.id
+         LEFT JOIN \`bd_prod_scolia_club_settings\` cs ON cs.club_id=k.club_id
+        WHERE k.id=? LIMIT 1`,
+      [physicalBoardId],
+    );
+    const aliases = await sql.query(
+      `SELECT k.id,k.club_id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,k.source_kiosk_id,c.slug
+         FROM \`bd_test_kiosks\` k
+         LEFT JOIN \`bd_test_clubs\` c ON c.id=k.club_id
+        WHERE k.source_kiosk_id=? ORDER BY k.id`,
+      [physicalBoardId],
+    );
+    const leases = await sql.query(
+      `SELECT physical_kiosk_id,test_kiosk_id,leased_at,heartbeat_at,expires_at,
+              TIMESTAMPDIFF(SECOND,NOW(3),expires_at) AS expires_in_seconds
+         FROM \`bd_prod_scolia_test_leases\`
+        WHERE physical_kiosk_id=?
+        ORDER BY expires_at DESC LIMIT 10`,
+      [physicalBoardId],
+    );
+    const testKioskIds = Array.from(new Set([
+      ...aliases.map((row) => String(row.id ?? "")).filter((value) => /^[1-9][0-9]*$/.test(value)),
+      ...leases.map((row) => String(row.test_kiosk_id ?? "")).filter((value) => /^[1-9][0-9]*$/.test(value)),
+    ]));
+    if (testKioskIds.length === 0) {
+      return {
+        db_now: dbNow[0]?.db_now ?? null,
+        physical_board: physicalBoard[0] ?? null,
+        aliases,
+        leases,
+        test_kiosk_ids: [],
+        runtime: [],
+        events: [],
+        commands: [],
+        matches: [],
+        visits: [],
+      };
+    }
+
+    const placeholders = testKioskIds.map(() => "?").join(",");
+    const runtime = await sql.query(
+      `SELECT kiosk_id,connection_state,board_status,board_phase,error_type,fallback_active,
+              needs_reconciliation,turn_locked_until_takeout,last_disconnect_reason,
+              last_bridge_heartbeat_at,connected_at,last_event_at,last_disconnect_at,last_reconciled_at
+         FROM \`bd_test_scolia_board_runtime\`
+        WHERE kiosk_id IN (${placeholders}) ORDER BY kiosk_id`,
+      testKioskIds,
+    );
+    const events = await sql.query(
+      `SELECT id,kiosk_id,match_id,provider_event_id,event_type,priority,processing_status,
+              attempt_count,received_at,processing_started_at,processed_at,next_attempt_at,
+              canonical_visit_id,last_error,processing_meta_json,payload_json
+         FROM \`bd_test_scolia_events\`
+        WHERE kiosk_id IN (${placeholders})
+        ORDER BY id DESC LIMIT 80`,
+      testKioskIds,
+    );
+    const commands = await sql.query(
+      `SELECT id,kiosk_id,command_type,message_id,status,priority,attempt_count,
+              created_at,delivered_at,completed_at,next_attempt_at,last_error
+         FROM \`bd_test_scolia_commands\`
+        WHERE kiosk_id IN (${placeholders})
+        ORDER BY id DESC LIMIT 40`,
+      testKioskIds,
+    );
+    const matches = await sql.query(
+      `SELECT *
+         FROM \`bd_test_matches\`
+        WHERE kiosk_id IN (${placeholders})
+        ORDER BY id DESC LIMIT 20`,
+      testKioskIds,
+    );
+    const matchIds = matches
+      .map((row) => String(row.id ?? ""))
+      .filter((value) => /^[1-9][0-9]*$/.test(value));
+    let visits = [];
+    if (matchIds.length > 0) {
+      const matchPlaceholders = matchIds.map(() => "?").join(",");
+      visits = await sql.query(
+        `SELECT *
+           FROM \`bd_test_visits\`
+          WHERE match_id IN (${matchPlaceholders})
+          ORDER BY id DESC LIMIT 40`,
+        matchIds,
+      );
+    }
+    return {
+      db_now: dbNow[0]?.db_now ?? null,
+      physical_board: physicalBoard[0] ?? null,
+      aliases,
+      leases,
+      test_kiosk_ids: testKioskIds,
+      runtime,
+      events,
+      commands,
+      matches,
+      visits,
+    };
+  });
+  console.log(JSON.stringify({ scenario: "physical-scolia-board4-readonly-snapshot", ...snapshot }, null, 2));
 }
 
 function requireInsertId(result, label) {
