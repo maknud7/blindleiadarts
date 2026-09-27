@@ -23,6 +23,44 @@ type PendingManualVisit = {
   optimisticScore: number;
   optimisticDarts: ManualDart[];
 };
+type CompletedMatchSummary = {
+  id?: number | string;
+  tournament_name?: string;
+  round_label?: string | null;
+  bracket_label?: string | null;
+  player_a_name?: string;
+  player_b_name?: string;
+  winner_name?: string;
+  legs_a?: number;
+  legs_b?: number;
+};
+type MatchReservation = {
+  match_id?: number | string;
+  player_a_name?: string;
+  player_b_name?: string;
+  round_label?: string | null;
+  bracket_label?: string | null;
+  remaining_seconds?: number;
+};
+type PostMatchResponse = {
+  active_match?: boolean;
+  last_completed_match?: CompletedMatchSummary | null;
+  reservation?: MatchReservation | null;
+  remaining_seconds?: number;
+  result_display_seconds?: number;
+};
+type NextMatchResponse = {
+  assignment?: { assigned?: boolean; reason?: string | null; reservation?: MatchReservation | null };
+  state: KioskSnapshot;
+};
+type CompletionState = {
+  matchId: number;
+  localMatch: KioskMatch;
+  serverMatch: CompletedMatchSummary | null;
+  reservation: MatchReservation | null;
+  remainingSeconds: number;
+  confirmed: boolean;
+};
 
 function text(error: unknown): string { return error instanceof Error ? error.message : "Ukjent feil"; }
 function matchIsAssigned(match: KioskMatch | null | undefined): boolean { return Boolean(match && ["assigned", "ready", "pending"].includes(String(match.status || "").toLowerCase())); }
@@ -185,6 +223,7 @@ export function KioskWorkspace() {
   const [multiplier, setMultiplier] = useState<Multiplier>("S");
   const [checkoutScore, setCheckoutScore] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [visitEditIndex, setVisitEditIndex] = useState<number | null>(null);
   const [visitEditId, setVisitEditId] = useState<number | null>(null);
   const [visitEditValue, setVisitEditValue] = useState("");
@@ -195,6 +234,9 @@ export function KioskWorkspace() {
   const manualQueuePaused = useRef(false);
   const manualQueueSequence = useRef(0);
   const skipNextThrowingReset = useRef(false);
+  const lastActiveMatchRef = useRef<KioskMatch | null>(null);
+  const postMatchBusy = useRef(false);
+  const nextMatchBusy = useRef(false);
 
   const kiosk = snapshot?.kiosk || null;
   const match = snapshot?.match || null;
@@ -224,7 +266,24 @@ export function KioskWorkspace() {
     if (!code) return;
     try {
       const data = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(code)}/state`, { kioskToken: token });
-      if (mounted.current) { setSnapshot(data); setError(""); }
+      if (mounted.current) {
+        const previous = lastActiveMatchRef.current;
+        if (!data.match && previous?.id && String(previous.status || "") === "in_progress" && !completion) {
+          setCompletion({
+            matchId: Number(previous.id),
+            localMatch: previous,
+            serverMatch: null,
+            reservation: null,
+            remainingSeconds: 30,
+            confirmed: false,
+          });
+        }
+        if (data.match && ["assigned", "ready", "pending", "in_progress"].includes(String(data.match.status || ""))) {
+          lastActiveMatchRef.current = data.match;
+        }
+        setSnapshot(data);
+        setError("");
+      }
     } catch (cause) {
       if (cause instanceof ApiError && [401, 403, 404, 409].includes(cause.status)) {
         if (mounted.current) {
@@ -237,7 +296,7 @@ export function KioskWorkspace() {
       }
       if (mounted.current) setError(text(cause));
     }
-  }, [kioskCode, kioskToken, effectiveTestMode]);
+  }, [kioskCode, kioskToken, effectiveTestMode, completion]);
 
   const loadTestBoards = useCallback(async () => {
     try {
@@ -335,6 +394,38 @@ export function KioskWorkspace() {
     resetInput();
   }, [throwingPlayerId]);
 
+  useEffect(() => {
+    if (match && ["assigned", "ready", "pending", "in_progress"].includes(String(match.status || ""))) {
+      lastActiveMatchRef.current = match;
+    }
+  }, [match?.id, match?.status, match?.current_leg, match?.current_player_id, match?.player_a?.legs_won, match?.player_b?.legs_won]);
+
+  useEffect(() => {
+    if (!completion || manualQueueDepth > 0 || manualQueueError) return;
+    void refreshPostMatchState();
+  }, [completion?.matchId, manualQueueDepth, manualQueueError, kioskCode]);
+
+  useEffect(() => {
+    if (!completion || completion.remainingSeconds <= 0) return;
+    const handle = window.setInterval(() => {
+      setCompletion((current) => {
+        if (!current) return current;
+        const next = Math.max(0, current.remainingSeconds - 1);
+        if (next === 0) window.setTimeout(() => void finishCompletion(), 0);
+        return { ...current, remainingSeconds: next };
+      });
+    }, 1000);
+    return () => window.clearInterval(handle);
+  }, [completion?.matchId]);
+
+  useEffect(() => {
+    if (!kioskCode || completion || match || busy || manualQueueDepth > 0 || manualQueueError) return;
+    const attempt = () => void claimNextMatch({ quiet: true });
+    attempt();
+    const handle = window.setInterval(attempt, 2500);
+    return () => window.clearInterval(handle);
+  }, [kioskCode, completion?.matchId, match?.id, busy, manualQueueDepth, manualQueueError]);
+
   async function selectTestBoard(board: TestBoard) {
     setBusy(true);
     setError("");
@@ -388,6 +479,74 @@ export function KioskWorkspace() {
       return;
     }
     await mutate(() => api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/undo`, { method: "POST", kioskToken }));
+  }
+
+  async function claimNextMatch({ quiet = true }: { quiet?: boolean } = {}) {
+    if (!kioskCode || nextMatchBusy.current || completion || manualQueueDepth > 0 || manualQueueError) return;
+    nextMatchBusy.current = true;
+    try {
+      const data = await api<NextMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/next-match`, {
+        method: "POST",
+        kioskToken,
+      });
+      if (data.assignment?.assigned) {
+        if (mounted.current) {
+          setSnapshot(data.state);
+          resetInput();
+          setError("");
+        }
+      } else if (!quiet && data.assignment?.reason && !["no_ready_match", "no_active_tournament", "no_auto_tournament", "reservation_wait"].includes(String(data.assignment.reason))) {
+        setError("Kunne ikke hente neste kamp akkurat nå.");
+      }
+    } catch (cause) {
+      if (!quiet && mounted.current) setError(text(cause));
+    } finally {
+      nextMatchBusy.current = false;
+    }
+  }
+
+  async function refreshPostMatchState() {
+    if (!kioskCode || !completion || postMatchBusy.current || manualQueueDepth > 0 || manualQueueError) return;
+    postMatchBusy.current = true;
+    try {
+      const data = await api<PostMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/post-match`, { kioskToken });
+      if (!mounted.current) return;
+      const remaining = Math.max(0, Number(data.remaining_seconds ?? data.result_display_seconds ?? 30));
+      setCompletion((current) => current ? {
+        ...current,
+        serverMatch: data.last_completed_match ?? current.serverMatch,
+        reservation: data.reservation ?? null,
+        remainingSeconds: remaining,
+        confirmed: Boolean(data.last_completed_match),
+      } : current);
+      if (remaining <= 0) {
+        await finishCompletion();
+      }
+    } catch (cause) {
+      if (mounted.current) setError(text(cause));
+    } finally {
+      postMatchBusy.current = false;
+    }
+  }
+
+  async function finishCompletion() {
+    if (!kioskCode || nextMatchBusy.current) return;
+    nextMatchBusy.current = true;
+    try {
+      const data = await api<NextMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/next-match`, {
+        method: "POST",
+        kioskToken,
+      });
+      if (!mounted.current) return;
+      setCompletion(null);
+      setSnapshot(data.state);
+      resetInput();
+      setError("");
+    } catch (cause) {
+      if (mounted.current) setError(text(cause));
+    } finally {
+      nextMatchBusy.current = false;
+    }
   }
 
   async function drainManualVisitQueue() {
@@ -478,12 +637,19 @@ export function KioskWorkspace() {
     );
     setManualQueueDepth(manualQueueRef.current.length);
     setError("");
+    const optimistic = optimisticManualSnapshot(snapshot, optimisticMode, optimisticScore, optimisticDarts);
     skipNextThrowingReset.current = true;
-    setSnapshot((current) =>
-      current
-        ? optimisticManualSnapshot(current, optimisticMode, optimisticScore, optimisticDarts)
-        : current
-    );
+    setSnapshot(optimistic);
+    if (optimistic.match?.status === "completed" && optimistic.match.id) {
+      setCompletion({
+        matchId: Number(optimistic.match.id),
+        localMatch: optimistic.match,
+        serverMatch: null,
+        reservation: null,
+        remainingSeconds: 30,
+        confirmed: false,
+      });
+    }
     resetInput();
 
     if (!manualQueuePaused.current) {
@@ -675,10 +841,11 @@ export function KioskWorkspace() {
     if (effectiveTestMode && !kioskCode) return "test-chooser";
     if (!kioskCode) return "pairing";
     if (!snapshot?.kiosk) return "loading";
+    if (completion) return "completed";
     if (!match) return "idle";
     if (matchIsAssigned(match)) return "assigned";
     return "match";
-  }, [health, effectiveTestMode, kioskCode, snapshot, match]);
+  }, [health, effectiveTestMode, kioskCode, snapshot, match, completion]);
 
   const headerTitle = kiosk?.name || (effectiveTestMode ? "Testterminal" : "Skiveterminal");
   const headerSubtitle = kiosk?.club?.name || (effectiveTestMode ? "Isolert TEST-runtime" : "Blindleia Darts");
@@ -706,7 +873,8 @@ export function KioskWorkspace() {
       {view === "loading" && <div className="kiosk-hero"><span className="pill">Skiveterminal</span><h2>Starter terminalen …</h2><p>Henter skive og kampstatus.</p></div>}
       {view === "test-chooser" && <TestChooser boards={testBoards} busy={busy} onChoose={selectTestBoard} onExit={() => void leaveTestMode()} />}
       {view === "pairing" && <PairingView code={pairingCode} expires={pairingExpires} busy={busy} onNew={() => void createPairing(true)} />}
-      {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1><p>Venter på neste kamp · {effectiveScoringMode.startsWith("scolia") ? "Scolia scoring" : "manuell scoring"}</p></div>}
+      {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1><p>Venter på neste kamp · følger kampkøen automatisk</p></div>}
+      {view === "completed" && completion && kiosk && <CompletionView completion={completion} board={kiosk.board_number} busy={busy || nextMatchBusy.current} onNext={() => void finishCompletion()} />}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
       {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
@@ -781,6 +949,37 @@ function TestChooser({ boards, busy, onChoose, onExit }: { boards: TestBoard[]; 
 
 function PairingView({ code, expires, busy, onNew }: { code: string; expires: string; busy: boolean; onNew: () => void }) {
   return <div className="kiosk-hero pairing-view"><span className="pill">Førstegangsoppsett</span><h2>Koble nettbrettet til riktig skive</h2>{code ? <><img src={qrUrl(code)} width="230" height="230" alt="QR-kode til Utstyr" /><div className="pair-code">{code}</div><p>Scan QR-koden med adminmobilen, eller skriv koden inne på skiva i Utstyr. Terminalen går videre automatisk.{expires ? ` Koden utløper ${new Date(String(expires).replace(" ", "T")).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}.` : ""}</p></> : <p>Lager pairingkode …</p>}<button className="button secondary" disabled={busy} onClick={onNew}>Lag ny kode</button></div>;
+}
+
+function CompletionView({ completion, board, busy, onNext }: {
+  completion: CompletionState;
+  board: number;
+  busy: boolean;
+  onNext: () => void;
+}) {
+  const local = completion.localMatch;
+  const server = completion.serverMatch;
+  const aName = server?.player_a_name || local.player_a.display_name;
+  const bName = server?.player_b_name || local.player_b.display_name;
+  const aLegs = Number(server?.legs_a ?? local.player_a.legs_won ?? 0);
+  const bLegs = Number(server?.legs_b ?? local.player_b.legs_won ?? 0);
+  const winner = server?.winner_name || (aLegs > bLegs ? aName : bName);
+  const next = completion.reservation;
+  return <div className="assigned-view">
+    <div className="match-tools"><span className="pill good">Skive {board} · resultat registrert</span><span className="pill">{server?.round_label || server?.bracket_label || local.round_label || local.bracket_label || "Kamp"}</span></div>
+    <div className="kiosk-hero">
+      <span className="pill good">KAMP FERDIG</span>
+      <h1>{winner} vinner</h1>
+      <div className="versus assigned-versus">
+        <div className="player-tile"><p>{aName}</p><div className="remaining">{aLegs}</div></div>
+        <div className="vs-mark">–</div>
+        <div className="player-tile"><p>{bName}</p><div className="remaining">{bLegs}</div></div>
+      </div>
+      {next ? <div className="notice"><strong>Neste kamp</strong><span>{next.player_a_name || "Spiller"} – {next.player_b_name || "Spiller"} · {next.round_label || next.bracket_label || "Kamp"}</span></div> : <p>Skiva følger kampkøen og klargjør neste kvalifiserte kamp.</p>}
+      <p>{completion.confirmed ? `Neste kamp vises om ${completion.remainingSeconds} sek` : "Bekrefter resultatet …"}</p>
+      <button className="button start-match-button" disabled={busy || !completion.confirmed} onClick={onNext}>Vis neste kamp nå</button>
+    </div>
+  </div>;
 }
 
 function AssignedView({ match, board, busy, onStart }: { match: KioskMatch; board: number; busy: boolean; onStart: () => void }) {
