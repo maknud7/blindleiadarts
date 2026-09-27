@@ -94,9 +94,13 @@ try {
     body: { limit: 10 },
   });
   assert.equal(drain.ok, true);
-  assert.equal(drain.claimed, 1);
-  assert.equal(drain.processed, 1);
+  assert.ok(drain.claimed === 0 || drain.claimed === 1, "HELLO_CLIENT may be claimed by the live TEST drainer first");
   assert.equal(drain.failed, 0);
+  if (drain.claimed === 1) {
+    assert.equal(drain.processed, 1);
+  } else {
+    await waitForEventTerminal(String(queued.event.id), "processed");
+  }
 
   const statusAfterHello = await requestJson(`/v1/kiosks/${encodeURIComponent(code)}/scolia/status`, {
     method: "GET",
@@ -331,6 +335,26 @@ async function createFixture(dbProvider) {
     );
     fixture.match = requireInsertId(match, "match");
   });
+}
+
+async function waitForEventTerminal(eventId, expectedStatus) {
+  const deadline = Date.now() + 10_000;
+  let lastStatus = null;
+  while (Date.now() < deadline) {
+    const dbProvider = makeProvider();
+    try {
+      const rows = await dbProvider.withConnection((sql) => sql.query(
+        `SELECT processing_status FROM \`${config.prefixes.runtime}scolia_events\` WHERE id=? LIMIT 1`,
+        [eventId],
+      ));
+      lastStatus = rows[0]?.processing_status ?? null;
+      if (lastStatus === expectedStatus) return;
+    } finally {
+      await dbProvider.close();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  assert.equal(lastStatus, expectedStatus, `Scolia event ${eventId} did not reach ${expectedStatus}`);
 }
 
 async function seedVisitBuffer() {
