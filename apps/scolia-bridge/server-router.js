@@ -20,8 +20,8 @@ const ACTIVE_CONFIG_POLL_MS = Math.max(2000, Number(process.env.SCOLIA_CONFIG_PO
 // A TEST lease can appear while the bridge is idle. Keep the idle router check cheap,
 // but never let configuration/env drift stretch the wake-up beyond the kiosk grace.
 const IDLE_CONFIG_POLL_MS = Math.min(2000, Math.max(1000, Number(process.env.SCOLIA_IDLE_CONFIG_POLL_MS || 2000)));
-const COMMAND_POLL_MS = Math.max(250, Number(process.env.SCOLIA_COMMAND_POLL_MS || 750));
-const DRAIN_POLL_MS = Math.max(250, Number(process.env.SCOLIA_DRAIN_POLL_MS || 500));
+const COMMAND_POLL_MS = Math.max(500, Number(process.env.SCOLIA_COMMAND_POLL_MS || 1500));
+const DRAIN_POLL_MS = Math.max(500, Number(process.env.SCOLIA_DRAIN_POLL_MS || 2000));
 const HEARTBEAT_MS = Math.max(5000, Number(process.env.SCOLIA_HEARTBEAT_MS || 15000));
 const SPOOL_RETRY_MS = Math.max(250, Number(process.env.SCOLIA_SPOOL_RETRY_MS || 1000));
 const SPOOL_DIR = path.resolve(process.env.SCOLIA_SPOOL_DIR || "./data/scolia-spool");
