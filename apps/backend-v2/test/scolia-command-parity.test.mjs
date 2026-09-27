@@ -57,3 +57,33 @@ test("completeCommand uses schema-compatible acked/refused/failed statuses", asy
     assert.equal(update.params[3], "41");
   }
 });
+
+
+test("queueCommand reuses an outstanding GET_SBC_STATUS instead of piling up probes", async () => {
+  const executes = [];
+  const db = {
+    async execute(sql, params = []) {
+      executes.push({ sql, params });
+      return { affectedRows: 1, insertId: "99" };
+    },
+    async query(sql) {
+      assert.match(sql, /command_type='GET_SBC_STATUS'/);
+      return [{
+        id: "40",
+        message_id: "existing-status-probe",
+        status: "queued",
+        attempt_count: 0,
+        created_at: "2026-09-27 17:00:00.000",
+      }];
+    },
+  };
+  const repo = new MySqlScoliaCommandRepository(new FakeSessions(db), "bd_test_");
+
+  const command = await repo.queueCommand("11", "17", "GET_SBC_STATUS", {}, null);
+
+  assert.equal(command.id, "40");
+  assert.equal(command.message_id, "existing-status-probe");
+  assert.equal(command.status, "queued");
+  assert.equal(command.deduped, true);
+  assert.equal(executes.length, 0);
+});
