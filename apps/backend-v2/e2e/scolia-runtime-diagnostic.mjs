@@ -33,7 +33,7 @@ const bridge = new MySqlScoliaBridgeRepository(provider, config.prefixes.runtime
 const processor = new ScoliaEventProcessor(bridge, {});
 
 await dumpPhysicalBoardSnapshot(provider);
-// live snapshot refresh 2026-09-27T15:26Z
+// live snapshot refresh after 5000ms Render env
 
 try {
   await provider.withConnection(async (sql) => {
