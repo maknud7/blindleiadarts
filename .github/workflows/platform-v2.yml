@@ -108,6 +108,14 @@ jobs:
           grep -Fq 'normalizeKioskSnapshot' apps/platform-v2/src/shared/api.ts
           grep -Fq 'kioskPlayerInputModes' apps/platform-v2/src/shared/storage.ts
           grep -Fq 'readPlayerInputModes' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          grep -Fq 'testLeaseFallback' apps/platform-v2/src/shared/storage.ts
+          grep -Fq 'enterLeaseFallback' apps/platform-v2/src/kiosk/useScoliaRuntime.ts
+          grep -Fq 'leaseFallback || fallbackActive ? "manual"' apps/platform-v2/src/kiosk/useScoliaRuntime.ts
+          grep -Fq 'Prøv Scolia igjen' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
+          if grep -Fq 'write("testLeasePending", "1"); write("testLeaseError", message); setLeasePending(true)' apps/platform-v2/src/kiosk/useScoliaRuntime.ts; then
+            echo 'A failed TEST lease must not leave kiosk permanently in scolia-pending.' >&2
+            exit 1
+          fi
           grep -Fq 'manualRemainingPreview' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq '<div className="remaining">{player.remaining}</div>' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
           grep -Fq '<h3>Registrer kast</h3>' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
