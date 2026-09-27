@@ -1,0 +1,91 @@
+name: Scolia Physical Readiness Audit
+
+on:
+  push:
+    branches:
+      - ops/kiosk-audit-test-smoke-cleanup
+    paths:
+      - '.github/workflows/scolia-physical-readiness-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Read canonical Scolia readiness
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          cat > /tmp/audit.php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)(getenv('DB_PORT') ?: 3306));
+          $db->set_charset('utf8mb4');
+
+          $sql="SELECT c.slug,k.id,k.board_number,k.name,k.scoring_mode,k.is_active,
+                       s.serial_number,s.mode,s.auto_fallback_to_manual,
+                       r.connection_state,r.board_status,r.board_phase,r.error_type,
+                       r.last_bridge_heartbeat_at,r.last_event_at,r.last_disconnect_reason
+                  FROM bd_prod_kiosks k
+                  INNER JOIN bd_prod_clubs c ON c.id=k.club_id
+                  LEFT JOIN bd_prod_scolia_board_settings s ON s.kiosk_id=k.id
+                  LEFT JOIN bd_prod_scolia_board_runtime r ON r.kiosk_id=k.id
+                 WHERE k.is_active=1
+                   AND (k.scoring_mode='scolia' OR s.serial_number IS NOT NULL)
+                 ORDER BY c.slug,k.board_number,k.id";
+          $res=$db->query($sql);
+          echo "SCOLIA_PHYSICAL_BOARDS=". $res->num_rows . PHP_EOL;
+          while($row=$res->fetch_assoc()){
+            $serial=trim((string)($row['serial_number']??''));
+            $serialMasked=$serial===''?'':(strlen($serial)<=4?'****':substr($serial,0,2).'***'.substr($serial,-2));
+            printf(
+              "BOARD club=%s id=%s no=%s name=%s scoring=%s serial=%s mode=%s fallback=%s state=%s heartbeat=%s event=%s error=%s disconnect=%s\n",
+              $row['slug'],$row['id'],$row['board_number'],$row['name'],$row['scoring_mode'],$serialMasked,
+              $row['mode']??'',$row['auto_fallback_to_manual']??'',$row['connection_state']??'',
+              $row['last_bridge_heartbeat_at']??'',$row['last_event_at']??'',$row['error_type']??'',
+              preg_replace('/\s+/',' ',(string)($row['last_disconnect_reason']??''))
+            );
+          }
+
+          $leases=$db->query("SELECT l.physical_kiosk_id,l.test_kiosk_id,l.heartbeat_at,l.expires_at,
+                                     pk.board_number AS physical_board,tk.code AS test_code
+                                FROM bd_prod_scolia_test_leases l
+                                LEFT JOIN bd_prod_kiosks pk ON pk.id=l.physical_kiosk_id
+                                LEFT JOIN bd_test_kiosks tk ON tk.id=l.test_kiosk_id
+                               WHERE l.expires_at>NOW(3)
+                               ORDER BY l.expires_at");
+          echo "ACTIVE_TEST_LEASES=".$leases->num_rows.PHP_EOL;
+          while($row=$leases->fetch_assoc()){
+            printf("LEASE physical=%s board=%s test=%s code=%s heartbeat=%s expires=%s\n",
+              $row['physical_kiosk_id'],$row['physical_board']??'',$row['test_kiosk_id'],$row['test_code']??'',
+              $row['heartbeat_at'],$row['expires_at']);
+          }
+
+          $aliases=$db->query("SELECT tk.id,tk.code,tk.name,tk.board_number,tk.scoring_mode,tk.source_kiosk_id,
+                                      pk.board_number AS physical_board
+                                 FROM bd_test_kiosks tk
+                                 LEFT JOIN bd_prod_kiosks pk ON pk.id=tk.source_kiosk_id
+                                WHERE tk.is_active=1 AND tk.source_kiosk_id IS NOT NULL
+                                ORDER BY tk.board_number,tk.id");
+          echo "TEST_PHYSICAL_ALIASES=".$aliases->num_rows.PHP_EOL;
+          while($row=$aliases->fetch_assoc()){
+            printf("ALIAS id=%s code=%s no=%s scoring=%s source=%s physical_board=%s\n",
+              $row['id'],$row['code'],$row['board_number'],$row['scoring_mode'],$row['source_kiosk_id'],$row['physical_board']??'');
+          }
+          PHP
+          php /tmp/audit.php
