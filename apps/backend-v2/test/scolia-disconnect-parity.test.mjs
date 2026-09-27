@@ -96,3 +96,36 @@ test("event processor delegates disconnect semantics to the runtime port", async
   assert.equal(result.status, "processed");
   assert.deepEqual(calls, [{ kioskId: "17", reason: "network" }]);
 });
+
+
+test("event processor treats current SBC_STATUS messages as runtime status updates", async () => {
+  const calls = [];
+  const bridge = {
+    async boardContext() {
+      return { kiosk_id: "17", physical_kiosk_id: "7", club_id: "11", mode: "live", fallback_active: 0, needs_reconciliation: 0, turn_locked_until_takeout: 0 };
+    },
+    async updateRuntimeStatus(kioskId, payload) { calls.push({ kioskId, payload }); },
+  };
+  const scoring = {
+    async startMatch() { return { kind: "no_match" }; },
+    async recordVisit() { return { kind: "duplicate" }; },
+    async undoLastVisit() { return { kind: "no_visit" }; },
+  };
+  const processor = new ScoliaEventProcessor(bridge, scoring, { async markDisconnected() {} });
+
+  const result = await processor.processEvent({
+    id: "45",
+    club_id: "11",
+    kiosk_id: "17",
+    match_id: null,
+    provider_event_id: "evt-45",
+    event_type: "SBC_STATUS",
+    priority: 30,
+    attempt_count: 1,
+    payload: { type: "SBC_STATUS", payload: { boardStatus: "Ready", boardPhase: "Throw", isSuspended: false } },
+  });
+
+  assert.equal(result.status, "processed");
+  assert.deepEqual(calls, [{ kioskId: "17", payload: { boardStatus: "Ready", boardPhase: "Throw", isSuspended: false } }]);
+  assert.equal(result.meta?.status_type, "SBC_STATUS");
+});
