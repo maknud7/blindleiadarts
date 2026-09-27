@@ -198,3 +198,15 @@ test("kiosk Scolia frontend calls backend-v2 directly and legacy PHP stays retir
   assert.match(source, /request\("status"\)/);
   assert.match(source, /request\("undo", \{ method: "POST"/);
 });
+
+
+test("Platform v2 never starts Scolia runtime for a manual board", () => {
+  const workspace = fs.readFileSync("apps/platform-v2/src/kiosk/KioskWorkspace.tsx", "utf8");
+  const hook = fs.readFileSync("apps/platform-v2/src/kiosk/useScoliaRuntime.ts", "utf8");
+  assert.match(workspace, /scoring_mode \|\| "manual"\)\.toLowerCase\(\) === "scolia"/);
+  assert.match(workspace, /enabled: scoliaConfigured/);
+  assert.match(workspace, /kioskCode && scoliaConfigured && <ScoliaRuntimePanel/);
+  assert.match(hook, /if \(!enabled\) \{/);
+  assert.match(hook, /read\("testLeaseActive"\) === "1"\) await releaseLease\(\)/);
+  assert.match(hook, /effectiveScoringMode: !enabled \|\| leaseFallback \|\| fallbackActive \? "manual"/);
+});
