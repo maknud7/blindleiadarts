@@ -247,9 +247,10 @@ export function KioskWorkspace() {
   const effectiveTestMode = Boolean(isTestEnvironment && testMode);
   const physicalBoardId = Number(read("testPhysicalBoardId") || 0);
   const testBoardLabel = read("testBoardLabel");
+  const scoliaConfigured = String(kiosk?.scoring_mode || "manual").toLowerCase() === "scolia";
 
-  const scolia = useScoliaRuntime({ environment: health?.environment, kioskCode, kioskToken, testMode: effectiveTestMode, physicalBoardId });
-  const effectiveScoringMode = scolia.leasePending ? "scolia-pending" : scolia.leaseFallback ? "manual" : (scolia.effectiveScoringMode || kiosk?.scoring_mode || "manual");
+  const scolia = useScoliaRuntime({ environment: health?.environment, kioskCode, kioskToken, testMode: effectiveTestMode, physicalBoardId, enabled: scoliaConfigured });
+  const effectiveScoringMode = !scoliaConfigured ? "manual" : scolia.leasePending ? "scolia-pending" : scolia.leaseFallback ? "manual" : (scolia.effectiveScoringMode || "scolia");
 
   function resetInput(): void {
     setScore("");
@@ -868,7 +869,7 @@ export function KioskWorkspace() {
     <main className="kiosk-main"><section className="kiosk-card">
       {error && <div className="notice bad">{error}</div>}
       {manualQueueError && <div className="notice bad"><span>{manualQueueError}</span><button className="button secondary small" disabled={busy} onClick={() => void refreshManualStatus()}>Oppdater status</button></div>}
-      {kioskCode && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseFallback={scolia.leaseFallback} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onRetryLease={scolia.retryLease} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
+      {kioskCode && scoliaConfigured && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseFallback={scolia.leaseFallback} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onRetryLease={scolia.retryLease} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
 
       {view === "loading" && <div className="kiosk-hero"><span className="pill">Skiveterminal</span><h2>Starter terminalen …</h2><p>Henter skive og kampstatus.</p></div>}
       {view === "test-chooser" && <TestChooser boards={testBoards} busy={busy} onChoose={selectTestBoard} onExit={() => void leaveTestMode()} />}
