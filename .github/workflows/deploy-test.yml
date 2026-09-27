@@ -73,8 +73,8 @@ jobs:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           STATIC_BASE_URL: ${{ vars.TEST_STATIC_BASE_URL || vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
           SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
-          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
-          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL || 'wss://blindleia-realtime-test.onrender.com/ws' }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL || 'https://blindleia-realtime-test.onrender.com/publish' }}
           REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
           SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
           BACKEND_V2_EQUIPMENT_ROUTING_MODE: node
