@@ -249,7 +249,8 @@ class BoardConnection {
 
     const type = String(message?.type || "").toUpperCase();
     let matchedCommand = null;
-    if (type === "ACK" || type === "REFUSED") {
+    const acknowledged = type === "ACK" || type === "ACKNOWLEDGED";
+    if (acknowledged || type === "REFUSED") {
       const resolved = resolvePendingScoliaCommand(message, this.pendingCommands);
       if (resolved) {
         const { key, pending } = resolved;
@@ -259,14 +260,14 @@ class BoardConnection {
         await targetApi(this.config.target_api_base, `/scolia/bridge/commands/${pending.commandId}/result`, {
           method: "POST",
           body: {
-            result: type === "ACK" ? "acked" : "refused",
+            result: acknowledged ? "acked" : "refused",
             error: type === "REFUSED" ? JSON.stringify(message.payload || {}) : null,
           },
         }).catch((error) => console.warn("Could not report command result:", error.message));
       }
     }
 
-    if (type === "ACK") {
+    if (acknowledged) {
       const payload = normalizeScoliaStatusPayload(message.payload);
       if (
         hasScoliaPhysicalStatus(payload)

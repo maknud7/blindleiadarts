@@ -52,4 +52,15 @@ import {
   assert.equal(match, null);
 }
 
+
+{
+  const pending = new Map([["cmd-acknowledged", { commandId: 15, commandType: "GET_SBC_STATUS" }]]);
+  const match = resolvePendingScoliaCommand({
+    type: "ACKNOWLEDGED",
+    payload: { replyTo: "cmd-acknowledged" },
+  }, pending);
+  assert.equal(match?.key, "cmd-acknowledged");
+  assert.equal(match?.inferred, false);
+}
+
 console.log("Scolia protocol tests passed");

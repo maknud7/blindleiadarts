@@ -109,9 +109,9 @@ export class ScoliaEventProcessor {
       await this.bridge.updateRuntimeStatus(event.kiosk_id, payload);
       return { status: "processed", meta: { hello: true } };
     }
-    if (["SBC_STATUS_CHANGED", "SBC_BOARD_AVAILABILITY_CHANGED"].includes(type)) {
+    if (["SBC_STATUS", "SBC_STATUS_CHANGED", "SBC_BOARD_AVAILABILITY_CHANGED"].includes(type)) {
       await this.bridge.updateRuntimeStatus(event.kiosk_id, payload);
-      return { status: "processed", meta: { status_update: true } };
+      return { status: "processed", meta: { status_update: true, status_type: type } };
     }
     if (type === "TAKEOUT_STARTED") {
       await this.bridge.updateRuntimeStatus(event.kiosk_id, { ...payload, boardPhase: "Takeout" });
