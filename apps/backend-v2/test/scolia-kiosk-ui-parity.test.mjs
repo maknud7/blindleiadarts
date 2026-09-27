@@ -210,3 +210,21 @@ test("Platform v2 never starts Scolia runtime for a manual board", () => {
   assert.match(hook, /read\("testLeaseActive"\) === "1"\) await releaseLease\(\)/);
   assert.match(hook, /effectiveScoringMode: !enabled \|\| leaseFallback \|\| fallbackActive \? "manual"/);
 });
+
+
+test("Platform v2 Scolia realtime path keeps takeout as the player-switch boundary", () => {
+  const workspace = fs.readFileSync("apps/platform-v2/src/kiosk/KioskWorkspace.tsx", "utf8");
+  const realtimeHook = fs.readFileSync("apps/platform-v2/src/kiosk/useScoliaRealtimeInput.ts", "utf8");
+  const bridge = fs.readFileSync("apps/scolia-bridge/server-router.js", "utf8");
+
+  assert.match(realtimeHook, /event !== "scolia_input"/);
+  assert.match(realtimeHook, /kiosk:\$\{kioskCode\}/);
+  assert.match(workspace, /type === "THROW_DETECTED"/);
+  assert.match(workspace, /type !== "TAKEOUT_FINISHED"/);
+  assert.match(workspace, /setScoliaRealtimeDarts\(nextTurn\.darts\)/);
+  assert.match(workspace, /optimisticManualSnapshot\(current, "per_dart", total, turn\.darts\)/);
+  assert.match(workspace, /scolia-seq-\$\{turn\.bridgeSequences\.join\("-"\)\}/);
+  assert.match(workspace, /manualQueueDepth > 0 \|\| scoliaTurnActive/);
+  assert.match(bridge, /bridge_sequence: bridgeSequence/);
+  assert.match(bridge, /kiosk_code: String\(route\.kiosk_code/);
+});
