@@ -94,17 +94,24 @@ function nextSpoolOrder() {
   return lastSpoolOrder;
 }
 
-async function spool(serial, targetApiBase, message) {
+async function spool(serial, targetApiBase, message, route = {}) {
+  // The same monotonic value drives both durable spool ordering and kiosk realtime
+  // ordering. This lets the kiosk trust bridge sequence rather than browser clocks.
+  const bridgeSequence = nextSpoolOrder();
   const record = {
     serial_number: serial,
     target_api_base: String(targetApiBase || API_BASE).replace(/\/$/, ""),
+    kiosk_id: Number(route.kiosk_id || 0) || null,
+    kiosk_code: String(route.kiosk_code || route.code || "").trim() || null,
+    environment: String(route.environment || "default"),
+    bridge_sequence: bridgeSequence,
     message,
     spooled_at: new Date().toISOString(),
   };
   // The numeric prefix is strictly monotonic inside this bridge process. Scolia can
   // emit several messages in the same millisecond; a random UUID must never decide
   // the order in which throws/takeout events reach canonical scoring.
-  const name = `${nextSpoolOrder()}-${safeFileName(serial)}-${randomUUID()}.json`;
+  const name = `${bridgeSequence}-${safeFileName(serial)}-${randomUUID()}.json`;
   const temp = path.join(SPOOL_DIR, `.${name}.tmp`);
   const final = path.join(SPOOL_DIR, name);
   await fs.writeFile(temp, JSON.stringify(record), { encoding: "utf8", flag: "wx" });
@@ -234,7 +241,8 @@ class BoardConnection {
     await spool(
       this.config.serial_number,
       this.config.target_api_base,
-      internalMessage("BRIDGE_CONNECTED", { kiosk_id: this.config.kiosk_id, environment: this.config.environment || "default" })
+      internalMessage("BRIDGE_CONNECTED", { kiosk_id: this.config.kiosk_id, environment: this.config.environment || "default" }),
+      { kiosk_id: this.config.kiosk_id, kiosk_code: this.config.code, environment: this.config.environment || "default" },
     );
   }
 
@@ -290,7 +298,12 @@ class BoardConnection {
       this.send({ id: randomUUID(), type: "GET_SBC_STATUS" });
     }
 
-    await spool(this.config.serial_number, this.config.target_api_base, message);
+    await spool(
+      this.config.serial_number,
+      this.config.target_api_base,
+      message,
+      { kiosk_id: this.config.kiosk_id, kiosk_code: this.config.code, environment: this.config.environment || "default" },
+    );
   }
 
   async onClose(code, reasonBuffer) {
@@ -302,7 +315,8 @@ class BoardConnection {
       await spool(
         this.config.serial_number,
         this.config.target_api_base,
-        internalMessage("BRIDGE_DISCONNECTED", { code, reason, environment: this.config.environment || "default" })
+        internalMessage("BRIDGE_DISCONNECTED", { code, reason, environment: this.config.environment || "default" }),
+        { kiosk_id: this.config.kiosk_id, kiosk_code: this.config.code, environment: this.config.environment || "default" },
       );
     }
   }
@@ -312,7 +326,8 @@ class BoardConnection {
     await spool(
       this.config.serial_number,
       this.config.target_api_base,
-      internalMessage("BRIDGE_ERROR", { error: String(error?.message || error), environment: this.config.environment || "default" })
+      internalMessage("BRIDGE_ERROR", { error: String(error?.message || error), environment: this.config.environment || "default" }),
+      { kiosk_id: this.config.kiosk_id, kiosk_code: this.config.code, environment: this.config.environment || "default" },
     );
   }
 
