@@ -120,7 +120,7 @@ export function KioskWorkspace() {
   const testBoardLabel = read("testBoardLabel");
 
   const scolia = useScoliaRuntime({ environment: health?.environment, kioskCode, kioskToken, testMode: effectiveTestMode, physicalBoardId });
-  const effectiveScoringMode = scolia.leasePending ? "scolia-pending" : (scolia.effectiveScoringMode || kiosk?.scoring_mode || "manual");
+  const effectiveScoringMode = scolia.leasePending ? "scolia-pending" : scolia.leaseFallback ? "manual" : (scolia.effectiveScoringMode || kiosk?.scoring_mode || "manual");
 
   function resetInput(): void {
     setScore("");
@@ -505,7 +505,7 @@ export function KioskWorkspace() {
 
     <main className="kiosk-main"><section className="kiosk-card">
       {error && <div className="notice bad">{error}</div>}
-      {kioskCode && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
+      {kioskCode && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseFallback={scolia.leaseFallback} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onRetryLease={scolia.retryLease} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
 
       {view === "loading" && <div className="kiosk-hero"><span className="pill">Skiveterminal</span><h2>Starter terminalen …</h2><p>Henter skive og kampstatus.</p></div>}
       {view === "test-chooser" && <TestChooser boards={testBoards} busy={busy} onChoose={selectTestBoard} onExit={() => void leaveTestMode()} />}
@@ -548,10 +548,11 @@ function SettingsDialog({ isTest, hasKiosk, busy, onClose, onReload, onReset, on
   </div>;
 }
 
-function ScoliaRuntimePanel({ snapshotMode, board, leasePending, leaseError, runtimeError, available, fallbackActive, automatic, remaining, busy, onFallback, onResume, onResetPhase }: {
+function ScoliaRuntimePanel({ snapshotMode, board, leasePending, leaseFallback, leaseError, runtimeError, available, fallbackActive, automatic, remaining, busy, onRetryLease, onFallback, onResume, onResetPhase }: {
   snapshotMode: string;
   board: ScoliaRuntimeBoard | null;
   leasePending: boolean;
+  leaseFallback: boolean;
   leaseError: string;
   runtimeError: string;
   available: boolean;
@@ -559,13 +560,15 @@ function ScoliaRuntimePanel({ snapshotMode, board, leasePending, leaseError, run
   automatic: boolean;
   remaining: number;
   busy: string;
+  onRetryLease: () => Promise<void>;
   onFallback: () => Promise<void>;
   onResume: () => Promise<void>;
   onResetPhase: () => Promise<void>;
 }) {
-  const relevant = snapshotMode === "scolia" || leasePending || board?.mode === "live" || fallbackActive || Boolean(board?.serial_number);
+  const relevant = snapshotMode === "scolia" || leasePending || leaseFallback || board?.mode === "live" || fallbackActive || Boolean(board?.serial_number);
   if (!relevant) return null;
   if (leasePending) return <div className="scolia-kiosk-strip warn"><div><strong>TEST kobler til fysisk Scolia …</strong><span>{leaseError || "Oppretter midlertidig lease. Manuell scoring er sperret mens tilkoblingen etableres."}</span></div><span className="pill warn">TEST · Scolia</span></div>;
+  if (leaseFallback) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia kunne ikke kobles til · manuell scoring aktiv</strong><span>{leaseError || "TEST-leasen kunne ikke etableres. Kampen kan fortsette manuelt."}</span></div><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onRetryLease()}>Prøv Scolia igjen</button></div>;
   if (fallbackActive) return <div className="scolia-kiosk-strip warn"><div><strong>{available ? "Scolia er tilbake – score må avstemmes" : "Scolia offline · manuell fallback"}</strong><span>{available ? "Fortsett manuelt til scoren er kontrollert." : "Kampen kan fortsette manuelt mens kiosken følger forbindelsen."}</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><div className="row-actions">{available && <button className="button small" disabled={Boolean(busy)} onClick={() => void onResume()}>Score avstemt · bruk Scolia</button>}<button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
   if (automatic && !available) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia-forbindelsen er brutt</strong><span>Prøver igjen. Manuell fallback {remaining > 0 ? `om ca. ${remaining} sek` : "aktiveres nå"}.</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onFallback()}>Bruk manuell nå</button></div>;
   if (automatic && available) return <div className="scolia-kiosk-strip good"><div><strong>Scolia tilkoblet · automatisk scoring</strong><span>{board?.physical_board_status || board?.board_status || "Online"}{board?.board_phase ? ` · ${board.board_phase}` : ""}</span></div><div className="row-actions"><span className="pill good"><span className="dot" />Live</span><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
