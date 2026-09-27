@@ -85,5 +85,51 @@ test("queueCommand reuses an outstanding GET_SBC_STATUS instead of piling up pro
   assert.equal(command.message_id, "existing-status-probe");
   assert.equal(command.status, "queued");
   assert.equal(command.deduped, true);
-  assert.equal(executes.length, 0);
+  assert.equal(executes.length, 1);
+  assert.match(executes[0].sql, /Superseded stale status probe/);
+  assert.deepEqual(executes[0].params, ["11", "17"]);
+});
+
+
+test("pollCommands expires stale probes and exhausted commands before ordered delivery", async () => {
+  const db = fakeDb();
+  db.query = async (sql, params = []) => {
+    db.queries.push({ sql, params });
+    return [];
+  };
+  const repo = new MySqlScoliaCommandRepository(new FakeSessions(db), "bd_test_");
+
+  const items = await repo.pollCommands(["17"], 10);
+
+  assert.deepEqual(items, []);
+  assert.equal(db.executes.length, 3);
+  assert.match(db.executes[0].sql, /command_type='GET_SBC_STATUS'/);
+  assert.match(db.executes[0].sql, /status='expired'/);
+  assert.match(db.executes[0].sql, /INTERVAL 30 SECOND/);
+  assert.match(db.executes[1].sql, /attempt_count>=8/);
+  assert.match(db.executes[1].sql, /status='expired'/);
+  assert.match(db.executes[2].sql, /status='failed'/);
+  assert.match(db.executes[2].sql, /attempt_count<8/);
+});
+
+test("queueCommand deduplicates a failed current status probe", async () => {
+  const db = fakeDb();
+  db.query = async (sql, params = []) => {
+    db.queries.push({ sql, params });
+    return [{
+      id: "40",
+      message_id: "failed-current-probe",
+      status: "failed",
+      attempt_count: 1,
+      created_at: "2026-09-27 18:00:00.000",
+    }];
+  };
+  const repo = new MySqlScoliaCommandRepository(new FakeSessions(db), "bd_test_");
+
+  const command = await repo.queueCommand("11", "17", "GET_SBC_STATUS", {}, null);
+
+  assert.equal(command.id, "40");
+  assert.equal(command.status, "failed");
+  assert.equal(command.deduped, true);
+  assert.equal(db.executes.length, 1);
 });
