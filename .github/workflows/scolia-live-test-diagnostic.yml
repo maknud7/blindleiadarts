@@ -1,0 +1,67 @@
+name: Scolia Live TEST Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/kiosk-audit-test-smoke-cleanup
+    paths:
+      - '.github/workflows/scolia-live-test-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: Read live TEST Scolia state
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          cat >/tmp/diag.php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)(getenv('DB_PORT')?:3306));
+          $db->set_charset('utf8mb4');
+
+          $k=$db->query("SELECT id,club_id,code,name,board_number,scoring_mode,source_kiosk_id FROM bd_test_kiosks WHERE source_kiosk_id=4 AND is_active=1 ORDER BY id DESC LIMIT 1")->fetch_assoc();
+          if(!$k){fwrite(STDERR,"No TEST alias for physical board 4\n"); exit(2);}
+          $kid=(string)$k['id']; $cid=(string)$k['club_id'];
+          echo "KIOSK ".json_encode($k,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+          $r=$db->query("SELECT kiosk_id,connection_state,board_status,board_phase,fallback_active,needs_reconciliation,turn_locked_until_takeout,last_bridge_heartbeat_at,last_event_at,last_disconnect_reason,error_type,updated_at FROM bd_test_scolia_board_runtime WHERE kiosk_id={$kid} LIMIT 1")->fetch_assoc();
+          echo "RUNTIME ".json_encode($r,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+          $b=$db->query("SELECT kiosk_id,match_id,player_id,darts_json,event_ids_json,provider_event_ids_json,updated_at FROM bd_test_scolia_visit_buffers WHERE kiosk_id={$kid} LIMIT 1")->fetch_assoc();
+          echo "BUFFER ".json_encode($b,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+          $m=$db->query("SELECT id,status,player_a_id,player_b_id,kiosk_id,starts_at,finished_at FROM bd_test_matches WHERE kiosk_id={$kid} AND status IN ('assigned','ready','pending','in_progress') ORDER BY id DESC LIMIT 1")->fetch_assoc();
+          echo "MATCH ".json_encode($m,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+          if($m){
+            $mid=(string)$m['id'];
+            $legs=$db->query("SELECT id,leg_number,starting_player_id,status,winner_player_id,start_score FROM bd_test_legs WHERE match_id={$mid} ORDER BY leg_number")->fetch_all(MYSQLI_ASSOC);
+            echo "LEGS ".json_encode($legs,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+            $vis=$db->query("SELECT id,leg_id,player_id,visit_number,score,darts_used,is_bust,remaining_after,input_mode,created_at,request_key FROM bd_test_visits WHERE match_id={$mid} ORDER BY id DESC LIMIT 12")->fetch_all(MYSQLI_ASSOC);
+            echo "VISITS ".json_encode($vis,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+          }
+
+          $events=$db->query("SELECT id,event_type,processing_status,canonical_visit_id,provider_event_id,received_at,processed_at,last_error,processing_meta_json FROM bd_test_scolia_events WHERE kiosk_id={$kid} ORDER BY id DESC LIMIT 30")->fetch_all(MYSQLI_ASSOC);
+          echo "EVENTS ".json_encode($events,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+          $cmd=$db->query("SELECT id,command_type,status,created_at,sent_at,completed_at,last_error FROM bd_test_scolia_commands WHERE kiosk_id={$kid} ORDER BY id DESC LIMIT 20")->fetch_all(MYSQLI_ASSOC);
+          echo "COMMANDS ".json_encode($cmd,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+          $lease=$db->query("SELECT physical_kiosk_id,test_kiosk_id,heartbeat_at,expires_at FROM bd_prod_scolia_test_leases WHERE physical_kiosk_id=4 OR test_kiosk_id={$kid} ORDER BY expires_at DESC LIMIT 5")->fetch_all(MYSQLI_ASSOC);
+          echo "LEASES ".json_encode($lease,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+          PHP
+          php /tmp/diag.php
