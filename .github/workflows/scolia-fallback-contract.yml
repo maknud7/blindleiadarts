@@ -23,6 +23,8 @@ jobs:
           node --check apps/kiosk/scolia-fallback-manual.js
           node --check apps/kiosk/scolia-live-ux.js
           node --check apps/kiosk/scolia-test-lease.js
+          node --check apps/kiosk/direct-test-handoff.js
+          node --check apps/kiosk/prod-test-entry.js
           node infra/tests/scolia_fallback_manual_test.mjs
           grep -Fq 'scolia-fallback-manual.js?v=' apps/kiosk/index.html
           grep -Fq 'scolia-test-lease.js?v=' apps/kiosk/index.html
