@@ -1,4 +1,5 @@
 name: Scolia Live TEST Diagnostic
+# rerun-after-forwarding-enable
 
 on:
   push:
