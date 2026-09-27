@@ -196,6 +196,12 @@ export type KioskMatch = {
 
 export type KioskSnapshot = {
   kiosk: Board & { club?: Club };
+  active_tournament?: {
+    id: number | string;
+    name: string;
+    status?: string;
+    auto_assign_enabled?: boolean;
+  } | null;
   match?: KioskMatch | null;
 };
 
