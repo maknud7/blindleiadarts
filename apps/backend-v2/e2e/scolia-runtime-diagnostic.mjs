@@ -107,7 +107,7 @@ async function dumpPhysicalBoardSnapshot(provider) {
       `SELECT k.id,k.club_id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,
               CASE WHEN s.serial_number IS NULL OR s.serial_number='' THEN 0 ELSE 1 END AS serial_configured,
               s.mode,s.auto_fallback_to_manual,
-              cs.enabled AS club_scolia_enabled,
+              cs.enabled AS club_scolia_enabled,cs.force_connect,cs.forward_messages_to_scolia,
               CASE WHEN cs.access_token IS NULL OR cs.access_token='' THEN 0 ELSE 1 END AS access_token_configured
          FROM \`bd_prod_kiosks\` k
          LEFT JOIN \`bd_prod_scolia_board_settings\` s ON s.kiosk_id=k.id
@@ -150,6 +150,23 @@ async function dumpPhysicalBoardSnapshot(provider) {
     }
 
     const placeholders = testKioskIds.map(() => "?").join(",");
+    const eventHistorySummary = await sql.query(
+      `SELECT event_type,COUNT(*) AS event_count,MIN(received_at) AS first_received_at,MAX(received_at) AS last_received_at
+         FROM \`bd_test_scolia_events\`
+        WHERE kiosk_id IN (${placeholders})
+        GROUP BY event_type
+        ORDER BY last_received_at DESC`,
+      testKioskIds,
+    );
+    const historicalScoringEvents = await sql.query(
+      `SELECT id,kiosk_id,match_id,event_type,processing_status,attempt_count,received_at,processed_at,
+              canonical_visit_id,last_error,processing_meta_json,payload_json
+         FROM \`bd_test_scolia_events\`
+        WHERE kiosk_id IN (${placeholders})
+          AND event_type IN ('THROW_DETECTED','TAKEOUT_STARTED','TAKEOUT_FINISHED')
+        ORDER BY id DESC LIMIT 30`,
+      testKioskIds,
+    );
     const runtime = await sql.query(
       `SELECT kiosk_id,connection_state,board_status,board_phase,error_type,fallback_active,
               needs_reconciliation,turn_locked_until_takeout,last_disconnect_reason,
@@ -202,6 +219,8 @@ async function dumpPhysicalBoardSnapshot(provider) {
       aliases,
       leases,
       test_kiosk_ids: testKioskIds,
+      event_history_summary: eventHistorySummary,
+      historical_scoring_events: historicalScoringEvents,
       runtime,
       events,
       commands,
