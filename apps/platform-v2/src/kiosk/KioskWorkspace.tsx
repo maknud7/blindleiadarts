@@ -411,7 +411,7 @@ export function KioskWorkspace() {
         } catch (cause) {
           manualQueuePaused.current = true;
           if (mounted.current) {
-            setManualQueueError(`Lagringskø stoppet: ${text(cause)}`);
+            setManualQueueError("Kunne ikke bekrefte siste kast. Oppdater status før dere fortsetter.");
           }
         }
       }
@@ -420,11 +420,30 @@ export function KioskWorkspace() {
     }
   }
 
-  function retryManualVisitQueue() {
-    if (!manualQueueRef.current.length) return;
-    manualQueuePaused.current = false;
+  async function refreshManualStatus() {
+    if (!kioskCode || busy) return;
+    setBusy(true);
     setManualQueueError("");
-    void drainManualVisitQueue();
+    manualQueuePaused.current = false;
+    try {
+      await drainManualVisitQueue();
+      if (manualQueueRef.current.length > 0 || manualQueuePaused.current) {
+        setManualQueueError("Kunne ikke bekrefte siste kast. Oppdater status og prøv igjen.");
+        return;
+      }
+      const fresh = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(kioskCode)}/state`, { kioskToken });
+      if (mounted.current) {
+        setSnapshot(fresh);
+        resetInput();
+        setError("");
+      }
+    } catch (cause) {
+      if (mounted.current) {
+        setManualQueueError(`Kunne ikke hente oppdatert kampstatus: ${text(cause)}`);
+      }
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   }
 
   function enqueueManualVisit(
@@ -681,6 +700,7 @@ export function KioskWorkspace() {
 
     <main className="kiosk-main"><section className="kiosk-card">
       {error && <div className="notice bad">{error}</div>}
+      {manualQueueError && <div className="notice bad"><span>{manualQueueError}</span><button className="button secondary small" disabled={busy} onClick={() => void refreshManualStatus()}>Oppdater status</button></div>}
       {kioskCode && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseFallback={scolia.leaseFallback} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onRetryLease={scolia.retryLease} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
 
       {view === "loading" && <div className="kiosk-hero"><span className="pill">Skiveterminal</span><h2>Starter terminalen …</h2><p>Henter skive og kampstatus.</p></div>}
@@ -688,10 +708,10 @@ export function KioskWorkspace() {
       {view === "pairing" && <PairingView code={pairingCode} expires={pairingExpires} busy={busy} onNew={() => void createPairing(true)} />}
       {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1><p>Venter på neste kamp · {effectiveScoringMode.startsWith("scolia") ? "Scolia scoring" : "manuell scoring"}</p></div>}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
-      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy)} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRetryQueue={retryManualVisitQueue} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
+      {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scolia.board} lastScoliaVisit={scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
 
-    {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy || manualQueueDepth > 0} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
+    {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
 
     {checkoutScore !== null && <div className="login-shell kiosk-dialog-overlay"><div className="login-card kiosk-dialog-card"><span className="pill good">Checkout</span><h1>Hvor mange piler?</h1><p>Registrer hvor mange piler som ble brukt på checkouten.</p><div className="grid three">{[1, 2, 3].map((used) => <button key={used} className="button" disabled={busy} onClick={() => submitSumVisit(checkoutScore, used)}>{used} pil{used > 1 ? "er" : ""}</button>)}</div><button className="button secondary" onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
 
@@ -703,10 +723,13 @@ export function KioskWorkspace() {
   </div>;
 }
 
-function SettingsDialog({ isTest, hasKiosk, busy, onClose, onReload, onReset, onExitTest }: {
+function SettingsDialog({ isTest, hasKiosk, busy, manualQueueDepth, manualQueueError, onRefreshStatus, onClose, onReload, onReset, onExitTest }: {
   isTest: boolean;
   hasKiosk: boolean;
   busy: boolean;
+  manualQueueDepth: number;
+  manualQueueError: string;
+  onRefreshStatus: () => void;
   onClose: () => void;
   onReload: () => void;
   onReset: () => void;
@@ -716,6 +739,7 @@ function SettingsDialog({ isTest, hasKiosk, busy, onClose, onReload, onReset, on
     <section className="kiosk-settings-dialog" role="dialog" aria-modal="true" aria-label="Skiveterminal innstillinger">
       <div className="kiosk-settings-head"><div><span>Skiveterminal</span><h2>Innstillinger</h2></div><button className="kiosk-settings-button" type="button" aria-label="Lukk" onClick={onClose}>×</button></div>
       <div className="kiosk-settings-actions">
+        <div className="notice"><strong>Lagringsstatus</strong><span>{manualQueueError ? "Krever avstemming" : manualQueueDepth > 0 ? `${manualQueueDepth} kast venter på bekreftelse` : "Alle kast er bekreftet"}</span>{(manualQueueDepth > 0 || manualQueueError) && <button className="button secondary small" disabled={busy} onClick={onRefreshStatus}>Oppdater status</button>}</div>
         <button className="button secondary" disabled={busy} onClick={onReload}>Last inn terminalen på nytt</button>
         {hasKiosk && <button className="button secondary" disabled={busy} onClick={onReset}>{isTest ? "Bytt testskive" : "Fjern pairing"}</button>}
         {isTest && <button className="button danger" disabled={busy} onClick={onExitTest}>Avslutt testmodus</button>}
@@ -763,7 +787,7 @@ function AssignedView({ match, board, busy, onStart }: { match: KioskMatch; boar
   return <div className="assigned-view"><div className="match-tools"><span className="pill good">Skive {board} · kamp klar</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"} · best of {match.best_of_legs}</span></div><div className="versus assigned-versus"><div className="player-tile"><p>Spiller 1</p><h2>{match.player_a.display_name}</h2></div><div className="vs-mark">VS</div><div className="player-tile"><p>Spiller 2</p><h2>{match.player_b.display_name}</h2></div></div><button className="button start-match-button" disabled={busy} onClick={onStart}>{busy ? "Starter …" : "Start kamp"}</button></div>;
 }
 
-function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, manualQueueDepth, manualQueueError, onRetryQueue, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo, onEditVisit, visitEditingAllowed }: {
+function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, manualQueueDepth, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo, onEditVisit, visitEditingAllowed }: {
   match: KioskMatch;
   board: number;
   scoringMode: string;
@@ -775,8 +799,6 @@ function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, in
   score: string;
   busy: boolean;
   manualQueueDepth: number;
-  manualQueueError: string;
-  onRetryQueue: () => void;
   onMode: (mode: InputMode) => void;
   onMultiplier: (value: Multiplier) => void;
   onDart: (value: number | "BULL", forcedMultiplier?: Multiplier) => void;
@@ -794,17 +816,16 @@ function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, in
   const playerAActive = Number(match.current_player_id) === Number(match.player_a.id);
   const playerBActive = Number(match.current_player_id) === Number(match.player_b.id);
   const recentVisits = ((match.recent_visits || []) as EditableVisit[]).slice(0, 4);
-  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy || manualQueueDepth > 0} onClick={onUndo}>Angre siste kast</button>{manualQueueDepth > 0 && <span className={`pill ${manualQueueError ? "warn" : ""}`}>{manualQueueError ? `Kø stoppet · ${manualQueueDepth}` : `Lagrer · ${manualQueueDepth}`}</span>}{manualQueueError && <button className="button secondary small" disabled={busy} onClick={onRetryQueue}>Prøv kø igjen</button>}</div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} preview={preview} busy={busy} queueDepth={manualQueueDepth} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits"><div className="editable-visits-v2" aria-label="Siste fire kast">{recentVisits.length ? recentVisits.map((visit, index) => { const bust = Number(visit.is_bust) === 1; const editable = visitEditingAllowed && Boolean(visit.id); return <button type="button" className="visit visit-editable-v2" key={`${visit.id || visit.visit_number || index}-${index}`} disabled={!editable || busy || manualQueueDepth > 0} onClick={() => onEditVisit(index)} aria-label={editable ? `Rediger kast ${Number(visit.score || 0)} av ${visit.player_name || "spiller"}` : undefined}><span><strong>{visit.player_name || "Spiller"}</strong><small>#{Number(visit.visit_number || 0)}</small></span><span><strong>{Number(visit.score || 0)}</strong><small>{bust ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</small></span>{editable && <span className="visit-edit-icon-v2" aria-hidden="true">✎</span>}</button>; }) : <div className="empty">Ingen kast registrert ennå.</div>}</div></div></div>;
+  return <div className="match-view"><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy || manualQueueDepth > 0} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} /><div className="vs-mark">Leg {match.current_leg || 1}</div><PlayerTile player={match.player_b} active={playerBActive} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} preview={preview} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits"><div className="editable-visits-v2" aria-label="Siste fire kast">{recentVisits.length ? recentVisits.map((visit, index) => { const bust = Number(visit.is_bust) === 1; const editable = visitEditingAllowed && Boolean(visit.id); return <button type="button" className="visit visit-editable-v2" key={`${visit.id || visit.visit_number || index}-${index}`} disabled={!editable || busy || manualQueueDepth > 0} onClick={() => onEditVisit(index)} aria-label={editable ? `Rediger kast ${Number(visit.score || 0)} av ${visit.player_name || "spiller"}` : undefined}><span><strong>{visit.player_name || "Spiller"}</strong><small>#{Number(visit.visit_number || 0)}</small></span><span><strong>{Number(visit.score || 0)}</strong><small>{bust ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</small></span>{editable && <span className="visit-edit-icon-v2" aria-hidden="true">✎</span>}</button>; }) : <div className="empty">Ingen kast registrert ennå.</div>}</div></div></div>;
 }
 
-function ManualScoreSurface({ inputMode, multiplier, darts, score, preview, busy, queueDepth, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit }: {
+function ManualScoreSurface({ inputMode, multiplier, darts, score, preview, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit }: {
   inputMode: InputMode;
   multiplier: Multiplier;
   darts: ManualDart[];
   score: string;
   preview: RemainingPreview | null;
   busy: boolean;
-  queueDepth: number;
   onMode: (mode: InputMode) => void;
   onMultiplier: (value: Multiplier) => void;
   onDart: (value: number | "BULL", forcedMultiplier?: Multiplier) => void;
@@ -823,23 +844,22 @@ function ManualScoreSurface({ inputMode, multiplier, darts, score, preview, busy
         : ` · Etter kast ${preview.remaining}`
     : "";
   return <div className={`score-entry ${inputMode === "per_dart" ? "dart-entry-active" : ""}`}>
-    <div className="panel-head scoring-head"><div><h3>Registrer kast</h3><p>{inputMode === "sum" ? "Sum for tre piler" : `Per pil · sum ${dartTotal}`}{previewText}{queueDepth > 0 ? ` · ${queueDepth} i lagringskø` : ""}</p></div><div className="manual-mode-switch"><button className={inputMode === "sum" ? "active" : ""} disabled={busy} onClick={() => onMode("sum")}>Sum</button><button className={inputMode === "per_dart" ? "active" : ""} disabled={busy} onClick={() => onMode("per_dart")}>Per pil</button></div></div>
-    {inputMode === "sum" ? <><div className="score-display">{score || "0"}</div><div className="keypad">{keys.map((key) => <button key={key} className={key === "ok" ? "primary" : ""} disabled={busy} onClick={() => { if (key === "del") onScore(score.slice(0, -1)); else if (key === "ok") onSubmit(); else if (score.length < 3) onScore(score + key); }}>{key === "del" ? "⌫" : key === "ok" ? "Lagre" : key}</button>)}</div></> : <PerDartEntry darts={darts} multiplier={multiplier} total={dartTotal} busy={busy} queueDepth={queueDepth} onMultiplier={onMultiplier} onDart={onDart} onBack={onDartBack} onSubmit={onDartSubmit} />}
+    <div className="panel-head scoring-head"><div><h3>Registrer kast</h3><p>{inputMode === "sum" ? "Sum for tre piler" : `Per pil · sum ${dartTotal}`}{previewText}</p></div><div className="manual-mode-switch"><button className={inputMode === "sum" ? "active" : ""} disabled={busy} onClick={() => onMode("sum")}>Sum</button><button className={inputMode === "per_dart" ? "active" : ""} disabled={busy} onClick={() => onMode("per_dart")}>Per pil</button></div></div>
+    {inputMode === "sum" ? <><div className="score-display">{score || "0"}</div><div className="keypad">{keys.map((key) => <button key={key} className={key === "ok" ? "primary" : ""} disabled={busy} onClick={() => { if (key === "del") onScore(score.slice(0, -1)); else if (key === "ok") onSubmit(); else if (score.length < 3) onScore(score + key); }}>{key === "del" ? "⌫" : key === "ok" ? "Lagre" : key}</button>)}</div></> : <PerDartEntry darts={darts} multiplier={multiplier} total={dartTotal} busy={busy} onMultiplier={onMultiplier} onDart={onDart} onBack={onDartBack} onSubmit={onDartSubmit} />}
   </div>;
 }
 
-function PerDartEntry({ darts, multiplier, total, busy, queueDepth, onMultiplier, onDart, onBack, onSubmit }: {
+function PerDartEntry({ darts, multiplier, total, busy, onMultiplier, onDart, onBack, onSubmit }: {
   darts: ManualDart[];
   multiplier: Multiplier;
   total: number;
   busy: boolean;
-  queueDepth: number;
   onMultiplier: (value: Multiplier) => void;
   onDart: (value: number | "BULL", forcedMultiplier?: Multiplier) => void;
   onBack: () => void;
   onSubmit: () => void;
 }) {
-  return <div className="manual-dart-entry"><div className="dart-summary-v2">{[0, 1, 2].map((index) => <div key={index}><span>Pil {index + 1}</span><strong>{manualDartLabel(darts[index])}</strong></div>)}<div className="dart-total-v2"><span>Sum</span><strong>{total}</strong></div></div><div className="dart-pick-area"><div className="multiplier-column">{(["S", "D", "T"] as Multiplier[]).map((value) => <button key={value} className={multiplier === value ? "active" : ""} disabled={busy} onClick={() => onMultiplier(value)}>{value}</button>)}</div><div className="number-grid-v2">{Array.from({ length: 20 }, (_, index) => index + 1).map((value) => <button key={value} disabled={busy || darts.length >= 3} onClick={() => onDart(value)}>{value}</button>)}<button disabled={busy || darts.length >= 3} onClick={() => onDart("BULL", "S")}>25</button><button disabled={busy || darts.length >= 3} onClick={() => onDart("BULL", "D")}>Bull</button><button disabled={busy || darts.length >= 3} onClick={() => onDart(0, "S")}>Miss</button></div></div><div className="dart-entry-actions"><button className="button secondary" disabled={busy || !darts.length} onClick={onBack}>⌫ Siste pil</button><button className="button" disabled={busy || !darts.length} onClick={onSubmit}>Lagre kast · {total}{queueDepth > 0 ? ` · kø ${queueDepth}` : ""}</button></div></div>;
+  return <div className="manual-dart-entry"><div className="dart-summary-v2">{[0, 1, 2].map((index) => <div key={index}><span>Pil {index + 1}</span><strong>{manualDartLabel(darts[index])}</strong></div>)}<div className="dart-total-v2"><span>Sum</span><strong>{total}</strong></div></div><div className="dart-pick-area"><div className="multiplier-column">{(["S", "D", "T"] as Multiplier[]).map((value) => <button key={value} className={multiplier === value ? "active" : ""} disabled={busy} onClick={() => onMultiplier(value)}>{value}</button>)}</div><div className="number-grid-v2">{Array.from({ length: 20 }, (_, index) => index + 1).map((value) => <button key={value} disabled={busy || darts.length >= 3} onClick={() => onDart(value)}>{value}</button>)}<button disabled={busy || darts.length >= 3} onClick={() => onDart("BULL", "S")}>25</button><button disabled={busy || darts.length >= 3} onClick={() => onDart("BULL", "D")}>Bull</button><button disabled={busy || darts.length >= 3} onClick={() => onDart(0, "S")}>Miss</button></div></div><div className="dart-entry-actions"><button className="button secondary" disabled={busy || !darts.length} onClick={onBack}>⌫ Siste pil</button><button className="button" disabled={busy || !darts.length} onClick={onSubmit}>Lagre kast · {total}</button></div></div>;
 }
 
 function dartLabel(dart?: ScoliaDart | null): string {
