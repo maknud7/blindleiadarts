@@ -1,0 +1,45 @@
+name: Scolia Router Readiness Audit
+
+on:
+  push:
+    branches:
+      - ops/kiosk-audit-test-smoke-cleanup
+    paths:
+      - '.github/workflows/scolia-router-readiness-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query Scolia router safely
+        env:
+          SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          ROUTER_URL: https://blindleiadarts.ingenting.org/api/scolia-bridge-router.php
+        run: |
+          set -Eeuo pipefail
+          test -n "$SCOLIA_BRIDGE_SECRET"
+          status="$(curl -sS -o /tmp/router.json -w '%{http_code}'             --connect-timeout 5 --max-time 20             -H "X-Scolia-Bridge-Secret: $SCOLIA_BRIDGE_SECRET"             "$ROUTER_URL")"
+          echo "HTTP_STATUS=$status"
+          test "$status" = "200"
+          jq -e '.ok == true' /tmp/router.json >/dev/null
+          jq '{
+            bridge_mode: .data.bridge_mode,
+            configured_boards: .data.configured_boards,
+            active_test_leases: .data.active_test_leases,
+            active_tournament_clubs: .data.active_tournament_clubs,
+            next_activation_in_seconds: .data.next_activation_in_seconds,
+            boards: [.data.boards[] | {
+              kiosk_id,
+              physical_kiosk_id,
+              board_number,
+              environment,
+              activation_reason,
+              mode,
+              auto_fallback_to_manual,
+              configuration_scope
+            }]
+          }' /tmp/router.json
