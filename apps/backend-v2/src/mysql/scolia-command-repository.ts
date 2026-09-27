@@ -43,11 +43,22 @@ export class MySqlScoliaCommandRepository {
 
     return this.sessions.withTransaction(async (db) => {
       if (type === "GET_SBC_STATUS") {
+        // Status probes are disposable observations, not business commands. A probe
+        // left behind by a disconnect must never block RESET_PHASE/corrections.
+        await db.execute(
+          `UPDATE \`${this.runtimePrefix}scolia_commands\`
+              SET status='expired',completed_at=NOW(3),
+                  last_error=COALESCE(last_error,'Superseded stale status probe')
+            WHERE club_id=? AND kiosk_id=? AND command_type='GET_SBC_STATUS'
+              AND status IN ('queued','failed','delivered')
+              AND created_at < DATE_SUB(NOW(3),INTERVAL 30 SECOND)`,
+          [clubId, kioskId],
+        );
         const existing = await db.query<QueryResultRow>(
           `SELECT id,message_id,status,attempt_count,created_at
              FROM \`${this.runtimePrefix}scolia_commands\`
             WHERE club_id=? AND kiosk_id=? AND command_type='GET_SBC_STATUS'
-              AND status IN ('queued','delivered')
+              AND status IN ('queued','failed','delivered')
             ORDER BY id DESC LIMIT 1 FOR UPDATE`,
           [clubId, kioskId],
         );
@@ -90,10 +101,33 @@ export class MySqlScoliaCommandRepository {
     const placeholders = kioskIds.map(() => "?").join(",");
 
     return this.sessions.withTransaction(async (db) => {
+      // Old status probes are observational and must never starve control commands.
+      await db.execute(
+        `UPDATE \`${this.runtimePrefix}scolia_commands\`
+            SET status='expired',completed_at=NOW(3),
+                last_error=COALESCE(last_error,'Superseded stale status probe')
+          WHERE kiosk_id IN (${placeholders})
+            AND command_type='GET_SBC_STATUS'
+            AND status IN ('queued','failed','delivered')
+            AND created_at < DATE_SUB(NOW(3),INTERVAL 30 SECOND)`,
+        kioskIds,
+      );
+      // A command that repeatedly fails must become terminal; otherwise strict
+      // per-board ordering lets it block every newer command forever.
+      await db.execute(
+        `UPDATE \`${this.runtimePrefix}scolia_commands\`
+            SET status='expired',completed_at=NOW(3),
+                last_error=COALESCE(last_error,'Command retry budget exhausted')
+          WHERE kiosk_id IN (${placeholders})
+            AND status IN ('queued','failed','delivered')
+            AND attempt_count>=8`,
+        kioskIds,
+      );
       await db.execute(
         `UPDATE \`${this.runtimePrefix}scolia_commands\`
             SET status='failed',next_attempt_at=NOW(3),last_error=COALESCE(last_error,'Recovered stale command delivery')
           WHERE kiosk_id IN (${placeholders}) AND status='delivered'
+            AND attempt_count<8
             AND delivered_at < DATE_SUB(NOW(3),INTERVAL 30 SECOND)`,
         kioskIds,
       );
