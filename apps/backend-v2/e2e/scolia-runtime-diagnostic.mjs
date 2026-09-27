@@ -109,7 +109,11 @@ async function dumpPhysicalBoardSnapshot(provider) {
       `SELECT k.id,k.club_id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,
               CASE WHEN s.serial_number IS NULL OR s.serial_number='' THEN 0 ELSE 1 END AS serial_configured,
               s.mode,s.auto_fallback_to_manual,
+              s.force_connect_override,s.forward_messages_override,s.updated_at AS board_settings_updated_at,
               cs.enabled AS club_scolia_enabled,cs.force_connect,cs.forward_messages_to_scolia,
+              cs.updated_at AS club_settings_updated_at,cs.updated_by_user_id AS club_settings_updated_by_user_id,
+              COALESCE(s.force_connect_override,cs.force_connect) AS effective_force_connect,
+              COALESCE(s.forward_messages_override,cs.forward_messages_to_scolia) AS effective_forward_messages_to_scolia,
               CASE WHEN cs.access_token IS NULL OR cs.access_token='' THEN 0 ELSE 1 END AS access_token_configured
          FROM \`bd_prod_kiosks\` k
          LEFT JOIN \`bd_prod_scolia_board_settings\` s ON s.kiosk_id=k.id
