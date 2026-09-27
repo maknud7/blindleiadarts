@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, legacyApi } from "../shared/api";
+import { api, ApiError } from "../shared/api";
 import { clearTestLeaseMarkers, read, write } from "../shared/storage";
 import type { EnvironmentName, ScoliaBoard } from "../shared/types";
 
@@ -103,7 +103,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     if (!active || !code || !physicalId || !kioskToken) { clearLeaseState(); return; }
     leaseBusy.current = true;
     try {
-      await legacyApi<LeaseResponse>("kiosk-scolia-test-lease.php?action=release", { method: "POST", kioskToken, body: { test_kiosk_code: code, physical_kiosk_id: physicalId } });
+      await api<LeaseResponse>(`/kiosks/${encodeURIComponent(code)}/scolia/test-lease/release`, { method: "POST", kioskToken, body: { test_kiosk_code: code, physical_kiosk_id: physicalId } });
     } catch {
       // Server-side lease expiry is the safety net if a best-effort release cannot complete.
     } finally {
@@ -135,7 +135,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     leaseBusy.current = true;
     setLeasePending(true); write("testLeasePending", "1");
     try {
-      const data = await legacyApi<LeaseResponse>("kiosk-scolia-test-lease.php?action=acquire", { method: "POST", kioskToken, body: { test_kiosk_code: kioskCode, physical_kiosk_id: physicalBoardId } });
+      const data = await api<LeaseResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/scolia/test-lease/acquire`, { method: "POST", kioskToken, body: { test_kiosk_code: kioskCode, physical_kiosk_id: physicalBoardId } });
       if (data.leased) {
         write("testLeaseActive", "1"); write("testLeasePhysicalId", physicalBoardId); write("testLeaseCode", kioskCode); write("testLeaseNotApplicablePhysicalId", null);
       } else {
@@ -154,7 +154,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     if (!testMode || code !== kioskCode || physicalId !== physicalBoardId) { await releaseLease(); return; }
     heartbeatBusy.current = true;
     try {
-      await legacyApi<LeaseResponse>("kiosk-scolia-test-lease.php?action=heartbeat", { method: "POST", kioskToken, body: { test_kiosk_code: code, physical_kiosk_id: physicalId } });
+      await api<LeaseResponse>(`/kiosks/${encodeURIComponent(code)}/scolia/test-lease/heartbeat`, { method: "POST", kioskToken, body: { test_kiosk_code: code, physical_kiosk_id: physicalId } });
       write("testLeaseError", null); setLeaseError("");
     } catch (cause) {
       write("testLeaseActive", null); write("testLeasePending", "1");
@@ -167,7 +167,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     if (!kioskCode || !kioskToken || leasePending || statusBusy.current) return null;
     statusBusy.current = true;
     try {
-      const data = await legacyApi<UiResponse>(`kiosk-scolia-ui.php?action=status&kiosk_code=${encodeURIComponent(kioskCode)}`, { kioskToken });
+      const data = await api<UiResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/scolia/status`, { kioskToken });
       setBoard(data.board || null); setLastVisit(data.last_visit || null); setRuntimeError("");
       return data;
     } catch (cause) {
@@ -207,7 +207,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     if (bufferDarts.length === 0 && !window.confirm("Ta pilene ut av skiva først. Angre siste Scolia-kast?")) return;
     runtimeBusy.current = true; setBusy("undo"); setRuntimeError("");
     try {
-      const data = await legacyApi<UiResponse>("kiosk-scolia-ui.php?action=undo", { method: "POST", kioskToken, body: { kiosk_code: kioskCode } });
+      const data = await api<UiResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/scolia/undo`, { method: "POST", kioskToken });
       setBoard(data.board || null); setLastVisit(data.last_visit || null);
     } catch (cause) { setRuntimeError(cause instanceof Error ? cause.message : "Kunne ikke angre Scolia-kastet."); }
     finally { runtimeBusy.current = false; setBusy(""); }

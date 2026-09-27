@@ -20,6 +20,7 @@ on:
       - 'apps/kiosk/scolia-test-lease.js'
       - 'apps/kiosk/direct-test-handoff.js'
       - 'apps/kiosk/prod-test-entry.js'
+      - 'apps/platform-v2/src/kiosk/useScoliaRuntime.ts'
       - 'apps/backend-v2/e2e/kiosk-scoring-frontdoor-lifecycle.mjs'
       - '.github/workflows/backend-v2-scolia-e2e.yml'
   workflow_dispatch:
