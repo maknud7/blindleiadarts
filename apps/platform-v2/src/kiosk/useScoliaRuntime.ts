@@ -69,6 +69,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
   const [lastVisit, setLastVisit] = useState<ScoliaLastVisit | null>(null);
   const [leasePending, setLeasePending] = useState(read("testLeasePending") === "1");
   const [leaseError, setLeaseError] = useState(read("testLeaseError"));
+  const [leaseFallback, setLeaseFallback] = useState(read("testLeaseFallback") === "1");
   const [runtimeError, setRuntimeError] = useState("");
   const [busy, setBusy] = useState("");
   const offlineSince = useRef(0);
@@ -79,7 +80,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
 
   const isTest = environment === "test";
   const fallbackActive = yes(board?.fallback_active) || yes(board?.needs_reconciliation);
-  const automatic = board?.mode === "live" && board?.effective_scoring_mode === "scolia" && !fallbackActive;
+  const automatic = !leaseFallback && board?.mode === "live" && board?.effective_scoring_mode === "scolia" && !fallbackActive;
   const available = isAvailable(board);
 
   useEffect(() => {
@@ -93,6 +94,17 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     clearTestLeaseMarkers();
     setLeasePending(false);
     setLeaseError("");
+    setLeaseFallback(false);
+  }, []);
+
+  const enterLeaseFallback = useCallback((message: string) => {
+    write("testLeaseActive", null);
+    write("testLeasePending", null);
+    write("testLeaseFallback", "1");
+    write("testLeaseError", message);
+    setLeasePending(false);
+    setLeaseFallback(true);
+    setLeaseError(message);
   }, []);
 
   const releaseLease = useCallback(async () => {
@@ -112,8 +124,9 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     }
   }, [isTest, kioskToken, clearLeaseState]);
 
-  const ensureLease = useCallback(async () => {
+  const ensureLease = useCallback(async (force = false) => {
     if (!isTest || leaseBusy.current) return;
+    if (leaseFallback && !force) return;
     if (!testMode || !physicalBoardId || !kioskCode || !kioskToken) {
       if (read("testLeaseActive") === "1") await releaseLease();
       else if (!testMode || !physicalBoardId) clearLeaseState();
@@ -124,7 +137,9 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     const activeCode = read("testLeaseCode");
     const activeMatches = read("testLeaseActive") === "1" && activePhysical === physicalBoardId && activeCode === kioskCode;
     if (activeMatches) {
-      setLeasePending(false); setLeaseError(""); write("testLeasePending", null); write("testLeaseError", null); return;
+      setLeasePending(false); setLeaseFallback(false); setLeaseError("");
+      write("testLeasePending", null); write("testLeaseFallback", null); write("testLeaseError", null);
+      return;
     }
     if (read("testLeaseActive") === "1") await releaseLease();
 
@@ -141,12 +156,13 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       } else {
         write("testLeaseActive", null); write("testLeasePhysicalId", null); write("testLeaseCode", null); write("testLeaseNotApplicablePhysicalId", physicalBoardId);
       }
-      write("testLeasePending", null); write("testLeaseError", null); setLeasePending(false); setLeaseError("");
+      write("testLeasePending", null); write("testLeaseFallback", null); write("testLeaseError", null);
+      setLeasePending(false); setLeaseFallback(false); setLeaseError("");
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Kunne ikke koble TEST til Scolia.";
-      write("testLeasePending", "1"); write("testLeaseError", message); setLeasePending(true); setLeaseError(message);
+      enterLeaseFallback(message);
     } finally { leaseBusy.current = false; }
-  }, [isTest, testMode, physicalBoardId, kioskCode, kioskToken, releaseLease, clearLeaseState]);
+  }, [isTest, testMode, physicalBoardId, kioskCode, kioskToken, leaseFallback, releaseLease, clearLeaseState, enterLeaseFallback]);
 
   const heartbeatLease = useCallback(async () => {
     if (!isTest || heartbeatBusy.current || read("testLeaseActive") !== "1") return;
@@ -157,11 +173,21 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       await api<LeaseResponse>(`/kiosks/${encodeURIComponent(code)}/scolia/test-lease/heartbeat`, { method: "POST", kioskToken, body: { test_kiosk_code: code, physical_kiosk_id: physicalId } });
       write("testLeaseError", null); setLeaseError("");
     } catch (cause) {
-      write("testLeaseActive", null); write("testLeasePending", "1");
       const message = cause instanceof Error ? cause.message : "Scolia-testleasen mistet forbindelsen.";
-      write("testLeaseError", message); setLeasePending(true); setLeaseError(message); await ensureLease();
+      enterLeaseFallback(message);
     } finally { heartbeatBusy.current = false; }
-  }, [isTest, testMode, kioskCode, physicalBoardId, kioskToken, releaseLease, ensureLease]);
+  }, [isTest, testMode, kioskCode, physicalBoardId, kioskToken, releaseLease, enterLeaseFallback]);
+
+  const retryLease = useCallback(async () => {
+    if (!isTest || leaseBusy.current) return;
+    write("testLeaseFallback", null);
+    write("testLeaseError", null);
+    write("testLeasePending", "1");
+    setLeaseFallback(false);
+    setLeaseError("");
+    setLeasePending(true);
+    await ensureLease(true);
+  }, [isTest, ensureLease]);
 
   const readStatus = useCallback(async (): Promise<UiResponse | null> => {
     if (!kioskCode || !kioskToken || leasePending || statusBusy.current) return null;
@@ -246,7 +272,9 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     fallbackActive,
     automatic,
     fallbackRemainingSeconds,
-    effectiveScoringMode: fallbackActive ? "manual" : (board?.effective_scoring_mode || null),
+    effectiveScoringMode: leaseFallback || fallbackActive ? "manual" : (board?.effective_scoring_mode || null),
+    leaseFallback,
+    retryLease,
     fallback: () => runtimeAction("fallback"),
     resume: () => runtimeAction("resume", { reconciled: true }),
     resetPhase: () => runtimeAction("reset-phase"),
