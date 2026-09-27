@@ -1,0 +1,82 @@
+name: Scolia Live TEST Audit
+
+on:
+  push:
+    branches:
+      - ops/kiosk-audit-test-smoke-cleanup
+    paths:
+      - '.github/workflows/scolia-live-test-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: Inspect live TEST Scolia state
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SCOLIA_BRIDGE_SECRET: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)(getenv("DB_PORT") ?: 3306));
+            $db->set_charset("utf8mb4");
+
+            echo "NOW=".$db->query("SELECT NOW(3)")->fetch_row()[0].PHP_EOL;
+
+            $leases=$db->query("SELECT l.physical_kiosk_id,l.test_kiosk_id,l.heartbeat_at,l.expires_at,tk.code,tk.board_number
+              FROM bd_prod_scolia_test_leases l
+              LEFT JOIN bd_test_kiosks tk ON tk.id=l.test_kiosk_id
+              WHERE l.expires_at>NOW(3)
+              ORDER BY l.expires_at");
+            echo "ACTIVE_LEASES=".$leases->num_rows.PHP_EOL;
+            while($r=$leases->fetch_assoc()) echo "LEASE ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+            $runtime=$db->query("SELECT r.*,k.code,k.board_number,k.source_kiosk_id,k.scoring_mode
+              FROM bd_test_scolia_board_runtime r
+              INNER JOIN bd_test_kiosks k ON k.id=r.kiosk_id
+              WHERE k.source_kiosk_id=4
+              ORDER BY r.updated_at DESC");
+            echo "TEST_RUNTIME_ROWS=".$runtime->num_rows.PHP_EOL;
+            while($r=$runtime->fetch_assoc()) echo "RUNTIME ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+            $events=$db->query("SELECT e.id,e.kiosk_id,e.match_id,e.event_type,e.received_at,e.processing_status,e.attempt_count,e.processed_at,e.last_error,e.canonical_visit_id
+              FROM bd_test_scolia_events e
+              INNER JOIN bd_test_kiosks k ON k.id=e.kiosk_id
+              WHERE k.source_kiosk_id=4
+              ORDER BY e.id DESC LIMIT 15");
+            echo "RECENT_EVENTS=".$events->num_rows.PHP_EOL;
+            while($r=$events->fetch_assoc()) echo "EVENT ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+            $buffers=$db->query("SELECT b.kiosk_id,b.match_id,b.player_id,b.darts_json,b.updated_at
+              FROM bd_test_scolia_visit_buffers b
+              INNER JOIN bd_test_kiosks k ON k.id=b.kiosk_id
+              WHERE k.source_kiosk_id=4");
+            echo "BUFFERS=".$buffers->num_rows.PHP_EOL;
+            while($r=$buffers->fetch_assoc()) echo "BUFFER ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
+
+            $matches=$db->query("SELECT m.id,m.kiosk_id,m.status,m.player_a_id,m.player_b_id,m.started_at,m.completed_at
+              FROM bd_test_matches m
+              INNER JOIN bd_test_kiosks k ON k.id=m.kiosk_id
+              WHERE k.source_kiosk_id=4 AND m.status IN (\"assigned\",\"in_progress\")
+              ORDER BY m.id DESC LIMIT 10");
+            echo "ACTIVE_MATCHES=".$matches->num_rows.PHP_EOL;
+            while($r=$matches->fetch_assoc()) echo "MATCH ".json_encode($r,JSON_UNESCAPED_SLASHES).PHP_EOL;
+          '
+
+          echo "--- ROUTER ---"
+          curl -fsS --connect-timeout 5 --max-time 20             -H "X-Scolia-Bridge-Secret: $SCOLIA_BRIDGE_SECRET"             "https://blindleiadarts.ingenting.org/api/scolia-bridge-router.php?cb=$RANDOM"             | jq '{ok,bridge_mode:.data.bridge_mode,active_test_leases:.data.active_test_leases,boards:[.data.boards[]|{kiosk_id,physical_kiosk_id,board_number,environment,activation_reason,lease_expires_at}]}'
