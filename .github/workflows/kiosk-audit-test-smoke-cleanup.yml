@@ -1,0 +1,104 @@
+name: Kiosk Audit and TEST Smoke Cleanup
+
+on:
+  push:
+    branches:
+      - ops/kiosk-audit-test-smoke-cleanup
+
+permissions:
+  contents: read
+
+jobs:
+  audit-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit PROD kiosk against develop
+        env:
+          PROD_BASE_URL: https://blindleiadarts.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          bash infra/deploy/build-release.sh prod
+
+          files=(
+            index.html
+            prod-test-entry.js
+            direct-test-handoff.js
+            test-mode.js
+            service-worker.js
+          )
+
+          mismatch=0
+          echo "## PROD kiosk audit" >> "$GITHUB_STEP_SUMMARY"
+          for file in "${files[@]}"; do
+            if [[ ! -f "dist/prod/kiosk/$file" ]]; then
+              echo "SKIP $file (not in prod build)"
+              continue
+            fi
+            if ! curl --fail --silent --show-error --location                 --header 'Cache-Control: no-cache' --header 'Pragma: no-cache'                 --max-time 30 "$PROD_BASE_URL/kiosk/$file?cb=$RANDOM-$RANDOM"                 -o "/tmp/prod-$file"; then
+              echo "MISSING $file"
+              echo "- FAIL $file: missing/unreachable in PROD" >> "$GITHUB_STEP_SUMMARY"
+              mismatch=1
+              continue
+            fi
+
+            expected="$(sha256sum "dist/prod/kiosk/$file" | awk '{print $1}')"
+            actual="$(sha256sum "/tmp/prod-$file" | awk '{print $1}')"
+            if [[ "$expected" == "$actual" ]]; then
+              echo "MATCH $file"
+              echo "- OK $file: exact develop build" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "MISMATCH $file expected=$expected actual=$actual"
+              echo "- DIFF $file: PROD differs from develop" >> "$GITHUB_STEP_SUMMARY"
+              mismatch=1
+            fi
+          done
+
+          if grep -Fq 'prod-test-entry.js' /tmp/prod-index.html 2>/dev/null; then
+            echo "PROD_TEST_ENTRY_PRESENT=yes"
+            echo "- OK PROD index references prod-test-entry.js" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "PROD_TEST_ENTRY_PRESENT=no"
+            echo "- FAIL PROD index does not reference prod-test-entry.js" >> "$GITHUB_STEP_SUMMARY"
+            mismatch=1
+          fi
+
+          if grep -Fq 'Start testmodus' /tmp/prod-prod-test-entry.js 2>/dev/null; then
+            echo "PROD_TEST_MODE_CONTROL_PRESENT=yes"
+          else
+            echo "PROD_TEST_MODE_CONTROL_PRESENT=no"
+          fi
+
+          echo "KIOSK_PROD_NEEDS_RELEASE=$mismatch"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "KIOSK_PROD_NEEDS_RELEASE=$mismatch" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+
+      - name: PHP syntax check cleanup
+        run: php -l infra/sql/cleanup_test_smoke_residue.php
+
+      - name: Remove automated smoke residue from TEST only
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/cleanup_test_smoke_residue.php | tee /tmp/test-smoke-cleanup.txt
+          {
+            echo "## TEST smoke cleanup"
+            cat /tmp/test-smoke-cleanup.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -Fq 'SMOKE_CLUBS_AFTER=0' /tmp/test-smoke-cleanup.txt
+          grep -Fq 'SMOKE_LOCAL_USERS_AFTER=0' /tmp/test-smoke-cleanup.txt
+          grep -Fq 'TEST_SMOKE_CLEANUP_OK=yes' /tmp/test-smoke-cleanup.txt
