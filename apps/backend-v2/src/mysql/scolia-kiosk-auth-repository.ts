@@ -145,6 +145,24 @@ export class MySqlScoliaKioskAuthRepository {
       const kiosk = await this.kioskWith(db, kioskId);
       if (!kiosk) throw new DomainValidationError("kiosk_not_found", "No kiosk exists for the supplied kiosk code.", 404);
 
+      const tournamentRows = await db.query<QueryResultRow>(
+        `SELECT t.id,t.name,t.status,t.auto_assign_enabled
+           FROM \`${this.runtimePrefix}tournament_kiosks\` tk
+           INNER JOIN \`${this.runtimePrefix}tournaments\` t ON t.id=tk.tournament_id
+          WHERE tk.kiosk_id=? AND t.status IN ('ready','in_progress')
+          ORDER BY FIELD(t.status,'in_progress','ready'),COALESCE(t.start_at,'2999-12-31 23:59:59') ASC,t.id ASC
+          LIMIT 1`,
+        [kioskId],
+      );
+      const activeTournament = tournamentRows[0]
+        ? {
+            id: id(tournamentRows[0].id, "tournament_id"),
+            name: String(tournamentRows[0].name ?? ""),
+            status: String(tournamentRows[0].status ?? ""),
+            auto_assign_enabled: numberValue(tournamentRows[0].auto_assign_enabled) === 1,
+          }
+        : null;
+
       const matchRows = await db.query<MatchRow>(
         `SELECT m.id,m.status,m.round_label,m.bracket_label,m.best_of_legs,m.legs_to_win,
                 m.player_a_id,m.player_b_id,m.winner_player_id,m.starts_at,m.finished_at,
@@ -161,6 +179,7 @@ export class MySqlScoliaKioskAuthRepository {
       if (!match) {
         return {
           kiosk: kioskPayload,
+          active_tournament: activeTournament,
           state: "idle",
           message: "No assigned or active match for this kiosk.",
         };
@@ -271,6 +290,7 @@ export class MySqlScoliaKioskAuthRepository {
 
       return {
         kiosk: kioskPayload,
+        active_tournament: activeTournament,
         state: status,
         match: {
           id: matchId,
