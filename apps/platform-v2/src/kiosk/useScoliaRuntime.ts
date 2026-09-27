@@ -53,9 +53,9 @@ type RuntimeResponse = { board?: ScoliaRuntimeBoard; command?: unknown };
 type UiResponse = { board?: ScoliaRuntimeBoard; match_id?: number | null; last_visit?: ScoliaLastVisit | null; action?: string };
 
 const OFFLINE_FALLBACK_GRACE_MS = 30_000;
-const STATUS_INTERVAL_MS = 500;
+const STATUS_INTERVAL_MS = 2_000;
 const LEASE_ENSURE_INTERVAL_MS = 1_000;
-const LEASE_HEARTBEAT_MS = 60_000;
+const LEASE_HEARTBEAT_MS = 30_000;
 
 function yes(value: unknown): boolean { return value === true || Number(value || 0) === 1; }
 function isAvailable(board: ScoliaRuntimeBoard | null): boolean {
@@ -75,6 +75,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
   const offlineSince = useRef(0);
   const leaseBusy = useRef(false);
   const heartbeatBusy = useRef(false);
+  const heartbeatFailures = useRef(0);
   const runtimeBusy = useRef(false);
   const statusBusy = useRef(false);
 
@@ -92,12 +93,14 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
 
   const clearLeaseState = useCallback(() => {
     clearTestLeaseMarkers();
+    heartbeatFailures.current = 0;
     setLeasePending(false);
     setLeaseError("");
     setLeaseFallback(false);
   }, []);
 
   const enterLeaseFallback = useCallback((message: string) => {
+    heartbeatFailures.current = 0;
     write("testLeaseActive", null);
     write("testLeasePending", null);
     write("testLeaseFallback", "1");
@@ -137,8 +140,8 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     const activeCode = read("testLeaseCode");
     const activeMatches = read("testLeaseActive") === "1" && activePhysical === physicalBoardId && activeCode === kioskCode;
     if (activeMatches) {
-      setLeasePending(false); setLeaseFallback(false); setLeaseError("");
-      write("testLeasePending", null); write("testLeaseFallback", null); write("testLeaseError", null);
+      setLeasePending(false); setLeaseFallback(false);
+      write("testLeasePending", null); write("testLeaseFallback", null);
       return;
     }
     if (read("testLeaseActive") === "1") await releaseLease();
@@ -152,6 +155,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     try {
       const data = await api<LeaseResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/scolia/test-lease/acquire`, { method: "POST", kioskToken, body: { test_kiosk_code: kioskCode, physical_kiosk_id: physicalBoardId } });
       if (data.leased) {
+        heartbeatFailures.current = 0;
         write("testLeaseActive", "1"); write("testLeasePhysicalId", physicalBoardId); write("testLeaseCode", kioskCode); write("testLeaseNotApplicablePhysicalId", null);
       } else {
         write("testLeaseActive", null); write("testLeasePhysicalId", null); write("testLeaseCode", null); write("testLeaseNotApplicablePhysicalId", physicalBoardId);
@@ -171,10 +175,21 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     heartbeatBusy.current = true;
     try {
       await api<LeaseResponse>(`/kiosks/${encodeURIComponent(code)}/scolia/test-lease/heartbeat`, { method: "POST", kioskToken, body: { test_kiosk_code: code, physical_kiosk_id: physicalId } });
+      heartbeatFailures.current = 0;
       write("testLeaseError", null); setLeaseError("");
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Scolia-testleasen mistet forbindelsen.";
-      enterLeaseFallback(message);
+      heartbeatFailures.current += 1;
+      const leaseDefinitelyExpired = cause instanceof ApiError && cause.status === 409;
+      if (leaseDefinitelyExpired || heartbeatFailures.current >= 4) {
+        enterLeaseFallback(message);
+      } else {
+        // Preserve the local active marker after transient API/DB pressure. The
+        // server-side 3 minute expiry remains authoritative and later heartbeats
+        // can recover without forcing the match into sticky manual fallback.
+        write("testLeaseError", message);
+        setLeaseError(message);
+      }
     } finally { heartbeatBusy.current = false; }
   }, [isTest, testMode, kioskCode, physicalBoardId, kioskToken, releaseLease, enterLeaseFallback]);
 
