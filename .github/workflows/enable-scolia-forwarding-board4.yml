@@ -1,0 +1,49 @@
+name: Enable Scolia Forwarding Board 4
+
+on:
+  push:
+    branches:
+      - ops/kiosk-audit-test-smoke-cleanup
+    paths:
+      - '.github/workflows/enable-scolia-forwarding-board4.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+      - name: Enable forwarding override on canonical physical board 4
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)(getenv("DB_PORT")?:3306));
+            $db->set_charset("utf8mb4");
+            $row=$db->query("SELECT k.id,k.club_id,k.scoring_mode,s.serial_number,s.mode,s.forward_messages_override,c.forward_messages_to_scolia
+                               FROM bd_prod_kiosks k
+                               INNER JOIN bd_prod_scolia_board_settings s ON s.kiosk_id=k.id
+                               INNER JOIN bd_prod_scolia_club_settings c ON c.club_id=k.club_id
+                              WHERE k.id=4 LIMIT 1")->fetch_assoc();
+            if(!$row){fwrite(STDERR,"Board 4 Scolia config missing\n"); exit(2);}
+            if((string)$row["scoring_mode"]!=="scolia" || (string)$row["mode"]!=="live" || trim((string)$row["serial_number"])===""){
+              fwrite(STDERR,"Board 4 is not canonical live Scolia\n"); exit(3);
+            }
+            echo "BEFORE club_forward=".$row["forward_messages_to_scolia"]." board_override=".var_export($row["forward_messages_override"],true)."\n";
+            $db->query("UPDATE bd_prod_scolia_board_settings SET forward_messages_override=1 WHERE kiosk_id=4");
+            $after=$db->query("SELECT forward_messages_override FROM bd_prod_scolia_board_settings WHERE kiosk_id=4")->fetch_assoc();
+            echo "AFTER board_override=".$after["forward_messages_override"]."\n";
+            if((int)$after["forward_messages_override"]!==1) exit(4);
+          '
