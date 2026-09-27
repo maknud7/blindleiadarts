@@ -205,6 +205,18 @@ export class ScoliaEventProcessor {
     }) as unknown as Record<string, unknown>;
   }
 
+  async recordScoliaVisit(kioskIdInput: unknown, payloadInput: unknown): Promise<Record<string, unknown>> {
+    const kioskId = requiredId(kioskIdInput, "kiosk_id");
+    if (payloadInput === null || typeof payloadInput !== "object" || Array.isArray(payloadInput)) {
+      throw new DomainValidationError("invalid_visit_payload", "Scoring payload must be a JSON object.", 422);
+    }
+    return await this.scoring.recordVisit({
+      kiosk_id: asDbId(kioskId),
+      source: "scolia",
+      payload: payloadInput as VisitInput,
+    }) as unknown as Record<string, unknown>;
+  }
+
   async undoManualVisit(kioskIdInput: unknown): Promise<Record<string, unknown>> {
     const kioskId = requiredId(kioskIdInput, "kiosk_id");
     return await this.scoring.undoLastVisit({ kiosk_id: asDbId(kioskId), source: "manual" }) as unknown as Record<string, unknown>;
@@ -269,7 +281,9 @@ export class ScoliaEventProcessor {
       return { status: "processed", meta: { empty_buffer: true } };
     }
     const evaluation = evaluateVisit(context.remaining, { input_mode: "per_dart", darts, darts_used: darts.length });
-    const requestKey = `scolia-${hashIds(buffer.event_ids)}`;
+    const requestKey = buffer.provider_event_ids.length === buffer.darts.length && buffer.provider_event_ids.length > 0
+      ? `scolia-provider-${hashIds(buffer.provider_event_ids)}`
+      : `scolia-${hashIds(buffer.event_ids)}`;
     const result = await this.scoring.recordVisit({
       kiosk_id: asDbId(kioskId),
       source: "scolia",
