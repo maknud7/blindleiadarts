@@ -9,6 +9,7 @@ type Options = {
   kioskToken: string;
   testMode: boolean;
   physicalBoardId: number;
+  enabled: boolean;
 };
 
 type LeaseResponse = {
@@ -64,7 +65,7 @@ function isAvailable(board: ScoliaRuntimeBoard | null): boolean {
   return board.connection_state === "connected" && String(board.board_status || "").toLowerCase() !== "offline";
 }
 
-export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode, physicalBoardId }: Options) {
+export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode, physicalBoardId, enabled }: Options) {
   const [board, setBoard] = useState<ScoliaRuntimeBoard | null>(null);
   const [lastVisit, setLastVisit] = useState<ScoliaLastVisit | null>(null);
   const [leasePending, setLeasePending] = useState(read("testLeasePending") === "1");
@@ -81,7 +82,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
 
   const isTest = environment === "test";
   const fallbackActive = yes(board?.fallback_active) || yes(board?.needs_reconciliation);
-  const automatic = !leaseFallback && board?.mode === "live" && board?.effective_scoring_mode === "scolia" && !fallbackActive;
+  const automatic = enabled && !leaseFallback && board?.mode === "live" && board?.effective_scoring_mode === "scolia" && !fallbackActive;
   const available = isAvailable(board);
 
   useEffect(() => {
@@ -89,7 +90,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     setLastVisit(null);
     setRuntimeError("");
     offlineSince.current = 0;
-  }, [kioskCode, physicalBoardId]);
+  }, [kioskCode, physicalBoardId, enabled]);
 
   const clearLeaseState = useCallback(() => {
     clearTestLeaseMarkers();
@@ -128,7 +129,16 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
   }, [isTest, kioskToken, clearLeaseState]);
 
   const ensureLease = useCallback(async (force = false) => {
-    if (!isTest || leaseBusy.current) return;
+    if (leaseBusy.current) return;
+    if (!enabled) {
+      setBoard(null);
+      setLastVisit(null);
+      setRuntimeError("");
+      if (isTest && read("testLeaseActive") === "1") await releaseLease();
+      else if (isTest) clearLeaseState();
+      return;
+    }
+    if (!isTest) return;
     if (leaseFallback && !force) return;
     if (!testMode || !physicalBoardId || !kioskCode || !kioskToken) {
       if (read("testLeaseActive") === "1") await releaseLease();
@@ -166,10 +176,11 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       const message = cause instanceof Error ? cause.message : "Kunne ikke koble TEST til Scolia.";
       enterLeaseFallback(message);
     } finally { leaseBusy.current = false; }
-  }, [isTest, testMode, physicalBoardId, kioskCode, kioskToken, leaseFallback, releaseLease, clearLeaseState, enterLeaseFallback]);
+  }, [enabled, isTest, testMode, physicalBoardId, kioskCode, kioskToken, leaseFallback, releaseLease, clearLeaseState, enterLeaseFallback]);
 
   const heartbeatLease = useCallback(async () => {
     if (!isTest || heartbeatBusy.current || read("testLeaseActive") !== "1") return;
+    if (!enabled) { await releaseLease(); return; }
     const code = read("testLeaseCode"); const physicalId = Number(read("testLeasePhysicalId") || 0);
     if (!testMode || code !== kioskCode || physicalId !== physicalBoardId) { await releaseLease(); return; }
     heartbeatBusy.current = true;
@@ -191,10 +202,10 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
         setLeaseError(message);
       }
     } finally { heartbeatBusy.current = false; }
-  }, [isTest, testMode, kioskCode, physicalBoardId, kioskToken, releaseLease, enterLeaseFallback]);
+  }, [enabled, isTest, testMode, kioskCode, physicalBoardId, kioskToken, releaseLease, enterLeaseFallback]);
 
   const retryLease = useCallback(async () => {
-    if (!isTest || leaseBusy.current) return;
+    if (!enabled || !isTest || leaseBusy.current) return;
     write("testLeaseFallback", null);
     write("testLeaseError", null);
     write("testLeasePending", "1");
@@ -202,10 +213,10 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     setLeaseError("");
     setLeasePending(true);
     await ensureLease(true);
-  }, [isTest, ensureLease]);
+  }, [enabled, isTest, ensureLease]);
 
   const readStatus = useCallback(async (): Promise<UiResponse | null> => {
-    if (!kioskCode || !kioskToken || leasePending || statusBusy.current) return null;
+    if (!enabled || !kioskCode || !kioskToken || leasePending || statusBusy.current) return null;
     statusBusy.current = true;
     try {
       const data = await api<UiResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/scolia/status`, { kioskToken });
@@ -216,10 +227,10 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       setRuntimeError(cause instanceof Error ? cause.message : "Scolia-status kunne ikke leses.");
       return null;
     } finally { statusBusy.current = false; }
-  }, [kioskCode, kioskToken, leasePending]);
+  }, [enabled, kioskCode, kioskToken, leasePending]);
 
   const runtimeAction = useCallback(async (action: "fallback" | "resume" | "reset-phase", body?: unknown) => {
-    if (!kioskCode || !kioskToken || runtimeBusy.current) return;
+    if (!enabled || !kioskCode || !kioskToken || runtimeBusy.current) return;
     runtimeBusy.current = true; setBusy(action); setRuntimeError("");
     try {
       const data = await api<RuntimeResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/scolia/${action}`, { method: "POST", kioskToken, body });
@@ -228,9 +239,10 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       offlineSince.current = 0;
     } catch (cause) { setRuntimeError(cause instanceof Error ? cause.message : "Scolia-handlingen feilet."); }
     finally { runtimeBusy.current = false; setBusy(""); }
-  }, [kioskCode, kioskToken, readStatus]);
+  }, [enabled, kioskCode, kioskToken, readStatus]);
 
   const poll = useCallback(async () => {
+    if (!enabled) return;
     const data = await readStatus();
     const next = data?.board || null;
     if (!next || leasePending) return;
@@ -240,10 +252,10 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     if (!shouldFallback) offlineSince.current = 0;
     else if (!offlineSince.current) offlineSince.current = Date.now();
     else if (Date.now() - offlineSince.current >= OFFLINE_FALLBACK_GRACE_MS && !runtimeBusy.current) await runtimeAction("fallback");
-  }, [readStatus, leasePending, runtimeAction]);
+  }, [enabled, readStatus, leasePending, runtimeAction]);
 
   const undoScolia = useCallback(async () => {
-    if (!kioskCode || !kioskToken || runtimeBusy.current) return;
+    if (!enabled || !kioskCode || !kioskToken || runtimeBusy.current) return;
     const bufferDarts = board?.buffer?.darts || [];
     if (bufferDarts.length === 0 && !window.confirm("Ta pilene ut av skiva først. Angre siste Scolia-kast?")) return;
     runtimeBusy.current = true; setBusy("undo"); setRuntimeError("");
@@ -252,7 +264,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       setBoard(data.board || null); setLastVisit(data.last_visit || null);
     } catch (cause) { setRuntimeError(cause instanceof Error ? cause.message : "Kunne ikke angre Scolia-kastet."); }
     finally { runtimeBusy.current = false; setBusy(""); }
-  }, [kioskCode, kioskToken, board?.buffer?.darts]);
+  }, [enabled, kioskCode, kioskToken, board?.buffer?.darts]);
 
   useEffect(() => {
     void ensureLease();
@@ -266,10 +278,16 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     return () => window.clearInterval(timer);
   }, [isTest, heartbeatLease]);
   useEffect(() => {
+    if (!enabled) {
+      setBoard(null);
+      setLastVisit(null);
+      setRuntimeError("");
+      return;
+    }
     void poll();
     const timer = window.setInterval(() => void poll(), STATUS_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [poll]);
+  }, [enabled, poll]);
 
   const fallbackRemainingSeconds = useMemo(() => {
     if (!offlineSince.current || fallbackActive || available) return 0;
@@ -287,7 +305,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     fallbackActive,
     automatic,
     fallbackRemainingSeconds,
-    effectiveScoringMode: leaseFallback || fallbackActive ? "manual" : (board?.effective_scoring_mode || null),
+    effectiveScoringMode: !enabled || leaseFallback || fallbackActive ? "manual" : (board?.effective_scoring_mode || null),
     leaseFallback,
     retryLease,
     fallback: () => runtimeAction("fallback"),
