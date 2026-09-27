@@ -2,6 +2,10 @@ name: Backend v2 TEST Render Bootstrap
 
 on:
   workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/backend-v2-test-render-bootstrap.yml'
 
 permissions:
   contents: read
@@ -31,9 +35,12 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
         run: |
           set -Eeuo pipefail
-          for name in RENDER_API_KEY DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD INTERNAL_TOKEN; do
+          for name in RENDER_API_KEY DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD INTERNAL_TOKEN REALTIME_WEBSOCKET_URL REALTIME_PUBLISH_URL REALTIME_PUBLISH_SECRET; do
             test -n "${!name}" || { echo "$name is required." >&2; exit 1; }
           done
 
@@ -46,6 +53,9 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           INTERNAL_TOKEN: ${{ secrets.SCOLIA_BRIDGE_SECRET }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_PUBLISH_URL: ${{ vars.TEST_REALTIME_PUBLISH_URL }}
+          REALTIME_PUBLISH_SECRET: ${{ secrets.REALTIME_PUBLISH_SECRET }}
         run: |
           set -Eeuo pipefail
           api="https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars"
@@ -72,6 +82,9 @@ jobs:
           update_env HARDWARE_TABLE_PREFIX bd_prod_
           update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
           update_env BD_BACKEND_V2_DB_IDLE_MS 15000
+          update_env REALTIME_WEBSOCKET_URL "$REALTIME_WEBSOCKET_URL"
+          update_env REALTIME_PUBLISH_URL "$REALTIME_PUBLISH_URL"
+          update_env REALTIME_PUBLISH_SECRET "$REALTIME_PUBLISH_SECRET"
           update_env RELEASE_SHA "$GITHUB_SHA"
 
       - name: Deploy current backend-v2 release
@@ -97,7 +110,7 @@ jobs:
           set -Eeuo pipefail
           for attempt in $(seq 1 60); do
             health="$(curl -fsS --max-time 20 "${HOST_URL%/}/health" || true)"
-            if jq -e --arg sha "$GITHUB_SHA" '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse" and .release_sha == $sha' <<<"$health" >/dev/null 2>&1; then
+            if jq -e --arg sha "$GITHUB_SHA" '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and .runtime_prefix == "bd_test_" and .identity_prefix == "bd_prod_" and .hardware_prefix == "bd_prod_" and .max_connections == 1 and .connection_mode == "idle-reuse" and .realtime_publish_enabled == true and .release_sha == $sha' <<<"$health" >/dev/null 2>&1; then
               echo 'Persistent TEST backend-v2 host is ready.'
               exit 0
             fi
