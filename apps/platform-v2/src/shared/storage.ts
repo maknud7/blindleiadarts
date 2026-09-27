@@ -17,6 +17,7 @@ const KEYS = {
   testLeasePending: "bd:kioskScoliaLeasePending",
   testLeaseNotApplicablePhysicalId: "bd:kioskScoliaLeaseNotApplicablePhysicalId",
   testLeaseError: "bd:kioskScoliaLeaseError",
+  testLeaseFallback: "bd:kioskScoliaLeaseFallback",
 } as const;
 
 export type StorageKey = keyof typeof KEYS;
@@ -49,6 +50,7 @@ export function clearTestLeaseMarkers(): void {
   write("testLeasePending", null);
   write("testLeaseNotApplicablePhysicalId", null);
   write("testLeaseError", null);
+  write("testLeaseFallback", null);
 }
 
 export function clearKioskRuntime(): void {
