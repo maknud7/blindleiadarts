@@ -23,6 +23,8 @@ on:
       - 'apps/api/tests/backend_v2_scolia_proxy_routing_test.php'
       - 'apps/kiosk/scolia-test-lease.js'
       - 'apps/platform-v2/src/kiosk/useScoliaRuntime.ts'
+      - 'apps/platform-v2/src/kiosk/KioskWorkspace.tsx'
+      - 'apps/platform-v2/src/shared/storage.ts'
       - 'apps/kiosk/direct-test-handoff.js'
       - 'apps/kiosk/prod-test-entry.js'
       - 'infra/deploy/generate_api_config.php'
@@ -90,6 +92,9 @@ jobs:
           grep -Fq '/scolia/test-lease/acquire' apps/platform-v2/src/kiosk/useScoliaRuntime.ts
           grep -Fq '/scolia/status' apps/platform-v2/src/kiosk/useScoliaRuntime.ts
           grep -Fq '/scolia/undo' apps/platform-v2/src/kiosk/useScoliaRuntime.ts
+          grep -Fq 'testLeaseFallback' apps/platform-v2/src/shared/storage.ts
+          grep -Fq 'enterLeaseFallback' apps/platform-v2/src/kiosk/useScoliaRuntime.ts
+          grep -Fq 'Prøv Scolia igjen' apps/platform-v2/src/kiosk/KioskWorkspace.tsx
 
       - name: Verify TEST and PROD Node routing defaults
         run: |
