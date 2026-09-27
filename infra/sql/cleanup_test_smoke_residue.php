@@ -41,8 +41,12 @@ $list = static fn(array $values): string => implode(',', array_map(
 ));
 
 $clubTable = $prefix . 'clubs';
-$clubWhere = "(slug REGEXP '^(checkin|elo|scoring|break|operations|playoff|scolia)-smoke-'"
-    . " OR name REGEXP '^(Checkin|ELO|Scoring|Break|Operations|Playoff|Scolia) Smoke ')";
+$clubWhere = "("
+    . "slug REGEXP '^(checkin|elo|scoring|break|operations|playoff|scolia)-smoke-'"
+    . " OR name REGEXP '^(Checkin|ELO|Scoring|Break|Operations|Playoff|Scolia) Smoke '"
+    . " OR slug REGEXP '^(backend-v2-e2e|backend-v2-playoff-club|kiosk-scoring-e2e|scolia-e2e|season-admin-e2e|attendance-admin-e2e|attendance-e2e|board-admin-e2e|catalog-e2e|tournament-create-e2e|tournament-e2e|player-break-e2e)-'"
+    . " OR name REGEXP '^(Backend v2 E2E|Backend v2 Playoff E2E|Kiosk scoring E2E|Scolia E2E|Season Admin E2E|Attendance Admin E2E|Attendance E2E|Board Admin E2E|Catalog E2E|Tournament Create E2E|Tournament E2E|Player Break E2E) '"
+    . ")";
 
 $clubs = $tableExists($db, $schema, $clubTable)
     ? $ids($db, "SELECT id FROM {$clubTable} WHERE {$clubWhere}")
@@ -75,6 +79,32 @@ if ($clubs !== []) {
     }
 }
 
+$seasonTable = $prefix . 'seasons';
+if ($tableExists($db, $schema, $seasonTable)) {
+    $directSeasons = $ids(
+        $db,
+        "SELECT id FROM {$seasonTable}
+          WHERE name REGEXP '^Backend v2 (ELO|Ranking) E2E Season '"
+    );
+    $entity['season'] = array_values(array_unique(array_merge($entity['season'], $directSeasons)));
+}
+
+$tournamentTable = $prefix . 'tournaments';
+if ($tableExists($db, $schema, $tournamentTable)) {
+    $conditions = [
+        "slug REGEXP '^backend-v2-(elo|ranking)-tournament-'",
+        "name REGEXP '^Backend v2 (ELO|Ranking) Tournament '",
+    ];
+    if ($entity['season'] !== []) {
+        $conditions[] = 'season_id IN (' . $list($entity['season']) . ')';
+    }
+    $directTournaments = $ids(
+        $db,
+        "SELECT id FROM {$tournamentTable} WHERE " . implode(' OR ', $conditions)
+    );
+    $entity['tournament'] = array_values(array_unique(array_merge($entity['tournament'], $directTournaments)));
+}
+
 if ($entity['tournament'] !== []) {
     $tournamentList = $list($entity['tournament']);
     foreach ([
@@ -93,7 +123,10 @@ $usersTable = $prefix . 'user_accounts';
 if ($tableExists($db, $schema, $usersTable)) {
     $entity['user_account'] = $ids(
         $db,
-        "SELECT id FROM {$usersTable} WHERE email LIKE 'bd-onboarding-smoke-%@example.invalid'"
+        "SELECT id FROM {$usersTable}
+          WHERE email LIKE 'bd-onboarding-smoke-%@example.invalid'
+             OR email LIKE '%e2e-%@example.invalid'
+             OR username REGEXP 'e2e-'"
     );
 }
 
@@ -175,6 +208,20 @@ try {
         }
     }
 
+    foreach ([
+        'match' => 'matches',
+        'tournament' => 'tournaments',
+        'kiosk' => 'kiosks',
+        'player' => 'players',
+        'season' => 'seasons',
+    ] as $key => $suffix) {
+        if ($entity[$key] === []) continue;
+        $table = $prefix . $suffix;
+        if (!$tableExists($db, $schema, $table)) continue;
+        $db->query("DELETE FROM {$table} WHERE id IN (" . $list($entity[$key]) . ')');
+        if ($db->affected_rows > 0) $deleted[$table] = ($deleted[$table] ?? 0) + $db->affected_rows;
+    }
+
     if ($entity['user_account'] !== [] && $tableExists($db, $schema, $usersTable)) {
         $db->query("DELETE FROM {$usersTable} WHERE id IN (" . $list($entity['user_account']) . ')');
         if ($db->affected_rows > 0) $deleted[$usersTable] = ($deleted[$usersTable] ?? 0) + $db->affected_rows;
@@ -205,9 +252,21 @@ $remainingClubs = $tableExists($db, $schema, $clubTable)
     ? (int) ($db->query("SELECT COUNT(*) c FROM {$clubTable} WHERE {$clubWhere}")->fetch_assoc()['c'] ?? 0)
     : 0;
 $remainingUsers = $tableExists($db, $schema, $usersTable)
-    ? (int) ($db->query("SELECT COUNT(*) c FROM {$usersTable} WHERE email LIKE 'bd-onboarding-smoke-%@example.invalid'")->fetch_assoc()['c'] ?? 0)
+    ? (int) ($db->query(
+        "SELECT COUNT(*) c FROM {$usersTable}
+          WHERE email LIKE 'bd-onboarding-smoke-%@example.invalid'
+             OR email LIKE '%e2e-%@example.invalid'
+             OR username REGEXP 'e2e-'"
+      )->fetch_assoc()['c'] ?? 0)
+    : 0;
+$remainingE2ESeasons = $tableExists($db, $schema, $seasonTable)
+    ? (int) ($db->query(
+        "SELECT COUNT(*) c FROM {$seasonTable}
+          WHERE name REGEXP '^Backend v2 (ELO|Ranking) E2E Season '"
+      )->fetch_assoc()['c'] ?? 0)
     : 0;
 
 echo "SMOKE_CLUBS_AFTER={$remainingClubs}" . PHP_EOL;
 echo "SMOKE_LOCAL_USERS_AFTER={$remainingUsers}" . PHP_EOL;
+echo "E2E_SEASONS_AFTER={$remainingE2ESeasons}" . PHP_EOL;
 echo "TEST_SMOKE_CLEANUP_OK=yes" . PHP_EOL;
