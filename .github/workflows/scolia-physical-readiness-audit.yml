@@ -62,6 +62,14 @@ jobs:
             );
           }
 
+          $settings=$db->query("SELECT c.club_id,c.enabled,c.force_connect,c.forward_messages_to_scolia,c.disconnect_fallback_enabled,
+                                           b.kiosk_id,b.force_connect_override,b.forward_messages_override
+                                      FROM bd_prod_scolia_club_settings c
+                                      LEFT JOIN bd_prod_scolia_board_settings b ON b.kiosk_id=4
+                                     WHERE c.club_id=(SELECT club_id FROM bd_prod_kiosks WHERE id=4 LIMIT 1)
+                                     LIMIT 1")->fetch_assoc();
+          echo "SETTINGS ".json_encode($settings,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+
           $leases=$db->query("SELECT l.physical_kiosk_id,l.test_kiosk_id,l.heartbeat_at,l.expires_at,
                                      pk.board_number AS physical_board,tk.code AS test_code
                                 FROM bd_prod_scolia_test_leases l
