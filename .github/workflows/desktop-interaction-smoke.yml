@@ -1,0 +1,42 @@
+name: Desktop Interaction Smoke
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'index.html'
+      - 'apps/player/**'
+      - 'apps/admin/**'
+      - 'packages/ui-assets/**'
+      - 'infra/tests/desktop-interaction-smoke.cjs'
+      - '.github/workflows/desktop-interaction-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-interaction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless Chromium
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/bd-browser-smoke
+          cd /tmp/bd-browser-smoke
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          cp "$GITHUB_WORKSPACE/infra/tests/desktop-interaction-smoke.cjs" .
+      - name: Hit-test deployed TEST desktop surfaces
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/bd-browser-smoke
+          node desktop-interaction-smoke.cjs
