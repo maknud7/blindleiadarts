@@ -1,0 +1,97 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "X52gn3ioRLKD",
+  "tournament_name": "Mandagsserien #8",
+  "tournament_date": "2026-09-28",
+  "tournament_start_at": "2026-09-28 18:30:00",
+  "tournament_slug": "mandagsserien-8-2026-09-28",
+  "expected_players": 10,
+  "expected_matches": 48,
+  "expected_legs": 53,
+  "players": {
+    "DUq32rNObrUk": "Thomas Kildal",
+    "hE2Jzt55iTf2": "Andre Kendrick",
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen",
+    "0J6SDLVfThUs": "Magnus Knudsen",
+    "lGf1wBj3yKWV": "Steffen Madsen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson",
+    "eNmn5GSftUdn": "Dan Christian Birkeland",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "46u0DEjhFWti": "Andreas Hasselgård",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "DUq32rNObrUk",
+        "hE2Jzt55iTf2",
+        "GFg9pZkPKrpU",
+        "0J6SDLVfThUs",
+        "lGf1wBj3yKWV",
+        "2bhzMxZ5bdyy",
+        "eNmn5GSftUdn",
+        "Rujhhq1jF7Uu",
+        "46u0DEjhFWti",
+        "xTpeuJWBefFN"
+      ],
+      "match_ids": [
+        "qEzbSExtJos0", "TrUMQekpvTrT", "yilOFjJrUGRV", "X8jVz6VqX7SY", "NVjK6HCiwjOM",
+        "LpYsPV5z98Ro", "NQpOc7891wCU", "YoZ6WuaV84Kk", "fylaY2VegTlW", "9C8baiuAFAla",
+        "R0u9pZHoxKi9", "2tO2nsMZuxvP", "FfOHjOFT3xuU", "LKH8PvaxhnI6", "3g8vcLkyjQpa",
+        "0OO0eypcAtmD", "9MaslFcPDOTS", "krgeB4fHEpN7", "j65XN8yOKFul", "egXePLk570KL",
+        "3fWGL0OBd50y", "mtVN74fMj4Ha", "hUl2212BoJok", "170pMpsSYrQE", "Yq3iDDBkVFpw",
+        "brVFR4eWRy0x", "8pgf4800Fhor", "tpWTOj83Kgxd", "Qaimz5bGuEdY", "j0ImdMcTLSyD",
+        "c6thANHbLWF6", "8wTBgR1oE6Zt", "Qk6blqVdFIhT", "S6g8jrSUEk1A", "jv9vi560X0Cb",
+        "lXI3a1f9Sxai", "6NDQUeJDoobN", "wPf0cjP3peXy", "bWe7EWpR3vLe", "nEavyRJpD38W",
+        "WN2iI1ruWwJ5", "utPhdsGAvHLg", "f8nJ6FmQW84A", "wCvXmtJsKXar", "HWcA6jBK91rn"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": ["DUq32rNObrUk", "hE2Jzt55iTf2", "GFg9pZkPKrpU", "0J6SDLVfThUs"],
+    "match_ids": ["CaoTO8fswljy", "2JzkCNiKMQPY", "tPNxjQ3B2G6H"],
+    "champion_external_id": "DUq32rNObrUk",
+    "champion_name": "Thomas Kildal"
+  },
+  "ranking_points": {
+    "DUq32rNObrUk": 4,
+    "GFg9pZkPKrpU": 3,
+    "0J6SDLVfThUs": 2,
+    "hE2Jzt55iTf2": 2,
+    "lGf1wBj3yKWV": 1,
+    "2bhzMxZ5bdyy": 1,
+    "eNmn5GSftUdn": 1,
+    "Rujhhq1jF7Uu": 1,
+    "46u0DEjhFWti": 1,
+    "xTpeuJWBefFN": 1
+  },
+  "ranking_stages": {
+    "DUq32rNObrUk": "Winner",
+    "GFg9pZkPKrpU": "Final",
+    "0J6SDLVfThUs": "Semi-Final",
+    "hE2Jzt55iTf2": "Semi-Final",
+    "lGf1wBj3yKWV": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage",
+    "eNmn5GSftUdn": "Group stage",
+    "Rujhhq1jF7Uu": "Group stage",
+    "46u0DEjhFWti": "Group stage",
+    "xTpeuJWBefFN": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #8 Champion Thomas Kildal",
+    "verified_at": "2026-09-28T18:49:00Z"
+  }
+}
