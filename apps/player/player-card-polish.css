@@ -207,3 +207,37 @@ body #statistics .elo-movement.negative{
     gap:5px!important;
   }
 }
+
+
+body #statistics .profile-card .profile-darts-head{
+  background:linear-gradient(145deg,#0b2f63 0%,#071f45 100%)!important;
+  border-bottom:0!important;
+}
+body #statistics .profile-card .profile-darts-head .eyebrow{color:#9db7d8!important}
+body #statistics .profile-card .profile-darts-head h2{color:#fff!important;font-size:1.65rem!important;letter-spacing:-.03em!important}
+body #statistics .profile-darts-identity{min-width:0;display:grid;gap:3px}
+body #statistics .profile-darts-nickname{margin:0!important;color:#ffd979!important;font-size:1rem!important;font-weight:850!important}
+body #statistics .profile-form{display:flex;align-items:center;gap:8px;margin-top:9px}
+body #statistics .profile-form>small{color:#b8cae0!important;font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+body #statistics .profile-form>span{display:flex;gap:4px}
+body #statistics .profile-form-pill{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;font-size:10px;font-weight:900}
+body #statistics .profile-form-pill.win{background:#dff6e8;color:#11844a}
+body #statistics .profile-form-pill.loss{background:#fee8eb;color:#c72f42}
+body #statistics .profile-form-pill.draw{background:#eef1f5;color:#596b82}
+body #statistics .profile-card .profile-darts-head .profile-close{border-color:rgba(255,255,255,.18)!important;background:rgba(255,255,255,.08)!important;color:#fff!important}
+body #statistics .profile-primary-stats{grid-template-columns:repeat(4,minmax(0,1fr))!important;padding-top:16px!important;padding-bottom:16px!important}
+body #statistics .profile-primary-stats .stat-card strong{font-size:1.45rem!important}
+body #statistics .profile-more-stats{margin:0 18px 8px;border:1px solid #e2e8ef;border-radius:12px;background:#fbfcfe;overflow:hidden}
+body #statistics .profile-more-stats>summary{list-style:none;cursor:pointer;padding:11px 13px;font-size:12px;font-weight:850;color:#36526f}
+body #statistics .profile-more-stats>summary::-webkit-details-marker{display:none}
+body #statistics .profile-more-stats>summary::after{content:'+';float:right;color:#7c8da1}
+body #statistics .profile-more-stats[open]>summary::after{content:'−'}
+body #statistics .profile-secondary-stats{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;padding:0 12px 12px!important}
+body #statistics .profile-secondary-stats .stat-card{padding:10px!important}
+
+@media(max-width:680px){
+  body #statistics .profile-card .profile-darts-head h2{font-size:1.45rem!important}
+  body #statistics .profile-primary-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;padding-bottom:12px!important}
+  body #statistics .profile-more-stats{margin:0 14px 6px}
+  body #statistics .profile-secondary-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
