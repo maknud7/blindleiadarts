@@ -1,0 +1,513 @@
+/* Player UI system pass · 2026-09-29
+   Player-facing surfaces use blue for actions/status accents, not as the default
+   background for every technical <button>. This layer deliberately loads on the
+   player portal and normalizes rows, tabs, filters and mobile navigation. */
+
+:root{
+  --player-surface:#f6f8fb;
+  --player-card:#fff;
+  --player-line:#dfe6ee;
+  --player-line-soft:#edf1f5;
+  --player-ink:#102844;
+  --player-muted:#6f8196;
+  --player-blue:#2f6fed;
+  --player-blue-soft:#edf4ff;
+  --player-green:#148653;
+  --player-red:#bd3848;
+}
+
+/* Calm player canvas */
+body[data-portal-default="home"]{
+  background:var(--player-surface)!important;
+}
+body[data-portal-default="home"] .card,
+body[data-portal-default="home"] .mini-card,
+body[data-portal-default="home"] .table-card,
+body[data-portal-default="home"] .profile-card{
+  border-color:var(--player-line)!important;
+}
+body[data-portal-default="home"] .eyebrow{
+  color:#5f7895!important;
+  letter-spacing:.08em!important;
+}
+
+/* Explicit interaction vocabulary. Informational rows must never inherit the
+   global filled-primary button treatment from blindleia-system.css. */
+body[data-portal-default="home"] .mobile-season-row,
+body[data-portal-default="home"] .player-card,
+body[data-portal-default="home"] .history-row-button,
+body[data-portal-default="home"] .match-result-card,
+body[data-portal-default="home"] .leg-card-toggle,
+body[data-portal-default="home"] .hub-standing-row,
+body[data-portal-default="home"] .hub-match-card,
+body[data-portal-default="home"] .hub-player-card,
+body[data-portal-default="home"] .hub-playoff-match button{
+  background:#fff!important;
+  color:var(--player-ink)!important;
+  border-color:var(--player-line)!important;
+  box-shadow:none!important;
+}
+
+/* Segmented controls */
+body[data-portal-default="home"] .statistics-tabs,
+body[data-portal-default="home"] .tournament-view-tabs,
+body[data-portal-default="home"] .tournament-hub .hub-tabs{
+  background:#eef2f6!important;
+  border:1px solid #dde5ee!important;
+  border-radius:12px!important;
+  box-shadow:none!important;
+}
+body[data-portal-default="home"] .statistics-tabs button,
+body[data-portal-default="home"] .tournament-view-tabs button,
+body[data-portal-default="home"] .tournament-hub .hub-tabs>button{
+  background:transparent!important;
+  color:#536b84!important;
+  border:0!important;
+  box-shadow:none!important;
+  font-weight:800!important;
+}
+body[data-portal-default="home"] .statistics-tabs button.active,
+body[data-portal-default="home"] .tournament-view-tabs button.active,
+body[data-portal-default="home"] .tournament-hub .hub-tabs>button.active{
+  background:#fff!important;
+  color:var(--player-blue)!important;
+  border:0!important;
+  box-shadow:0 1px 4px rgba(17,42,73,.08)!important;
+}
+
+/* Filter chips are controls, not CTA buttons. */
+body[data-portal-default="home"] .tournament-hub .hub-group-picker>button,
+body[data-portal-default="home"] .tournament-hub .hub-match-filters>button{
+  background:#fff!important;
+  color:#46627f!important;
+  border:1px solid #dbe3ec!important;
+  box-shadow:none!important;
+}
+body[data-portal-default="home"] .tournament-hub .hub-group-picker>button.active,
+body[data-portal-default="home"] .tournament-hub .hub-match-filters>button.active{
+  background:var(--player-blue-soft)!important;
+  color:#174f9c!important;
+  border-color:#bfd1ed!important;
+}
+
+/* Season ranking */
+body[data-portal-default="home"] #statistics .statistics-table-card{
+  border:1px solid var(--player-line)!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  overflow:hidden!important;
+}
+body[data-portal-default="home"] #statistics .season-table-heading{
+  margin:0!important;
+  padding:12px 14px!important;
+  background:#fafbfd!important;
+  border-bottom:1px solid var(--player-line-soft)!important;
+  align-items:center!important;
+}
+body[data-portal-default="home"] #statistics .season-table-heading strong{
+  font-size:13px!important;
+  color:#304b69!important;
+}
+body[data-portal-default="home"] #statistics .tie-break-note{
+  margin:3px 0 0!important;
+  font-size:10px!important;
+  line-height:1.35!important;
+  color:#8291a3!important;
+}
+body[data-portal-default="home"] #statistics .season-table-heading .pill{
+  padding:4px 8px!important;
+  font-size:10px!important;
+  background:#edf4ff!important;
+  border-color:#cbdcf2!important;
+  color:#285788!important;
+}
+
+body[data-portal-default="home"] #statistics .mobile-season-standings{
+  display:none;
+  background:#fff!important;
+}
+body[data-portal-default="home"] #statistics .mobile-season-row{
+  width:100%!important;
+  min-height:66px!important;
+  display:grid!important;
+  grid-template-columns:38px minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:10px!important;
+  margin:0!important;
+  padding:11px 12px!important;
+  border:0!important;
+  border-bottom:1px solid var(--player-line-soft)!important;
+  border-radius:0!important;
+  text-align:left!important;
+  font-size:inherit!important;
+}
+body[data-portal-default="home"] #statistics .mobile-season-row:last-child{
+  border-bottom:0!important;
+}
+body[data-portal-default="home"] #statistics .mobile-season-row:active,
+body[data-portal-default="home"] #statistics .mobile-season-row:hover{
+  background:#f8fafc!important;
+}
+body[data-portal-default="home"] #statistics .mobile-season-position{
+  width:30px;
+  height:30px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#f0f3f7;
+  color:#51677f;
+  font-size:12px!important;
+  font-weight:900!important;
+  text-align:center;
+}
+body[data-portal-default="home"] #statistics .mobile-season-row:nth-child(1) .mobile-season-position{
+  background:#fff4ce;
+  color:#80630d;
+}
+body[data-portal-default="home"] #statistics .mobile-season-row:nth-child(2) .mobile-season-position{
+  background:#edf1f5;
+  color:#586a7e;
+}
+body[data-portal-default="home"] #statistics .mobile-season-row:nth-child(3) .mobile-season-position{
+  background:#f5e7dd;
+  color:#85502e;
+}
+body[data-portal-default="home"] #statistics .mobile-season-player{
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+body[data-portal-default="home"] #statistics .mobile-season-player>strong{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#122d4d!important;
+  font-size:14px!important;
+  line-height:1.18;
+}
+body[data-portal-default="home"] #statistics .mobile-season-player>small{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#416fa4!important;
+  font-size:10px!important;
+  font-weight:750!important;
+}
+body[data-portal-default="home"] #statistics .mobile-season-meta{
+  min-width:0;
+  display:flex;
+  gap:5px;
+  flex-wrap:wrap;
+  margin-top:2px;
+  color:#7a8b9e;
+  font-size:9px;
+  font-style:normal;
+  line-height:1.2;
+}
+body[data-portal-default="home"] #statistics .mobile-season-meta span+span::before{
+  content:"·";
+  margin-right:5px;
+  color:#adb8c5;
+}
+body[data-portal-default="home"] #statistics .mobile-season-primary{
+  display:grid;
+  justify-items:end;
+  gap:2px;
+  color:#153b67!important;
+  white-space:nowrap;
+}
+body[data-portal-default="home"] #statistics .mobile-season-primary>strong{
+  font-size:14px!important;
+  line-height:1!important;
+}
+body[data-portal-default="home"] #statistics .mobile-season-primary>small{
+  font-size:9px!important;
+  color:#7d8da0!important;
+  font-weight:700!important;
+}
+
+/* Player directory and match history use continuous list language. */
+body[data-portal-default="home"] #statistics .player-directory,
+body[data-portal-default="home"] #statistics .match-result-list,
+body[data-portal-default="home"] #statistics #myMatchList{
+  border:1px solid var(--player-line)!important;
+  border-radius:14px!important;
+  overflow:hidden!important;
+  background:#fff!important;
+  gap:0!important;
+}
+body[data-portal-default="home"] #statistics .player-card,
+body[data-portal-default="home"] #statistics .match-result-card,
+body[data-portal-default="home"] #statistics #myMatchList>.history-row-button{
+  margin:0!important;
+  border:0!important;
+  border-bottom:1px solid var(--player-line-soft)!important;
+  border-radius:0!important;
+}
+body[data-portal-default="home"] #statistics .player-card:last-child,
+body[data-portal-default="home"] #statistics .match-result-card:last-child,
+body[data-portal-default="home"] #statistics #myMatchList>.history-row-button:last-child{
+  border-bottom:0!important;
+}
+
+/* Tournament rows follow the same hierarchy. */
+body[data-portal-default="home"] .tournament-hub .hub-group-list,
+body[data-portal-default="home"] .tournament-hub .hub-match-list{
+  border-color:var(--player-line)!important;
+}
+body[data-portal-default="home"] .tournament-hub .hub-standing-row.is-me{
+  background:#f1f6ff!important;
+  box-shadow:inset 3px 0 0 var(--player-blue)!important;
+}
+body[data-portal-default="home"] .tournament-hub .hub-match-card.is-mine{
+  box-shadow:inset 3px 0 0 var(--player-blue)!important;
+}
+body[data-portal-default="home"] .tournament-hub .hub-match-card.is-live{
+  background:#fbfefb!important;
+  border-color:#b7d6bf!important;
+}
+
+/* Match detail reads like a score sheet. */
+body[data-portal-default="home"] .match-detail-dialog{
+  color:var(--player-ink)!important;
+}
+body[data-portal-default="home"] .leg-card-toggle{
+  width:100%!important;
+  background:#fff!important;
+  color:var(--player-ink)!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+body[data-portal-default="home"] .leg-visits{
+  background:#fbfcfe!important;
+}
+body[data-portal-default="home"] .visit-row{
+  position:relative;
+  min-width:0;
+  align-items:center;
+}
+body[data-portal-default="home"] .visit-row.visit-player-a{
+  grid-template-areas:"player score remaining";
+}
+body[data-portal-default="home"] .visit-row.visit-player-b{
+  grid-template-areas:"remaining score player";
+}
+body[data-portal-default="home"] .visit-row .visit-player-name{
+  grid-area:player;
+  min-width:0;
+  color:#264766;
+  font-weight:760;
+}
+body[data-portal-default="home"] .visit-row.visit-player-b .visit-player-name{
+  text-align:right;
+}
+body[data-portal-default="home"] .visit-row .visit-score{
+  grid-area:score;
+  min-width:42px;
+  text-align:center;
+  color:#102d4f;
+  font-size:15px;
+  font-variant-numeric:tabular-nums;
+}
+body[data-portal-default="home"] .visit-row .visit-remaining{
+  grid-area:remaining;
+  min-width:0;
+  color:#7a8b9e;
+  font-size:10px;
+}
+body[data-portal-default="home"] .visit-row.visit-player-a .visit-remaining{
+  text-align:right;
+}
+body[data-portal-default="home"] .visit-row.visit-player-b .visit-remaining{
+  text-align:left;
+}
+
+/* Profile/admin-like content should stay calm. */
+body[data-portal-default="home"] .profile-v2-panel,
+body[data-portal-default="home"] .profile-membership-summary,
+body[data-portal-default="home"] .profile-payment-option,
+body[data-portal-default="home"] .profile-payment-history,
+body[data-portal-default="home"] .profile-stats-disclosure{
+  border-color:var(--player-line)!important;
+  box-shadow:none!important;
+}
+body[data-portal-default="home"] .profile-v2-panel>summary,
+body[data-portal-default="home"] .profile-payment-history>summary,
+body[data-portal-default="home"] .profile-stats-disclosure>summary{
+  color:#284664!important;
+}
+body[data-portal-default="home"] .profile-v2-identity-actions button{
+  background:#fff!important;
+  color:#244867!important;
+  border:1px solid #d6e0ea!important;
+  box-shadow:none!important;
+}
+
+/* Mobile bottom navigation: every item gets identical geometry. Active means
+   accent colour/light tint, never a giant filled CTA. */
+@media(max-width:760px){
+  body[data-portal-default="home"] .unified-mobile-bottom-nav{
+    min-height:calc(68px + env(safe-area-inset-bottom))!important;
+    padding:6px max(6px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px,env(safe-area-inset-left))!important;
+    box-shadow:0 -5px 18px rgba(17,42,73,.07)!important;
+  }
+  body[data-portal-default="home"] .unified-mobile-bottom-nav a,
+  body[data-portal-default="home"] .unified-mobile-bottom-nav button{
+    width:auto!important;
+    min-width:0!important;
+    min-height:54px!important;
+    margin:0!important;
+    padding:5px 2px!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:transparent!important;
+    color:#71839a!important;
+    box-shadow:none!important;
+    font-size:10px!important;
+    line-height:1.1!important;
+  }
+  body[data-portal-default="home"] .unified-mobile-bottom-nav a.active,
+  body[data-portal-default="home"] .unified-mobile-bottom-nav button.active{
+    background:#f0f5ff!important;
+    color:var(--player-blue)!important;
+    box-shadow:none!important;
+  }
+  body[data-portal-default="home"] .unified-mobile-bottom-nav svg{
+    width:22px!important;
+    height:22px!important;
+  }
+
+  /* Main mobile surfaces are content-first rather than card-inside-card. */
+  body[data-portal-default="home"] #statistics.card{
+    padding:0!important;
+    border:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-page-head{
+    padding:2px 2px 0!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-page-head h2{
+    font-size:24px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-page-head .muted{
+    max-width:34rem;
+    font-size:12px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-tabs{
+    position:static!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:3px!important;
+    padding:3px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-tabs button{
+    min-height:41px!important;
+    padding:6px 8px!important;
+    border-radius:9px!important;
+    font-size:12px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-panel{
+    gap:10px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-panel-head{
+    gap:8px!important;
+    padding:4px 2px 0!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-panel-head h3{
+    font-size:19px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-panel-head .muted{
+    font-size:12px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-season-chooser,
+  body[data-portal-default="home"] #statistics .statistics-tournament-chooser{
+    gap:4px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-season-chooser>span,
+  body[data-portal-default="home"] #statistics .statistics-tournament-chooser>span{
+    font-size:9px!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-season-chooser select,
+  body[data-portal-default="home"] #statistics .statistics-tournament-chooser select{
+    min-height:44px!important;
+    padding:8px 10px!important;
+    border-radius:10px!important;
+    font-size:14px!important;
+    font-weight:780!important;
+  }
+  body[data-portal-default="home"] #statistics .mobile-season-standings{
+    display:grid!important;
+  }
+  body[data-portal-default="home"] #statistics [data-statistics-panel="season"] .table-scroll{
+    display:none!important;
+  }
+
+  /* Tournament surface */
+  body[data-portal-default="home"] .tournament-hub{
+    padding:12px!important;
+  }
+  body[data-portal-default="home"] .tournament-hub .hub-tabs{
+    padding:3px!important;
+  }
+  body[data-portal-default="home"] .tournament-hub .hub-tabs>button{
+    min-height:40px!important;
+    padding:6px 9px!important;
+    font-size:12px!important;
+  }
+  body[data-portal-default="home"] .tournament-hub .hub-next-match{
+    padding:13px!important;
+    border-radius:12px!important;
+    box-shadow:none!important;
+  }
+
+  /* Home remains the only surface with a visual lead card; everything below it
+     uses compact content rows/cards. */
+  body[data-portal-default="home"] .home-stat-card,
+  body[data-portal-default="home"] .home-latest-match{
+    box-shadow:none!important;
+  }
+
+  /* Public player profile */
+  body[data-portal-default="home"] #statistics .profile-card{
+    border-radius:14px!important;
+    overflow:hidden!important;
+  }
+  body[data-portal-default="home"] #statistics .profile-primary-stats{
+    gap:8px!important;
+  }
+  body[data-portal-default="home"] #statistics .profile-primary-stats .stat-card{
+    min-height:84px;
+  }
+}
+
+@media(max-width:390px){
+  body[data-portal-default="home"] #statistics .mobile-season-row{
+    grid-template-columns:34px minmax(0,1fr) auto!important;
+    gap:8px!important;
+    padding:10px!important;
+  }
+  body[data-portal-default="home"] #statistics .mobile-season-position{
+    width:28px;
+    height:28px;
+  }
+  body[data-portal-default="home"] #statistics .mobile-season-primary>strong{
+    font-size:13px!important;
+  }
+}
+
+/* Desktop: preserve the information-rich tables but keep surfaces visually calm. */
+@media(min-width:761px){
+  body[data-portal-default="home"] #statistics .mobile-season-standings{
+    display:none!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-tabs{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
+  body[data-portal-default="home"] #statistics .statistics-tabs button{
+    min-height:40px!important;
+    padding:7px 10px!important;
+    font-size:12px!important;
+  }
+}
