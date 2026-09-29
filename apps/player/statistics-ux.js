@@ -161,8 +161,8 @@ function ensureSeasonChooser() {
 }
 
 function seasonOption(season) {
-  const status = season.is_active ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong";
-  return `${season.name}${season.starts_on ? ` · ${formatDate(season.starts_on)}` : ""} · ${status}`;
+  const status = season.is_active ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "";
+  return `${season.name}${status ? ` · ${status}` : ""}`;
 }
 
 async function loadSeasons() {
