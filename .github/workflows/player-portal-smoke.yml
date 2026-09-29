@@ -65,6 +65,10 @@ jobs:
           grep -Fq './portal-content.js' <<<"$player_loader_js"
           grep -Fq './tournament-hub.js' <<<"$player_loader_js"
           grep -Fq './home-dashboard-ux.js' <<<"$player_loader_js"
+          statistics_css="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/statistics-ux.css?cb=$RANDOM")"
+          grep -Fq 'Mobile containment' <<<"$statistics_css"
+          match_detail_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/match-detail-ux.js?cb=$RANDOM")"
+          grep -Fq 'overflow-x:hidden' <<<"$match_detail_js"
           elo_history_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/elo-history-exact.js?cb=$RANDOM")"
           grep -Fq './elo-tournament-history.css' <<<"$elo_history_js"
 
@@ -194,6 +198,30 @@ jobs:
 
           request "player profile" "$base/api/v1/players/$player_id/profile"
           request "player matches" "$base/api/v1/players/$player_id/matches"
+          match_id="$(php -r '$j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true); echo (int)($j["data"]["items"][0]["id"] ?? 0);')"
+          if test "$match_id" -gt 0; then
+            request "match detail" "$base/api/v1/matches/$match_id/detail"
+            php -r '
+              $j=json_decode(file_get_contents("/tmp/player-portal-last.json"),true);
+              $data=$j["data"]??[];
+              $legs=[];
+              foreach(($data["legs"]??[]) as $leg){$legs[(int)($leg["leg_number"]??0)]=(int)($leg["starting_player_id"]??0);}
+              $previousLeg=-1;$previousVisit=-1;$previousOrder=-1;
+              foreach(($data["visits"]??[]) as $visit){
+                $leg=(int)($visit["leg_number"]??0);
+                $number=(int)($visit["visit_number"]??0);
+                $starter=$legs[$leg]??0;
+                $order=((int)($visit["player_id"]??0)===$starter)?0:1;
+                if($leg===$previousLeg){
+                  if($number<$previousVisit || ($number===$previousVisit && $order<$previousOrder)){
+                    fwrite(STDERR,"Match visits are not in throwing order\n");exit(1);
+                  }
+                }
+                if($leg!==$previousLeg){$previousVisit=-1;$previousOrder=-1;}
+                $previousLeg=$leg;$previousVisit=$number;$previousOrder=$order;
+              }
+            '
+          fi
           request "player tournament ELO history" "$base/api/player-elo-tournaments.php?player_id=$player_id"
 
           echo "DEEP HEALTH: $base/api/health.php?deep=1"
