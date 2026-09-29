@@ -37,6 +37,11 @@ export function PlatformNav({ active }: { active: Surface }) {
   useEffect(() => {
     const body = document.body;
     body.dataset.portalDefault = "overview";
+    const nav = document.querySelector<HTMLElement>(".platform-nav");
+    if (nav) {
+      nav.removeAttribute("aria-hidden");
+      nav.inert = false;
+    }
     let disposed = false;
     let previousToken = localStorage.getItem("bd:token") || "";
 
