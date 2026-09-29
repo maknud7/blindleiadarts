@@ -22,9 +22,9 @@ function injectStyles() {
   const style = document.createElement('style');
   style.id = 'match-detail-ux-styles';
   style.textContent = `
-    .match-detail-dialog{width:min(720px,calc(100vw - 24px));max-height:min(92dvh,940px);border-radius:22px;overflow:hidden;box-shadow:0 28px 80px rgba(8,29,54,.34)}
+    .match-detail-dialog{box-sizing:border-box;width:min(720px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:min(92dvh,940px);margin:auto;padding:0;border-radius:22px;overflow:hidden;box-shadow:0 28px 80px rgba(8,29,54,.34)}
     .match-detail-dialog::backdrop{background:rgba(8,29,54,.52);backdrop-filter:blur(2px)}
-    .match-detail-content{max-height:min(92dvh,940px);padding:24px;overflow:auto;background:#fff}
+    .match-detail-content{box-sizing:border-box;width:100%;max-width:100%;min-width:0;max-height:min(92dvh,940px);padding:24px;overflow-x:hidden;overflow-y:auto;background:#fff}
     .match-detail-head{position:relative;display:block;padding-right:54px;margin-bottom:18px}
     .match-detail-head h2{font-size:clamp(1.45rem,3vw,2rem);line-height:1.08;margin-top:6px;max-width:620px}
     .match-detail-head .muted{margin-top:9px;font-size:.9rem}
@@ -44,9 +44,9 @@ function injectStyles() {
     .match-elo-delta.down{color:#b4232e;background:#fdebed}
     .match-elo-delta.flat{color:#61738a;background:#eef2f6}
     .match-elo-unavailable{margin:0;color:#73859a;font-size:.82rem}
-    .match-stat-board{margin-top:0;border-radius:16px;border-color:#d9e3ee;background:#fff;overflow:hidden}
+    .match-stat-board{width:100%;max-width:100%;min-width:0;margin-top:0;border-radius:16px;border-color:#d9e3ee;background:#fff;overflow:hidden}
     .match-stat-names{padding:16px 18px;background:#f6f9fd;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);gap:12px}
-    .match-stat-names strong{font-size:1rem;line-height:1.18}
+    .match-stat-names strong{min-width:0;font-size:1rem;line-height:1.18;overflow-wrap:anywhere}
     .match-stat-row{padding:13px 18px;grid-template-columns:minmax(72px,1fr) 130px minmax(72px,1fr);gap:12px;min-height:52px}
     .match-stat-row strong{font-size:1.06rem}
     .match-stat-row span{font-size:.84rem;color:#71849a;text-align:center}
@@ -60,30 +60,30 @@ function injectStyles() {
     .match-legs h3{font-size:1.15rem;margin-bottom:3px}
     .match-legs>.match-leg-help{margin:0 0 10px;font-size:.78rem;color:#71849a}
     .leg-card{border-color:#dbe5ef;border-radius:14px;background:#fff;margin-bottom:9px;overflow:hidden}
-    .leg-card-toggle{padding:14px 16px;background:#fff!important;box-shadow:none!important}
+    .leg-card-toggle{box-sizing:border-box;width:100%!important;max-width:100%;min-width:0;padding:14px 16px;background:#fff!important;box-shadow:none!important}
     .leg-card-toggle:hover{background:#f8fbff!important}
-    .leg-card-toggle>span:first-child strong{color:#2f6fed}
+    .leg-card-toggle>span:first-child{min-width:0}.leg-card-toggle>span:first-child strong{color:#2f6fed;overflow-wrap:anywhere}
     .leg-card-toggle>span:last-child{display:grid;gap:1px;justify-items:end;border-radius:10px;background:#edf4ff;color:#1858bc;padding:6px 10px;font-weight:800;white-space:nowrap}
     .leg-card-toggle>span:last-child small{font-size:.58rem;letter-spacing:.07em;text-transform:uppercase;color:#6a82a1}
     .leg-card-toggle>span:last-child strong{font-size:.82rem;color:#1858bc;font-variant-numeric:tabular-nums}
-    .leg-visits{background:#fbfcfe;padding:5px 14px 9px}
+    .leg-visits{min-width:0;max-width:100%;background:#fbfcfe;padding:5px 14px 9px}.visit-row{min-width:0;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.visit-row span{min-width:0;overflow-wrap:anywhere}.visit-row strong{white-space:nowrap}
     .leg-average-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:7px 0 9px}
     .leg-average-player{display:grid;gap:2px;padding:9px 10px;border:1px solid #dce7f2;border-radius:10px;background:#fff}
     .leg-average-player small{font-size:.64rem;color:#71849a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .leg-average-player strong{font-size:1rem;color:#174a82;font-variant-numeric:tabular-nums}
     @media(max-width:680px){
-      .match-detail-dialog{width:calc(100vw - 18px);max-height:calc(100dvh - 24px);border-radius:22px}
-      .match-detail-content{max-height:calc(100dvh - 24px);padding:20px 16px 22px}
+      .match-detail-dialog{width:calc(100vw - 12px);max-width:calc(100vw - 12px);max-height:calc(100dvh - 12px);border-radius:18px}
+      .match-detail-content{max-height:calc(100dvh - 12px);padding:16px 12px 18px}
       .match-detail-head{display:block;padding-right:48px}
       .match-detail-head h2{font-size:1.72rem}
       .match-detail-close{width:40px!important;height:40px}
       .match-elo-grid{grid-template-columns:1fr}
-      .match-stat-names{padding:14px 12px;grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr)}
+      .match-stat-names{padding:12px 9px;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:6px}
       .match-stat-names strong{font-size:.94rem}
-      .match-stat-row{padding:12px 12px;grid-template-columns:minmax(64px,1fr) 116px minmax(64px,1fr);gap:8px}
+      .match-stat-row{padding:11px 9px;grid-template-columns:minmax(0,1fr) minmax(82px,100px) minmax(0,1fr);gap:6px}
       .match-stat-row strong{font-size:1rem}
       .match-stat-row span{font-size:.76rem}
-      .leg-card-toggle{padding:13px 14px}
+      .leg-card-toggle{padding:12px 10px;gap:8px}.leg-card-toggle>span:last-child{max-width:44%;padding:5px 7px}.leg-visits{padding:5px 9px 9px}.visit-row{gap:6px;font-size:.8rem}
       .leg-average-breakdown{grid-template-columns:1fr}
     }
   `;

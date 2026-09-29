@@ -114,3 +114,91 @@ body #statistics .player-card:focus-visible{outline:none!important;border-color:
   .mobile-season-row{grid-template-columns:36px minmax(0,1fr);gap:8px}
   .mobile-season-primary{grid-column:2;justify-self:start;font-size:11px;color:#52677f}
 }
+
+
+/* Mobile containment: components may scroll internally, but the statistics page
+   itself must never grow wider than the viewport. */
+@media(max-width:680px){
+  #statistics,
+  #statistics .statistics-page-head,
+  #statistics .statistics-tabs,
+  #statistics .statistics-panel,
+  #statistics .statistics-panel-head,
+  #statistics .statistics-table-card,
+  #statistics .table-card,
+  #statistics .table-scroll,
+  #statistics .player-directory,
+  #statistics .profile-card,
+  #statistics .profile-head,
+  #statistics .profile-section,
+  #statistics .match-result-list,
+  #statistics .match-result-card,
+  #statistics .match-result-main,
+  #statistics #myMatchList{
+    box-sizing:border-box;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  #statistics .statistics-page-head,
+  #statistics .statistics-panel-head,
+  #statistics .season-table-heading{
+    min-width:0;
+  }
+
+  #statistics .statistics-page-head>*,
+  #statistics .statistics-panel-head>*,
+  #statistics .season-table-heading>*,
+  #statistics .match-result-main>*,
+  #statistics .profile-head>*{
+    min-width:0;
+  }
+
+  #statistics .statistics-tabs{
+    overflow:hidden;
+  }
+
+  #statistics .table-scroll{
+    overflow-x:auto;
+    overflow-y:hidden;
+    overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  #statistics [data-statistics-panel="season"] .statistics-table-card .table-scroll{
+    display:none;
+  }
+
+  #statistics .match-result-main{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;
+    gap:6px!important;
+  }
+
+  #statistics .match-result-main strong,
+  #statistics .player-card-name,
+  #statistics .player-card-meta,
+  #statistics .profile-head h2,
+  #statistics .profile-section strong{
+    min-width:0;
+    overflow-wrap:anywhere;
+    word-break:normal;
+  }
+
+  #statistics .match-result-main strong{
+    white-space:normal;
+  }
+
+  #statistics .elo-movement{
+    min-width:0;
+    max-width:100%;
+    flex-wrap:wrap;
+  }
+
+  #statistics .statistics-season-chooser select,
+  #statistics .statistics-tournament-chooser select,
+  #statistics .player-search input{
+    box-sizing:border-box;
+    max-width:100%;
+  }
+}
