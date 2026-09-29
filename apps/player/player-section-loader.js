@@ -1,4 +1,4 @@
-const VERSION = "20260920-player-perf-02";
+const VERSION = "20260929-player-ux-01";
 const loaded = new Map();
 const deferredLoaded = new Set();
 
