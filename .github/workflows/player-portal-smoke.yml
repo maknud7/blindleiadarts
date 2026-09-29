@@ -61,6 +61,10 @@ jobs:
           fi
 
           player_loader_js="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/player-section-loader.js?cb=$RANDOM")"
+          player_design_css="$(curl -fsS --connect-timeout 5 --max-time 15 "$base/player/player-design-system.css?cb=$RANDOM")"
+          grep -Fq 'Season ranking' <<<"$player_design_css"
+          grep -Fq '.mobile-season-row' <<<"$player_design_css"
+          grep -Fq '.unified-mobile-bottom-nav button.active' <<<"$player_design_css"
           grep -Fq './member-account.js' <<<"$player_loader_js"
           grep -Fq './portal-content.js' <<<"$player_loader_js"
           grep -Fq './tournament-hub.js' <<<"$player_loader_js"
