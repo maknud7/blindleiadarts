@@ -110,7 +110,11 @@ export class MySqlTournamentPublicReadRepository {
                 v.darts_json,v.is_bust,v.remaining_after,v.created_at
            FROM ${this.table("visits")} v
            INNER JOIN ${this.table("legs")} l ON l.id=v.leg_id
-          WHERE v.match_id=? ORDER BY l.leg_number ASC,v.id ASC`,
+          WHERE v.match_id=?
+          ORDER BY l.leg_number ASC,
+                   v.visit_number ASC,
+                   CASE WHEN v.player_id=l.starting_player_id THEN 0 ELSE 1 END ASC,
+                   v.id ASC`,
         [matchId],
       )).map((raw) => {
         let darts: unknown[] = [];
