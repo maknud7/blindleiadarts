@@ -444,10 +444,17 @@ async function openMatchDetail(matchId) {
         <h3>Legs</h3>
         ${(data.legs || []).length ? data.legs.map((leg) => {
           const winner = Number(leg.winner_player_id) === Number(match.player_a_id) ? match.player_a_name : Number(leg.winner_player_id) === Number(match.player_b_id) ? match.player_b_name : "—";
-          const legVisits = visitsByLeg.get(Number(leg.leg_number)) || [];
+          const legVisits = [...(visitsByLeg.get(Number(leg.leg_number)) || [])].sort((left, right) => {
+            const byVisit = Number(left.visit_number || 0) - Number(right.visit_number || 0);
+            if (byVisit !== 0) return byVisit;
+            const starter = Number(leg.starting_player_id || 0);
+            const leftOrder = Number(left.player_id) === starter ? 0 : 1;
+            const rightOrder = Number(right.player_id) === starter ? 0 : 1;
+            return leftOrder - rightOrder || Number(left.id || 0) - Number(right.id || 0);
+          });
           return `<article class="leg-card">
             <button type="button" class="leg-card-toggle" data-leg="${Number(leg.leg_number)}"><span><strong>Leg ${Number(leg.leg_number)}</strong><small>${esc(winner)} vant</small></span><span>${Number(leg.player_a_average || 0) > 0 ? Number(leg.player_a_average).toFixed(2) : "—"} · ${Number(leg.player_b_average || 0) > 0 ? Number(leg.player_b_average).toFixed(2) : "—"}</span></button>
-            <div class="leg-visits hidden" data-leg-visits="${Number(leg.leg_number)}">${legVisits.length ? legVisits.map((visit) => `<div class="visit-row"><span>${Number(visit.player_id) === Number(match.player_a_id) ? esc(match.player_a_name) : esc(match.player_b_name)}</span><strong>${Number(visit.score)}</strong><span>${visit.is_bust ? "Bust" : `${Number(visit.remaining_after)} igjen`}</span></div>`).join("") : `<p class="muted">Ingen kastdetaljer lagret for dette leget.</p>`}</div>
+            <div class="leg-visits hidden" data-leg-visits="${Number(leg.leg_number)}">${legVisits.length ? legVisits.map((visit) => `<div class="visit-row" data-visit-number="${Number(visit.visit_number || 0)}"><span>${Number(visit.player_id) === Number(match.player_a_id) ? esc(match.player_a_name) : esc(match.player_b_name)}</span><strong>${Number(visit.score)}</strong><span>${visit.is_bust ? "Bust" : `${Number(visit.remaining_after)} igjen`}</span></div>`).join("") : `<p class="muted">Ingen kastdetaljer lagret for dette leget.</p>`}</div>
           </article>`;
         }).join("") : `<p class="muted">Ingen leg-detaljer lagret for denne kampen.</p>`}
       </div>`;
