@@ -42,7 +42,10 @@ function closeMobileDrawer() {
     more.setAttribute("aria-expanded", "false");
     more.classList.remove("active");
   }
-  const nav = document.querySelector(".portal-menu");
+  // Platform v2 has its own always-visible responsive navigation. It reuses
+  // the portal-menu class only for guide placement and must never inherit the
+  // legacy mobile-drawer inert/aria-hidden lifecycle.
+  const nav = document.querySelector(".portal-menu:not(.platform-nav)");
   if (nav && window.matchMedia("(max-width: 760px)").matches) {
     nav.setAttribute("aria-hidden", "true");
     if ("inert" in nav) nav.inert = true;
