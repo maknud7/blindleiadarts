@@ -92,3 +92,25 @@ body #statistics .player-card:focus-visible{outline:none!important;border-color:
   #statistics .history-row-button>.elo-movement{grid-column:1/-1;grid-row:2;margin-left:0;justify-self:start}
   .elo-timeline-row{grid-template-columns:1fr;gap:7px}.elo-timeline-row .elo-movement{justify-self:start}
 }
+
+
+.mobile-season-standings{display:none}
+.mobile-season-row{width:100%;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:0;border-bottom:1px solid #edf1f5;background:#fff;color:var(--ink);text-align:left;box-shadow:none}
+.mobile-season-row:last-child{border-bottom:0}
+.mobile-season-row:active{background:#f5f8fc}
+.mobile-season-position{font-size:16px;font-weight:900;color:#173b63;text-align:center}
+.mobile-season-player{min-width:0;display:grid;gap:2px}
+.mobile-season-player strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mobile-season-player small{font-size:11px;color:#2f6fed;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mobile-season-player em{font-style:normal;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mobile-season-primary{font-size:12px;font-weight:900;color:#173b63;white-space:nowrap}
+
+@media(max-width:680px){
+  [data-statistics-panel="season"] .statistics-table-card .table-scroll{display:none}
+  .mobile-season-standings{display:grid}
+  .statistics-table-card .season-table-heading{padding:12px}
+}
+@media(max-width:390px){
+  .mobile-season-row{grid-template-columns:36px minmax(0,1fr);gap:8px}
+  .mobile-season-primary{grid-column:2;justify-self:start;font-size:11px;color:#52677f}
+}

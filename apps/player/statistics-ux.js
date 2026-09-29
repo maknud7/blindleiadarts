@@ -1,6 +1,6 @@
 const stylesheet = document.createElement("link");
 stylesheet.rel = "stylesheet";
-stylesheet.href = new URL("./statistics-ux.css?v=20260828-0700", import.meta.url).href;
+stylesheet.href = new URL("./statistics-ux.css?v=20260929-player-ux-01", import.meta.url).href;
 document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
@@ -198,6 +198,19 @@ async function renderSeason() {
     const primary = season.ranking_method === "elo" ? "ELO" : "poeng";
     seasonRoot.innerHTML = `
       <div class="season-table-heading"><div><strong>${esc(season.name || "Sesong")}</strong><p class="tie-break-note">Offisiell rekkefølge: ${primary} → leg differanse → sesongsnitt (3DA) → innbyrdes.</p></div><span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span></div>
+      <div class="mobile-season-standings" aria-label="Sesongranking">
+        ${(data.items || []).map((row) => {
+          const legDiff = Number(row.leg_diff || 0);
+          const primaryValue = season.ranking_method === "elo"
+            ? `${Number(row.elo_rating || 1000).toFixed(1)} ELO`
+            : `${pointsText(row.points)} p`;
+          return `<button type="button" class="mobile-season-row" data-player-profile="${Number(row.id)}">
+            <span class="mobile-season-position">#${Number(row.position)}</span>
+            <span class="mobile-season-player"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>«${esc(row.nickname)}»</small>` : ""}<em>${Number(row.matches_played || 0)} kamper · Leg ${legDiff > 0 ? "+" : ""}${legDiff} · 3DA ${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</em></span>
+            <span class="mobile-season-primary">${primaryValue}</span>
+          </button>`;
+        }).join("")}
+      </div>
       <div class="table-scroll"><table class="portal-table season-table combined-season-table" data-combined-season="${selectedSeasonId}">
         <thead><tr><th data-sort-type="number" data-sort-default="ascending">Plass</th><th data-sort-type="text" data-sort-default="ascending">Spiller</th><th data-sort-type="number">Poeng</th><th data-sort-type="number">ELO</th><th data-sort-type="number">K</th><th data-sort-type="number">V</th><th data-sort-type="number">U</th><th data-sort-type="number">T</th><th data-sort-type="number" title="Leg differanse">Leg +/−</th><th data-sort-type="number" title="3-dart snitt for hele den valgte sesongen">3DA sesong</th></tr></thead>
         <tbody>${(data.items || []).map((row) => `<tr data-player-profile="${Number(row.id)}"><td data-sort-value="${Number(row.position)}"><strong>${Number(row.position)}</strong></td><td data-sort-value="${esc(row.display_name)}"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td><td data-sort-value="${Number(row.points || 0)}"><strong>${pointsText(row.points)}</strong></td><td data-sort-value="${Number(row.elo_rating || 1000)}"><span class="elo-table-value">${Number(row.elo_rating || 1000).toFixed(1)}</span></td><td data-sort-value="${Number(row.matches_played || 0)}">${Number(row.matches_played || 0)}</td><td data-sort-value="${Number(row.wins || 0)}">${Number(row.wins || 0)}</td><td data-sort-value="${Number(row.draws || 0)}">${Number(row.draws || 0)}</td><td data-sort-value="${Number(row.losses || 0)}">${Number(row.losses || 0)}</td><td data-sort-value="${Number(row.leg_diff || 0)}"><span class="leg-diff ${Number(row.leg_diff || 0) > 0 ? "positive" : Number(row.leg_diff || 0) < 0 ? "negative" : ""}">${Number(row.leg_diff || 0) > 0 ? "+" : ""}${Number(row.leg_diff || 0)}</span></td><td data-sort-value="${Number(row.three_dart_average || 0)}">${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</td></tr>`).join("")}</tbody>

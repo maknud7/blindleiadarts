@@ -200,28 +200,40 @@ async function loadPlayerProfile(playerId) {
   const elo = data.elo || {};
   const recent = data.recent_matches || [];
   const history = data.elo_history || [];
+  const form = recent.slice(0, 5).map((match) => {
+    const result = String(match.result || "").toLowerCase();
+    const tone = result === "win" ? "win" : result === "draw" ? "draw" : "loss";
+    const label = result === "win" ? "V" : result === "draw" ? "U" : "T";
+    return `<span class="profile-form-pill ${tone}" title="${esc(match.opponent_name || "Kamp")}">${label}</span>`;
+  }).join("");
 
   el.playerProfile.innerHTML = `
-    <div class="profile-head">
-      <div>
+    <div class="profile-head profile-darts-head">
+      <div class="profile-darts-identity">
         <p class="eyebrow">Spillerprofil</p>
         <h2>${esc(player.display_name)}</h2>
-        ${player.nickname ? `<p class="muted">${esc(player.nickname)}</p>` : ""}
+        ${player.nickname ? `<p class="profile-darts-nickname">«${esc(player.nickname)}»</p>` : ""}
+        ${form ? `<div class="profile-form"><small>Siste form</small><span>${form}</span></div>` : ""}
       </div>
       <button type="button" class="profile-close ghost">Lukk</button>
     </div>
-    <div class="stats-grid profile-stats">
+    <div class="stats-grid profile-stats profile-primary-stats">
       <div class="stat-card"><small>ELO</small><strong>${Number(elo.rating || 1000).toFixed(1)}</strong></div>
-      <div class="stat-card stat-card-accent"><small>3-dart snitt</small><strong>${Number(stats.three_dart_average || 0) > 0 ? Number(stats.three_dart_average).toFixed(2) : "—"}</strong></div>
-      <div class="stat-card"><small>Kamper</small><strong>${Number(stats.matches_played || 0)}</strong></div>
-      <div class="stat-card"><small>Seire</small><strong>${Number(stats.matches_won || 0)}</strong></div>
-      <div class="stat-card"><small>Seiersprosent</small><strong>${Number(stats.win_percentage || 0).toFixed(1)}%</strong></div>
-      <div class="stat-card"><small>Høy checkout</small><strong>${Number(stats.highest_checkout || 0)}</strong></div>
-      <div class="stat-card"><small>Checkout %</small><strong>${stats.checkout_percentage === null || stats.checkout_percentage === undefined ? "—" : `${Number(stats.checkout_percentage).toFixed(1)}%`}</strong></div>
+      <div class="stat-card stat-card-accent"><small>3DA</small><strong>${Number(stats.three_dart_average || 0) > 0 ? Number(stats.three_dart_average).toFixed(2) : "—"}</strong></div>
+      <div class="stat-card"><small>Høy checkout</small><strong>${Number(stats.highest_checkout || 0) || "—"}</strong></div>
       <div class="stat-card"><small>180</small><strong>${Number(stats.visits_180 || 0)}</strong></div>
-      <div class="stat-card"><small>140+</small><strong>${Number(stats.visits_140_plus || 0)}</strong></div>
-      <div class="stat-card"><small>100+</small><strong>${Number(stats.visits_100_plus || 0)}</strong></div>
     </div>
+    <details class="profile-more-stats">
+      <summary>Flere tall</summary>
+      <div class="stats-grid profile-secondary-stats">
+        <div class="stat-card"><small>Kamper</small><strong>${Number(stats.matches_played || 0)}</strong></div>
+        <div class="stat-card"><small>Seire</small><strong>${Number(stats.matches_won || 0)}</strong></div>
+        <div class="stat-card"><small>Seiersprosent</small><strong>${Number(stats.win_percentage || 0).toFixed(1)}%</strong></div>
+        <div class="stat-card"><small>Checkout %</small><strong>${stats.checkout_percentage === null || stats.checkout_percentage === undefined ? "—" : `${Number(stats.checkout_percentage).toFixed(1)}%`}</strong></div>
+        <div class="stat-card"><small>140+</small><strong>${Number(stats.visits_140_plus || 0)}</strong></div>
+        <div class="stat-card"><small>100+</small><strong>${Number(stats.visits_100_plus || 0)}</strong></div>
+      </div>
+    </details>
     <div class="profile-section">
       <div class="section-head"><h3>Siste kamper</h3>${recent.length ? `<button type="button" class="ghost profile-all-matches" data-player="${Number(player.id)}">Se alle</button>` : ""}</div>
       <div class="profile-match-history">${recent.length ? renderHistoryRows(recent) : `<p class="muted">Ingen fullførte kamper registrert.</p>`}</div>
