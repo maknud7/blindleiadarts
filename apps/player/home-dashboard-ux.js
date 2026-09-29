@@ -1,6 +1,6 @@
 const stylesheet = document.createElement("link");
 stylesheet.rel = "stylesheet";
-stylesheet.href = new URL("./home-dashboard-ux.css?v=20260902-elo-chart-ux-01", import.meta.url).href;
+stylesheet.href = new URL("./home-dashboard-ux.css?v=20260929-player-ux-01", import.meta.url).href;
 document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
@@ -314,8 +314,8 @@ async function loadModel() {
   return { clubId, me, dashboard, profile, season, seasonRow, totalPlayers, tournamentElo };
 }
 
-function statCard(icon, label, value, note, extra = "") {
-  return `<article class="home-stat-card">
+function statCard(icon, label, value, note, extra = "", className = "") {
+  return `<article class="home-stat-card ${className}">
     <div class="home-stat-icon" aria-hidden="true">${esc(icon)}</div>
     <div class="home-stat-copy"><span>${esc(label)}</span><strong>${value}</strong>${extra}<small>${esc(note)}</small></div>
   </article>`;
@@ -345,14 +345,48 @@ function renderStats(model) {
   statsGrid.className = "stats-grid home-dashboard-grid";
   statsGrid.innerHTML = [
     statCard("K", "Kamper", formatNumber(matches), model.season ? `I ${model.season.name}` : "Registrert totalt"),
-    statCard("V", "Seire", formatNumber(wins), number(matches) ? `${formatNumber(winPct, 1)}% seiersprosent` : "Ingen kamper ennå"),
-    statCard("L", "Legs vunnet", formatNumber(stats.legs_won || profileStats.legs_won || 0), "Registrert totalt"),
+    statCard("V", "Seire", formatNumber(wins), number(matches) ? `${formatNumber(winPct, 1)}% seiersprosent` : "Ingen kamper ennå", "", "home-stat-secondary"),
+    statCard("L", "Legs vunnet", formatNumber(stats.legs_won || profileStats.legs_won || 0), "Registrert totalt", "", "home-stat-secondary"),
     statCard("3D", "3DA snitt", threeDa > 0 ? formatNumber(threeDa, 2) : "—", model.season ? `I ${model.season.name}` : "Registrert snitt"),
     statCard("E", "ELO nå", formatNumber(elo, 1), latestTournament ? "Endring i siste turnering" : "Gjeldende rating", eloExtra),
     statCard("#", "Sesongranking", position ? `#${position}` : "—", model.totalPlayers ? `Av ${model.totalPlayers} spillere` : "Ingen plassering ennå"),
-    statCard("↗", "Seire på rad", formatNumber(streak), "Nåværende streak"),
-    statCard("★", "Beste 3DA", best && number(best.average) > 0 ? formatNumber(best.average, 2) : "—", best?.opponent_name ? `Mot ${best.opponent_name}` : "Siste registrerte kamper"),
+    statCard("↗", "Seire på rad", formatNumber(streak), "Nåværende streak", "", "home-stat-secondary"),
+    statCard("★", "Beste 3DA", best && number(best.average) > 0 ? formatNumber(best.average, 2) : "—", best?.opponent_name ? `Mot ${best.opponent_name}` : "Siste registrerte kamper", "", "home-stat-secondary"),
   ].join("");
+}
+
+function renderLatestMatch(model) {
+  if (!statsSection) return;
+  let card = statsSection.querySelector(".home-latest-match");
+  const match = model?.profile?.recent_matches?.[0] || null;
+  if (!match) {
+    card?.remove();
+    return;
+  }
+  if (!card) {
+    card = document.createElement("article");
+    card.className = "home-latest-match";
+    rankingList?.insertAdjacentElement("beforebegin", card);
+  }
+  const result = String(match.result || "").toLowerCase();
+  const resultLabel = result === "win" ? "Seier" : result === "draw" ? "Uavgjort" : "Tap";
+  const tone = result === "win" ? "win" : result === "draw" ? "draw" : "loss";
+  const average = number(match.average, 0);
+  const checkout = number(match.highest_checkout, 0);
+  card.innerHTML = `
+    <div class="home-latest-match-head">
+      <div><span>Siste kamp</span><strong>${esc(resultLabel)} mot ${esc(match.opponent_name || "motstander")}</strong><small>${esc(match.tournament_name || "")}${match.round_label ? ` · ${esc(match.round_label)}` : ""}</small></div>
+      <b class="${tone}">${esc(resultLabel)}</b>
+    </div>
+    <div class="home-latest-match-metrics">
+      <span><small>3DA</small><strong>${average > 0 ? formatNumber(average, 2) : "—"}</strong></span>
+      <span><small>Høy checkout</small><strong>${checkout > 0 ? formatNumber(checkout) : "—"}</strong></span>
+      <span><small>Dato</small><strong>${esc(formatDate(match.finished_at || match.start_at) || "—")}</strong></span>
+    </div>
+    <a href="#statistics" class="home-latest-match-link">Se kamphistorikk</a>`;
+  card.querySelector(".home-latest-match-link")?.addEventListener("click", () => {
+    localStorage.setItem("bd:statisticsView", "mine");
+  });
 }
 
 function renderSeasonOverview(model) {
@@ -449,13 +483,20 @@ function enhanceSectionChrome() {
     const head = statsSection.querySelector(":scope > .section-head");
     const eyebrow = head?.querySelector(".eyebrow");
     const title = head?.querySelector("h2");
-    if (eyebrow) eyebrow.textContent = "Mine tall";
-    if (title) title.textContent = "Statistikkoversikt";
+    if (eyebrow) eyebrow.textContent = "Min sesong";
+    if (title) title.textContent = "Oversikt";
     if (head && !head.querySelector(".home-dashboard-subtitle")) {
       const subtitle = document.createElement("p");
       subtitle.className = "muted home-dashboard-subtitle";
-      subtitle.textContent = "Din prestasjon, ranking og ELO samlet på ett sted.";
+      subtitle.textContent = "Det viktigste fra sesongen din akkurat nå.";
       title?.insertAdjacentElement("afterend", subtitle);
+    }
+    if (head && !head.querySelector(".home-dashboard-all-link")) {
+      const link = document.createElement("a");
+      link.className = "home-dashboard-all-link";
+      link.href = "#statistics";
+      link.textContent = "Se all statistikk";
+      head.appendChild(link);
     }
   }
   matchesSection?.classList.add("home-matches-section");
@@ -477,6 +518,7 @@ function render(model) {
   try {
     enhanceSectionChrome();
     renderStats(model);
+    renderLatestMatch(model);
     renderSeasonOverview(model);
     decorateMatches(model);
   } finally {
@@ -512,6 +554,7 @@ function scheduleRefresh(delay = 120) {
       try {
         enhanceSectionChrome();
         renderStats(modelCache);
+        renderLatestMatch(modelCache);
         renderSeasonOverview(modelCache);
         decorateMatches(modelCache);
       } finally {
