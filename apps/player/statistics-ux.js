@@ -1,6 +1,6 @@
 const stylesheet = document.createElement("link");
 stylesheet.rel = "stylesheet";
-stylesheet.href = new URL("./statistics-ux.css?v=20260929-player-ux-01", import.meta.url).href;
+stylesheet.href = new URL("./statistics-ux.css?v=20260929-ui-system-01", import.meta.url).href;
 document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
@@ -161,8 +161,8 @@ function ensureSeasonChooser() {
 }
 
 function seasonOption(season) {
-  const status = season.is_active ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong";
-  return `${season.name}${season.starts_on ? ` · ${formatDate(season.starts_on)}` : ""} · ${status}`;
+  const status = season.is_active ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "";
+  return `${season.name}${status ? ` · ${status}` : ""}`;
 }
 
 async function loadSeasons() {
@@ -197,17 +197,36 @@ async function renderSeason() {
     const season = data.season || seasons.find((item) => Number(item.id) === selectedSeasonId) || {};
     const primary = season.ranking_method === "elo" ? "ELO" : "poeng";
     seasonRoot.innerHTML = `
-      <div class="season-table-heading"><div><strong>${esc(season.name || "Sesong")}</strong><p class="tie-break-note">Offisiell rekkefølge: ${primary} → leg differanse → sesongsnitt (3DA) → innbyrdes.</p></div><span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span></div>
+      <div class="season-table-heading">
+        <div>
+          <strong>Offisiell ranking</strong>
+          <p class="tie-break-note">${primary} → leg +/− → 3DA → innbyrdes</p>
+        </div>
+        <span class="pill">${season.status === "active" ? "Aktiv" : season.status === "completed" ? "Avsluttet" : "Sesong"}</span>
+      </div>
       <div class="mobile-season-standings" aria-label="Sesongranking">
         ${(data.items || []).map((row) => {
           const legDiff = Number(row.leg_diff || 0);
+          const threeDa = Number(row.three_dart_average || 0);
+          const elo = Number(row.elo_rating || 1000);
           const primaryValue = season.ranking_method === "elo"
-            ? `${Number(row.elo_rating || 1000).toFixed(1)} ELO`
+            ? `${elo.toFixed(1)} ELO`
             : `${pointsText(row.points)} p`;
+          const secondaryValue = season.ranking_method === "elo"
+            ? `${pointsText(row.points)} p`
+            : `ELO ${elo.toFixed(1)}`;
           return `<button type="button" class="mobile-season-row" data-player-profile="${Number(row.id)}">
             <span class="mobile-season-position">#${Number(row.position)}</span>
-            <span class="mobile-season-player"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>«${esc(row.nickname)}»</small>` : ""}<em>${Number(row.matches_played || 0)} kamper · Leg ${legDiff > 0 ? "+" : ""}${legDiff} · 3DA ${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</em></span>
-            <span class="mobile-season-primary">${primaryValue}</span>
+            <span class="mobile-season-player">
+              <strong>${esc(row.display_name)}</strong>
+              ${row.nickname ? `<small>«${esc(row.nickname)}»</small>` : ""}
+              <em class="mobile-season-meta">
+                <span>${Number(row.matches_played || 0)} kamper</span>
+                <span>Leg ${legDiff > 0 ? "+" : ""}${legDiff}</span>
+                <span>3DA ${threeDa > 0 ? threeDa.toFixed(2) : "—"}</span>
+              </em>
+            </span>
+            <span class="mobile-season-primary"><strong>${primaryValue}</strong><small>${secondaryValue}</small></span>
           </button>`;
         }).join("")}
       </div>

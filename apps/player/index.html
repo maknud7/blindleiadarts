@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="./styles.css?v=20260827-1435">
   <link rel="stylesheet" href="./player-ux.css?v=20260828-1200">
   <link rel="stylesheet" href="./player-card-polish.css?v=20260929-player-ux-01">
+  <link rel="stylesheet" href="./player-design-system.css?v=20260929-ui-system-01">
   <script>if(new URLSearchParams(window.location.search).has('reset_token')){window.location.hash='#profile';}</script>
 </head>
 <body data-portal-default="home">
@@ -66,7 +67,7 @@
 
     <section id="statistics" data-portal-section="statistics" class="card stack statistics-page">
       <div class="statistics-panel-head statistics-page-head">
-        <div><p class="eyebrow">Historikk og prestasjon</p><h2>Statistikk</h2><p class="muted">Velg nivå: sesong for totalbildet, turnering for tabell og alle resultater, spiller for profil og kamphistorikk, eller Mine kamper for din egen historikk.</p></div>
+        <div><p class="eyebrow">Historikk og prestasjon</p><h2>Statistikk</h2><p class="muted">Velg sesong, turnering, spiller eller dine egne kamper.</p></div>
       </div>
 
       <div class="statistics-tabs" data-tab-count="4" role="tablist" aria-label="Statistikkvisning">
@@ -77,13 +78,13 @@
       </div>
 
       <div class="statistics-panel" data-statistics-panel="season">
-        <div class="statistics-panel-head"><div><h3>Sesongranking</h3><p class="muted">Poeng, ELO, leg differanse og sesongsnitt (3DA) i valgt sesong.</p></div></div>
+        <div class="statistics-panel-head"><div><h3>Sesongranking</h3><p class="muted">Ranking, ELO og sesongsnitt for valgt sesong.</p></div></div>
         <div id="seasonStandings" class="table-card statistics-table-card"><p class="muted">Henter sesongtabell …</p></div>
       </div>
 
       <div class="statistics-panel hidden" data-statistics-panel="tournament">
         <div class="statistics-panel-head statistics-tournament-head">
-          <div><h3>Turneringshistorikk</h3><p class="muted">Velg en turnering. Tabellen viser turneringssnitt (3DA), og Kamper viser alle fullførte matcher med kampsnitt.</p></div>
+          <div><h3>Turneringshistorikk</h3><p class="muted">Tabell, kamper og sluttspill fra valgt turnering.</p></div>
           <label class="statistics-tournament-chooser"><span>Turnering</span><select id="tableTournamentSelect" aria-label="Velg turnering"></select></label>
         </div>
         <div class="tournament-view-tabs statistics-tournament-tabs" role="tablist" aria-label="Turneringsvisning">
@@ -124,6 +125,6 @@
   <script src="./pwa-install.js?v=20260828-1210" type="module"></script>
   <script src="./player-mobile-consolidation.js?v=20260920-player-perf-02" type="module"></script>
   <script src="../packages/ui-assets/portal-menu.js?v=20260921-desktop-inert-01" type="module"></script>
-  <script src="./player-section-loader.js?v=20260929-mobile-overflow-01" type="module"></script>
+  <script src="./player-section-loader.js?v=20260929-ui-system-01" type="module"></script>
 </body>
 </html>

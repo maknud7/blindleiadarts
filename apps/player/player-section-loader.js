@@ -1,4 +1,4 @@
-const VERSION = "20260929-mobile-overflow-01";
+const VERSION = "20260929-ui-system-01";
 const loaded = new Map();
 const deferredLoaded = new Set();
 

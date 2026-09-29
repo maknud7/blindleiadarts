@@ -203,6 +203,12 @@ jobs:
           grep -Fq 'viewport-fit=cover' apps/onboarding/index.html
           grep -Fq 'data-toggle-password' apps/onboarding/index.html
           grep -Fq 'mobile-portal.css' packages/ui-assets/portal-menu.js
+          grep -Fq 'player-design-system.css' apps/player/index.html
+          grep -Fq '.mobile-season-row' apps/player/player-design-system.css
+          grep -Fq '.unified-mobile-bottom-nav button.active' apps/player/player-design-system.css
+          grep -Fq 'background:#fff!important' apps/player/player-design-system.css
+          grep -Fq 'visit-player-a' apps/player/portal-content.js
+          grep -Fq 'visit-player-b' apps/player/portal-content.js
           grep -Fq 'viewport-fit=cover' apps/live/index.html
           grep -Fq 'blindleia-dartklubb-logo.png' apps/live/index.html
           grep -Fq 'screen-ux.css' apps/screen/index.html
