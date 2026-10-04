@@ -19,6 +19,14 @@ function localYmd(date){return `${date.getFullYear()}-${String(date.getMonth()+1
 function parseLocalDate(v){const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3])):null}
 function shortDate(v){const d=parseLocalDate(v);return d?d.toLocaleDateString('nb-NO',{day:'numeric',month:'short'}):v}
 function eventMeta(e){if(e?.start_date&&e?.end_date&&e.start_date!==e.end_date)return `${shortDate(e.start_date)}–${shortDate(e.end_date)}`;return [e?.day,e?.time].filter(Boolean).join(' · ')}
+function upcomingMeta(e,date){
+  const d=parseLocalDate(date);
+  if(!d)return eventMeta(e);
+  let label=d.toLocaleDateString('nb-NO',{weekday:'long',day:'numeric',month:'short'});
+  label=label.charAt(0).toUpperCase()+label.slice(1);
+  if(e?.start_date&&e?.end_date&&e.start_date!==e.end_date)label=`${label}–${shortDate(e.end_date)}`;
+  return e?.time?`${label} · ${e.time}`:label;
+}
 function sameLocalDay(a,b){return localYmd(a)===localYmd(b)}
 function eventMatchesFocusDate(e,date){
   const key=localYmd(date);
@@ -139,7 +147,7 @@ function renderUpcoming(data,displayDate){
   for(const item of items){const k=`${item.child}|${item.e.event_id||item.e.title}|${item.date}`;if(seen.has(k))continue;seen.add(k);unique.push(item);if(unique.length>=8)break;}
   if(!unique.length){$('upcomingCard').classList.add('hidden');$('upcoming').innerHTML='';return;}
   $('upcomingCard').classList.remove('hidden');
-  $('upcoming').innerHTML=unique.map(({child,e})=>row(e.icon||'📅',`${child} · ${e.title}`,e.detail,eventMeta(e))).join('');
+  $('upcoming').innerHTML=unique.map(({date,child,e})=>row(e.icon||'📅',`${child} · ${e.title}`,e.detail,upcomingMeta(e,date))).join('');
 }
 
 async function main(){
