@@ -1,0 +1,97 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "CR1whrYUxIxa",
+  "tournament_name": "Mandagsserien #9",
+  "tournament_date": "2026-10-05",
+  "tournament_start_at": "2026-10-05 18:30:00",
+  "tournament_slug": "mandagsserien-9-2026-10-05",
+  "expected_players": 10,
+  "expected_matches": 48,
+  "expected_legs": 53,
+  "players": {
+    "5sIceSlYm33a": "Jon-Henning Næss",
+    "6dLds5Na0PsZ": "Arild Eidesund",
+    "46u0DEjhFWti": "Andreas Hasselgård",
+    "nrAYPZl1pyuM": "Kjell Moyle",
+    "DUq32rNObrUk": "Thomas Kildal",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen",
+    "lGf1wBj3yKWV": "Steffen Madsen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson",
+    "r9i3qOgJspnP": "Boye Buckingham"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "5sIceSlYm33a",
+        "6dLds5Na0PsZ",
+        "46u0DEjhFWti",
+        "nrAYPZl1pyuM",
+        "DUq32rNObrUk",
+        "Rujhhq1jF7Uu",
+        "xTpeuJWBefFN",
+        "lGf1wBj3yKWV",
+        "2bhzMxZ5bdyy",
+        "r9i3qOgJspnP"
+      ],
+      "match_ids": [
+        "scafa6vqHhIj", "QR2j5had6Aj1", "qziJtBLt389P", "Dhs9n797az0b", "1xUd6elDfvXH",
+        "NmQwclfUOcZx", "F4EBWv2gGdSJ", "Ike0jVqrNYaz", "ESkOwmQld1Oe", "rou20ilEj8ly",
+        "h2fpSCq4YUjF", "XDFZHHgKveP8", "hBHgJgGtOaJH", "04zOxkkP4TcZ", "CfiCEMx41fyT",
+        "bZ22RLSrGdi1", "GYHx5WGyB0UP", "uV1NsbLnWIA8", "0RuJABMDNedF", "6Lk3u3dd3o50",
+        "WzBh25U4gL6U", "DT0IIqJz4YBv", "3tvM4OpyP98V", "B9PULyCn7LUQ", "Yv3kWk9IJiMc",
+        "w0wUsd1PsEWS", "KN4ftmSIkIsg", "pWu6E5laZeXu", "tNt6W9m5bQe9", "KgySwogaymhh",
+        "7sMjUzjFi4Ub", "t0KiBwVy819a", "oefdOHiePCck", "8jd3ObN8Tjp1", "SdPu7Y812aHR",
+        "sJSj6EOtaB2B", "593Brt67obDw", "Ul3nHc7SNJch", "NcVFlZVlwdi4", "k3rIHN3Ae9m9",
+        "zkspvzq1a4pz", "ViWKbrLzgb1q", "y5vo2u0ys1Qz", "hd7iWQVx4jtu", "XGBkwYLWKjh0"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": ["5sIceSlYm33a", "6dLds5Na0PsZ", "46u0DEjhFWti", "nrAYPZl1pyuM"],
+    "match_ids": ["v2FOzC33l2SU", "8ESiiwWI3DM9", "CezxlLQAOyhT"],
+    "champion_external_id": "5sIceSlYm33a",
+    "champion_name": "Jon-Henning Næss"
+  },
+  "ranking_points": {
+    "5sIceSlYm33a": 4,
+    "6dLds5Na0PsZ": 3,
+    "46u0DEjhFWti": 2,
+    "nrAYPZl1pyuM": 2,
+    "DUq32rNObrUk": 1,
+    "Rujhhq1jF7Uu": 1,
+    "xTpeuJWBefFN": 1,
+    "lGf1wBj3yKWV": 1,
+    "2bhzMxZ5bdyy": 1,
+    "r9i3qOgJspnP": 1
+  },
+  "ranking_stages": {
+    "5sIceSlYm33a": "Winner",
+    "6dLds5Na0PsZ": "Final",
+    "46u0DEjhFWti": "Semi-Final",
+    "nrAYPZl1pyuM": "Semi-Final",
+    "DUq32rNObrUk": "Group stage",
+    "Rujhhq1jF7Uu": "Group stage",
+    "xTpeuJWBefFN": "Group stage",
+    "lGf1wBj3yKWV": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage",
+    "r9i3qOgJspnP": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #9 Champion Jon-Henning Næss",
+    "verified_at": "2026-10-05T18:24:00Z"
+  }
+}
