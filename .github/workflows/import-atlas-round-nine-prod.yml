@@ -1,0 +1,261 @@
+name: Import Verified Atlas Round Nine To Production
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-import-atlas-round-nine-prod.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-atlas-round-nine-production
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TEST_BASE_URL: https://test.blindleiadarts.ingenting.org
+      PROD_BASE_URL: https://blindleiadarts.ingenting.org
+      MANIFEST: infra/atlas/manifests/mandagsserien-2026-09.json
+      EXTERNAL_ID: CR1whrYUxIxa
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - name: Checkout exact import commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate frozen round-nine request
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_NINE_TO_PROD=yes' infra/sql/run-import-atlas-round-nine-prod.flag
+          php -l infra/sql/import_atlas_manifest_test.php
+          php -l infra/sql/import_atlas_match_visits_test.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_promote_test_history_to_prod.php
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            if(($m["tournament_external_id"]??"")!==getenv("EXTERNAL_ID")||($m["season_external_id"]??"")!=="rFByCgOqI1rq")throw new RuntimeException("Wrong frozen source");
+            if(($m["tournament_date"]??"")!=="2026-10-05"||($m["expected_players"]??0)!==10||($m["expected_matches"]??0)!==48||($m["expected_legs"]??0)!==53)throw new RuntimeException("Wrong frozen counts");
+            $ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
+            if(count($ids)!==48||count(array_unique($ids))!==48||count($m["players"]??[])!==10)throw new RuntimeException("Frozen manifest is incomplete");
+            if(($m["playoff"]["champion_external_id"]??"")!=="5sIceSlYm33a")throw new RuntimeException("Wrong champion");
+            echo "ROUND9_MANIFEST_OK=yes\n";
+          '
+
+      - name: Fetch and validate round-nine tournament source
+        run: |
+          set -Eeuo pipefail
+          target=/tmp/round-nine-probe.json
+          fetched=no
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS -L --connect-timeout 8 --max-time 120 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-tournament-probe.php?tournament=${EXTERNAL_ID}&cb=$RANDOM" || true)"
+            if [[ "$status" == 200 ]] && php -r '
+              $d=json_decode(file_get_contents($argv[1]),true);$p=$d["pages"]??[];
+              exit(is_array($d)&&($d["ok"]??false)===true&&($p["root"]["status"]??0)===200&&($p["group-1"]["status"]??0)===200&&($p["results"]["status"]??0)===200?0:1);
+            ' "$target"; then fetched=yes; break; fi
+            echo "Retrying tournament probe: HTTP $status, attempt $attempt/12"
+            sleep $((30 + attempt * 10))
+          done
+          [[ "$fetched" == yes ]] || { echo "Could not fetch complete round-nine source." >&2; exit 1; }
+          php -r '
+            $d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);$p=$d["pages"];
+            $group=count($p["group-1"]["matches"]??[]);$playoff=count($p["results"]["matches"]??[]);$players=count($p["group-1"]["players"]??[]);
+            if($group!==45||$playoff!==3||$players!==10)throw new RuntimeException("Source count drift: players={$players} group={$group} playoff={$playoff}");
+            echo "ROUND9_SOURCE_OK=yes players={$players} matches=".($group+$playoff)."\n";
+          ' "$target"
+
+      - name: Import round-nine skeleton into TEST
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/round-nine-probe.json
+
+      - name: Fetch every round-nine leg and visit through TEST
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/round-nine-matches
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            target="/tmp/round-nine-matches/${id}.json"
+            fetched=no
+            for attempt in $(seq 1 10); do
+              status="$(curl -sS -L --connect-timeout 8 --max-time 90 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-match-visits.php?match=${id}&cb=$RANDOM" || true)"
+              if [[ "$status" == 200 ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(is_array($d)&&($d["ok"]??false)===true&&($d["external_id"]??"")===$argv[2]?0:1);' "$target" "$id"; then fetched=yes; break; fi
+              echo "Retrying $id: HTTP $status, attempt $attempt/10"
+              sleep $((30 + attempt * 10))
+            done
+            [[ "$fetched" == yes ]] || { echo "Could not fetch verified match detail for $id." >&2; exit 1; }
+            php -r '$d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);printf("FETCHED_MATCH id=%s legs=%d visits=%d darts=%d\n",$d["external_id"],$d["leg_count"],$d["visit_count"],$d["darts_count"]);' "$target"
+            sleep 12
+          done
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
+            $legs=$visits=$darts=0;foreach($ids as $id){$d=json_decode(file_get_contents("/tmp/round-nine-matches/{$id}.json"),true,512,JSON_THROW_ON_ERROR);$legs+=(int)$d["leg_count"];$visits+=(int)$d["visit_count"];$darts+=(int)$d["darts_count"];}
+            if($legs!==53||$visits<106)throw new RuntimeException("Round-nine detail drift: legs={$legs} visits={$visits}");
+            echo "ROUND9_FETCH_OK=yes matches=48 legs={$legs} visits={$visits} darts={$darts}\n";
+          '
+
+      - name: Import canonical legs visits and statistics into TEST
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            imported=no
+            for attempt in $(seq 1 5); do
+              if php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-nine-matches/${id}.json"; then imported=yes; break; fi
+              echo "Retrying TEST write for ${id} after transient database failure (${attempt}/5)"
+              sleep $((attempt * 5))
+            done
+            [[ "$imported" == yes ]] || { echo "TEST write failed permanently for ${id}" >&2; exit 1; }
+          done
+
+      - name: Verify finalize and prove idempotent TEST round nine
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          verify() {
+            php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=48 --expected-players=10 --phase=data --require-visits=1 --require-playoff=1
+            php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+            php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=48 --expected-players=10 --phase=final --require-visits=1 --require-playoff=1
+            php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+            php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+          }
+          verify
+          php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/round-nine-probe.json
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-nine-matches/${id}.json"; done
+          verify
+          echo "ROUND9_TEST_IDEMPOTENT_OK=yes"
+
+      - name: Freeze verified TEST totals
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));$p='bd_test_';$x=getenv('EXTERNAL_ID');
+          $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=? LIMIT 1");$s->bind_param('s',$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()['internal_id']??0);if($tid<1)throw new RuntimeException('Round nine TEST ref missing');
+          $players=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];$visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];
+          if($players!==10||$matches!==48||$legs!==53||$visits<106)throw new RuntimeException('Final TEST count drift');
+          $promotion=['mode'=>'incremental_existing_season','source_prefix'=>'bd_test_','target_prefix'=>'bd_prod_','club_slug'=>'blindleia-dartklubb','season_external_id'=>'rFByCgOqI1rq','tournaments'=>[['external_id'=>$x,'name'=>'Mandagsserien #9','expected_players'=>$players,'expected_matches'=>$matches,'expected_legs'=>$legs,'expected_visits'=>$visits]],'expected_totals'=>['tournaments'=>1,'matches'=>$matches,'legs'=>$legs,'visits'=>$visits,'atlas_player_references'=>10]];
+          file_put_contents('/tmp/round-nine-promotion.json',json_encode($promotion,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));echo "ROUND9_TEST_FROZEN=yes tournament_id={$tid} players={$players} matches={$matches} legs={$legs} visits={$visits}\n";
+          PHP
+
+      - name: Guard canonical PROD before promotion
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));$p='bd_prod_';
+          $activeT=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournaments` WHERE status IN ('ready','in_progress')")->fetch_assoc()['c'];$activeM=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE status IN ('pending','assigned','in_progress')")->fetch_assoc()['c'];if($activeT!==0||$activeM!==0)throw new RuntimeException('Active PROD runtime exists');
+          $present=['fpC4m4hIZdjZ','FHHAnnuO8txa','PvGa73emrY6e','jort2WSBWFwN','xPoP3xqp9n73','JaqLpRQCCeLi','wigXPiwRIME4','X52gn3ioRLKD'];$absent=getenv('EXTERNAL_ID');$s=$db->prepare("SELECT COUNT(*) c FROM `{$p}external_references` WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=?");foreach($present as $x){$s->bind_param('s',$x);$s->execute();if((int)$s->get_result()->fetch_assoc()['c']!==1)throw new RuntimeException("Missing canonical PROD tournament {$x}");}$s->bind_param('s',$absent);$s->execute();if((int)$s->get_result()->fetch_assoc()['c']!==0)throw new RuntimeException('Round nine is already present in PROD');
+          $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches`")->fetch_assoc()['c'];if($matches!==322)throw new RuntimeException("Existing PROD match total drift: {$matches}");
+          $dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1)x")->fetch_assoc()['c'];if($dups!==0)throw new RuntimeException("PROD active player duplicates remain: {$dups}");
+          echo "ROUND9_PROD_PREFLIGHT_OK=yes history_matches={$matches}\n";
+          PHP
+
+      - name: Snapshot existing PROD tables
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Promote exact verified TEST round nine
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_PROMOTION: yes
+        run: |
+          php infra/sql/atlas_promote_test_history_to_prod.php /tmp/round-nine-promotion.json | tee /tmp/round-nine-prod-promotion.txt
+          grep -Fq 'ATLAS_PROD_PROMOTION_STAGED=yes' /tmp/round-nine-prod-promotion.txt
+
+      - name: Verify finalize and rebuild canonical PROD
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_ATLAS_FINALIZE: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=48 --expected-players=10 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+          php infra/sql/run_php_migration.php infra/sql/migrations/0053_rebuild_elo_in_logical_match_order.php bd_prod_
+          php infra/sql/run_php_migration.php infra/sql/migrations/0074_add_tournament_elo_snapshots.php bd_prod_
+          php infra/sql/elo_ledger_doctor.php
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=48 --expected-players=10 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));$p='bd_prod_';$x=getenv('EXTERNAL_ID');
+          $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=? LIMIT 1");$s->bind_param('s',$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()['internal_id']??0);if($tid<1)throw new RuntimeException('Round nine PROD ref missing');
+          $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches`")->fetch_assoc()['c'];$roundMatches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];$elo=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` e JOIN `{$p}matches` m ON m.id=e.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];$snapshots=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_elo_snapshots` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1)x")->fetch_assoc()['c'];
+          if($matches!==370||$roundMatches!==48||$legs!==53||$elo!==48||$snapshots!==10||$dups!==0)throw new RuntimeException('Final PROD integrity failed: '.json_encode(compact('matches','roundMatches','legs','elo','snapshots','dups')));
+          echo "ROUND9_PROD_FINAL_OK=yes tournament_id={$tid} matches={$roundMatches} legs={$legs} elo_events={$elo} elo_snapshots={$snapshots} backup=".getenv('PROD_BACKUP_PREFIX')."\n";
+          PHP
+
+      - name: Canonical PROD editorial report
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));$p='bd_prod_';$ext=getenv('EXTERNAL_ID');
+          $s=$db->prepare("SELECT internal_id FROM {$p}external_references WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=? LIMIT 1");$s->bind_param('s',$ext);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()['internal_id']??0);if($tid<1)throw new RuntimeException('Round nine missing');
+          $t=$db->query("SELECT id,season_id,name,status,start_at,end_at FROM {$p}tournaments WHERE id={$tid}")->fetch_assoc();$sid=(int)$t['season_id'];echo 'ROUND9_PROD='.json_encode($t,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
+          $q="SELECT COUNT(*) matches,(SELECT COUNT(*) FROM {$p}legs l JOIN {$p}matches x ON x.id=l.match_id WHERE x.tournament_id={$tid}) legs,(SELECT COUNT(*) FROM {$p}visits v JOIN {$p}matches x ON x.id=v.match_id WHERE x.tournament_id={$tid}) visits,(SELECT COALESCE(SUM(v.darts_used),0) FROM {$p}visits v JOIN {$p}matches x ON x.id=v.match_id WHERE x.tournament_id={$tid}) darts FROM {$p}matches WHERE tournament_id={$tid}";echo 'COUNTS='.json_encode($db->query($q)->fetch_assoc(),JSON_UNESCAPED_UNICODE)."\n";
+          echo "GROUP_TABLE_BEGIN\n";$q="SELECT p.display_name,COALESCE(p.nickname,''),COUNT(*) played,SUM(m.winner_player_id=p.id) wins,SUM(m.winner_player_id<>p.id) losses,ROUND(SUM(ms.average*ms.darts_thrown)/NULLIF(SUM(ms.darts_thrown),0),2) average FROM {$p}tournament_players tp JOIN {$p}players p ON p.id=tp.player_id JOIN {$p}matches m ON m.tournament_id=tp.tournament_id AND m.tournament_group_id IS NOT NULL AND (m.player_a_id=p.id OR m.player_b_id=p.id) LEFT JOIN {$p}match_statistics ms ON ms.match_id=m.id AND ms.player_id=p.id WHERE tp.tournament_id={$tid} GROUP BY p.id,p.display_name,p.nickname ORDER BY wins DESC,average DESC,p.display_name";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "GROUP_TABLE_END\n";
+          echo "PLAYOFFS_BEGIN\n";$q="SELECT COALESCE(m.bracket_label,m.round_label) stage,pa.display_name player_a,pb.display_name player_b,SUM(l.winner_player_id=m.player_a_id) score_a,SUM(l.winner_player_id=m.player_b_id) score_b,pw.display_name winner FROM {$p}matches m JOIN {$p}players pa ON pa.id=m.player_a_id JOIN {$p}players pb ON pb.id=m.player_b_id JOIN {$p}players pw ON pw.id=m.winner_player_id LEFT JOIN {$p}legs l ON l.match_id=m.id WHERE m.tournament_id={$tid} AND m.tournament_group_id IS NULL GROUP BY m.id,m.bracket_label,m.round_label,pa.display_name,pb.display_name,pw.display_name ORDER BY COALESCE(m.finished_at,m.starts_at,m.created_at),m.id";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "PLAYOFFS_END\n";
+          echo "PLAYER_STATS_BEGIN\n";$q="SELECT p.display_name,COALESCE(p.nickname,''),ROUND(SUM(ms.average*ms.darts_thrown)/NULLIF(SUM(ms.darts_thrown),0),2) round_average,MAX(ms.average) best_match_average,MAX(ms.first_nine_average) best_first_nine,MAX(ms.highest_checkout) highest_checkout,SUM(ms.score_180) score_180 FROM {$p}match_statistics ms JOIN {$p}matches m ON m.id=ms.match_id JOIN {$p}players p ON p.id=ms.player_id WHERE m.tournament_id={$tid} GROUP BY p.id,p.display_name,p.nickname ORDER BY round_average DESC,p.display_name";foreach($db->query($q) as $r)echo implode('|',array_map(fn($v)=>$v===null?'':$v,$r))."\n";echo "PLAYER_STATS_END\n";
+          echo "CHECKOUTS_BEGIN\n";$q="SELECT p.display_name,v.score,CASE WHEN m.player_a_id=p.id THEN pb.display_name ELSE pa.display_name END opponent,COALESCE(m.bracket_label,m.round_label) stage FROM {$p}visits v JOIN {$p}legs l ON l.id=v.leg_id AND l.winner_player_id=v.player_id JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}players p ON p.id=v.player_id JOIN {$p}players pa ON pa.id=m.player_a_id JOIN {$p}players pb ON pb.id=m.player_b_id WHERE m.tournament_id={$tid} AND v.remaining_after=0 ORDER BY v.score DESC,v.id";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "CHECKOUTS_END\n";
+          echo "VISIT_180_BEGIN\n";$q="SELECT p.display_name,COUNT(*) total FROM {$p}visits v JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}players p ON p.id=v.player_id WHERE m.tournament_id={$tid} AND v.score=180 AND v.is_bust=0 GROUP BY p.id,p.display_name ORDER BY total DESC,p.display_name";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "VISIT_180_END\n";
+          $season180=(int)$db->query("SELECT COUNT(*) c FROM {$p}visits v JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}tournaments t ON t.id=m.tournament_id WHERE t.season_id={$sid} AND v.score=180 AND v.is_bust=0")->fetch_assoc()['c'];echo "SEASON_180_TOTAL={$season180}\n";$q180="SELECT p.display_name,t.name,COUNT(*) total FROM {$p}visits v JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}tournaments t ON t.id=m.tournament_id JOIN {$p}players p ON p.id=v.player_id WHERE t.season_id={$sid} AND v.score=180 AND v.is_bust=0 GROUP BY p.id,p.display_name,t.id,t.name ORDER BY t.start_at,p.display_name";foreach($db->query($q180) as $r)echo 'SEASON_180_DETAIL='.implode('|',$r)."\n";$seasonHigh=$db->query("SELECT p.display_name,v.score,t.name FROM {$p}visits v JOIN {$p}legs l ON l.id=v.leg_id AND l.winner_player_id=v.player_id JOIN {$p}matches m ON m.id=v.match_id JOIN {$p}tournaments t ON t.id=m.tournament_id JOIN {$p}players p ON p.id=v.player_id WHERE t.season_id={$sid} AND v.remaining_after=0 ORDER BY v.score DESC,v.id LIMIT 1")->fetch_assoc();echo 'SEASON_HIGH_CHECKOUT='.implode('|',$seasonHigh)."\n";
+          echo "ROUND_ELO_BEGIN\n";$q="SELECT p.display_name,ROUND(s.elo_before,1),ROUND(s.elo_after,1),ROUND(s.elo_after-s.elo_before,1),s.matches_before,s.matches_after FROM {$p}tournament_elo_snapshots s JOIN {$p}players p ON p.id=s.player_id WHERE s.tournament_id={$tid} ORDER BY s.elo_after DESC,p.display_name";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "ROUND_ELO_END\n";
+          echo "FULL_ELO_BEGIN\n";$q="SELECT p.display_name,COALESCE(p.nickname,''),ROUND(e.rating,1),e.matches_played FROM {$p}elo_current_ratings e JOIN {$p}players p ON p.id=e.player_id WHERE e.season_id={$sid} AND p.is_active=1 AND p.merged_into_player_id IS NULL ORDER BY e.rating DESC,p.display_name";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "FULL_ELO_END\n";
+          echo "SEASON_STANDINGS_BEGIN\n";$q="SELECT p.display_name,ROUND(SUM(e.points),0) points,COUNT(*) rounds FROM {$p}season_ranking_events e JOIN {$p}players p ON p.id=e.player_id WHERE e.season_id={$sid} AND e.status='applied' GROUP BY p.id,p.display_name ORDER BY points DESC,rounds DESC,p.display_name";foreach($db->query($q) as $r)echo implode('|',$r)."\n";echo "SEASON_STANDINGS_END\n";
+          $dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM {$p}players WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1)x")->fetch_assoc()['c'];echo "ACTIVE_PLAYER_DUPLICATES={$dups}\n";
+          PHP
+
+      - name: Verify public PROD readback
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 12); do
+            tournaments="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/clubs/1/tournaments?cb=$RANDOM" || true)"
+            elo="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/clubs/1/elo?cb=$RANDOM" || true)"
+            if readback="$(TOURNAMENTS="$tournaments" ELO="$elo" php -r '
+              $t=json_decode(getenv("TOURNAMENTS"),true);$e=json_decode(getenv("ELO"),true);$items=$t["data"]["items"]??[];$tid=0;foreach($items as $x)if(($x["name"]??"")==="Mandagsserien #9"&&($x["status"]??"")==="completed"&&(int)($x["match_count"]??0)===48)$tid=(int)$x["id"];$names=[];$dups=0;foreach(($e["data"]["items"]??[]) as $x){$n=mb_strtolower(trim((string)($x["display_name"]??"")));if(isset($names[$n]))$dups++;$names[$n]=1;}if($tid<1||$dups!==0)exit(1);echo $tid;
+            ')"; then
+              tournament_elo="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/tournament-elo.php?tournament_id=${readback}&cb=$RANDOM" || true)"
+              if TOURNAMENT_ELO="$tournament_elo" php -r '$d=json_decode(getenv("TOURNAMENT_ELO"),true);exit(count($d["data"]["players"]??[])===10?0:1);'; then
+                echo "ROUND9_PUBLIC_READBACK_OK=yes tournament_id=${readback} elo_players=10"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Public PROD readback did not expose round nine cleanly." >&2
+          exit 1
