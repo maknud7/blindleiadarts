@@ -4,13 +4,20 @@ import test from "node:test";
 import { MySqlActivityRuntimeRepository } from "../dist/mysql/activity-runtime-repository.js";
 import { ActivityRuntimeRouter } from "../dist/runtime/activity-runtime-router.js";
 
-function config({ mode = "test-write", identity = "bd_prod_" } = {}) {
+function config({
+  environment = "test",
+  mode = "test-write",
+  runtime = "bd_test_",
+  identity = "bd_prod_",
+  hardware = "bd_prod_",
+  prodCanaryWritesEnabled = false,
+} = {}) {
   return {
-    environment: "test",
+    environment,
     mode,
-    prodCanaryWritesEnabled: false,
+    prodCanaryWritesEnabled,
     canonicalSideEffectsReady: true,
-    prefixes: { runtime: "bd_test_", identity, hardware: "bd_prod_" },
+    prefixes: { runtime, identity, hardware },
   };
 }
 
@@ -101,6 +108,57 @@ test("valid TEST telemetry keeps shared PROD identity ids as exact decimal strin
   assert.deepEqual(ids, ["9007199254740993", "9007199254740995"]);
 });
 
+test("PROD activity POST uses armed runtime write and preserves legacy session touch", async () => {
+  let touch = null;
+  let recorded = null;
+  const router = new ActivityRuntimeRouter(
+    config({
+      environment: "prod",
+      mode: "prod-canary",
+      runtime: "bd_prod_",
+      identity: "bd_prod_",
+      hardware: "bd_prod_",
+      prodCanaryWritesEnabled: true,
+    }),
+    { async findBySessionToken(_token, touchSession) { touch = touchSession; return user(); } },
+    { async recordBatch(events, userId, sessionId) { recorded = { events, userId, sessionId }; return events.length; } },
+  );
+
+  const result = await router.handle("POST", "/v1/activity", request({
+    headers: { authorization: "Bearer good-prod-token" },
+    body: { event_name: "page_view", path: "/admin" },
+  }));
+
+  assert.equal(result.statusCode, 201);
+  assert.equal(result.payload.recorded, 1);
+  assert.equal(touch, true);
+  assert.deepEqual([recorded.userId, recorded.sessionId], ["9007199254740993", "9007199254740995"]);
+});
+
+test("PROD activity POST remains blocked when canary writes are not armed", async () => {
+  let identityCalls = 0;
+  let writes = 0;
+  const router = new ActivityRuntimeRouter(
+    config({
+      environment: "prod",
+      mode: "prod-canary",
+      runtime: "bd_prod_",
+      identity: "bd_prod_",
+      hardware: "bd_prod_",
+      prodCanaryWritesEnabled: false,
+    }),
+    { async findBySessionToken() { identityCalls += 1; return user(); } },
+    { async recordBatch() { writes += 1; return 1; } },
+  );
+
+  await assert.rejects(
+    router.handle("POST", "/v1/activity", request({ body: { event_name: "page_view" } })),
+    (error) => error?.code === "backend_v2_read_only" && error?.statusCode === 403,
+  );
+  assert.equal(identityCalls, 0);
+  assert.equal(writes, 0);
+});
+
 test("activity session read preserves unsafe BIGINT ids", async () => {
   const router = new ActivityRuntimeRouter(
     config(),
@@ -185,4 +243,36 @@ test("unrelated routes remain outside activity ownership", async () => {
   const router = new ActivityRuntimeRouter(config(), {}, {});
   assert.equal(await router.handle("GET", "/v1/clubs/7/elo", request()), null);
   assert.equal(await router.handle("POST", "/v1/tournaments/7/start", request()), null);
+});
+
+
+test("PROD activity repository writes only bd_prod_ runtime tables", async () => {
+  const writes = [];
+  const executor = {
+    async query(sql) {
+      if (sql.includes("FROM \`bd_prod_clubs\` WHERE slug=?")) return [{ id: "42" }];
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+    async execute(sql, params = []) {
+      writes.push({ sql, params });
+      return { affectedRows: 1, insertId: "0" };
+    },
+  };
+  const repository = new MySqlActivityRuntimeRepository(
+    { async withConnection(work) { return work(executor); } },
+    "bd_prod_",
+    "bd_prod_",
+  );
+
+  const count = await repository.recordBatch(
+    [{ club_slug: "Blindleia", event_name: "page_view", path: "/live" }],
+    "1001",
+    "2001",
+  );
+
+  assert.equal(count, 1);
+  assert.equal(writes.length, 1);
+  assert.match(writes[0].sql, /\`bd_prod_activity_events\`/);
+  assert.doesNotMatch(writes[0].sql, /bd_test_/);
+  assert.deepEqual(writes[0].params.slice(1, 5), ["1001", "2001", "42", null]);
 });
