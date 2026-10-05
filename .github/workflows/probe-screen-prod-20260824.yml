@@ -1,0 +1,47 @@
+name: Probe Screen Production 2026-08-24
+
+on:
+  push:
+    branches:
+      - release/dartsatlas-screen-prod-20260824
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check production URL configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
+        run: |
+          if [ -n "${PROD_BASE_URL:-}" ]; then STATE=success; else STATE=failure; fi
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/config/base-url\",\"description\":\"Production base URL configuration check\"}"
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Check production SFTP path
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          printf 'ls /www/blindleiadarts/prod\nquit\n' > probe-sftp.txt
+          if [ -n "${SFTP_HOST:-}" ] && [ -n "${SFTP_USERNAME:-}" ] && [ -n "${SFTP_PASSWORD:-}" ] && sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b probe-sftp.txt "${SFTP_USERNAME}@${SFTP_HOST}" >/dev/null 2>&1; then
+            STATE=success
+          else
+            STATE=failure
+          fi
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/config/sftp\",\"description\":\"Production SFTP path check\"}"

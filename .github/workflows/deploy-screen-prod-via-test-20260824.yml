@@ -1,0 +1,118 @@
+name: Deploy Production Screen via Webhotel 2026-08-24
+
+on:
+  push:
+    branches:
+      - release/dartsatlas-screen-prod-20260824
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: deploy-production-screen-webhotel
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, curl, dom
+          coverage: none
+
+      - name: Build isolated screen package
+        run: |
+          php -l apps/api/dartsatlas-screen.php
+          php -d zend.assertions=1 -d assert.exception=1 packages/connectors/DartsAtlas/tests/parser_smoke.php
+          rm -rf dist/prod-screen
+          mkdir -p dist/prod-screen/screen dist/prod-screen/api dist/prod-screen/packages/connectors/DartsAtlas
+          cp apps/screen/index.html apps/screen/live.css apps/screen/live.js dist/prod-screen/screen/
+          cp apps/api/dartsatlas-screen.php dist/prod-screen/api/
+          cp packages/connectors/DartsAtlas/DartsAtlasHttpClient.php dist/prod-screen/packages/connectors/DartsAtlas/
+          cp packages/connectors/DartsAtlas/DartsAtlasHtmlParser.php dist/prod-screen/packages/connectors/DartsAtlas/
+          sed -i 's#../api/live.php#../api/dartsatlas-screen.php#g' dist/prod-screen/screen/live.js
+          sed -i 's#live.js?v=1#live.js?v=20260824-1#g' dist/prod-screen/screen/index.html
+
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Ensure production path and verify access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          printf '%s\n' '-mkdir /www/blindleiadarts/prod' 'ls /www/blindleiadarts/prod' 'quit' > sftp-probe.txt
+          if sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b sftp-probe.txt "${SFTP_USERNAME}@${SFTP_HOST}" >/dev/null 2>&1; then
+            STATE=success
+          else
+            STATE=failure
+          fi
+          curl --fail --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/webhotel/sftp\",\"description\":\"Known webhotel connection to production path\"}"
+          [ "$STATE" = success ]
+
+      - name: Upload screen to production path
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 22
+          local_path: ./dist/prod-screen/*
+          remote_path: /www/blindleiadarts/prod
+          sftp_only: true
+          rsyncArgs: --exclude=.git
+
+      - name: Verify files exist on webhotel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          printf '%s\n' 'ls /www/blindleiadarts/prod/screen/index.html' 'ls /www/blindleiadarts/prod/screen/live.js' 'ls /www/blindleiadarts/prod/api/dartsatlas-screen.php' 'quit' > sftp-files.txt
+          if sshpass -p "$SFTP_PASSWORD" sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -b sftp-files.txt "${SFTP_USERNAME}@${SFTP_HOST}" >/dev/null 2>&1; then STATE=success; else STATE=failure; fi
+          curl --fail --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/webhotel/files\",\"description\":\"Production screen files exist on webhotel\"}"
+          [ "$STATE" = success ]
+
+      - name: Probe likely production hosts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          probe() {
+            local host="$1" context="$2"
+            if curl --fail --silent --show-error --max-time 25 "$host/screen/" -o probe.html && grep -q 'BLINDLEIA' probe.html; then STATE=success; else STATE=failure; fi
+            curl --fail --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -d "{\"state\":\"${STATE}\",\"context\":\"${context}\",\"description\":\"Production hostname probe\"}"
+          }
+          probe 'https://blindleiadarts.ingenting.org' 'prod/url/blindleiadarts'
+          probe 'https://prod.blindleiadarts.ingenting.org' 'prod/url/prod-subdomain'
+
+      - name: Verify scraper on reachable production host
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          STATE=failure
+          for ROOT in 'https://blindleiadarts.ingenting.org' 'https://prod.blindleiadarts.ingenting.org'; do
+            HTTP=$(curl --silent --show-error --max-time 90 --output payload.json --write-out '%{http_code}' "$ROOT/api/dartsatlas-screen.php" || true)
+            if [ "$HTTP" = '200' ] && php -r '$d=json_decode(file_get_contents("payload.json"),true); exit(is_array($d) && ($d["ok"]??false) && !empty($d["tournament"]) ? 0 : 1);'; then
+              STATE=success
+              break
+            fi
+          done
+          curl --fail --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"prod/webhotel/scraper\",\"description\":\"Production standalone DartsAtlas scraper\"}"
