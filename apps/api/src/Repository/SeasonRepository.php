@@ -172,6 +172,7 @@ final class SeasonRepository
                     COUNT(DISTINCT CASE WHEN m.winner_player_id IS NOT NULL AND m.winner_player_id<>p.id THEN m.id END) AS losses,
                     (SELECT COUNT(*) FROM `%1$slegs` lw INNER JOIN `%1$smatches` mw ON mw.id=lw.match_id INNER JOIN `%1$stournaments` tw ON tw.id=mw.tournament_id WHERE tw.season_id=? AND lw.status="completed" AND lw.winner_player_id=p.id) AS legs_won,
                     (SELECT COUNT(*) FROM `%1$slegs` ll INNER JOIN `%1$smatches` ml ON ml.id=ll.match_id INNER JOIN `%1$stournaments` tl ON tl.id=ml.tournament_id WHERE tl.season_id=? AND ll.status="completed" AND ll.winner_player_id IS NOT NULL AND ll.winner_player_id<>p.id AND (ml.player_a_id=p.id OR ml.player_b_id=p.id)) AS legs_lost,
+                    (SELECT COUNT(*) FROM `%1$slegs` la INNER JOIN `%1$smatches` ma ON ma.id=la.match_id INNER JOIN `%1$stournaments` ta ON ta.id=ma.tournament_id WHERE ta.season_id=? AND la.status="completed" AND la.winner_player_id=p.id AND la.starting_player_id IS NOT NULL AND la.starting_player_id<>p.id) AS legs_won_against_throw,
                     COALESCE((SELECT ROUND(COALESCE(
                         SUM(ms.average * COALESCE(ms.darts_thrown,0)) / NULLIF(SUM(COALESCE(ms.darts_thrown,0)),0),
                         AVG(ms.average)
@@ -190,7 +191,7 @@ final class SeasonRepository
             $this->prefix
         );
         $stmt = $this->connection->prepare($sql);
-        $stmt->bind_param('iiiii', $seasonId, $seasonId, $seasonId, $seasonId, $seasonId);
+        $stmt->bind_param('iiiiii', $seasonId, $seasonId, $seasonId, $seasonId, $seasonId, $seasonId);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
@@ -201,7 +202,7 @@ final class SeasonRepository
         $method = (string) $season['ranking_method'];
         $linearPoints = $method === 'linear' ? $this->linearPoints($seasonId) : [];
         foreach ($rows as &$row) {
-            foreach (['tournaments','matches_played','wins','draws','losses','legs_won','legs_lost','elo_matches_played'] as $field) {
+            foreach (['tournaments','matches_played','wins','draws','losses','legs_won','legs_lost','legs_won_against_throw','elo_matches_played'] as $field) {
                 $row[$field] = (int) ($row[$field] ?? 0);
             }
             $row['leg_diff'] = $row['legs_won'] - $row['legs_lost'];
@@ -245,6 +246,8 @@ final class SeasonRepository
             if ($cmp !== 0) return $cmp;
             $cmp = ((int) $b['leg_diff']) <=> ((int) $a['leg_diff']);
             if ($cmp !== 0) return $cmp;
+            $cmp = ((int) $b['legs_won_against_throw']) <=> ((int) $a['legs_won_against_throw']);
+            if ($cmp !== 0) return $cmp;
             $cmp = ((float) $b['three_dart_average']) <=> ((float) $a['three_dart_average']);
             return $cmp !== 0 ? $cmp : strcasecmp((string) $a['display_name'], (string) $b['display_name']);
         });
@@ -256,6 +259,7 @@ final class SeasonRepository
             while ($cursor < $count
                 && abs($primary($rows[$cursor]) - $primary($rows[$index])) < 0.0001
                 && (int) $rows[$cursor]['leg_diff'] === (int) $rows[$index]['leg_diff']
+                && (int) $rows[$cursor]['legs_won_against_throw'] === (int) $rows[$index]['legs_won_against_throw']
                 && abs((float) $rows[$cursor]['three_dart_average'] - (float) $rows[$index]['three_dart_average']) < 0.0001) {
                 $bucket[] = $rows[$cursor];
                 $cursor++;
