@@ -129,6 +129,11 @@ export class MySqlSeasonPublicReadRepository {
                   INNER JOIN ${this.table("tournaments")} tl ON tl.id=ml.tournament_id
                   WHERE tl.season_id=? AND ll.status='completed' AND ll.winner_player_id IS NOT NULL
                     AND ll.winner_player_id<>p.id AND (ml.player_a_id=p.id OR ml.player_b_id=p.id)) AS legs_lost,
+                (SELECT COUNT(*) FROM ${this.table("legs")} la
+                  INNER JOIN ${this.table("matches")} ma ON ma.id=la.match_id
+                  INNER JOIN ${this.table("tournaments")} ta ON ta.id=ma.tournament_id
+                  WHERE ta.season_id=? AND la.status='completed' AND la.winner_player_id=p.id
+                    AND la.starting_player_id IS NOT NULL AND la.starting_player_id<>p.id) AS legs_won_against_throw,
                 COALESCE((SELECT ROUND(COALESCE(
                     SUM(ms.average * COALESCE(ms.darts_thrown,0)) / NULLIF(SUM(COALESCE(ms.darts_thrown,0)),0),
                     AVG(ms.average)
@@ -145,7 +150,7 @@ export class MySqlSeasonPublicReadRepository {
              AND (m.player_a_id=p.id OR m.player_b_id=p.id)
            LEFT JOIN ${this.table("elo_current_ratings")} e ON e.player_id=p.id AND e.season_id=?
           GROUP BY p.id,p.display_name,p.nickname,e.rating,e.matches_played`,
-        [seasonId, seasonId, seasonId, seasonId, seasonId],
+        [seasonId, seasonId, seasonId, seasonId, seasonId, seasonId],
       );
 
       const rankingMethod = String(season.ranking_method ?? "match_points");
@@ -174,6 +179,7 @@ export class MySqlSeasonPublicReadRepository {
           losses,
           legs_won: legsWon,
           legs_lost: legsLost,
+          legs_won_against_throw: integer(row.legs_won_against_throw),
           elo_matches_played: integer(row.elo_matches_played),
           leg_diff: legsWon - legsLost,
           three_dart_average: round(numberValue(row.three_dart_average), 2),
@@ -236,6 +242,11 @@ export class MySqlSeasonPublicReadRepository {
       if (byPrimary !== 0) return byPrimary;
       const byLegs = compareNumberDesc(a.leg_diff, b.leg_diff);
       if (byLegs !== 0) return byLegs;
+      const byAgainstThrow = compareNumberDesc(
+        integer(a.legs_won_against_throw),
+        integer(b.legs_won_against_throw),
+      );
+      if (byAgainstThrow !== 0) return byAgainstThrow;
       const byAverage = compareNumberDesc(a.three_dart_average, b.three_dart_average);
       return byAverage !== 0 ? byAverage : compareName(a.display_name, b.display_name);
     });
@@ -252,6 +263,7 @@ export class MySqlSeasonPublicReadRepository {
           candidate === undefined ||
           Math.abs(primary(candidate) - primary(first)) >= 0.0001 ||
           candidate.leg_diff !== first.leg_diff ||
+          integer(candidate.legs_won_against_throw) !== integer(first.legs_won_against_throw) ||
           Math.abs(candidate.three_dart_average - first.three_dart_average) >= 0.0001
         ) break;
         bucket.push(candidate);
