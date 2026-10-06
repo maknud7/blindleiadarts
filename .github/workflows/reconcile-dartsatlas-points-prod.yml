@@ -1,0 +1,99 @@
+name: Reconcile DartsAtlas Ranking Points In Production
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - infra/sql/run-reconcile-dartsatlas-points-prod.flag
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reconcile-dartsatlas-ranking-points-production
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROD_BASE_URL: https://blindleiadarts.ingenting.org
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - name: Checkout exact correction commit
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring
+          coverage: none
+
+      - name: Validate frozen correction
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'RECONCILE_DARTSATLAS_LINEAR_POINTS_PROD=yes' infra/sql/run-reconcile-dartsatlas-points-prod.flag
+          php -l infra/sql/reconcile_dartsatlas_linear_points_prod.php
+          php -r '
+            $files=[
+              "infra/sql/atlas-manifests/mandagsserien-3.json"=>["players"=>9,"top"=>[5,4,3,3]],
+              "infra/atlas/manifests/mandagsserien-2026-08.json"=>["players"=>10,"top"=>[5,4,3,3]],
+              "infra/atlas/manifests/mandagsserien-2026-09.json"=>["players"=>10,"top"=>[5,4,3,3]],
+            ];
+            foreach($files as $file=>$expected){
+              $m=json_decode(file_get_contents($file),true,512,JSON_THROW_ON_ERROR);
+              if((int)$m["expected_players"]!==$expected["players"])throw new RuntimeException("Entrant drift in {$file}");
+              $points=array_values($m["ranking_points"]);rsort($points,SORT_NUMERIC);
+              if(array_slice($points,0,4)!==$expected["top"])throw new RuntimeException("Linear points drift in {$file}");
+            }
+            echo "CORRECTION_MANIFESTS_OK=yes\n";
+          '
+
+      - name: Snapshot existing PROD tables
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/prod-snapshot.txt
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/prod-snapshot.txt
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+
+      - name: Reconcile canonical PROD ranking ledger
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+          ALLOW_PROD_RANKING_RECONCILIATION: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/reconcile_dartsatlas_linear_points_prod.php | tee /tmp/reconcile.txt
+          grep -Fq 'DARTSATLAS_POINTS_RECONCILED=yes' /tmp/reconcile.txt
+          grep -Fq 'elo_unchanged=yes' /tmp/reconcile.txt
+          season_id="$(sed -n 's/.*season_id=\([0-9][0-9]*\).*/\1/p' /tmp/reconcile.txt | tail -1)"
+          [[ "$season_id" =~ ^[1-9][0-9]*$ ]]
+          echo "SEASON_ID=$season_id" >> "$GITHUB_ENV"
+
+      - name: Verify public PROD standings readback
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 30); do
+            payload="$(curl -fsS --connect-timeout 5 --max-time 20 "${PROD_BASE_URL%/}/api/v1/seasons/${SEASON_ID}/standings?cb=$RANDOM" || true)"
+            if PAYLOAD="$payload" php -r '
+              $d=json_decode(getenv("PAYLOAD"),true);$items=$d["data"]["items"]??$d["items"]??[];
+              $expected=["Arild Eidesund"=>25,"Thomas Kildal"=>24,"Vetle Ribe Davidsen"=>18,"Magnus Knudsen"=>16,"Andre Kendrick"=>14,"Andreas Tingstveit Hansen"=>14,"Jon-Henning Næss"=>13,"Tormod Haga"=>13,"Andreas Hasselgård"=>13,"Steffen Madsen"=>9,"Leif Atle Franksson"=>9,"Kjell Moyle"=>7,"Dan Christian Birkeland"=>5,"Bjørn Jarle Jahnsen"=>4,"Hans Øyvind Reiersen"=>2,"Tor Egil Olsen"=>2,"Sven Einar Davidsen"=>2,"Boye Buckingham"=>2,"Geir Atle Håland"=>1];
+              $actual=[];foreach($items as $row)$actual[(string)($row["display_name"]??"")]=(float)($row["points"]??-1);
+              if(count($actual)!==count($expected)||array_keys($actual)!==array_keys($expected))exit(1);foreach($expected as $name=>$points)if(!isset($actual[$name])||abs($actual[$name]-$points)>.0001)exit(1);
+            '; then
+              echo "DARTSATLAS_POINTS_PUBLIC_READBACK_OK=yes backup=${PROD_BACKUP_PREFIX}"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'Public PROD standings did not expose the corrected points.' >&2
+          exit 1
