@@ -102,8 +102,59 @@ $updateEvent = $db->prepare(
 
 $changed = 0;
 $alreadyCorrect = 0;
+$backfilledStarters = 0;
 $db->begin_transaction();
 try {
+    // Historical DartsAtlas legs were imported with complete per-player visits,
+    // but the legacy importer left starting_player_id NULL. In a completed 501
+    // leg the starter has one extra visit when they win; otherwise both players
+    // have the same number of visits and the non-winner started. Reconstructing
+    // this source fact makes the canonical LA tie-break match DartsAtlas.
+    $starterRows = $db->query(
+        "SELECT l.id,l.winner_player_id,m.player_a_id,m.player_b_id,
+                SUM(CASE WHEN v.player_id=m.player_a_id THEN 1 ELSE 0 END) player_a_visits,
+                SUM(CASE WHEN v.player_id=m.player_b_id THEN 1 ELSE 0 END) player_b_visits
+           FROM `{$prefix}legs` l
+           JOIN `{$prefix}matches` m ON m.id=l.match_id
+           JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+           JOIN `{$prefix}visits` v ON v.leg_id=l.id
+          WHERE t.season_id={$seasonId} AND l.status='completed'
+            AND l.winner_player_id IS NOT NULL AND l.starting_player_id IS NULL
+          GROUP BY l.id,l.winner_player_id,m.player_a_id,m.player_b_id"
+    )->fetch_all(MYSQLI_ASSOC);
+    $updateStarter = $db->prepare(
+        "UPDATE `{$prefix}legs` SET starting_player_id=? WHERE id=? AND starting_player_id IS NULL"
+    );
+    foreach ($starterRows as $leg) {
+        $winnerId = (int) $leg['winner_player_id'];
+        $playerAId = (int) $leg['player_a_id'];
+        $playerBId = (int) $leg['player_b_id'];
+        $playerAVisits = (int) $leg['player_a_visits'];
+        $playerBVisits = (int) $leg['player_b_visits'];
+        if ($winnerId !== $playerAId && $winnerId !== $playerBId) {
+            throw new RuntimeException("Leg {$leg['id']} winner is not one of the match players.");
+        }
+        if ($playerAVisits < 1 || $playerBVisits < 1 || abs($playerAVisits - $playerBVisits) > 1) {
+            throw new RuntimeException("Cannot derive DartsAtlas starter for leg {$leg['id']}.");
+        }
+        if ($playerAVisits === $playerBVisits) {
+            $starterId = $winnerId === $playerAId ? $playerBId : $playerAId;
+        } elseif ($playerAVisits === $playerBVisits + 1 && $winnerId === $playerAId) {
+            $starterId = $playerAId;
+        } elseif ($playerBVisits === $playerAVisits + 1 && $winnerId === $playerBId) {
+            $starterId = $playerBId;
+        } else {
+            throw new RuntimeException("DartsAtlas visit order contradicts the winner for leg {$leg['id']}.");
+        }
+        $legId = (int) $leg['id'];
+        $updateStarter->bind_param('ii', $starterId, $legId);
+        $updateStarter->execute();
+        if ($updateStarter->affected_rows !== 1) {
+            throw new RuntimeException("Starter for leg {$legId} was not backfilled exactly once.");
+        }
+        $backfilledStarters++;
+    }
+
     foreach ($corrections as $tournamentExternalId => $players) {
         $entityType = 'tournament';
         $ref->bind_param('ss', $entityType, $tournamentExternalId);
@@ -180,6 +231,18 @@ try {
         }
     }
 
+    $remainingNullStarters = (int) $db->query(
+        "SELECT COUNT(*) c FROM `{$prefix}legs` l
+         JOIN `{$prefix}matches` m ON m.id=l.match_id
+         JOIN `{$prefix}tournaments` t ON t.id=m.tournament_id
+         WHERE t.season_id={$seasonId} AND l.status='completed'
+           AND l.winner_player_id IS NOT NULL AND l.starting_player_id IS NULL
+           AND EXISTS (SELECT 1 FROM `{$prefix}visits` v WHERE v.leg_id=l.id)"
+    )->fetch_assoc()['c'];
+    if ($remainingNullStarters !== 0) {
+        throw new RuntimeException("Completed DartsAtlas legs still lack a starter: {$remainingNullStarters}.");
+    }
+
     $duplicates = (int) $db->query(
         "SELECT COUNT(*) c FROM (
            SELECT club_id,LOWER(TRIM(display_name)) normalized
@@ -203,4 +266,4 @@ if (!hash_equals($beforeElo, $afterElo)) {
     throw new RuntimeException('ELO changed during ranking-points reconciliation.');
 }
 
-echo "DARTSATLAS_POINTS_RECONCILED=yes season_id={$seasonId} changed={$changed} already_correct={$alreadyCorrect} elo_unchanged=yes\n";
+echo "DARTSATLAS_POINTS_RECONCILED=yes season_id={$seasonId} changed={$changed} already_correct={$alreadyCorrect} starters_backfilled={$backfilledStarters} elo_unchanged=yes\n";
