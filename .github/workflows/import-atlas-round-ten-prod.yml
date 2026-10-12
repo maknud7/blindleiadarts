@@ -87,7 +87,9 @@ jobs:
           for attempt in $(seq 1 10); do
             status="$(curl -sS -L --connect-timeout 8 --max-time 90 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-match-visits.php?match=qhDHgnXEGbR4&cb=$RANDOM" || true)"
             if [[ "$status" == 200 ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(is_array($d)&&($d["ok"]??false)===true&&($d["external_id"]??"")==="qhDHgnXEGbR4"?0:1);' "$target"; then fetched=yes; break; fi
-            sleep $((20 + attempt * 10))
+            echo "MATCH_DETAIL_DIAGNOSTIC status=$status attempt=$attempt"
+            php -r '$d=json_decode(file_get_contents($argv[1]),true);echo "payload=".json_encode(["ok"=>$d["ok"]??null,"external_id"=>$d["external_id"]??null,"error"=>$d["error"]??null,"message"=>$d["message"]??null,"keys"=>is_array($d)?array_keys($d):[]],JSON_UNESCAPED_SLASHES),"\\n";' "$target" || true
+            exit 1
           done
           [[ "$fetched" == yes ]] || { echo "Could not fetch qhDHgnXEGbR4 details." >&2; exit 1; }
           php <<'PHP'
