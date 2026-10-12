@@ -1,0 +1,129 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "6ZCTzHFc6rpe",
+  "tournament_name": "Mandagsserien #10",
+  "tournament_date": "2026-10-12",
+  "tournament_start_at": "2026-10-12 18:30:00",
+  "tournament_slug": "mandagsserien-10-2026-10-12",
+  "expected_players": 9,
+  "expected_matches": 39,
+  "expected_legs": 44,
+  "players": {
+    "6dLds5Na0PsZ": "Arild Eidesund",
+    "46u0DEjhFWti": "Andreas Hasselgård",
+    "eNmn5GSftUdn": "Dan Christian Birkeland",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen",
+    "0J6SDLVfThUs": "Magnus Knudsen",
+    "DUq32rNObrUk": "Thomas Kildal",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "6dLds5Na0PsZ",
+        "46u0DEjhFWti",
+        "eNmn5GSftUdn",
+        "xTpeuJWBefFN",
+        "0J6SDLVfThUs",
+        "DUq32rNObrUk",
+        "Rujhhq1jF7Uu",
+        "GFg9pZkPKrpU",
+        "2bhzMxZ5bdyy"
+      ],
+      "match_ids": [
+        "SrN0AqwwFKF3",
+        "HIo7LJUqPCdj",
+        "qhDHgnXEGbR4",
+        "xnNHMyJqnUhZ",
+        "shOmMp8gD7bx",
+        "wR9sFlLPgtba",
+        "eIsZPA5F3iBt",
+        "ZWiqSsN55soe",
+        "WdbPnGwkgfRO",
+        "K2uFuNYganRH",
+        "N333cxP02Ks8",
+        "t1gbhlesKlVL",
+        "EXV6dnO4CkKj",
+        "5roQvKTQgAIV",
+        "axQBRKXQUaU1",
+        "1FenEdmxhH67",
+        "5ig68DZ0GjVW",
+        "Jg5kIFwcfmM0",
+        "B3KhzIJ5ugcb",
+        "KIbqbVKVDjMh",
+        "MyV5xBx5NsPx",
+        "325DD5ELdO0e",
+        "csTgOEsYIzzK",
+        "tGgBH220COVW",
+        "JA9QoE1jDOvV",
+        "HmwL7KblmhUO",
+        "OX1AcplK9AW0",
+        "UqthPf6fCkYg",
+        "GfjuKDOGJ6QZ",
+        "fbHjW3Hy9ooo",
+        "QztEmXJfx61C",
+        "veKcfpIzF0tQ",
+        "Vh6hxxlueSuB",
+        "hvtCiLwcfCfT",
+        "eGu79SySss6c",
+        "fLLtKrfHrrMP"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": [
+      "6dLds5Na0PsZ",
+      "46u0DEjhFWti",
+      "eNmn5GSftUdn",
+      "xTpeuJWBefFN"
+    ],
+    "match_ids": [
+      "JQBPgttnSGHc",
+      "IAW33Kvuh23a",
+      "a9eC3kQ82Nto"
+    ],
+    "champion_external_id": "eNmn5GSftUdn",
+    "champion_name": "Dan Christian Birkeland"
+  },
+  "ranking_points": {
+    "eNmn5GSftUdn": 5,
+    "6dLds5Na0PsZ": 4,
+    "46u0DEjhFWti": 3,
+    "xTpeuJWBefFN": 3,
+    "0J6SDLVfThUs": 1,
+    "DUq32rNObrUk": 1,
+    "Rujhhq1jF7Uu": 1,
+    "GFg9pZkPKrpU": 1,
+    "2bhzMxZ5bdyy": 1
+  },
+  "ranking_stages": {
+    "eNmn5GSftUdn": "Winner",
+    "6dLds5Na0PsZ": "Final",
+    "46u0DEjhFWti": "Semi-Final",
+    "xTpeuJWBefFN": "Semi-Final",
+    "0J6SDLVfThUs": "Group stage",
+    "DUq32rNObrUk": "Group stage",
+    "Rujhhq1jF7Uu": "Group stage",
+    "GFg9pZkPKrpU": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #10 Champion Dan Christian Birkeland",
+    "verified_at": "2026-10-12T20:10:00Z"
+  }
+}
