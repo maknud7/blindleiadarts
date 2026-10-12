@@ -79,6 +79,35 @@ jobs:
             echo "ROUND10_SOURCE_OK=yes players={$players} matches=".($group+$playoff)."\n";
           ' "$target"
 
+      - name: Restore the one missing Atlas group-page average from verified visits
+        run: |
+          set -Eeuo pipefail
+          target=/tmp/qhDHgnXEGbR4.json
+          fetched=no
+          for attempt in $(seq 1 10); do
+            status="$(curl -sS -L --connect-timeout 8 --max-time 90 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-match-visits.php?match=qhDHgnXEGbR4&cb=$RANDOM" || true)"
+            if [[ "$status" == 200 ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(is_array($d)&&($d["ok"]??false)===true&&($d["external_id"]??"")==="qhDHgnXEGbR4"?0:1);' "$target"; then fetched=yes; break; fi
+            sleep $((20 + attempt * 10))
+          done
+          [[ "$fetched" == yes ]] || { echo "Could not fetch qhDHgnXEGbR4 details." >&2; exit 1; }
+          php <<'PHP'
+          <?php
+          $probePath='/tmp/round-ten-probe.json';$detailPath='/tmp/qhDHgnXEGbR4.json';
+          $probe=json_decode(file_get_contents($probePath),true,512,JSON_THROW_ON_ERROR);
+          $detail=json_decode(file_get_contents($detailPath),true,512,JSON_THROW_ON_ERROR);
+          $label=(string)($probe['pages']['group-1']['matches']['qhDHgnXEGbR4']??'');
+          $a=(string)($detail['players']['a']??'');$b=(string)($detail['players']['b']??'');
+          if($label===''||$a===''||$b===''||mb_stripos($label,$a)===false||mb_stripos($label,$b)===false)throw new RuntimeException('Cannot align missing-average match players');
+          $sum=['a'=>0,'b'=>0];$darts=['a'=>0,'b'=>0];
+          foreach($detail['legs']??[] as $leg)foreach(['a'=>'player_a_visits','b'=>'player_b_visits'] as $side=>$key)foreach($leg[$key]??[] as $visit){$sum[$side]+=(int)$visit['score'];$darts[$side]+=(int)$visit['darts_used'];}
+          if($darts['a']<1||$darts['b']<1)throw new RuntimeException('Missing verified darts for average restoration');
+          $avg=['a'=>round($sum['a']*3/$darts['a'],2),'b'=>round($sum['b']*3/$darts['b'],2)];
+          $first=mb_stripos($label,$a)<mb_stripos($label,$b)?'a':'b';$second=$first==='a'?'b':'a';
+          $probe['pages']['group-1']['matches']['qhDHgnXEGbR4']=$label.' '.number_format($avg[$first],2,'.','').' Avg '.number_format($avg[$second],2,'.','').' Avg';
+          file_put_contents($probePath,json_encode($probe,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
+          echo "ROUND10_AVERAGE_RESTORED=yes match=qhDHgnXEGbR4 {$a}={$avg['a']} {$b}={$avg['b']}\n";
+          PHP
+
       - name: Import round-ten skeleton into TEST
         env:
           DB_TABLE_PREFIX: bd_test_
