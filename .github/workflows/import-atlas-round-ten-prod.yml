@@ -52,7 +52,7 @@ jobs:
             if(($m["tournament_external_id"]??"")!==getenv("EXTERNAL_ID")||($m["season_external_id"]??"")!=="rFByCgOqI1rq")throw new RuntimeException("Wrong frozen source");
             if(($m["tournament_date"]??"")!=="2026-10-12"||($m["expected_players"]??0)!==9||($m["expected_matches"]??0)!==39||($m["expected_legs"]??0)!==44)throw new RuntimeException("Wrong frozen counts");
             $ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
-            if(count($ids)!==39||count(array_unique($ids))!==48||count($m["players"]??[])!==9)throw new RuntimeException("Frozen manifest is incomplete");
+            if(count($ids)!==39||count(array_unique($ids))!==39||count($m["players"]??[])!==9)throw new RuntimeException("Frozen manifest is incomplete");
             if(($m["playoff"]["champion_external_id"]??"")!=="eNmn5GSftUdn")throw new RuntimeException("Wrong champion");
             echo "ROUND10_MANIFEST_OK=yes\n";
           '
