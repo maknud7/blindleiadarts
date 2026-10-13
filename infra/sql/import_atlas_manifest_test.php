@@ -33,6 +33,7 @@ $groups = is_array($manifest['groups'] ?? null) ? $manifest['groups'] : [];
 $playoffConfig = is_array($manifest['playoff'] ?? null) ? $manifest['playoff'] : [];
 $expectedPlayers = (int) ($manifest['expected_players'] ?? 0);
 $expectedMatches = (int) ($manifest['expected_matches'] ?? 0);
+$winnerOnlyMatchIds = array_fill_keys(array_map('strval', (array) ($manifest['winner_only_match_ids'] ?? [])), true);
 if ($expectedPlayers < 2 || count($manifestPlayers) !== $expectedPlayers || $expectedMatches < 1 || $groups === []) {
     throw new RuntimeException('Manifest counts/config are invalid.');
 }
@@ -71,6 +72,9 @@ foreach ((array) ($playoffConfig['match_ids'] ?? []) as $externalId) {
     $expectedMatchOrder[$externalId] = count($expectedMatchOrder) + 1;
 }
 if (count($expectedMatchIds) !== $expectedMatches) throw new RuntimeException('Manifest match-id count differs from expected_matches.');
+foreach (array_keys($winnerOnlyMatchIds) as $externalId) {
+    if (!isset($expectedMatchIds[$externalId])) throw new RuntimeException("Winner-only match {$externalId} is not frozen in the manifest match list.");
+}
 
 foreach ($manifestPlayers as $externalId => $name) {
     if (!isset($sourcePlayerNames[$externalId])) {
@@ -84,7 +88,7 @@ if (count(array_intersect_key($sourcePlayerNames, $manifestPlayers)) !== $expect
 
 $namePositions = [];
 foreach ($manifestPlayers as $externalId => $name) $namePositions[(string) $externalId] = (string) $name;
-$parseMatch = static function (string $externalId, string $label, string $sourcePage, ?int $groupNumber) use ($namePositions): array {
+$parseMatch = static function (string $externalId, string $label, string $sourcePage, ?int $groupNumber) use ($namePositions, $winnerOnlyMatchIds): array {
     $label = trim((string) preg_replace('/\s+/u', ' ', $label));
     if (!preg_match('/\bBest\s+of\s+(\d+)\b/i', $label, $best)) throw new RuntimeException("Missing Best of for {$externalId}: {$label}");
     $bestOf = (int) $best[1];
@@ -115,7 +119,9 @@ $parseMatch = static function (string $externalId, string $label, string $source
     preg_match_all('/\b(\d{1,3}(?:\.\d{1,2})?)\s*Avg\b/i', $label, $averages);
     $averageA = isset($averages[1][0]) ? (float) $averages[1][0] : null;
     $averageB = isset($averages[1][1]) ? (float) $averages[1][1] : null;
-    if ($averageA === null || $averageB === null) throw new RuntimeException("Missing averages for {$externalId}");
+    $winnerOnly = isset($winnerOnlyMatchIds[$externalId]);
+    if (($averageA === null || $averageB === null) && !$winnerOnly) throw new RuntimeException("Missing averages for {$externalId}");
+    if ($winnerOnly) { $averageA = null; $averageB = null; }
     $winnerExternalId = $scoreA > $scoreB ? $a['external_id'] : $b['external_id'];
     $stageOrder = $groupNumber !== null ? (($roundNumber ?? 0) * 10 + $groupNumber) : match ($roundLabel) {
         'Quarter-Final' => 100, 'Semi-Final' => 110, 'Final' => 120, default => 130,
@@ -126,7 +132,7 @@ $parseMatch = static function (string $externalId, string $label, string $source
         'legs_to_win' => $legsToWin, 'player_a_external_id' => $a['external_id'],
         'player_b_external_id' => $b['external_id'], 'score_a' => $scoreA, 'score_b' => $scoreB,
         'winner_external_id' => $winnerExternalId, 'average_a' => $averageA, 'average_b' => $averageB,
-        'raw_label' => $label, 'stage_order' => $stageOrder,
+        'winner_only' => $winnerOnly, 'raw_label' => $label, 'stage_order' => $stageOrder,
     ];
 };
 
@@ -260,13 +266,13 @@ try {
     $matchLocalIds=[];$order=0;
     foreach($ordered as $match){
         $order++;$pa=$localPlayers[$match['player_a_external_id']];$pb=$localPlayers[$match['player_b_external_id']];$winner=$localPlayers[$match['winner_external_id']];$gid=$match['group_number']!==null?$groupIds[$match['group_number']]:null;$bracket=$match['group_number']!==null?'group':'single_elimination';
-        $mmeta=json_encode(['source'=>'dartsatlas_history_import','external_id'=>$match['external_id'],'source_page'=>$match['source_page'],'source_label'=>$match['raw_label'],'source_scores'=>[$match['score_a'],$match['score_b']],'import_order'=>$order,'completeness'=>'aggregate_result_and_average'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        $mmeta=json_encode(['source'=>'dartsatlas_history_import','external_id'=>$match['external_id'],'source_page'=>$match['source_page'],'source_label'=>$match['raw_label'],'source_scores'=>[$match['score_a'],$match['score_b']],'import_order'=>$order,'completeness'=>($match['winner_only']?'winner_only_result':'aggregate_result_and_average')],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
         $type='match';$eid=$match['external_id'];$findRef->bind_param('sss',$externalSystem,$type,$eid);$findRef->execute();$rr=$findRef->get_result()->fetch_assoc();$mid=$rr?(int)$rr['internal_id']:null;
         $rl=$match['round_label'];$rn=$match['round_number'];$bo=$match['best_of_legs'];$ltw=$match['legs_to_win'];
         if($mid===null){$stmt=$db->prepare("INSERT INTO `{$prefix}matches` (tournament_id,tournament_group_id,round_label,round_number,bracket_label,provider_metadata,status,best_of_legs,legs_to_win,player_a_id,player_b_id,winner_player_id,finished_at) VALUES (?,?,?,?,?,?,'completed',?,?,?,?,?,?)");$stmt->bind_param('iisissiiiiis',$tournamentId,$gid,$rl,$rn,$bracket,$mmeta,$bo,$ltw,$pa,$pb,$winner,$tournamentStartAt);$stmt->execute();$mid=(int)$stmt->insert_id;$stmt->close();}
         else{$stmt=$db->prepare("UPDATE `{$prefix}matches` SET tournament_id=?,tournament_group_id=?,round_label=?,round_number=?,bracket_label=?,provider_metadata=?,status='completed',best_of_legs=?,legs_to_win=?,player_a_id=?,player_b_id=?,winner_player_id=?,finished_at=? WHERE id=?");$stmt->bind_param('iisissiiiiisi',$tournamentId,$gid,$rl,$rn,$bracket,$mmeta,$bo,$ltw,$pa,$pb,$winner,$tournamentStartAt,$mid);$stmt->execute();$stmt->close();}
         $putRef('match',$eid,'match',$mid);$matchLocalIds[$eid]=$mid;
-        $stats=$db->prepare("INSERT INTO `{$prefix}match_statistics` (match_id,player_id,legs_won,average,provider_metadata) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE legs_won=VALUES(legs_won),average=VALUES(average),provider_metadata=VALUES(provider_metadata),updated_at=NOW()");$smeta=json_encode(['source'=>'dartsatlas_history_import','external_match_id'=>$eid],JSON_UNESCAPED_SLASHES);$sa=$match['score_a'];$sb=$match['score_b'];$aa=$match['average_a'];$ab=$match['average_b'];$stats->bind_param('iiids',$mid,$pa,$sa,$aa,$smeta);$stats->execute();$stats->bind_param('iiids',$mid,$pb,$sb,$ab,$smeta);$stats->execute();$stats->close();
+        $stats=$db->prepare("INSERT INTO `{$prefix}match_statistics` (match_id,player_id,legs_won,average,provider_metadata) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE legs_won=VALUES(legs_won),average=VALUES(average),provider_metadata=VALUES(provider_metadata),updated_at=NOW()");$smeta=json_encode(['source'=>'dartsatlas_history_import','external_match_id'=>$eid,'completeness'=>($match['winner_only']?'winner_only_result':'aggregate_result_and_average')],JSON_UNESCAPED_SLASHES);$sa=$match['score_a'];$sb=$match['score_b'];$aa=$match['average_a'];$ab=$match['average_b'];$stats->bind_param('iiids',$mid,$pa,$sa,$aa,$smeta);$stats->execute();$stats->bind_param('iiids',$mid,$pb,$sb,$ab,$smeta);$stats->execute();$stats->close();
     }
 
     $stmt=$db->prepare("SELECT id FROM `{$prefix}tournament_playoffs` WHERE tournament_id=? LIMIT 1");$stmt->bind_param('i',$tournamentId);$stmt->execute();$r=$stmt->get_result()->fetch_assoc();$stmt->close();if($r){$old=(int)$r['id'];$db->query("DELETE FROM `{$prefix}tournament_playoff_nodes` WHERE playoff_id={$old}");$db->query("DELETE FROM `{$prefix}tournament_playoff_entries` WHERE playoff_id={$old}");$db->query("DELETE FROM `{$prefix}tournament_playoffs` WHERE id={$old}");}
