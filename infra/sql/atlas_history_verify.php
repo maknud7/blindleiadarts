@@ -252,12 +252,18 @@ foreach ($matches as $match) {
     if (empty($match['finished_at'])) $issues[] = 'finished_at';
     if (empty($match['atlas_match_id'])) $issues[] = 'external_reference';
     if ($expectedLegs === null || $scoreA === $scoreB || max((int) $scoreA, (int) $scoreB) < 1) $issues[] = 'source_scores';
+    $winnerOnly = is_array($meta) && (($meta['completeness'] ?? '') === 'winner_only_result');
     if ($expectedLegs !== null) {
-        if ((int) ($legs['leg_count'] ?? 0) !== $expectedLegs) $issues[] = 'leg_count';
-        if ((int) ($legs['completed_legs'] ?? 0) !== $expectedLegs) $issues[] = 'leg_status';
-        if ((int) ($legs['missing_winner_legs'] ?? 0) !== 0) $issues[] = 'leg_winner';
-        if ((int) ($legs['a_legs'] ?? 0) !== $scoreA || (int) ($legs['b_legs'] ?? 0) !== $scoreB) $issues[] = 'leg_score';
-        if ($requireVisits && ((int) ($visits['visit_count'] ?? 0) < 1 || (int) ($visits['visited_legs'] ?? 0) !== $expectedLegs)) $issues[] = 'visits';
+        if ($winnerOnly) {
+            if ((int) ($legs['leg_count'] ?? 0) !== 0) $issues[] = 'winner_only_has_legs';
+            if ((int) ($visits['visit_count'] ?? 0) !== 0) $issues[] = 'winner_only_has_visits';
+        } else {
+            if ((int) ($legs['leg_count'] ?? 0) !== $expectedLegs) $issues[] = 'leg_count';
+            if ((int) ($legs['completed_legs'] ?? 0) !== $expectedLegs) $issues[] = 'leg_status';
+            if ((int) ($legs['missing_winner_legs'] ?? 0) !== 0) $issues[] = 'leg_winner';
+            if ((int) ($legs['a_legs'] ?? 0) !== $scoreA || (int) ($legs['b_legs'] ?? 0) !== $scoreB) $issues[] = 'leg_score';
+            if ($requireVisits && ((int) ($visits['visit_count'] ?? 0) < 1 || (int) ($visits['visited_legs'] ?? 0) !== $expectedLegs)) $issues[] = 'visits';
+        }
         if (!isset($stats[$playerA], $stats[$playerB])) $issues[] = 'statistics_rows';
         else {
             if ((int) $stats[$playerA]['legs_won'] !== $scoreA || (int) $stats[$playerB]['legs_won'] !== $scoreB) $issues[] = 'statistics_score';
