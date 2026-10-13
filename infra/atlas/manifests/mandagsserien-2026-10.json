@@ -12,7 +12,7 @@
   "tournament_slug": "mandagsserien-10-2026-10-12",
   "expected_players": 9,
   "expected_matches": 39,
-  "expected_legs": 44,
+  "expected_legs": 43,
   "players": {
     "6dLds5Na0PsZ": "Arild Eidesund",
     "46u0DEjhFWti": "Andreas Hasselgård",
@@ -125,5 +125,8 @@
     "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
     "season_results_text": "Mandagsserien #10 Champion Dan Christian Birkeland",
     "verified_at": "2026-10-12T20:10:00Z"
-  }
+  },
+  "winner_only_match_ids": [
+    "qhDHgnXEGbR4"
+  ]
 }
