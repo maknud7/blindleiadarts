@@ -136,6 +136,150 @@ jobs:
           DB_TABLE_PREFIX: bd_test_
           IDENTITY_TABLE_PREFIX: bd_prod_
 
+      - name: Create temporary TEST admin browser session
+        id: browser_session
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          token="$(openssl rand -hex 32)"
+          export BROWSER_TEST_TOKEN="$token"
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)(getenv("DB_PORT") ?: 3306));
+            $db->set_charset("utf8mb4");
+            $row=$db->query("SELECT ua.id FROM bd_prod_user_accounts ua INNER JOIN bd_prod_global_user_roles gur ON gur.user_account_id=ua.id AND gur.role=\"super_admin\" WHERE ua.is_active=1 AND ua.account_status=\"active\" ORDER BY ua.id LIMIT 1")->fetch_assoc();
+            if (!$row) {
+              $row=$db->query("SELECT ua.id FROM bd_prod_user_accounts ua INNER JOIN bd_prod_club_user_roles cur ON cur.user_account_id=ua.id AND cur.role=\"club_admin\" WHERE ua.is_active=1 AND ua.account_status=\"active\" ORDER BY ua.id LIMIT 1")->fetch_assoc();
+            }
+            if (!$row) { fwrite(STDERR,"No active admin identity found\n"); exit(2); }
+            $userId=(string)$row["id"];
+            $hash=hash("sha256",getenv("BROWSER_TEST_TOKEN"));
+            $stmt=$db->prepare("INSERT INTO bd_test_auth_sessions (user_account_id,session_token_hash,expires_at,last_used_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 30 MINUTE),NOW())");
+            $stmt->bind_param("ss",$userId,$hash);
+            $stmt->execute();
+            $id=$db->insert_id;
+            file_put_contents(getenv("GITHUB_OUTPUT"),"token=".getenv("BROWSER_TEST_TOKEN")."\nsession_id=".$id."\n",FILE_APPEND);
+          '
+
+      - name: Install Chromium browser probe
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Desktop platform hit-test
+        env:
+          BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+          BROWSER_TEST_TOKEN: ${{ steps.browser_session.outputs.token }}
+        run: |
+          cat > /tmp/desktop-hit-test.mjs <<'EOF'
+          import { chromium } from "playwright";
+
+          const base = process.env.BASE_URL.replace(/\/$/, "");
+          const token = process.env.BROWSER_TEST_TOKEN;
+          const routes = ["#home", "#tournaments", "#statistics", "#club"];
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+          await page.addInitScript((value) => localStorage.setItem("bd:token", value), token);
+
+          let failed = false;
+          for (const route of routes) {
+            await page.goto(base + "/" + route, { waitUntil: "domcontentloaded", timeout: 30000 });
+            await page.waitForTimeout(route === "#club" ? 8000 : 5000);
+
+            const result = await page.evaluate(() => {
+              const visible = (el) => {
+                const cs = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                return cs.display !== "none" && cs.visibility !== "hidden" && Number(cs.opacity || "1") > 0.01
+                  && r.width > 4 && r.height > 4 && r.bottom > 0 && r.right > 0
+                  && r.top < innerHeight && r.left < innerWidth;
+              };
+              const fullScreen = [...document.querySelectorAll("body *")].filter((el) => {
+                if (!visible(el)) return false;
+                const cs = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                return (cs.position === "fixed" || cs.position === "absolute")
+                  && cs.pointerEvents !== "none"
+                  && r.width >= innerWidth * 0.8
+                  && r.height >= innerHeight * 0.8;
+              }).map((el) => ({
+                tag: el.tagName,
+                id: el.id,
+                cls: String(el.className || "").slice(0, 160),
+                z: getComputedStyle(el).zIndex,
+                pointer: getComputedStyle(el).pointerEvents,
+                rect: [Math.round(el.getBoundingClientRect().left), Math.round(el.getBoundingClientRect().top), Math.round(el.getBoundingClientRect().width), Math.round(el.getBoundingClientRect().height)],
+              }));
+
+              const controls = [...document.querySelectorAll("a[href],button,select,input")].filter(visible).slice(0, 80);
+              const blocked = [];
+              for (const el of controls) {
+                const r = el.getBoundingClientRect();
+                const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+                const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+                const top = document.elementFromPoint(x, y);
+                if (!top) continue;
+                if (top === el || el.contains(top) || top.contains(el)) continue;
+                blocked.push({
+                  target: el.id || el.getAttribute("href") || el.textContent?.trim().slice(0, 60) || el.tagName,
+                  blocker: top.id || String(top.className || "").slice(0, 100) || top.tagName,
+                  targetTag: el.tagName,
+                  blockerTag: top.tagName,
+                  point: [Math.round(x), Math.round(y)],
+                });
+              }
+
+              const centerStack = document.elementsFromPoint(innerWidth / 2, innerHeight / 2).slice(0, 8).map((el) => ({
+                tag: el.tagName,
+                id: el.id,
+                cls: String(el.className || "").slice(0, 120),
+                pointer: getComputedStyle(el).pointerEvents,
+                z: getComputedStyle(el).zIndex,
+              }));
+
+              return {
+                href: location.href,
+                bodyClass: document.body.className,
+                bodyActive: document.body.dataset.portalActive || "",
+                fullScreen,
+                blocked,
+                centerStack,
+              };
+            });
+
+            console.log("\nROUTE", route, JSON.stringify(result, null, 2));
+            if (result.fullScreen.length || result.blocked.length) failed = true;
+          }
+
+          await browser.close();
+          if (failed) process.exit(1);
+          EOF
+          node /tmp/desktop-hit-test.mjs
+
+      - name: Cleanup temporary TEST admin browser session
+        if: always() && steps.browser_session.outputs.session_id != ''
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SESSION_ID: ${{ steps.browser_session.outputs.session_id }}
+        run: |
+          php -r '
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            $db=new mysqli(getenv("DB_HOST"),getenv("DB_USERNAME"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)(getenv("DB_PORT") ?: 3306));
+            $stmt=$db->prepare("DELETE FROM bd_test_auth_sessions WHERE id=?");
+            $id=(string)getenv("SESSION_ID");
+            $stmt->bind_param("s",$id);
+            $stmt->execute();
+          '
+
       - name: Generate isolated test API config for domain smoke tests
         run: php infra/deploy/generate_api_config.php --output=apps/api/config.php
         env:
