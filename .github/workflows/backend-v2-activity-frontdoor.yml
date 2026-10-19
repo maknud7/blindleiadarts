@@ -10,6 +10,10 @@ on:
       - 'apps/api/index.php'
       - 'apps/api/config.example.php'
       - 'apps/api/tests/backend_v2_activity_proxy_routing_test.php'
+      - 'apps/backend-v2/src/mysql/activity-runtime-repository.ts'
+      - 'apps/backend-v2/src/runtime/activity-runtime-router.ts'
+      - 'apps/backend-v2/test/activity-runtime.test.mjs'
+      - 'apps/backend-v2/e2e/activity-runtime.mjs'
       - 'infra/deploy/generate_api_config.php'
       - '.github/workflows/backend-v2-activity-frontdoor.yml'
   workflow_dispatch:
@@ -43,7 +47,7 @@ jobs:
           grep -Fq 'PHP fallback is disabled' apps/api/src/BackendV2ActivityProxyApplication.php
           grep -Fq 'BackendV2ActivityProxyApplication' apps/api/index.php
 
-      - name: Verify TEST-only activity routing default
+      - name: Verify TEST and PROD activity routing defaults
         env:
           SCOLIA_BRIDGE_SECRET: activity-routing-contract
           DB_HOST: 127.0.0.1
@@ -62,9 +66,54 @@ jobs:
           APP_ENV=prod BASE_URL=https://blindleiadarts.ingenting.org STATIC_BASE_URL=https://blindleiadarts.ingenting.org \
             DB_TABLE_PREFIX=bd_prod_ IDENTITY_TABLE_PREFIX=bd_prod_ HARDWARE_TABLE_PREFIX=bd_prod_ \
             php infra/deploy/generate_api_config.php --output=/tmp/activity-prod.php
-          php -r '$c=require "/tmp/activity-prod.php"; $b=$c["backend_v2"]??[]; if (($b["activity_routing_mode"]??null)!=="php") exit(1);'
+          php -r '$c=require "/tmp/activity-prod.php"; $b=$c["backend_v2"]??[]; if (($b["activity_routing_mode"]??null)!=="node") exit(1); if (($b["base_url"]??null)!=="https://blindleia-backend-v2-readonly.onrender.com") exit(2);'
 
       - name: Verify activity proxy precedes legacy PHP
         run: |
           set -Eeuo pipefail
           php -r '$s=file_get_contents("apps/api/index.php"); $n=strpos($s,"\$activityV2 = new BackendV2ActivityProxyApplication"); $p=strpos($s,"\$activity = new ActivityApplication"); if ($n===false||$p===false||$n>=$p) exit(1);'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify activity Node runtime contract
+        run: |
+          set -Eeuo pipefail
+          npm install --no-package-lock --ignore-scripts
+          npm run backend-v2:build
+          node --test apps/backend-v2/test/activity-runtime.test.mjs
+
+      - name: Verify current PROD backend activity readiness without writing
+        env:
+          HOST_URL: https://blindleia-backend-v2-readonly.onrender.com
+        run: |
+          set -Eeuo pipefail
+
+          health="$(curl -fsS --max-time 30 "$HOST_URL/health")"
+          jq -e '
+            .ok == true and
+            .environment == "prod" and
+            .mode == "prod-canary" and
+            .writes_armed == true and
+            .runtime_prefix == "bd_prod_" and
+            .identity_prefix == "bd_prod_"
+          ' <<<"$health" >/dev/null
+
+          body="$(mktemp)"
+          status="$(curl -sS --max-time 30 -X POST             -H 'Content-Type: application/json'             --data '{"events":[]}'             -o "$body" -w '%{http_code}'             "$HOST_URL/v1/activity")"
+          echo "POST /v1/activity empty batch HTTP $status: $(cat "$body")"
+          test "$status" = "422"
+          test "$(jq -r '.error.code // empty' "$body")" = "activity_events_required"
+          rm -f "$body"
+
+          for path in /v1/activity/session /v1/platform/activity /v1/clubs/1/activity; do
+            body="$(mktemp)"
+            status="$(curl -sS --max-time 30               -H 'Authorization: Bearer definitely-invalid-activity-prod-probe'               -o "$body" -w '%{http_code}'               "$HOST_URL$path")"
+            echo "$path HTTP $status: $(cat "$body")"
+            test "$status" = "401"
+            code="$(jq -r '.error.code // empty' "$body")"
+            [[ "$code" == "invalid_session" || "$code" == "authentication_required" ]]
+            rm -f "$body"
+          done
