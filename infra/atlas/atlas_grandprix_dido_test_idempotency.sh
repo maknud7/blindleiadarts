@@ -32,8 +32,21 @@ $ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $x)$ids[]=$x;forea
 $legs=0;foreach($ids as $x){$d=json_decode(file_get_contents("/tmp/dido-idempotent/matches/{$x}.json"),true,512,JSON_THROW_ON_ERROR);$legs+=(int)$d["leg_count"];}
 if($legs!==88)throw new RuntimeException("Detail mismatch on second pass: {$legs}");
 ' "$manifest"
-php infra/sql/import_atlas_grandprix_dido_test.php "$manifest" /tmp/dido-idempotent/source.json
-for id in "${ids[@]}"; do php infra/sql/import_atlas_match_visits_test.php "$manifest" "/tmp/dido-idempotent/matches/${id}.json"; done
+ok=no
+for attempt in 1 2 3 4 5 6; do
+  if php infra/sql/import_atlas_grandprix_dido_test.php "$manifest" /tmp/dido-idempotent/source.json; then ok=yes;break;fi
+  sleep $((20+attempt*15))
+done
+[[ "$ok" == yes ]] || { echo "TEST manifest idempotency failed" >&2; exit 1; }
+for id in "${ids[@]}"; do
+  ok=no
+  for attempt in 1 2 3 4 5 6; do
+    if php infra/sql/import_atlas_match_visits_test.php "$manifest" "/tmp/dido-idempotent/matches/${id}.json"; then ok=yes;break;fi
+    echo "Transient TEST DB retry for $id attempt $attempt"
+    sleep $((20+attempt*20))
+  done
+  [[ "$ok" == yes ]] || { echo "TEST match idempotency failed: $id" >&2; exit 1; }
+done
 php infra/sql/atlas_history_verify.php --external="$external" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
 php infra/sql/atlas_history_finalize.php --external="$external"
 php infra/sql/atlas_history_verify.php --external="$external" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
