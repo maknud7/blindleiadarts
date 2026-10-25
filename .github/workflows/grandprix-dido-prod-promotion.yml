@@ -36,13 +36,13 @@ jobs:
           php -l infra/sql/atlas_promote_grandprix_dido_no_elo.php
           php -l infra/sql/atlas_dido_prod_no_elo_guard.php
           php -r '$m=json_decode(file_get_contents("infra/atlas/manifests/grandprix-dido-2026-10-24.json"),true,512,JSON_THROW_ON_ERROR);if(($m["standalone"]??false)!==true||($m["elo_enabled"]??true)!==false||($m["ranking_points_enabled"]??true)!==false||($m["season_external_id"]??"x")!=="")exit(1);echo "DIDO_ISOLATION_OK=yes\n";'
-      - name: Require successful immutable Grand Prix DiDo TEST import
+      - name: Require successful DiDo TEST recovery with no-ELO verification
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           for attempt in $(seq 1 50); do
-            payload="$(curl -fsSL --connect-timeout 5 --max-time 25 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/40174560307")"
+            payload="$(curl -fsSL --connect-timeout 5 --max-time 25 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/40176418908")"
             status="$(jq -r '.status' <<< "$payload")"
             result="$(jq -r '.conclusion // "pending"' <<< "$payload")"
             if [[ "$status" == completed ]]; then
