@@ -1,0 +1,50 @@
+name: Grand Prix DiDo source preflight (read-only)
+
+on:
+  push:
+    branches:
+      - codex/grandprix-dido-no-elo-probe
+    paths:
+      - infra/atlas/run-grandprix-dido-probe.flag
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Probe exact DartsAtlas tournament through existing TEST connector
+        env:
+          EXTERNAL_ID: UBKzQpfMMwyB
+          TEST_BASE_URL: https://test.blindleiadarts.ingenting.org
+        run: |
+          set -Eeuo pipefail
+          target=/tmp/grandprix-dido-probe.json
+          status="$(curl --fail-with-body -sS -L --connect-timeout 10 --max-time 240 -o "$target" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-tournament-probe.php?tournament=${EXTERNAL_ID}" || true)"
+          echo "HTTP status=$status"
+          if [[ "$status" != "200" ]]; then
+            head -c 600 "$target" 2>/dev/null || true
+            exit 1
+          fi
+          php -r '
+            $d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);
+            if(($d["ok"]??false)!==true||($d["tournament_external_id"]??"")!=="UBKzQpfMMwyB")throw new RuntimeException("Wrong source ID");
+            foreach(["root","groups","group-1","group-2","results"] as $n){
+              $p=$d["pages"][$n]??null;
+              if(($p["status"]??0)!==200)throw new RuntimeException("Source page unavailable: ".$n." HTTP ".($p["status"]??"unknown"));
+              printf("PAGE=%s PLAYERS=%d MATCHES=%d BYTES=%d\n",$n,count($p["players"]??[]),count($p["matches"]??[]),$p["body_bytes"]??0);
+            }
+            echo "DIDO_SOURCE_PREFLIGHT_OK=yes\n";
+          ' "$target"
+          cp "$target" grandprix-dido-probe.json
+      - name: Preserve public source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grandprix-dido-source-probe
+          path: grandprix-dido-probe.json
+          retention-days: 3
+          if-no-files-found: ignore
