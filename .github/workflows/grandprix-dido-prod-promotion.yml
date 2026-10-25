@@ -1,0 +1,80 @@
+name: Promote Grand Prix DiDo without ELO
+on:
+  push:
+    branches: [codex/grandprix-dido-no-elo-probe]
+    paths: [infra/atlas/run-grandprix-dido-prod.flag]
+permissions:
+  contents: read
+concurrency:
+  group: grandprix-dido-prod-no-elo
+  cancel-in-progress: false
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_TABLE_PREFIX: bd_prod_
+      DIDO_NO_ELO_GUARD: yes
+      EXTERNAL_ID: UBKzQpfMMwyB
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli,mbstring
+          coverage: none
+      - name: Require explicitly requested DIDO import and lint code
+        run: |
+          set -Eeuo pipefail
+          grep -Fxq 'PROMOTE_VERIFIED_DIDO_WITHOUT_ELO=yes' infra/atlas/run-grandprix-dido-prod.flag
+          php -l infra/sql/atlas_promote_grandprix_dido_no_elo.php
+          php -l infra/sql/dido_prod_no_elo_guard.php
+          php -r '$m=json_decode(file_get_contents("infra/atlas/manifests/grandprix-dido-2026-10-24.json"),true,512,JSON_THROW_ON_ERROR);if(($m["standalone"]??false)!==true||($m["elo_enabled"]??true)!==false||($m["ranking_points_enabled"]??true)!==false||($m["season_external_id"]??"x")!=="")exit(1);echo "DIDO_ISOLATION_OK=yes\n";'
+      - name: Require complete canonical TEST history and playoff
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+      - name: Build exact promotion manifest from TEST and save immutable ELO checksum
+        env:
+          DB_TABLE_PREFIX: bd_prod_
+        run: php infra/sql/dido_prod_no_elo_guard.php plan
+      - name: Snapshot PROD before any changes
+        env:
+          ALLOW_PROD_SNAPSHOT_BACKUP: yes
+        run: |
+          set -Eeuo pipefail
+          backup_prefix="bd_backup_$(date -u +%Y%m%d_%H%M%S)_"
+          BACKUP_TABLE_PREFIX="$backup_prefix" php infra/sql/prod_snapshot_backup.php | tee /tmp/dido-prod-backup.log
+          grep -Fq 'PROD_SNAPSHOT_BACKUP_OK=yes' /tmp/dido-prod-backup.log
+          echo "PROD_BACKUP_PREFIX=$backup_prefix" >> "$GITHUB_ENV"
+      - name: Promote only standalone DiDo rows from verified TEST
+        env:
+          ALLOW_PROD_DIDO_STANDALONE: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_promote_grandprix_dido_no_elo.php /tmp/grandprix-dido-promotion.json | tee /tmp/dido-prod-promotion.log
+          grep -Fq 'ATLAS_PROD_PROMOTION_STAGED=yes' /tmp/dido-prod-promotion.log
+      - name: Strict PROD data-phase gate
+        run: php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
+      - name: Finalize and verify PROD without rebuilding ELO
+        env:
+          ALLOW_PROD_ATLAS_FINALIZE: yes
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+          php infra/sql/dido_prod_no_elo_guard.php verify
+      - name: Record production snapshot reference
+        if: always()
+        run: echo "PROD_BACKUP_PREFIX=${PROD_BACKUP_PREFIX:-none}"
