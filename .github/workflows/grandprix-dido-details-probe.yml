@@ -1,0 +1,36 @@
+name: Grand Prix DiDo match-detail preflight (read-only)
+
+on:
+  push:
+    branches: [codex/grandprix-dido-no-elo-probe]
+    paths: [infra/atlas/run-grandprix-dido-details.flag]
+
+permissions:
+  contents: read
+
+jobs:
+  details:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch sample group and final match details via TEST connector
+        run: |
+          set -Eeuo pipefail
+          for id in RoeBCfG6gUe2 k9GJlVwnyGsn; do
+            status="$(curl -sS -L --connect-timeout 8 --max-time 120 -o "/tmp/${id}.json" -w '%{http_code}' "https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=${id}" || true)"
+            echo "match=$id http=$status"
+            php -r '
+              $d=json_decode(file_get_contents($argv[1]),true);
+              echo json_encode(["match"=>$argv[2],"ok"=>$d["ok"]??false,"error"=>$d["error"]??null,"leg_count"=>$d["leg_count"]??null,"visit_count"=>$d["visit_count"]??null,"darts_count"=>$d["darts_count"]??null,"players"=>$d["players"]??null],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),"\n";
+              if(($d["ok"]??false)!==true)exit(1);
+            ' "/tmp/${id}.json" "$id"
+            sleep 12
+          done
+      - name: Publish sample detail files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grandprix-dido-sample-match-details
+          path: /tmp/*.json
+          retention-days: 3
+          if-no-files-found: ignore
