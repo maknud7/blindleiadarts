@@ -48,7 +48,7 @@ for id in "${ids[@]}"; do
   [[ "$ok" == yes ]] || { echo "TEST match idempotency failed: $id" >&2; exit 1; }
 done
 php infra/sql/atlas_history_verify.php --external="$external" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
-php infra/sql/atlas_history_finalize.php --external="$external"
+php infra/sql/atlas_finalize_grandprix_dido_no_elo.php --external="$external"
 php infra/sql/atlas_history_verify.php --external="$external" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
 php infra/sql/atlas_history_lifecycle_verify.php --external="$external"
 php infra/sql/atlas_format_metadata_verify.php --external="$external"
