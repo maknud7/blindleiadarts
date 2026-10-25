@@ -1,0 +1,123 @@
+name: Resume DiDo TEST import with original ELO baseline
+on:
+  push:
+    branches: [codex/grandprix-dido-no-elo-probe]
+    paths: [infra/atlas/run-grandprix-dido-recovery.flag]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: grandprix-dido-test-migration
+  cancel-in-progress: false
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      DB_TABLE_PREFIX: bd_test_
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      EXTERNAL_ID: UBKzQpfMMwyB
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli,mbstring
+          coverage: none
+      - uses: actions/download-artifact@v4
+        with:
+          name: grandprix-dido-test-migration-evidence
+          run-id: 40174560307
+          github-token: ${{ github.token }}
+          path: /tmp/dido-recovery/old
+      - name: Validate original frozen ELO baseline and TEST importer
+        run: |
+          set -Eeuo pipefail
+          php -l infra/sql/atlas_grandprix_dido_missing_details.php
+          php -l infra/sql/import_atlas_match_visits_test.php
+          test -s /tmp/dido-recovery/old/elo-before.json
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));
+          $v=[];
+          foreach(['elo_current_ratings','elo_match_events','tournament_elo_snapshots'] as $name){
+            $rows=$db->query("SELECT * FROM `bd_test_{$name}`")->fetch_all(MYSQLI_ASSOC);
+            usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));
+            $v[$name]=$rows;
+          }
+          if(json_encode($v,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==file_get_contents('/tmp/dido-recovery/old/elo-before.json'))throw new RuntimeException('TEST ELO drift since the original, incomplete import');
+          echo "ORIGINAL_TEST_ELO_BASELINE_UNCHANGED=yes\n";
+          PHP
+      - name: Discover missing match details without modifying DB
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/dido-recovery/matches
+          ok=no
+          for attempt in 1 2 3 4 5; do
+            if php infra/sql/atlas_grandprix_dido_missing_details.php > /tmp/dido-recovery/missing.txt; then ok=yes;break;fi
+            echo "Transient DB failure listing missing matches, attempt $attempt"
+            sleep $((15+attempt*15))
+          done
+          [[ "$ok" == yes ]] || exit 1
+          n="$(grep -c '.' /tmp/dido-recovery/missing.txt || true)"
+          echo "MISSING_DETAILS_COUNT=$n"
+          [[ "$n" -le 79 ]] || exit 1
+      - name: Fetch exact missing source details before any recovery writes
+        run: |
+          set -Eeuo pipefail
+          while IFS= read -r id; do
+            [[ -n "$id" ]] || continue
+            ok=no
+            for attempt in 1 2 3 4 5; do
+              status="$(curl -sS -L --connect-timeout 8 --max-time 100 -o "/tmp/dido-recovery/matches/${id}.json" -w '%{http_code}' "https://test.blindleiadarts.ingenting.org/api/atlas-match-visits.php?match=$id" || true)"
+              if [[ "$status" == 200 ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(($d["ok"]??false)===true&&($d["external_id"]??"")===$argv[2]&&($d["leg_count"]??0)>0&&($d["visit_count"]??0)>0?0:1);' "/tmp/dido-recovery/matches/${id}.json" "$id"; then ok=yes;break;fi
+              echo "Retrying source match $id HTTP=$status"
+              sleep $((20+attempt*20))
+            done
+            [[ "$ok" == yes ]] || { echo "SOURCE_INCOMPLETE=$id" >&2; exit 1; }
+            echo "SOURCE_READY=$id"
+            sleep 12
+          done < /tmp/dido-recovery/missing.txt
+          echo "ALL_MISSING_DETAILS_READY=yes"
+      - name: Complete missing legs and visits with safe DB reconnect retries
+        run: |
+          set -Eeuo pipefail
+          manifest=infra/atlas/manifests/grandprix-dido-2026-10-24.json
+          while IFS= read -r id; do
+            [[ -n "$id" ]] || continue
+            ok=no
+            for attempt in 1 2 3 4 5 6; do
+              if php infra/sql/import_atlas_match_visits_test.php "$manifest" "/tmp/dido-recovery/matches/${id}.json"; then ok=yes;break;fi
+              echo "Retrying transient TEST DB connection/transaction for $id attempt $attempt"
+              sleep $((15+attempt*20))
+            done
+            [[ "$ok" == yes ]] || { echo "DETAIL_IMPORT_FAILED=$id" >&2; exit 1; }
+          done < /tmp/dido-recovery/missing.txt
+          echo "DIDO_MISSING_DETAILS_RECOVERED=yes"
+      - name: Strict complete TEST QA, finalize and no-ELO proof
+        run: |
+          set -Eeuo pipefail
+          [[ ! -s <(php infra/sql/atlas_grandprix_dido_missing_details.php) ]] || { echo "Still missing match details"; exit 1; }
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));
+          $r=$db->query("SELECT t.id,t.elo_enabled,t.season_id,t.status,t.end_at FROM bd_test_external_references e JOIN bd_test_tournaments t ON t.id=e.internal_id WHERE e.external_system=CONCAT('darts','atlas') AND e.external_entity_type='tournament' AND e.external_id='UBKzQpfMMwyB' LIMIT 1")->fetch_assoc();
+          if(!$r||$r['season_id']!==null||(int)$r['elo_enabled']!==0||$r['status']!=='completed'||!$r['end_at'])throw new RuntimeException('Tournament ELO/season/lifecycle mismatch');
+          $id=(int)$r['id'];
+          foreach(['elo_match_events','tournament_elo_snapshots','season_ranking_events'] as $name)if((int)$db->query("SELECT COUNT(*) c FROM `bd_test_{$name}` WHERE tournament_id={$id}")->fetch_assoc()['c']!==0)throw new RuntimeException('Illegal DiDo ELO/ranking rows');
+          $v=[];
+          foreach(['elo_current_ratings','elo_match_events','tournament_elo_snapshots'] as $name){$rows=$db->query("SELECT * FROM `bd_test_{$name}`")->fetch_all(MYSQLI_ASSOC);usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));$v[$name]=$rows;}
+          if(json_encode($v,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==file_get_contents('/tmp/dido-recovery/old/elo-before.json'))throw new RuntimeException('ELO changed during DiDo import');
+          echo "DIDO_TEST_COMPLETE_NO_ELO_OK=yes id={$id}\n";
+          PHP
