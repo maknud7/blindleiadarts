@@ -208,7 +208,8 @@ if ($activeProdTournaments !== 0 || $activeProdMatches !== 0) {
     throw new RuntimeException("Refusing history promotion while PROD has active runtime: tournaments={$activeProdTournaments}, matches={$activeProdMatches}");
 }
 
-// A standalone Grand Prix has no season; no source season lookup or modification.\n$sourceTournamentIds = [];
+// A standalone Grand Prix has no season; no source season lookup or modification.
+$sourceTournamentIds = [];
 $sourceTournamentRows = [];
 $sourceSpecByExternal = [];
 $totalMatches = 0;
@@ -284,7 +285,8 @@ foreach ($participantSourceIds as $sourcePlayerId) {
     }
 }
 
-// Never resolve a production season for this tournament.\necho "ATLAS_PROD_PROMOTION_PREFLIGHT_OK=yes" . PHP_EOL;
+// Never resolve a production season for this tournament.
+echo "ATLAS_PROD_PROMOTION_PREFLIGHT_OK=yes" . PHP_EOL;
 echo "ATLAS_PROD_PROMOTION_SOURCE_TOURNAMENTS=" . count($sourceTournamentIds) . PHP_EOL;
 echo "ATLAS_PROD_PROMOTION_SOURCE_MATCHES={$totalMatches}" . PHP_EOL;
 echo "ATLAS_PROD_PROMOTION_SOURCE_LEGS={$totalLegs}" . PHP_EOL;
@@ -293,7 +295,9 @@ echo "ATLAS_PROD_PROMOTION_SOURCE_PLAYER_REFS=" . count($playerRefRows) . PHP_EO
 
 $db->begin_transaction();
 try {
-    $targetSeasonId = null; // Isolation from Mandagsserien and all season tables.\n\n    $targetPlayers = $db->query(
+    $targetSeasonId = null; // Isolation from Mandagsserien and all season tables.
+
+    $targetPlayers = $db->query(
         "SELECT * FROM `{$targetPrefix}players` WHERE club_id={$targetClubId} OR club_id IS NULL ORDER BY id"
     )->fetch_all(MYSQLI_ASSOC);
     $targetByMember = [];
