@@ -101,7 +101,7 @@ jobs:
           set -Eeuo pipefail
           [[ ! -s <(php infra/sql/atlas_grandprix_dido_missing_details.php) ]] || { echo "Still missing match details"; exit 1; }
           php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
-          php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_finalize_grandprix_dido_no_elo.php --external="$EXTERNAL_ID"
           php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
           php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
