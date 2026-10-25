@@ -43,6 +43,10 @@ jobs:
           php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
           php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+      - name: Prove entire 79-match TEST import is idempotent before PROD
+        env:
+          DB_TABLE_PREFIX: bd_test_
+        run: bash infra/atlas/atlas_grandprix_dido_test_idempotency.sh
       - name: Build exact promotion manifest from TEST and save immutable ELO checksum
         env:
           DB_TABLE_PREFIX: bd_prod_
