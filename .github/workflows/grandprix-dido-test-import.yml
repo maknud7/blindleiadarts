@@ -128,7 +128,9 @@ jobs:
           $items=[];
           foreach($names as $name){
             $table='bd_test_'.$name;
-            $items[$name]=$db->query("SELECT * FROM `{$table}` ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+            $rows=$db->query("SELECT * FROM `{$table}`")->fetch_all(MYSQLI_ASSOC);
+            usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));
+            $items[$name]=$rows;
           }
           file_put_contents('/tmp/dido/elo-before.json',json_encode($items,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES));
           echo "DIDO_TEST_ELO_BASELINE_SAVED=yes\n";
@@ -168,7 +170,9 @@ jobs:
           }
           $current=[];
           foreach(['elo_current_ratings','elo_match_events','tournament_elo_snapshots'] as $name){
-            $current[$name]=$db->query("SELECT * FROM `bd_test_{$name}` ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+            $rows=$db->query("SELECT * FROM `bd_test_{$name}`")->fetch_all(MYSQLI_ASSOC);
+            usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));
+            $current[$name]=$rows;
           }
           $before=file_get_contents('/tmp/dido/elo-before.json');
           if(json_encode($current,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==$before)throw new RuntimeException('Global TEST ELO state was modified');
