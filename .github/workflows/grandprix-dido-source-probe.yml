@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Probe exact DartsAtlas tournament through existing TEST connector
+      - name: Probe exact Atlas tournament through existing TEST connector
         env:
           EXTERNAL_ID: UBKzQpfMMwyB
           TEST_BASE_URL: https://test.blindleiadarts.ingenting.org
