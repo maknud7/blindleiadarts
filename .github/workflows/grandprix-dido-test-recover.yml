@@ -1,4 +1,4 @@
-name: Resume DiDo TEST import with original ELO baseline
+name: Resume DiDo TEST import with ELO isolation
 on:
   push:
     branches: [codex/grandprix-dido-no-elo-probe]
@@ -28,18 +28,12 @@ jobs:
           php-version: '8.3'
           extensions: mysqli,mbstring
           coverage: none
-      - uses: actions/download-artifact@v4
-        with:
-          name: grandprix-dido-test-migration-evidence
-          run-id: 40174560307
-          github-token: ${{ github.token }}
-          path: /tmp/dido-recovery/old
-      - name: Validate original frozen ELO baseline and TEST importer
+      - name: Capture existing ELO baseline and forbid DiDo ELO records
         run: |
           set -Eeuo pipefail
           php -l infra/sql/atlas_grandprix_dido_missing_details.php
           php -l infra/sql/import_atlas_match_visits_test.php
-          test -s /tmp/dido-recovery/old/elo-before.json
+          mkdir -p /tmp/dido-recovery
           php <<'PHP'
           <?php
           mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
@@ -50,8 +44,11 @@ jobs:
             usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));
             $v[$name]=$rows;
           }
-          if(json_encode($v,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==file_get_contents('/tmp/dido-recovery/old/elo-before.json'))throw new RuntimeException('TEST ELO drift since the original, incomplete import');
-          echo "ORIGINAL_TEST_ELO_BASELINE_UNCHANGED=yes\n";
+          $t=$db->query("SELECT t.id,t.elo_enabled,t.season_id FROM bd_test_external_references e JOIN bd_test_tournaments t ON t.id=e.internal_id WHERE e.external_system=CONCAT('darts','atlas') AND e.external_entity_type='tournament' AND e.external_id='UBKzQpfMMwyB' LIMIT 1")->fetch_assoc();
+          if(!$t || $t['season_id']!==null || (int)$t['elo_enabled']!==0)throw new RuntimeException('Pre-recovery DiDo ELO/season state invalid');
+          foreach(['elo_match_events','tournament_elo_snapshots','season_ranking_events'] as $name)if((int)$db->query("SELECT COUNT(*) c FROM `bd_test_{$name}` WHERE tournament_id=".(int)$t['id'])->fetch_assoc()['c']!==0)throw new RuntimeException('Existing DiDo ELO or ranking event');
+          file_put_contents('/tmp/dido-recovery/elo-before.json',json_encode($v,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES));
+          echo "RECOVERY_TEST_NO_ELO_BASELINE_CAPTURED=yes\n";
           PHP
       - name: Discover missing match details without modifying DB
         run: |
@@ -118,6 +115,6 @@ jobs:
           foreach(['elo_match_events','tournament_elo_snapshots','season_ranking_events'] as $name)if((int)$db->query("SELECT COUNT(*) c FROM `bd_test_{$name}` WHERE tournament_id={$id}")->fetch_assoc()['c']!==0)throw new RuntimeException('Illegal DiDo ELO/ranking rows');
           $v=[];
           foreach(['elo_current_ratings','elo_match_events','tournament_elo_snapshots'] as $name){$rows=$db->query("SELECT * FROM `bd_test_{$name}`")->fetch_all(MYSQLI_ASSOC);usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));$v[$name]=$rows;}
-          if(json_encode($v,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==file_get_contents('/tmp/dido-recovery/old/elo-before.json'))throw new RuntimeException('ELO changed during DiDo import');
+          if(json_encode($v,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==file_get_contents('/tmp/dido-recovery/elo-before.json'))throw new RuntimeException('ELO changed during DiDo import');
           echo "DIDO_TEST_COMPLETE_NO_ELO_OK=yes id={$id}\n";
           PHP
