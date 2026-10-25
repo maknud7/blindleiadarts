@@ -42,7 +42,7 @@ jobs:
           php -l infra/sql/import_atlas_grandprix_dido_test.php
           php -l infra/sql/import_atlas_match_visits_test.php
           php -l infra/sql/atlas_history_verify.php
-          php -l infra/sql/atlas_history_finalize.php
+          php -l infra/sql/atlas_finalize_grandprix_dido_no_elo.php
           php -r '
             $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
             if(($m["tournament_external_id"]??"")!=="UBKzQpfMMwyB" || ($m["standalone"]??false)!==true || ($m["elo_enabled"]??true)!==false || ($m["ranking_points_enabled"]??true)!==false || ($m["season_external_id"]??"x")!=="")
@@ -148,7 +148,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
-          php infra/sql/atlas_history_finalize.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_finalize_grandprix_dido_no_elo.php --external="$EXTERNAL_ID"
           php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
           php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
           php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
