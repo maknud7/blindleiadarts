@@ -42,7 +42,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           for attempt in $(seq 1 50); do
-            payload="$(curl -fsSL --connect-timeout 5 --max-time 25 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/40176418908")"
+            payload="$(curl -fsSL --connect-timeout 5 --max-time 25 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/40178781210")"
             status="$(jq -r '.status' <<< "$payload")"
             result="$(jq -r '.conclusion // "pending"' <<< "$payload")"
             if [[ "$status" == completed ]]; then
