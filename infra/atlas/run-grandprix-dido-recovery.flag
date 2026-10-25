@@ -1,3 +1,4 @@
 RESUME_MISSING_TEST_DETAILS=yes
-ELO_CHECKPOINT=before_and_after_resume
+ISOLATED_NO_ELO_FINALIZER=required
+ELO_CHECKPOINT=frozen_current_state_before_after
 PROD_WRITES_ALLOWED=no
