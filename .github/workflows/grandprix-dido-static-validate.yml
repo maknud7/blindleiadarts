@@ -1,0 +1,28 @@
+name: Validate DiDo standalone migration PHP
+on:
+  push:
+    branches: [codex/grandprix-dido-no-elo-probe]
+    paths: [infra/atlas/run-grandprix-dido-validate.flag]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli,mbstring
+          coverage: none
+      - name: Lint standalone import, promoter and Elo verifier
+        run: |
+          set -Eeuo pipefail
+          for file in infra/sql/import_atlas_grandprix_dido_test.php infra/sql/atlas_promote_grandprix_dido_no_elo.php infra/sql/atlas_dido_prod_no_elo_guard.php; do php -l "$file"; done
+          php -r '
+            $s=file_get_contents("infra/sql/import_atlas_grandprix_dido_test.php");
+            if(str_contains($s,"elo_enabled=1")||str_contains($s,"INSERT INTO `{$prefix}seasons`")||str_contains($s,"INSERT INTO `{$prefix}season_ranking_events`"))throw new RuntimeException("Unsafe migration code");
+            $p=file_get_contents("infra/sql/atlas_promote_grandprix_dido_no_elo.php");
+            if(str_contains($p,"run_php_migration.php")||str_contains($p,"rebuild_elo")||str_contains($p,"INSERT INTO `{$targetPrefix}season_ranking_events`"))throw new RuntimeException("Unsafe promotion code");
+            echo "DIDO_STANDALONE_STATIC_VALIDATION_OK=yes\n";
+          '

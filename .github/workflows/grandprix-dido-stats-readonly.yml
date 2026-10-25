@@ -1,0 +1,35 @@
+name: Grand Prix DiDo public stats (read-only)
+
+on:
+  push:
+    branches:
+      - codex/grandprix-dido-no-elo-probe
+    paths:
+      - infra/atlas/run-grandprix-dido-stats.flag
+
+permissions:
+  contents: read
+
+jobs:
+  statistics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      DB_TABLE_PREFIX: bd_test_
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli,mbstring
+          coverage: none
+      - name: Read tournament match, scoring and checkout statistics
+        run: |
+          set -Eeuo pipefail
+          php -l infra/sql/atlas_grandprix_dido_stats_readonly.php
+          php infra/sql/atlas_grandprix_dido_stats_readonly.php
