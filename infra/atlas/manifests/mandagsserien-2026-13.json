@@ -1,0 +1,130 @@
+{
+  "manifest_version": 1,
+  "source": "dartsatlas",
+  "season_external_id": "rFByCgOqI1rq",
+  "season_name": "Mandagsserien – Høst 2026",
+  "season_starts_on": "2026-08-10",
+  "season_ends_on": "2026-12-07",
+  "tournament_external_id": "sh8pT3wP9xtJ",
+  "tournament_name": "Mandagsserien #13",
+  "tournament_date": "2026-11-02",
+  "tournament_start_at": "2026-11-02 18:30:00",
+  "tournament_slug": "mandagsserien-13-2026-11-02",
+  "expected_players": 9,
+  "expected_matches": 39,
+  "expected_legs": 44,
+  "players": {
+    "6dLds5Na0PsZ": "Arild Eidesund",
+    "5sIceSlYm33a": "Jon-Henning Næss",
+    "0J6SDLVfThUs": "Magnus Knudsen",
+    "Rujhhq1jF7Uu": "Tormod Haga",
+    "AD14UnsZ6TbO": "Kristian Mollestad",
+    "DUq32rNObrUk": "Thomas Kildal",
+    "xTpeuJWBefFN": "Andreas Tingstveit Hansen",
+    "2bhzMxZ5bdyy": "Leif Atle Franksson",
+    "GFg9pZkPKrpU": "Vetle Ribe Davidsen"
+  },
+  "groups": [
+    {
+      "number": 1,
+      "name": "Group 1",
+      "players": [
+        "6dLds5Na0PsZ",
+        "5sIceSlYm33a",
+        "0J6SDLVfThUs",
+        "Rujhhq1jF7Uu",
+        "AD14UnsZ6TbO",
+        "DUq32rNObrUk",
+        "xTpeuJWBefFN",
+        "2bhzMxZ5bdyy",
+        "GFg9pZkPKrpU"
+      ],
+      "match_ids": [
+        "bbhpyG7sH8Yy",
+        "HiFsmHtfZ8d9",
+        "vOPHyOqSS7sP",
+        "fapHs4pbeZMS",
+        "VAK90Co7rskB",
+        "T43dDU2K8nJN",
+        "KY2nn3z65Ej0",
+        "ZWvrVuDXkbHm",
+        "8CdrU65jERH3",
+        "Q1HIohKpFc9d",
+        "unslhwPFFDGl",
+        "c1i3GYQ5Uad5",
+        "doRfBIsZ1bPa",
+        "3HkRhZbRoJ4X",
+        "N8CG2vgsUQCV",
+        "uMKmsgDBpx56",
+        "wPjihw0gLkkD",
+        "y7L7ERKeLNC8",
+        "mHHNlw3VIhjp",
+        "dTnJQMVQ2zC8",
+        "syuUcdPdYHQP",
+        "qOI5rH1C58UQ",
+        "evYdjHmsy8RB",
+        "KDnQ96nR8FAe",
+        "bHvQVrNGOY3N",
+        "vhNVN0PFIY8V",
+        "ID5F3BalXIFV",
+        "T1gg1EMnU746",
+        "z1U6oQsVBAom",
+        "9bE6x2R3g4Gy",
+        "X1D6HXl2cAap",
+        "kissq1h9JIgF",
+        "qCygZCYOmj2W",
+        "8TRyWbSpNlUb",
+        "eiFLrKmTVoBq",
+        "XUsVqHx5XZ1X"
+      ]
+    }
+  ],
+  "playoff": {
+    "format": "single_elimination",
+    "bracket_size": 4,
+    "qualifiers_per_group": 4,
+    "best_of_legs": 3,
+    "expected_nodes": 3,
+    "qualifiers": [
+      "6dLds5Na0PsZ",
+      "5sIceSlYm33a",
+      "0J6SDLVfThUs",
+      "Rujhhq1jF7Uu"
+    ],
+    "match_ids": [
+      "xVeM9Nap4S6R",
+      "nSPmDQcZyRS0",
+      "G7du13kH0XyL"
+    ],
+    "champion_external_id": "6dLds5Na0PsZ",
+    "champion_name": "Arild Eidesund"
+  },
+  "ranking_points": {
+    "6dLds5Na0PsZ": 5,
+    "0J6SDLVfThUs": 4,
+    "5sIceSlYm33a": 3,
+    "Rujhhq1jF7Uu": 3,
+    "AD14UnsZ6TbO": 1,
+    "DUq32rNObrUk": 1,
+    "xTpeuJWBefFN": 1,
+    "2bhzMxZ5bdyy": 1,
+    "GFg9pZkPKrpU": 1
+  },
+  "ranking_stages": {
+    "6dLds5Na0PsZ": "Winner",
+    "0J6SDLVfThUs": "Final",
+    "5sIceSlYm33a": "Semi-Final",
+    "Rujhhq1jF7Uu": "Semi-Final",
+    "AD14UnsZ6TbO": "Group stage",
+    "DUq32rNObrUk": "Group stage",
+    "xTpeuJWBefFN": "Group stage",
+    "2bhzMxZ5bdyy": "Group stage",
+    "GFg9pZkPKrpU": "Group stage"
+  },
+  "source_evidence": {
+    "season_results_path": "/seasons/rFByCgOqI1rq/tournaments/results",
+    "season_results_text": "Mandagsserien #13 Champion Arild Eidesund",
+    "verified_at": "2026-11-02T19:40:00Z"
+  },
+  "winner_only_match_ids": []
+}
