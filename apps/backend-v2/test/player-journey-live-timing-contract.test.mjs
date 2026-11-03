@@ -92,3 +92,11 @@ test("Home registration uses canonical action directly and keeps local feedback"
   assert.doesNotMatch(home, /triggerExisting\("register", open\.id\)/);
 });
 
+test("Live polls repaint groups and ELO only when canonical content changes", () => {
+  const live = read("apps/live/app.js");
+  const v2 = read("apps/live/live-v2.js");
+  assert.match(live, /if \(markup === lastBoardsMarkup && el\.boards\.firstElementChild\) return/);
+  assert.match(v2, /if \(liveV2State\.tableMarkup !== groupMarkup \|\| !el\.tables\.firstElementChild\)/);
+  assert.match(v2, /if \(liveV2State\.eloMarkup !== eloMarkup \|\| !el\.elo\.firstElementChild\)/);
+  assert.match(v2, /\}, 20000\)/);
+});
