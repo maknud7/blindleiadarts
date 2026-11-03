@@ -70,3 +70,14 @@ test("tournament-detail action errors stay visible and do not replace button lab
   assert.match(details, /actionPending=true/);
   assert.doesNotMatch(details, /if\(b\) b\.textContent=error\.message/);
 });
+
+test("check-in gates coalesce concurrent status GETs and ignore their own label-only mutations", () => {
+  const checkin = read("apps/player/checkin-runtime.js");
+  assert.match(checkin, /const checkinStatusInFlight = new Map\(\)/);
+  assert.match(checkin, /if \(checkinStatusInFlight\.has\(id\)\) return checkinStatusInFlight\.get\(id\)/);
+  assert.match(checkin, /finally\(\(\) => checkinStatusInFlight\.delete\(id\)\)/);
+  assert.match(checkin, /function updateTextWhenChanged\(node, text\)/);
+  assert.match(checkin, /if \(node && node\.textContent !== text\)/);
+  assert.match(checkin, /node\.nodeType === Node\.ELEMENT_NODE/);
+  assert.match(checkin, /if \(structuralChange\) scheduleMutationRefresh\(\)/);
+});
