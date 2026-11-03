@@ -69,7 +69,7 @@ async function startMockKiosk(browser, size, options = {}) {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data }) });
   });
 
-  const response = await page.goto(ORIGIN + "/kiosk/", { waitUntil: "domcontentloaded" });
+  const response = await page.goto(ORIGIN + "/v2/kiosk/", { waitUntil: "domcontentloaded" });
   expect(response?.ok()).toBeTruthy();
   await expect(page.getByText("Registrer kast")).toBeVisible();
   await expect(page.locator(".kiosk-shell")).toHaveAttribute("data-kiosk-layout", /^(fit|scroll)$/);
