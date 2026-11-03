@@ -85,7 +85,7 @@ test("both kiosk generations avoid external Scolia polling on manual hardware", 
   assert.match(legacy, /if \(!shouldPollScolia\(\)\)/);
   assert.match(legacy, /board\?\.scolia_service_ready === false/);
   assert.match(legacy, /renderInactiveService\(board\)/);
-  assert.match(v2Hook, /if \(!enabled\) return null/);
+  assert.match(v2Hook, /if \(!enabled \|\| !kioskCode/);
   assert.match(v2Hook, /INACTIVE_SERVICE_STATUS_INTERVAL_MS = 30_000/);
   assert.match(v2Hook, /board\?\.scolia_service_ready === false/);
   assert.match(v2Workspace, /enabled: scolia\.automatic/);
