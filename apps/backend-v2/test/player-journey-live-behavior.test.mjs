@@ -92,3 +92,46 @@ test("two visible check-in buttons for one tournament share one status request",
   await getCheckinStatus(77);
   assert.equal(requests.length, 1, "subsequent reads use cached status until stale");
 });
+
+function playerRefreshHarness(status) {
+  const events = [];
+  const state = { token: "existing-token", me: { id: 7 }, dashboard: { registrations: [{ status: "registered" }] } };
+  const error = Object.assign(new Error("Temporary backend failure"), { status });
+  const scope = {
+    state,
+    sharedApp: { session: {
+      snapshot: () => ({ resolved: false }),
+      resolve: async () => ({ id: 7 }),
+      clear: () => events.push("clear-session"),
+    } },
+    api: async () => { throw error; },
+    persistToken: (token) => { state.token = token; events.push("persist-token"); },
+    renderAuth: () => events.push("render-auth"),
+    renderDashboard: () => events.push("render-dashboard"),
+    renderTournaments: () => events.push("render-tournaments"),
+    emitPlayerData: (reason) => events.push(reason),
+    setStatus: (message) => events.push(message),
+  };
+  const source = extract("apps/player/app.js", "async function loadCurrentUser() {", "function applyBranding()");
+  return { state, events, refresh: vm.runInNewContext(`${source}\nloadCurrentUser;`, scope) };
+}
+
+test("temporary 502 during player refresh does not log out registered player", async () => {
+  const h = playerRefreshHarness(502);
+  await h.refresh();
+  assert.equal(h.state.token, "existing-token");
+  assert.equal(h.state.me.id, 7);
+  assert.equal(h.state.dashboard.registrations[0].status, "registered");
+  assert.ok(h.events.includes("user_refresh_error"));
+  assert.ok(!h.events.includes("clear-session"));
+  assert.ok(h.events.some((x) => String(x).includes("Innloggingen er beholdt")));
+});
+
+test("explicit 401 still clears invalid player credentials", async () => {
+  const h = playerRefreshHarness(401);
+  await h.refresh();
+  assert.equal(h.state.token, "");
+  assert.equal(h.state.me, null);
+  assert.ok(h.events.includes("clear-session"));
+  assert.ok(h.events.includes("session_error"));
+});
