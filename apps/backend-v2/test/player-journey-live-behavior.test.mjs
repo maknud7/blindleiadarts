@@ -135,3 +135,24 @@ test("explicit 401 still clears invalid player credentials", async () => {
   assert.ok(h.events.includes("clear-session"));
   assert.ok(h.events.includes("session_error"));
 });
+
+test("unchanged 3-second Live board snapshots do not recreate DOM cards", () => {
+  let writes = 0;
+  let markup = "";
+  const boardRoot = {
+    get firstElementChild() { return markup ? {} : null; },
+    get innerHTML() { return markup; },
+    set innerHTML(value) { markup = value; writes += 1; },
+  };
+  const source = extract("apps/live/app.js", "let lastBoardsMarkup = null;", "function renderQueue(");
+  const renderBoards = vm.runInNewContext(`${source}\nrenderBoards;`, {
+    el: { boards: boardRoot },
+    esc: (value) => String(value),
+  });
+  renderBoards([]);
+  renderBoards([]);
+  assert.equal(writes, 1, "no new HTML when both snapshots are empty");
+  renderBoards([{ board_number: 1, live_match: null }]);
+  renderBoards([{ board_number: 1, live_match: null }]);
+  assert.equal(writes, 2, "board changes repaint exactly once");
+});
