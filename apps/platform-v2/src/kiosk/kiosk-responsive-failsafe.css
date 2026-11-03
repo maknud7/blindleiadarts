@@ -101,12 +101,23 @@
 }
 
 .score-entry {
-  /* 44px mode buttons plus switch padding need more than old 42px header. */
-  grid-template-rows: minmax(56px, auto) 54px minmax(0, 1fr);
+  /* 44px mode buttons + switch padding + Norwegian labels must fit above the score display. */
+  grid-template-rows: minmax(72px, auto) 54px minmax(0, 1fr);
+}
+
+.score-entry .panel-head {
+  position: relative;
+  z-index: 2;
+  min-height: 64px;
+}
+
+.score-entry .score-display {
+  position: relative;
+  z-index: 1;
 }
 
 .score-entry.dart-entry-active {
-  grid-template-rows: minmax(56px, auto) minmax(0, 1fr);
+  grid-template-rows: minmax(72px, auto) minmax(0, 1fr);
 }
 
 .keypad {
@@ -200,11 +211,11 @@
   height: auto;
   min-height: 0;
   overflow: visible;
-  grid-template-rows: 56px 54px minmax(220px, auto);
+  grid-template-rows: minmax(72px, auto) 54px minmax(220px, auto);
 }
 
 .kiosk-shell[data-kiosk-layout="scroll"] .score-entry.dart-entry-active {
-  grid-template-rows: 56px minmax(335px, auto);
+  grid-template-rows: minmax(72px, auto) minmax(335px, auto);
 }
 
 .kiosk-shell[data-kiosk-layout="scroll"] .keypad {
