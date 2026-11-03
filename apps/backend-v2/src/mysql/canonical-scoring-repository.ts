@@ -181,6 +181,7 @@ export class MySqlCanonicalScoringRepository {
         visitNumber,
         evaluation,
         requestKey === "" ? null : requestKey,
+        command.source,
       );
 
       let matchCompleted = false;
@@ -430,12 +431,13 @@ export class MySqlCanonicalScoringRepository {
     visitNumber: number,
     visit: EvaluatedVisit,
     requestKey: string | null,
+    source: RecordVisitCommand["source"],
   ): Promise<void> {
     const dartsJson = visit.darts.length > 0 ? JSON.stringify(visit.darts) : null;
     await sql.execute(
       `INSERT INTO ${this.table("visits")}
-       (match_id, leg_id, player_id, visit_number, score, darts_used, input_mode, darts_json, is_bust, remaining_after, request_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (match_id, leg_id, player_id, visit_number, score, darts_used, input_mode, darts_json, is_bust, remaining_after, request_key, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         matchId,
         legId,
@@ -448,6 +450,7 @@ export class MySqlCanonicalScoringRepository {
         visit.is_bust ? 1 : 0,
         visit.remaining_after,
         requestKey,
+        source,
       ],
     );
   }
