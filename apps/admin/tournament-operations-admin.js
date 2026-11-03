@@ -47,6 +47,7 @@ if (opsHost) {
   );
   const state = { tournaments: [], snapshot: null, boardSelection: null };
 
+
   function token() { return localStorage.getItem("bd:token") || ""; }
   function clubId() { return Number(localStorage.getItem("bd:selectedClubId") || 0); }
   function esc(value) {
@@ -127,29 +128,47 @@ if (opsHost) {
     })[status] || status || "Ukjent";
   }
 
+  // Keep the operator's intended destination across the automatic 15-second
+  // tournament refresh. Never silently default to the first available board.
+  const selectedMoveTargets = new Map();
+  let moveInProgress = false;
+  const exactId = (value) => String(value ?? "").trim();
+  const boardLabel = (board) => `Skive ${Number(board?.board_number || 0)}`;
+
   function movableBoards(match) {
-    const current = Number(match.kiosk_id || 0);
+    const current = exactId(match.kiosk_id);
     return (state.boardSelection?.boards || []).filter((board) => {
       if (!board.selected || !board.is_active) return false;
-      const boardId = Number(board.id || 0);
+      const boardId = exactId(board.id);
       if (!boardId || boardId === current) return false;
       return !board.is_busy && !board.is_reserved;
     });
   }
 
   function renderMove(match) {
+    const id = exactId(match.id);
     const boards = movableBoards(match);
+    const currentBoard = match.board_number ? `skive ${Number(match.board_number)}` : "køen";
     if (!boards.length) {
-      return `<div class="row-meta"><span>Ingen annen valgt og ledig skive akkurat nå.</span></div>`;
+      selectedMoveTargets.delete(id);
+      return `<p class="ops-move-unavailable">Ingen ledig skive akkurat nå. Fullfør eller frigjør en kamp, og oppdater oversikten.</p>`;
     }
-    const options = boards
-      .map((board) => `<option value="${Number(board.id)}">Skive ${Number(board.board_number)} · ${esc(board.name || board.code || "")}</option>`)
-      .join("");
+
+    const previousChoice = selectedMoveTargets.get(id) || "";
+    const selected = boards.find((board) => exactId(board.id) === previousChoice);
+    if (previousChoice && !selected) selectedMoveTargets.delete(id);
+    const options = boards.map((board) =>
+      `<option value="${esc(exactId(board.id))}" ${selected && exactId(selected.id) === exactId(board.id) ? "selected" : ""}>${esc(boardLabel(board))} · ${esc(board.name || board.code || "")}</option>`
+    ).join("");
     const verb = match.status === "pending" ? "Plasser kamp" : "Flytt kamp";
+    const preview = selected
+      ? `${currentBoard} → ${boardLabel(selected)}`
+      : previousChoice ? "Valgt skive er ikke lenger ledig. Velg på nytt." : "Velg en ledig skive før du flytter kampen.";
     return `
       <div class="ops-match-move">
-        <label><span>Ny skive</span><select data-move-target="${Number(match.id)}">${options}</select></label>
-        <button type="button" class="button quiet" data-move-match="${Number(match.id)}">${verb}</button>
+        <label><span>Flytt fra ${esc(currentBoard)} til</span><select data-move-target="${esc(id)}" aria-label="Velg ny skive for kampen" ${moveInProgress ? "disabled" : ""}><option value="">Velg ledig skive …</option>${options}</select></label>
+        <button type="button" class="button quiet" data-move-match="${esc(id)}" ${!selected || moveInProgress ? "disabled" : ""}>${verb}</button>
+        <p class="ops-move-preview" role="status">${esc(preview)}</p>
       </div>`;
   }
 
