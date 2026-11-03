@@ -17,7 +17,7 @@ export default defineConfig({
   },
   webServer: {
     command: "npx vite --config apps/platform-v2/vite.config.mjs --host 127.0.0.1 --port 4173 --strictPort",
-    url: "http://127.0.0.1:4173/kiosk/",
+    url: "http://127.0.0.1:4173/v2/kiosk/",
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
   },
