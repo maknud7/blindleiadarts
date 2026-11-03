@@ -89,3 +89,29 @@ test("successful move is not re-sent after read refresh failure", () => {
   assert.match(source, /el\.opsQueue\.addEventListener\("click"/);
   assert.match(source, /document\.activeElement\?\.matches\?\./);
 });
+
+test("canonical admin Utstyr navigation never silently switches to v2", () => {
+  const nav = read("apps/platform-v2/src/shared/PlatformNav.tsx");
+  const shell = read("packages/ui-assets/portal-menu.js");
+  const adminPage = read("apps/admin/index.html");
+  assert.match(nav, /canonicalEquipment: "\/#equipment"/);
+  assert.match(nav, /equipmentHref = testHost \? routes\.equipment : routes\.canonicalEquipment/);
+  assert.match(nav, /Utstyr · Klubbadmin/);
+  assert.match(adminPage, /kiosks: "equipment"/);
+  assert.match(shell, /equipment: "kiosks"/);
+  assert.match(shell, /clearStaleNavigationOverlay\(\{ closeDrawer: true \}\)/);
+  assert.match(shell, /menu\.removeAttribute\("inert"\)/);
+  assert.match(shell, /overlay\.hidden = true/);
+});
+
+test("equipment refreshes are parallel and Scolia background polling cannot block section changes", () => {
+  const admin = read("apps/admin/app.js");
+  const scolia = read("apps/admin/scolia-admin.js");
+  assert.match(admin, /const \[boardResult, pairingResult\] = await Promise\.allSettled/);
+  assert.match(admin, /state\.kiosks = boardResult\.value\.items \|\| \[\]/);
+  assert.match(admin, /timeoutMs: 10000/);
+  assert.match(scolia, /controller\?\.signal\.aborted/);
+  assert.match(scolia, /if \(loading \|\| !onEquipment \|\| document\.hidden/);
+  assert.match(scolia, /\}, 15000\)/);
+  assert.doesNotMatch(scolia, /\}, 5000\)/);
+});
