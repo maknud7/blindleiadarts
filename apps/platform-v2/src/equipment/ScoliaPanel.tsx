@@ -69,11 +69,11 @@ export function ScoliaPanel({ clubId, token, environment, boards, onEquipmentRef
     setLoading(true);
     setError("");
     try {
-      const data = await api<ScoliaDashboard>(`/clubs/${clubId}/scolia`, { token });
+      const data = await api<ScoliaDashboard>(`/clubs/${clubId}/scolia`, { token, timeoutMs: 12000 });
       setDashboard(data);
       const states = await Promise.allSettled(
         (data.boards || []).map(async (board) => {
-          const state = await legacyApi<BridgeResponse>(bridgeUrl(clubId, Number(board.id)), { token });
+          const state = await legacyApi<BridgeResponse>(bridgeUrl(clubId, Number(board.id)), { token, timeoutMs: 8000 });
           return [Number(board.id), state.board] as const;
         }),
       );
