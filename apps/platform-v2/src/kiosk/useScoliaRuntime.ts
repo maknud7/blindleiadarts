@@ -55,6 +55,7 @@ type UiResponse = { board?: ScoliaRuntimeBoard; match_id?: number | null; last_v
 
 const OFFLINE_FALLBACK_GRACE_MS = 30_000;
 const STATUS_INTERVAL_MS = 2_000;
+const INACTIVE_SERVICE_STATUS_INTERVAL_MS = 30_000;
 const LEASE_ENSURE_INTERVAL_MS = 1_000;
 const LEASE_HEARTBEAT_MS = 30_000;
 
@@ -277,6 +278,10 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     const timer = window.setInterval(() => void heartbeatLease(), LEASE_HEARTBEAT_MS);
     return () => window.clearInterval(timer);
   }, [isTest, heartbeatLease]);
+  // A configured Scolia board can be operated manually while the club has no
+  // active Service Account. Check occasionally for reactivation instead of
+  // polling the database every two seconds for an unavailable integration.
+  const statusIntervalMs = board?.scolia_service_ready === false ? INACTIVE_SERVICE_STATUS_INTERVAL_MS : STATUS_INTERVAL_MS;
   useEffect(() => {
     if (!enabled) {
       setBoard(null);
@@ -285,9 +290,9 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
       return;
     }
     void poll();
-    const timer = window.setInterval(() => void poll(), STATUS_INTERVAL_MS);
+    const timer = window.setInterval(() => void poll(), statusIntervalMs);
     return () => window.clearInterval(timer);
-  }, [enabled, poll]);
+  }, [enabled, poll, statusIntervalMs]);
 
   const fallbackRemainingSeconds = useMemo(() => {
     if (!offlineSince.current || fallbackActive || available) return 0;

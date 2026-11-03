@@ -333,9 +333,12 @@ export class MySqlScoliaAdminRepository {
     if (!resolved) return null;
     const rows = await db.query<QueryResultRow>(
       `SELECT k.id,k.club_id,k.code,k.name,k.board_number,k.scoring_mode,k.is_active,
-              s.serial_number,s.mode,s.auto_fallback_to_manual,s.force_connect_override,s.forward_messages_override
+              s.serial_number,s.mode,s.auto_fallback_to_manual,s.force_connect_override,s.forward_messages_override,
+               COALESCE(cs.enabled,0) AS club_scolia_enabled,
+               CASE WHEN cs.access_token IS NOT NULL AND LENGTH(TRIM(cs.access_token)) > 0 THEN 1 ELSE 0 END AS club_scolia_token_configured
          FROM \`${this.hardwarePrefix}kiosks\` k
          LEFT JOIN \`${this.hardwarePrefix}scolia_board_settings\` s ON s.kiosk_id=k.id
+         LEFT JOIN \`${this.hardwarePrefix}scolia_club_settings\` cs ON cs.club_id=k.club_id
         WHERE k.club_id=? AND k.id=? LIMIT 1`,
       [resolved.canonicalClubId, resolved.physicalId],
     );
