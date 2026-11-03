@@ -14,7 +14,24 @@ function bool(value) { return Number(value || 0) === 1; }
 async function request(path, { method = "GET", body } = {}) {
   const headers = { Authorization: `Bearer ${token()}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(`${API_ROOT}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store" });
+  // Scolia is a supplementary admin panel, not a reason to block the main
+  // equipment UI. Bound READS only; never abort/retry canonical mutations.
+  const controller = method === "GET" ? new AbortController() : null;
+  const timeoutId = controller ? window.setTimeout(() => controller.abort(), 10000) : null;
+  let response;
+  try {
+    response = await fetch(`${API_ROOT}${path}`, {
+      method, headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (controller?.signal.aborted) throw new Error("Scolia-status svarte ikke innen 10 sekunder. Du kan fortsatt bruke Utstyr.");
+    throw error;
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
   return payload.data;
@@ -197,7 +214,9 @@ function renderFailed() {
 
 async function load() {
   ensurePanel();
-  if (loading || !clubId() || !token() || !document.getElementById("scoliaEquipmentPanel")) return;
+  const onEquipment = ["#equipment", "#kiosks"].includes(window.location.hash)
+    || ["kiosks", "equipment"].includes(document.body.dataset.portalActive);
+  if (loading || !onEquipment || document.hidden || !clubId() || !token() || !document.getElementById("scoliaEquipmentPanel")) return;
   loading = true;
   try {
     dashboard = await request(`/clubs/${clubId()}/scolia`);
@@ -252,5 +271,9 @@ ensurePanel();
 clubSelect?.addEventListener("change", () => window.setTimeout(() => load(), 150));
 refreshAll?.addEventListener("click", () => window.setTimeout(() => load(), 150));
 load();
-pollTimer = window.setInterval(() => { if (!document.hidden && (location.hash === "#kiosks" || location.hash === "#equipment")) load(); }, 5000);
+// Scolia operational status doesn't need the 5-second public Live cadence.
+// Poll only while the equipment screen is actually visible.
+pollTimer = window.setInterval(() => {
+  if (!document.hidden && ["#kiosks", "#equipment"].includes(location.hash)) void load();
+}, 15000);
 window.addEventListener("beforeunload", () => clearInterval(pollTimer));
