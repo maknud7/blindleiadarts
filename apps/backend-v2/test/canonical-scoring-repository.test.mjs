@@ -160,6 +160,8 @@ test("recordVisit mirrors PHP retry + transaction order without nested connectio
   assert.equal(visitInsert.sql.includes("INSERT IGNORE"), false, "canonical visit SQL stays equal to PHP");
   assert.deepEqual(visitInsert.params.slice(0, 3), [ids.match, ids.leg, ids.playerA]);
   assert.equal(visitInsert.params[10], "manual-test-1");
+  assert.equal(visitInsert.params[11], "manual", "provenance must be persisted, not inferred from request_key");
+  assert.match(visitInsert.sql, /request_key, source\)/);
   assert.equal(typeof visitInsert.params[0], "string");
   assert.equal(typeof visitInsert.params[1], "string");
   assert.equal(typeof visitInsert.params[2], "string");
@@ -168,6 +170,31 @@ test("recordVisit mirrors PHP retry + transaction order without nested connectio
     assert.equal(operation.sql.includes("`bd_matches`"), false);
     assert.equal(operation.sql.includes("hardware"), false);
     assert.equal(operation.sql.includes("identity"), false);
+  }
+});
+
+test("manual, Scolia, import and API visits share the canonical table but retain their source", async () => {
+  for (const source of ["manual", "scolia", "import", "api"]) {
+    const sessions = new RecordingSessionProvider(normalVisitResolver);
+    const repository = new MySqlCanonicalScoringRepository(sessions, asTablePrefix("bd_test_"));
+    const result = await repository.recordVisit({
+      kiosk_id: ids.kiosk,
+      source,
+      payload: { input_mode: "per_dart", darts_used: 3, darts: [
+        { multiplier: "T", value: 20 },
+        { multiplier: "T", value: 20 },
+        { multiplier: "S", value: 20 },
+      ] },
+    });
+    assert.equal(result.kind, "recorded");
+    assert.equal(result.evaluation.score, 140);
+    assert.equal(result.evaluation.remaining_after, 361);
+    const insert = sessions.operations.find((item) => item.kind === "execute" && item.sql.includes("INSERT INTO `bd_test_visits`"));
+    assert.ok(insert);
+    assert.equal(insert.params[11], source);
+    assert.equal(insert.params[6], "per_dart");
+    assert.equal(insert.params[4], 140);
+    assert.equal(sessions.maxActive, 1, "source tracking must not add a database connection");
   }
 });
 

@@ -47,8 +47,11 @@ final class MatchScoringRepository
     }
 
     /** @param array<string, mixed> $payload */
-    public function recordVisit(int $kioskId, array $payload): void
+    public function recordVisit(int $kioskId, array $payload, string $source = 'manual'): void
     {
+        if (!in_array($source, ['manual', 'scolia', 'import', 'api'], true)) {
+            throw new ValidationException('invalid_scoring_source', 'Ukjent scoringkilde.', 422);
+        }
         $requestKey = trim((string) ($payload['request_id'] ?? ''));
         if ($requestKey !== '') {
             if (strlen($requestKey) > 80) {
@@ -60,7 +63,7 @@ final class MatchScoringRepository
             }
         }
 
-        $this->transaction(function () use ($kioskId, $payload, $requestKey): void {
+        $this->transaction(function () use ($kioskId, $payload, $requestKey, $source): void {
             // Re-check inside the transaction to cover concurrent retries.
             if ($requestKey !== '' && $this->visitRequestAlreadyExists($requestKey)) {
                 return;
@@ -105,13 +108,13 @@ final class MatchScoringRepository
 
             $sql = sprintf(
                 'INSERT INTO `%1$svisits`
-                 (match_id, leg_id, player_id, visit_number, score, darts_used, input_mode, darts_json, is_bust, remaining_after, request_key)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                 (match_id, leg_id, player_id, visit_number, score, darts_used, input_mode, darts_json, is_bust, remaining_after, request_key, source)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 $this->tablePrefix
             );
             $stmt = $this->connection->prepare($sql);
             $stmt->bind_param(
-                'iiiiiissiis',
+                'iiiiiissiiss',
                 $matchId,
                 $legId,
                 $currentPlayerId,
@@ -122,7 +125,8 @@ final class MatchScoringRepository
                 $dartsJson,
                 $bust,
                 $remainingAfter,
-                $storedRequestKey
+                $storedRequestKey,
+                $source
             );
             $stmt->execute();
             $stmt->close();
