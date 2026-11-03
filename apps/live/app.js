@@ -252,6 +252,12 @@ async function load() {
     const checkin = checkinResult.status === "fulfilled" ? checkinResult.value : null;
     const live = liveResult.status === "fulfilled" ? liveResult.value : null;
 
+    // A transient failed poll must never turn an active Live/check-in display
+    // into standby. The display timelines (board 6s, groups/ELO 20s) own their
+    // own clocks and must not be restarted by 3s data refresh failures.
+    if (state.phase === "checkin" && checkinResult.status === "rejected") return;
+    if (state.phase === "live" && liveResult.status === "rejected" && !checkin?.active) return;
+
     if (checkin?.active && renderCheckin(checkin)) {
       setPhase("checkin");
       return;
