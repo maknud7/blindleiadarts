@@ -4,6 +4,7 @@ const KEYS = {
   kioskCode: "bd:kioskCode",
   kioskToken: "bd:kioskPairingToken",
   kioskPlayerInputModes: "bd:kioskPlayerInputModes",
+  kioskSafeLayout: "bd:kioskSafeLayout",
   pairingRequest: "bd:kioskPairingRequestCode",
   pairingExpires: "bd:kioskPairingExpires",
   testMode: "bd:kioskTestMode",
