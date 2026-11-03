@@ -67,9 +67,11 @@ async function api(path, { method = "GET", body, auth = false } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
-  const payload = await response.json();
-  if (!response.ok || !payload.ok) {
-    throw new Error(payload?.error?.message || `Request failed with ${response.status}`);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    const error = new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
+    error.status = response.status;
+    throw error;
   }
   return payload.data;
 }
@@ -173,15 +175,24 @@ async function loadCurrentUser() {
     renderTournaments();
     emitPlayerData("user");
   } catch (error) {
-    persistToken("");
-    sharedApp?.session?.clear?.();
-    state.me = null;
-    state.dashboard = null;
-    renderAuth();
-    renderDashboard();
-    renderTournaments();
-    emitPlayerData("session_error");
-    setStatus(error.message, "error");
+    if (Number(error?.status || 0) === 401) {
+      // Authentication is invalid only when the server explicitly says so.
+      // A temporary 5xx/timeout must not log out a user who is checking in.
+      persistToken("");
+      sharedApp?.session?.clear?.();
+      state.me = null;
+      state.dashboard = null;
+      renderAuth();
+      renderDashboard();
+      renderTournaments();
+      emitPlayerData("session_error");
+      setStatus("Økten har utløpt. Logg inn på nytt.", "error");
+      return;
+    }
+    // Preserve existing identity, dashboard and registration states on failure.
+    // A later refresh will reconcile the UI with canonical backend state.
+    emitPlayerData("user_refresh_error");
+    setStatus(`Kunne ikke oppdatere spillerdata. Innloggingen er beholdt. ${error?.message || ""}`, "error");
   }
 }
 
