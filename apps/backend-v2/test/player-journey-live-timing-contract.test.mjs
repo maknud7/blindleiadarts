@@ -81,3 +81,14 @@ test("check-in gates coalesce concurrent status GETs and ignore their own label-
   assert.match(checkin, /node\.nodeType === Node\.ELEMENT_NODE/);
   assert.match(checkin, /if \(structuralChange\) scheduleMutationRefresh\(\)/);
 });
+test("Home registration uses canonical action directly and keeps local feedback", () => {
+  const main = read("apps/player/app.js");
+  const home = read("apps/player/player-ux.js");
+  assert.match(main, /register: \(tournamentId\) => registerForTournament\(Number\(tournamentId\)\)/);
+  assert.match(main, /return outcome/);
+  assert.match(main, /Påmeldingen er lagret, men status kunne ikke oppdateres/);
+  assert.match(home, /window\.BlindleiaPlayerRuntime\?\.register/);
+  assert.match(home, /button\.textContent = "Melder på …"/);
+  assert.doesNotMatch(home, /triggerExisting\("register", open\.id\)/);
+});
+
