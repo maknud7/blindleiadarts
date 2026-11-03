@@ -283,10 +283,10 @@ export class MySqlScoliaCommandRepository {
     matchId: string,
     scoliaOnly: boolean,
   ): Promise<Record<string, unknown> | null> {
-    const sourceFilter = scoliaOnly ? " AND v.request_key LIKE 'scolia-%'" : "";
+    const sourceFilter = scoliaOnly ? " AND (v.source='scolia' OR v.request_key LIKE 'scolia-%')" : "";
     const rows = await db.query<QueryResultRow>(
       `SELECT v.id,v.match_id,v.leg_id,v.player_id,v.visit_number,v.score,v.darts_used,v.input_mode,
-              v.darts_json,v.is_bust,v.remaining_after,v.request_key,v.created_at,p.display_name AS player_name
+              v.darts_json,v.is_bust,v.remaining_after,v.request_key,v.source,v.created_at,p.display_name AS player_name
          FROM \`${this.runtimePrefix}visits\` v
          INNER JOIN \`${this.runtimePrefix}matches\` m ON m.id=v.match_id
          LEFT JOIN \`${this.runtimePrefix}players\` p ON p.id=v.player_id
@@ -310,7 +310,7 @@ export class MySqlScoliaCommandRepository {
       darts: parseArray(row.darts_json),
       is_bust: numberValue(row.is_bust) === 1,
       remaining_after: numberValue(row.remaining_after),
-      source: requestKey.startsWith("scolia-") ? "scolia" : "manual",
+      source: stringValue(row.source) || (requestKey.startsWith("scolia-") ? "scolia" : "legacy"),
       created_at: row.created_at ?? null,
     };
   }
