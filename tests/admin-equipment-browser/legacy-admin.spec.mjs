@@ -94,3 +94,25 @@ test("Canonical Utstyr keeps navigation after read-only equipment API 503", asyn
     await context.close();
   }
 });
+
+test("Temporary 502 on admin login check stays in Clubadmin and offers retry, never redirects to player", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  try {
+    await page.addInitScript(() => localStorage.setItem("bd:token", "valid-admin-session"));
+    await page.route("**/api/**", async (route) => {
+      await route.fulfill({
+        status: 502,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: { message: "Gateway unavailable" } }),
+      });
+    });
+    await page.goto(BASE + "/#equipment", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: "Prøv igjen" })).toBeVisible({ timeout: 12000 });
+    expect(new URL(page.url()).hash).toBe("#equipment");
+    expect(new URL(page.url()).pathname).toBe("/");
+    expect(await page.evaluate(() => localStorage.getItem("bd:token"))).toBe("valid-admin-session");
+  } finally {
+    await context.close();
+  }
+});
