@@ -49,7 +49,7 @@ function showStatus(message, tone = "info") {
   card.querySelector("p").textContent = message;
   root.prepend(card);
   while (root.children.length > 4) root.lastElementChild?.remove();
-  root.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // Do not jump the user away from the active tournament or check-in dialog.
 }
 
 async function api(path, { method = "GET", body } = {}) {
@@ -278,6 +278,7 @@ function ensureDialog() {
 
 let activeTournamentId = 0;
 let activeStatus = null;
+let checkinSubmitting = false;
 
 async function openCheckin(tournamentId) {
   if (!token()) throw new Error("Logg inn før du sjekker inn.");
@@ -288,9 +289,11 @@ async function openCheckin(tournamentId) {
   activeStatus = status;
 
   if (status.registration_status === "checked_in") { showStatus("Du er allerede sjekket inn.", "success"); return; }
+  if (status.registration_status !== "registered") throw new Error("Du må ha en bekreftet påmelding før du kan sjekke inn.");
   if (status.window_state === "not_open") throw new Error(`Innsjekk er ikke åpnet ennå. Den åpner ${formatWindowTime(status.opens_at)}.`);
   if (status.window_state === "closed") throw new Error("Innsjekk er stengt. Kontakt turneringsleder.");
   if (status.method === "admin_only") { showStatus("Denne turneringen sjekkes inn av turneringsleder. Gå til innsjekkbordet."); return; }
+  if (status.code_allowed === false) throw new Error("Innsjekk med kode er ikke tilgjengelig. Kontakt turneringsleder.");
 
   const codeInput = document.getElementById("ciCode");
   document.getElementById("ciMessage").textContent = "";
@@ -302,21 +305,42 @@ async function openCheckin(tournamentId) {
 
 async function submitCode(event) {
   event.preventDefault();
-  if (!activeTournamentId || !activeStatus?.code_allowed) return;
+  if (checkinSubmitting || !activeTournamentId) return;
+  if (!activeStatus?.code_allowed) {
+    document.getElementById("ciMessage").textContent = "Innsjekk med kode er ikke tilgjengelig. Kontakt turneringsleder.";
+    return;
+  }
   const code = document.getElementById("ciCode").value.trim();
   if (!code) { document.getElementById("ciMessage").textContent = "Tast inn koden fra Live-skjermen."; return; }
   const button = document.getElementById("ciSubmit");
+  checkinSubmitting = true;
   button.disabled = true;
+  button.textContent = "Sjekker inn …";
   try {
-    await api(`/tournaments/${activeTournamentId}/check-in`, { method: "POST", body: { code } });
-    checkinStatusCache.delete(activeTournamentId);
+    const completedTournamentId = activeTournamentId;
+    await api(`/tournaments/${completedTournamentId}/check-in`, { method: "POST", body: { code } });
+    checkinStatusCache.delete(completedTournamentId);
+    activeTournamentId = 0;
+    activeStatus = null;
     document.getElementById("checkinCodeDialog").close();
     showStatus("Du er sjekket inn og klar for turneringen.", "success");
+    // Refresh canonical player state in-place. Full-page reloads lose modal,
+    // scroll and view context, and create a false impression of failed check-in.
+    try {
+      await window.BlindleiaPlayerRuntime?.refresh?.();
+    } catch (refreshError) {
+      console.warn("Innsjekken ble lagret, men spillerstatus kunne ikke oppdateres", refreshError);
+      showStatus("Innsjekken er lagret. Oppdater spillerdata hvis status fortsatt ser gammel ut.");
+    }
     window.dispatchEvent(new CustomEvent("bd:player-state-changed"));
-    window.setTimeout(() => window.location.reload(), 500);
+    refreshCheckinGates(true).catch(() => undefined);
   } catch (error) {
     document.getElementById("ciMessage").textContent = error.message;
-  } finally { button.disabled = false; }
+  } finally {
+    checkinSubmitting = false;
+    button.disabled = false;
+    button.textContent = "Sjekk inn";
+  }
 }
 
 ensureGateStyles();
@@ -326,7 +350,7 @@ document.getElementById("checkinCodeForm")?.addEventListener("submit", submitCod
 // Capture phase owns existing check-in buttons before the older app.js click handler.
 document.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest("[data-checkin]") : null;
-  if (!target) return;
+  if (!target || target.disabled) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   const tournamentId = Number(target.getAttribute("data-checkin") || 0);
@@ -362,6 +386,7 @@ window.addEventListener("bd:portal-view", (event) => {
 });
 
 window.BlindleiaCheckinWindow = Object.freeze({
+  open: (tournamentId) => openCheckin(Number(tournamentId)),
   getStatus: (tournamentId) => getCheckinStatus(tournamentId, true),
   formatOpen: formatWindowTime,
   refresh: () => refreshCheckinGates(true),
