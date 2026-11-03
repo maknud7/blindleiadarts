@@ -17,7 +17,8 @@ export function useKioskViewportSafety(contentKey: string) {
     const shell = shellRef.current;
     if (!shell) return;
     let frame = 0;
-    let lastSize = "";
+    let lastWidth = 0;
+    let lastHeight = 0;
 
     function inspect() {
       frame = 0;
@@ -27,11 +28,12 @@ export function useKioskViewportSafety(contentKey: string) {
       const height = Math.min(root.clientHeight, window.visualViewport?.height ?? root.clientHeight);
       if (!width || !height) return;
 
-      const size = `${Math.round(width)}x${Math.round(height)}`;
-      // Re-evaluate the fit only if the actual viewport changes; a changing
-      // score or asynchronous status message must not reset scroll position.
-      if (size !== lastSize) {
-        lastSize = size;
+      // Browser toolbars can move by 1-2 CSS pixels while users scroll.
+      // Re-evaluate the fitted layout only after a substantial resize, so the
+      // safe scroll position never jumps under their fingers.
+      if (!lastWidth || Math.abs(width - lastWidth) >= 24 || Math.abs(height - lastHeight) >= 24) {
+        lastWidth = width;
+        lastHeight = height;
         root.dataset.kioskLayout = "fit";
       }
 
@@ -73,7 +75,8 @@ export function useKioskViewportSafety(contentKey: string) {
     const onPreferenceChange = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
       if (detail?.key !== "kioskSafeLayout") return;
-      lastSize = ""; // Re-evaluate fit when user exits the safe layout.
+      lastWidth = 0; // Re-evaluate fit when user exits the safe layout.
+      lastHeight = 0;
       schedule();
     };
     window.addEventListener(STORAGE_EVENT, onPreferenceChange);
