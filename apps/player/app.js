@@ -31,6 +31,7 @@ function emitPlayerData(reason) {
 window.BlindleiaPlayerRuntime = Object.freeze({
   ready: runtimeReady,
   snapshot: playerSnapshot,
+  register: (tournamentId) => registerForTournament(Number(tournamentId)),
   refresh: async () => {
     await Promise.all([loadClubTournaments(), loadCurrentUser()]);
   },
@@ -389,6 +390,7 @@ async function runTournamentAction(action, tournamentId, work) {
 }
 
 async function registerForTournament(tournamentId) {
+  let outcome = { ok: false, message: "Påmeldingen behandles allerede." };
   await runTournamentAction("register", tournamentId, async () => {
     try {
       const data = await api(`/tournaments/${tournamentId}/register`, {
@@ -396,12 +398,25 @@ async function registerForTournament(tournamentId) {
         auth: true,
       });
       const status = data.registration?.status;
-      setStatus(status === "waitlisted" ? "Turneringen er full. Du står nå på venteliste." : "Du er meldt på turneringen.", "success");
-      await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+      const message = status === "waitlisted" ? "Turneringen er full. Du står nå på venteliste." : "Du er meldt på turneringen.";
+      outcome = { ok: true, message };
+      setStatus(message, "success");
+      // Never report a confirmed registration as failed because a subsequent
+      // read timed out. Refresh uncertainty is a distinct UI state.
+      try {
+        await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+      } catch (refreshError) {
+        const suffix = "Påmeldingen er lagret, men status kunne ikke oppdateres. Bruk Oppdater for å hente den.";
+        outcome = { ok: true, message: suffix };
+        setStatus(suffix);
+      }
     } catch (error) {
-      setStatus(`Påmeldingen kunne ikke bekreftes: ${error.message}`, "error");
+      const message = `Påmeldingen kunne ikke bekreftes: ${error.message}`;
+      outcome = { ok: false, message };
+      setStatus(message, "error");
     }
   });
+  return outcome;
 }
 
 async function withdrawFromTournament(tournamentId) {
