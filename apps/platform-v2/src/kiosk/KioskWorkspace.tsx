@@ -1174,15 +1174,15 @@ function CompletionView({ completion, board, busy, onNext }: {
   return <div className="assigned-view">
     <div className="match-tools"><span className="pill good">Skive {board} · resultat registrert</span><span className="pill">{server?.round_label || server?.bracket_label || local.round_label || local.bracket_label || "Kamp"}</span></div>
     <div className="kiosk-hero">
-      <span className="pill good">KAMP FERDIG</span>
-      <h1>{winner} vinner</h1>
+      <span className={`pill ${completion.confirmed ? "good" : "warn"}`}>{completion.confirmed ? "KAMP FERDIG" : "AVVENTER RESULTAT"}</span>
+      <h1>{completion.confirmed ? `${winner} vinner` : "Bekrefter kampen …"}</h1>
       <div className="versus assigned-versus">
         <div className="player-tile"><p>{aName}</p><div className="remaining">{aLegs}</div></div>
         <div className="vs-mark">–</div>
         <div className="player-tile"><p>{bName}</p><div className="remaining">{bLegs}</div></div>
       </div>
       {next ? <div className="notice"><strong>Neste kamp</strong><span>{next.player_a_name || "Spiller"} – {next.player_b_name || "Spiller"} · {next.round_label || next.bracket_label || "Kamp"}</span></div> : <p>Skiva følger kampkøen og klargjør neste kvalifiserte kamp.</p>}
-      <p>{completion.confirmed ? `Neste kamp vises om ${completion.remainingSeconds} sek` : "Bekrefter resultatet …"}</p>
+      <p role="status" aria-live="polite">{completion.confirmed ? `Neste kamp vises om ${completion.remainingSeconds} sek` : "Resultatet er ikke bekreftet av serveren. Skiva blir på denne kampen til lagringen er kontrollert."}</p>
       <button className="button start-match-button" disabled={busy || !completion.confirmed} onClick={onNext}>Vis neste kamp nå</button>
     </div>
   </div>;
