@@ -80,7 +80,7 @@ test("tournament move: explicit target, persistent selection, active match confi
   const { page, context, moves, errors } = await mountTournamentOperations(browser);
   try {
     await expect(page.locator(".ops-board-state.available")).toContainText("Ledig");
-    await expect(page.locator(".ops-board-state.busy")).toContainText("Pågår");
+    await expect(page.locator(".ops-board-state.busy").first()).toContainText("Pågår");
     await expect(page.locator(".ops-board-state.reserved")).toContainText("Reservert");
 
     const target = page.locator(`select[data-move-target="${MATCH_ID}"]`);
