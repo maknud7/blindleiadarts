@@ -310,11 +310,24 @@ export class ScoliaRuntimeRouter {
     ]);
     const physicalAvailable = bridgeFresh && statusFresh && !unavailableStatuses.has(normalizedPhysicalStatus);
     const fallbackActive = numberValue(settings.fallback_active) === 1 || numberValue(settings.needs_reconciliation) === 1;
-    const effectiveScoringMode = fallbackActive
+    // Legacy TEST fixtures may omit the new readiness flags. Real MySQL reads
+    // always return both flags; when the subscription is disabled or lacks an
+    // access token, keep the physical Scolia identity but score manually.
+    const readinessKnown = settings.club_scolia_enabled !== undefined || settings.club_scolia_token_configured !== undefined;
+    const serviceReady = !readinessKnown || (
+      numberValue(settings.club_scolia_enabled) === 1 &&
+      numberValue(settings.club_scolia_token_configured) === 1
+    );
+    const hardwareManual = stringValue(settings.scoring_mode).toLowerCase() === "manual";
+    const effectiveScoringMode = fallbackActive || !serviceReady || hardwareManual || stringValue(settings.mode) !== "live"
       ? "manual"
-      : stringValue(settings.mode) === "live" ? "scolia" : "manual";
+      : "scolia";
     const board: Record<string, unknown> = {
       ...settings,
+      scolia_service_ready: serviceReady,
+      scolia_inactive_reason: !serviceReady
+        ? numberValue(settings.club_scolia_enabled) !== 1 ? "club_disabled" : "access_token_missing"
+        : null,
       effective_scoring_mode: effectiveScoringMode,
       buffer: snapshot.buffer,
       queue: snapshot.queue,
