@@ -154,7 +154,44 @@ function actionsHtml(t,reg){
   if(s==="waitlisted") return `<div class="tdx-actions"><button class="ghost" data-action="withdraw">Fjern meg fra ventelisten</button></div>`;
   const state=String(t.registration_state||"open"); return state==="open"||!t.registration_state?`<div class="tdx-actions"><button data-action="register">Meld meg på</button></div>`:`<div class="tdx-actions"><button disabled>${esc(publicStatus(t))}</button></div>`;
 }
-async function performAction(t,action){ const id=Number(t.id); try{ if(action==="register") await api(`/tournaments/${id}/register`,{method:"POST",auth:true}); if(action==="withdraw") await api(`/tournaments/${id}/register`,{method:"DELETE",auth:true}); if(action==="checkin") await api(`/tournaments/${id}/check-in`,{method:"POST",auth:true}); await loadData(); dialog.close(); await openDetail(id); }catch(error){ const b=dialog.querySelector(`[data-action="${action}"]`); if(b) b.textContent=error.message; } }
+let actionPending = false;
+async function performAction(t,action){
+  const id=Number(t.id);
+  if(actionPending || !Number.isSafeInteger(id) || id<=0) return;
+  actionPending=true;
+  const button=dialog.querySelector(`[data-action="${action}"]`);
+  const label=button?.textContent || "";
+  if(button){button.disabled=true;button.setAttribute("aria-busy","true");}
+  dialog.querySelector(".tdx-action-error")?.remove();
+  try{
+    if(action==="checkin"){
+      // The visible detail must use the same window/method/code validation as
+      // Home and the main registration list, never an unauthenticated POST.
+      if(typeof window.BlindleiaCheckinWindow?.open!=="function") throw new Error("Innsjekkmodulen er ikke klar. Prøv igjen.");
+      await window.BlindleiaCheckinWindow.open(id);
+      return;
+    }
+    if(action==="register") await api(`/tournaments/${id}/register`,{method:"POST",auth:true});
+    else if(action==="withdraw") await api(`/tournaments/${id}/register`,{method:"DELETE",auth:true});
+    await loadData();
+    // Refresh the detail in place rather than close and reopen the dialog.
+    const data=await api(`/tournaments/${id}`);
+    const updated=data.tournament||data;
+    renderDetail(updated,Array.isArray(updated.registrations)?updated.registrations:[],Array.isArray(updated.matches)?updated.matches:[],regFor(updated),"overview");
+  }catch(error){
+    const actions=dialog.querySelector(".tdx-actions");
+    if(actions){
+      const note=document.createElement("p");
+      note.className="tdx-action-error";
+      note.setAttribute("role","alert");
+      note.textContent=error?.message||"Handlingen kunne ikke gjennomføres. Prøv på nytt.";
+      actions.prepend(note);
+    }
+  }finally{
+    actionPending=false;
+    if(button?.isConnected){button.disabled=false;button.removeAttribute("aria-busy");button.textContent=label;}
+  }
+}
 
 async function loadData(){
   if(loading) return; loading=true;
