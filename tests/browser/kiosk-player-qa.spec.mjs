@@ -73,6 +73,11 @@ for (const size of [
   { width: 1440, height: 900 },
 ]) {
   test("Kiosk TEST launcher (PROD to isolated TEST) works at " + size.width + "x" + size.height, async ({ browser }, testInfo) => {
+    // Opening an unpaired PROD kiosk can itself create a PROD pairing request.
+    // Never do that in the automated read-only workflow. Enable this only for
+    // a supervised on-site session with explicit approval of that side effect.
+    test.skip(process.env.ALLOW_PROD_KIOSK_BOOT !== "1",
+      "Supervised-only: initial PROD kiosk load can create a PROD pairing request");
     const context = await browser.newContext({ viewport: size, hasTouch: size.width < 900 });
     const page = await context.newPage();
     try {
