@@ -4,6 +4,7 @@ import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/stor
 import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard, Visit } from "../shared/types";
 import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
 import { useScoliaRealtimeInput, type ScoliaRealtimeMessage } from "./useScoliaRealtimeInput";
+import { useKioskViewportSafety } from "./useKioskViewportSafety";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
 type PairingStatusResponse = { status: string; kiosk?: { code?: string; name?: string }; snapshot?: KioskSnapshot | null };
@@ -237,6 +238,7 @@ function manualRemainingPreview(player: PlayerScore | null, inputMode: InputMode
 }
 
 export function KioskWorkspace() {
+  const kioskViewportRef = useKioskViewportSafety();
   const [health, setHealth] = useState<Health | null>(null);
   const [kioskToken, setKioskToken] = useState(() => ensureKioskToken());
   const [kioskCode, setKioskCode] = useState(() => read("kioskCode"));
@@ -1047,7 +1049,7 @@ export function KioskWorkspace() {
   const headerSubtitle = kiosk?.club?.name || (effectiveTestMode ? "Isolert TEST-runtime" : "Blindleia Darts");
   const connectionLabel = kiosk ? `Skive ${kiosk.board_number}` : effectiveTestMode ? "TEST" : "Ikke paret";
 
-  return <div className="kiosk-shell">
+  return <div ref={kioskViewportRef} className="kiosk-shell" data-kiosk-layout="fit">
     {effectiveTestMode && <div className="test-banner">TESTMODUS · isolert fra PROD{testBoardLabel ? ` · ${testBoardLabel}` : " · velg skive"}</div>}
 
     <header className="kiosk-topbar">
