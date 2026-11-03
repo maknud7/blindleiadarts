@@ -257,6 +257,7 @@ export function KioskWorkspace() {
   const [multiplier, setMultiplier] = useState<Multiplier>("S");
   const [checkoutScore, setCheckoutScore] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [safeLayout, setSafeLayout] = useState(() => read("kioskSafeLayout") === "1");
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [visitEditIndex, setVisitEditIndex] = useState<number | null>(null);
   const [visitEditId, setVisitEditId] = useState<number | null>(null);
@@ -1085,7 +1086,7 @@ export function KioskWorkspace() {
       {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scoliaRealtimeDarts.length > 0 ? { ...(scolia.board || {}), buffer: { ...(scolia.board?.buffer || {}), darts: scoliaRealtimeDarts } } as ScoliaRuntimeBoard : scolia.board} lastScoliaVisit={scoliaRealtimeLastVisit || scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
 
-    {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
+    {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} safeLayout={safeLayout} onToggleSafeLayout={() => { const next = !safeLayout; setSafeLayout(next); write("kioskSafeLayout", next ? "1" : null); }} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
 
     {checkoutScore !== null && <div className="login-shell kiosk-dialog-overlay"><div className="login-card kiosk-dialog-card"><span className="pill good">Checkout</span><h1>Hvor mange piler?</h1><p>Registrer hvor mange piler som ble brukt på checkouten.</p><div className="grid three">{[1, 2, 3].map((used) => <button key={used} className="button" disabled={busy} onClick={() => submitSumVisit(checkoutScore, used)}>{used} pil{used > 1 ? "er" : ""}</button>)}</div><button className="button secondary" onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
 
@@ -1097,10 +1098,12 @@ export function KioskWorkspace() {
   </div>;
 }
 
-function SettingsDialog({ isTest, hasKiosk, busy, manualQueueDepth, manualQueueError, onRefreshStatus, onClose, onReload, onReset, onExitTest }: {
+function SettingsDialog({ isTest, hasKiosk, busy, safeLayout, onToggleSafeLayout, manualQueueDepth, manualQueueError, onRefreshStatus, onClose, onReload, onReset, onExitTest }: {
   isTest: boolean;
   hasKiosk: boolean;
   busy: boolean;
+  safeLayout: boolean;
+  onToggleSafeLayout: () => void;
   manualQueueDepth: number;
   manualQueueError: string;
   onRefreshStatus: () => void;
@@ -1114,6 +1117,7 @@ function SettingsDialog({ isTest, hasKiosk, busy, manualQueueDepth, manualQueueE
       <div className="kiosk-settings-head"><div><span>Skiveterminal</span><h2>Innstillinger</h2></div><button className="kiosk-settings-button" type="button" aria-label="Lukk" onClick={onClose}>×</button></div>
       <div className="kiosk-settings-actions">
         <div className="notice"><strong>Lagringsstatus</strong><span>{manualQueueError ? "Krever avstemming" : manualQueueDepth > 0 ? `${manualQueueDepth} kast venter på bekreftelse` : "Alle kast er bekreftet"}</span>{(manualQueueDepth > 0 || manualQueueError) && <button className="button secondary small" disabled={busy} onClick={onRefreshStatus}>Oppdater status</button>}</div>
+        <button className="button secondary" type="button" onClick={onToggleSafeLayout}>{safeLayout ? "Bruk automatisk visning" : "Vis alle knapper (sikker visning)"}</button>
         <button className="button secondary" disabled={busy} onClick={onReload}>Last inn terminalen på nytt</button>
         {hasKiosk && <button className="button secondary" disabled={busy} onClick={onReset}>{isTest ? "Bytt testskive" : "Fjern pairing"}</button>}
         {isTest && <button className="button danger" disabled={busy} onClick={onExitTest}>Avslutt testmodus</button>}
