@@ -197,18 +197,22 @@ if (opsHost) {
     el.opsBoards.innerHTML = boards.length ? boards.map((board) => {
       const reservation = board.reservation || null;
       const busy = Boolean(board.active_match_id);
-      const cls = busy ? "busy" : reservation ? "reserved" : "";
+      const cls = busy ? "busy" : reservation ? "reserved" : "available";
+      const status = busy ? "Pågår" : reservation ? "Reservert" : "Ledig";
       const stateHtml = busy
         ? `<span>${esc(board.player_a_name)} – ${esc(board.player_b_name)}<small>${esc(statusLabel(board.active_match_status))}</small></span>`
         : reservation
           ? `<span>${esc(reservation.player_a_name)} – ${esc(reservation.player_b_name)}<small>Neste · ${Number(reservation.remaining_seconds || 0)} sek</small></span>`
-          : `<span class="muted">Ledig</span>`;
-      return `<article class="ops-board ${cls}"><div><strong>Skive ${Number(board.board_number)}</strong><small>${esc(board.name || board.code)}</small></div>${stateHtml}</article>`;
+          : `<span class="muted">Klar for ny kamp</span>`;
+      return `<article class="ops-board ${cls}" data-board-id="${esc(exactId(board.id))}"><div><strong>Skive ${Number(board.board_number)}</strong><small>${esc(board.name || board.code)}</small><span class="ops-board-state ${cls}">${status}</span></div>${stateHtml}</article>`;
     }).join("") : `<div class="empty">Ingen skiver er tilordnet turneringen.</div>`;
 
     const openMatches = (data.queue?.items || []).filter((match) =>
       ["pending", "assigned", "in_progress"].includes(match.status)
     );
+    // Native tablet/desktop select can remain focused while the server polls.
+    // Never destroy the control under the operator's finger mid-selection.
+    if (el.opsQueue.contains(document.activeElement) && document.activeElement?.matches?.("select[data-move-target]")) return;
     el.opsQueue.innerHTML = openMatches.length ? openMatches.map((match) => {
       const reservation = match.reservation || null;
       const location = match.status === "pending"
