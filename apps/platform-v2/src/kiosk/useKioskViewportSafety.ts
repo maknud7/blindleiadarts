@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { read, STORAGE_EVENT } from "../shared/storage";
 
 /**
  * Kiosk is meant to feel like a single-screen tablet scorer, but must never
@@ -33,7 +34,7 @@ export function useKioskViewportSafety() {
         root.dataset.kioskLayout = "fit";
       }
 
-      const constrained = width < 540 || height < 790 || width > height;
+      const constrained = read("kioskSafeLayout") === "1" || width < 540 || height < 790 || width > height;
       if (constrained) {
         root.dataset.kioskLayout = "scroll";
         return;
@@ -73,6 +74,13 @@ export function useKioskViewportSafety() {
       : null;
     changes?.observe(shell, { subtree: true, childList: true });
 
+    const onPreferenceChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key !== "kioskSafeLayout") return;
+      lastSize = ""; // Re-evaluate fit when user exits the safe layout.
+      schedule();
+    };
+    window.addEventListener(STORAGE_EVENT, onPreferenceChange);
     window.addEventListener("resize", schedule);
     window.visualViewport?.addEventListener("resize", schedule);
     schedule();
@@ -81,6 +89,7 @@ export function useKioskViewportSafety() {
       if (frame) window.cancelAnimationFrame(frame);
       resize?.disconnect();
       changes?.disconnect();
+      window.removeEventListener(STORAGE_EVENT, onPreferenceChange);
       window.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("resize", schedule);
     };
