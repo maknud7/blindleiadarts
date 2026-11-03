@@ -31,6 +31,9 @@ function emitPlayerData(reason) {
 window.BlindleiaPlayerRuntime = Object.freeze({
   ready: runtimeReady,
   snapshot: playerSnapshot,
+  refresh: async () => {
+    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+  },
 });
 
 const elements = {
@@ -363,41 +366,65 @@ async function handleLogin(event) {
   }
 }
 
-async function registerForTournament(tournamentId) {
+// Prevent repeated taps from sending duplicate canonical mutations while
+// the network is still processing the first request.
+const pendingTournamentActions = new Set();
+
+async function runTournamentAction(action, tournamentId, work) {
+  if (!Number.isSafeInteger(tournamentId) || tournamentId < 1) return;
+  const key = `${action}:${tournamentId}`;
+  if (pendingTournamentActions.has(key)) return;
+  pendingTournamentActions.add(key);
+  const selector = action === "register" ? "[data-register]" : action === "withdraw" ? "[data-withdraw]" : "[data-checkin]";
+  const buttons = [...document.querySelectorAll(selector)].filter((node) =>
+    Number(node.dataset[action === "register" ? "register" : action === "withdraw" ? "withdraw" : "checkin"]) === tournamentId
+  );
+  buttons.forEach((node) => { node.disabled = true; node.setAttribute("aria-busy", "true"); });
   try {
-    const data = await api(`/tournaments/${tournamentId}/register`, {
-      method: "POST",
-      auth: true,
-    });
-    const status = data.registration?.status;
-    setStatus(status === "waitlisted" ? "Turneringen er full. Du står nå på venteliste." : "Du er meldt på turneringen.", "success");
-    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
-  } catch (error) {
-    setStatus(error.message, "error");
+    await work();
+  } finally {
+    pendingTournamentActions.delete(key);
+    buttons.forEach((node) => { if (!node.isConnected) return; node.disabled = false; node.removeAttribute("aria-busy"); });
   }
 }
 
+async function registerForTournament(tournamentId) {
+  await runTournamentAction("register", tournamentId, async () => {
+    try {
+      const data = await api(`/tournaments/${tournamentId}/register`, {
+        method: "POST",
+        auth: true,
+      });
+      const status = data.registration?.status;
+      setStatus(status === "waitlisted" ? "Turneringen er full. Du står nå på venteliste." : "Du er meldt på turneringen.", "success");
+      await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+    } catch (error) {
+      setStatus(`Påmeldingen kunne ikke bekreftes: ${error.message}`, "error");
+    }
+  });
+}
+
 async function withdrawFromTournament(tournamentId) {
-  try {
-    await api(`/tournaments/${tournamentId}/register`, {
-      method: "DELETE",
-      auth: true,
-    });
-    setStatus("Du er meldt av turneringen.", "success");
-    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
+  await runTournamentAction("withdraw", tournamentId, async () => {
+    try {
+      await api(`/tournaments/${tournamentId}/register`, {
+        method: "DELETE",
+        auth: true,
+      });
+      setStatus("Du er meldt av turneringen.", "success");
+      await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+    } catch (error) {
+      setStatus(`Avmeldingen kunne ikke bekreftes: ${error.message}`, "error");
+    }
+  });
 }
 
 async function checkInForTournament(tournamentId) {
   try {
-    await api(`/tournaments/${tournamentId}/check-in`, {
-      method: "POST",
-      auth: true,
-    });
-    setStatus("Du er nå checket inn på arenaen.", "success");
-    await Promise.all([loadClubTournaments(), loadCurrentUser()]);
+    if (!window.BlindleiaCheckinWindow?.open) {
+      throw new Error("Innsjekkmodulen er ikke klar. Åpne innsjekken på nytt.");
+    }
+    await window.BlindleiaCheckinWindow.open(tournamentId);
   } catch (error) {
     setStatus(error.message, "error");
   }
