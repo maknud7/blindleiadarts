@@ -1,0 +1,68 @@
+name: TEST UI Browser QA
+
+# Manual, read-only screenshots from the exact deployed TEST release.
+# Do not run kiosk score mutations or create PROD hardware/identity data.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_test_release_sha:
+        description: "40-character SHA from TEST /release.json (prevents checking wrong deploy)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  browser-ui:
+    name: Player Live and kiosk visual browser QA
+    runs-on: ubuntu-latest
+    environment: test
+    timeout-minutes: 25
+    env:
+      TEST_BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
+      PROD_BASE_URL: https://blindleiadarts.ingenting.org
+      EXPECTED_TEST_SHA: ${{ inputs.expected_test_release_sha }}
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact deployed TEST SHA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$EXPECTED_TEST_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Expected TEST SHA must be a 40-character lowercase Git commit SHA.' >&2
+            exit 1
+          fi
+          release="$(curl -fsS --connect-timeout 5 --max-time 20 "${TEST_BASE_URL%/}/release.json?qa=$GITHUB_RUN_ID")"
+          if ! grep -Fq "$EXPECTED_TEST_SHA" <<< "$release"; then
+            echo 'TEST currently hosts a different release. Deploy/verify the intended version first.' >&2
+            exit 1
+          fi
+          echo 'Exact TEST release verified; running read-only browser QA.'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Playwright browser test runner
+        run: |
+          npm ci --ignore-scripts
+          npm install --no-save --ignore-scripts @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Run real-browser visual QA without changing match or membership data
+        run: npx playwright test --config tests/browser/playwright.config.mjs
+
+      - name: Upload browser screenshots, traces and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blindleia-test-browser-qa-${{ github.run_id }}
+          path: |
+            test-results/browser-artifacts/
+            test-results/browser-report/
+          retention-days: 14
+          if-no-files-found: warn
