@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   browser-ui:
-    name: Player Live and kiosk visual browser QA
+    name: Player and Live visual QA (kiosk supervised only)
     runs-on: ubuntu-latest
     environment: test
     timeout-minutes: 25
