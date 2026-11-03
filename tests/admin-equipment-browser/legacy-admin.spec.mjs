@@ -51,18 +51,25 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
       const nav = page.locator(".portal-menu a[href='#kiosks']").first();
       await expect(nav).toBeVisible();
       await nav.click();
+      await expect(page).toHaveURL(/\/#equipment$/);
       await expect(page.locator("#kiosks")).toBeVisible();
-      await expect(page.locator("#kiosks")).not.toHaveClass(/portal-view-hidden/);
-
-      // The legacy create form is intentionally hidden by the equipment UX
-      // overlay; the real user-visible hardware rows must be present instead.
       await expect(page.locator("#kioskList .board-row")).toHaveCount(1);
-      await expect(page.locator("#kioskList .board-row")).toBeVisible();
+      // URL must stay in canonical admin. Never silently open /v2/equipment/.
+      expect(new URL(page.url()).pathname).toBe("/");
+      await expect(page.locator("#kiosks h2").first()).toContainText("Utstyr");
       if (size.width < 760) {
         await page.locator("#unifiedMobileMore").click();
+        await expect(page.locator(".portal-menu")).not.toHaveAttribute("inert", "");
       }
       await page.locator(".portal-menu a[href='#players']").first().click();
+      await expect(page).toHaveURL(/\/#members$/);
       await expect(page.locator("#players")).toBeVisible();
+      // A browser animation-frame after leaving equipment is proof that the
+      // frontend is still interactive, not just that a hidden DOM node exists.
+      const responsive = await page.evaluate(() => new Promise((resolve) => {
+        requestAnimationFrame(() => resolve(document.body.dataset.portalActive));
+      }));
+      expect(responsive).toBe("players");
       await page.screenshot({ path: testInfo.outputPath(`canonical-admin-${size.width}.png`), animations: "disabled" });
       expect(errors).toEqual([]);
       expect(mutations).toEqual([]);
