@@ -21,6 +21,8 @@ test("Live does not drop back to standby on transient failed API reads", () => {
   assert.match(live, /state\.phase === "checkin" && checkinResult\.status === "rejected"/);
   assert.match(live, /state\.phase === "live" && liveResult\.status === "rejected"/);
   assert.match(live, /if \(checkin\?\.active && renderCheckin\(checkin\)\)/);
+  assert.match(live, /if \(state\.phase === "checkin"\) \{\s*load\(\)\.catch/);
+  assert.match(live, /const live = message\?\.payload\?\.live \|\| null/);
 });
 
 test("all visible player check-in entry points open one code/window method", () => {
