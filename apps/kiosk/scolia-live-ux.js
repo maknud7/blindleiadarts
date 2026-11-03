@@ -38,6 +38,17 @@
     return localStorage.getItem("bd:kioskPairingToken") || "";
   }
 
+  // Manual hardware never starts the Scolia status loop. TEST leases may
+  // temporarily promote an isolated manual alias to Scolia.
+  function shouldPollScolia() {
+    const configured = typeof currentKiosk === "function"
+      && String(currentKiosk()?.scoring_mode || "").toLowerCase() === "scolia";
+    const leaseTransition = document.body?.dataset?.appEnv === "test"
+      && (localStorage.getItem("bd:kioskScoliaLeasePending") === "1"
+        || localStorage.getItem("bd:kioskScoliaLeaseActive") === "1");
+    return configured || leaseTransition;
+  }
+
   function testLeasePending() {
     return document.body?.dataset?.appEnv === "test"
       && localStorage.getItem("bd:kioskTestMode") === "1"
@@ -207,6 +218,14 @@
       <div class="scolia-live-footer"><span class="scolia-live-hint">Ikke registrer kast manuelt før fallback er aktiv.</span></div>`;
   }
 
+  function renderInactiveService(board) {
+    hideLiveSurface();
+    if (manualCard) manualCard.style.setProperty("display", "block", "important");
+    originalCard.style.setProperty("display", "none", "important");
+    fallbackNotice.classList.remove("hidden");
+    fallbackNotice.innerHTML = `<div><strong>Scolia API er ikke aktivt · manuell scoring</strong><span class="muted">Scolia-oppsettet er bevart. Kampen kan scores manuelt uten Service Account-tilgang.</span></div>`;
+  }
+
   function renderManualFallback(board) {
     hideLiveSurface();
     if (manualCard) manualCard.style.setProperty("display", "block", "important");
@@ -292,6 +311,11 @@
 
     if (testLeasePending()) {
       renderTestLeaseTransition();
+      return;
+    }
+
+    if (board?.scolia_service_ready === false) {
+      renderInactiveService(board);
       return;
     }
 
@@ -434,6 +458,11 @@
   }
 
   async function poll({ force = false } = {}) {
+    if (!shouldPollScolia()) {
+      clearManualFallbackUi();
+      hideLiveSurface();
+      return;
+    }
     if (polling && !force) return;
     polling = true;
     try {
@@ -465,6 +494,6 @@
     document.body.classList.remove("scolia-live-active");
     clearManualFallbackUi();
   });
-  window.setInterval(() => poll().catch(() => undefined), 750);
+  window.setInterval(() => poll().catch(() => undefined), 1500);
   poll().catch(() => undefined);
 })();
