@@ -155,12 +155,20 @@ function renderProgress(progress = {}) {
   el.progressCards.innerHTML = cards.map(([label, value]) => `<div class="stat-card"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`).join("");
 }
 
+let lastBoardsMarkup = null;
+function paintBoardsIfChanged(markup) {
+  // A 3s read must not recreate the wall's cards/scroll/rotation when scores
+  // are unchanged. Board layout is controlled by its independent 6s timer.
+  if (markup === lastBoardsMarkup && el.boards.firstElementChild) return;
+  lastBoardsMarkup = markup;
+  el.boards.innerHTML = markup;
+}
 function renderBoards(boards = []) {
   if (!boards.length) {
-    el.boards.innerHTML = `<div class="empty">Ingen skiver er koblet til turneringen ennå.</div>`;
+    paintBoardsIfChanged(`<div class="empty">Ingen skiver er koblet til turneringen ennå.</div>`);
     return;
   }
-  el.boards.innerHTML = boards.map((board) => {
+  const markup = boards.map((board) => {
     const match = board.live_match;
     if (!match) return `<article class="board-card idle"><div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge">Ledig</span></div><p class="muted">Venter på neste kamp.</p></article>`;
     const playing = match.status === "in_progress";
@@ -175,6 +183,7 @@ function renderBoards(boards = []) {
       <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best of ${Number(match.best_of_legs)}</div>
     </article>`;
   }).join("");
+  paintBoardsIfChanged(markup);
 }
 
 function renderQueue(items = []) {
