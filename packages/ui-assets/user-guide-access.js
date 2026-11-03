@@ -249,8 +249,47 @@ function refresh() {
   applyDialogAccess();
 }
 
-const observer = new MutationObserver(refresh);
-observer.observe(document.documentElement, { childList: true, subtree: true });
+// The guide needs to discover only the dynamically created mobile navigation
+// and guide launcher. Observing the ENTIRE DOM made each equipment/table render
+// trigger guide refresh, which itself can move nodes and schedule another DOM
+// mutation. In admin with active board data this could starve the UI event loop.
+let refreshQueued = false;
+function scheduleGuideRefresh() {
+  if (refreshQueued) return;
+  refreshQueued = true;
+  window.requestAnimationFrame(() => {
+    refreshQueued = false;
+    refresh();
+  });
+}
+
+const observedRoot = document.body || document.documentElement;
+const observer = new MutationObserver((records) => {
+  const relevant = records.some((record) =>
+    [...record.addedNodes, ...record.removedNodes].some((node) =>
+      node.nodeType === Node.ELEMENT_NODE &&
+      (node.id === "unifiedMobileBottomNav" || node.id === "unifiedMobileMore"
+        || node.classList?.contains("bd-user-guide"))
+    )
+  );
+  if (relevant) scheduleGuideRefresh();
+});
+observer.observe(observedRoot, { childList: true });
+
+// The guide's sidebar launcher can arrive after the guide access module.
+// Listen only for direct menu children, not every scoring or admin list item.
+const guideMenu = document.querySelector(".portal-menu");
+if (guideMenu) {
+  const menuObserver = new MutationObserver((records) => {
+    if (records.some((record) =>
+      [...record.addedNodes, ...record.removedNodes].some((node) =>
+        node.nodeType === Node.ELEMENT_NODE &&
+        node.classList?.contains("bd-guide-open")
+      )
+    )) scheduleGuideRefresh();
+  });
+  menuObserver.observe(guideMenu, { childList: true });
+}
 
 window.addEventListener("storage", (event) => {
   if (event.key !== "bd:token") return;
