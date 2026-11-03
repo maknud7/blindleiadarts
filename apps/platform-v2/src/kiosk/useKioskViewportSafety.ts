@@ -9,8 +9,9 @@ import { read, STORAGE_EVENT } from "../shared/storage";
  * content cannot fit, switch to a stable, internally scrollable scorer.
  * Do not bounce between layouts after every 1.5s canonical poll.
  */
-export function useKioskViewportSafety() {
+export function useKioskViewportSafety(contentKey: string) {
   const shellRef = useRef<HTMLDivElement>(null);
+  const refreshRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -65,14 +66,9 @@ export function useKioskViewportSafety() {
       : null;
     resize?.observe(shell);
 
-    // React renders new notices, games and score panels without resizing the
-    // root. Observe DOM *structure*, not attributes, to avoid self-triggering.
-    const changes = typeof MutationObserver === "function"
-      ? new MutationObserver((records) => {
-        if (records.some((record) => record.addedNodes.length || record.removedNodes.length)) schedule();
-      })
-      : null;
-    changes?.observe(shell, { subtree: true, childList: true });
+    // React state owns kiosk content. A separate effect below rechecks when
+    // the active view, notices or scoring mode actually changes.
+    refreshRef.current = schedule;
 
     const onPreferenceChange = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
@@ -88,12 +84,16 @@ export function useKioskViewportSafety() {
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
       resize?.disconnect();
-      changes?.disconnect();
+      refreshRef.current = () => undefined;
       window.removeEventListener(STORAGE_EVENT, onPreferenceChange);
       window.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("resize", schedule);
     };
   }, []);
+
+  useEffect(() => {
+    refreshRef.current();
+  }, [contentKey]);
 
   return shellRef;
 }
