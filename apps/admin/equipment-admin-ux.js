@@ -294,8 +294,12 @@ async function decorateDeleteActions() {
     controls.appendChild(button);
   });
 
+  const screenRows = [...document.querySelectorAll("#screenList .screen-row")];
+  // On clubs with no venue screens, never issue a screen-devices GET merely
+  // because a board's delete control was added or the board list rerendered.
+  if (!screenRows.length) return;
   if (!state.screenIds.size) await loadScreenIds().catch(() => undefined);
-  document.querySelectorAll("#screenList .screen-row").forEach((row) => {
+  screenRows.forEach((row) => {
     if (row.querySelector(".equipment-delete-button")) return;
     const code = row.querySelector(".screen-code")?.textContent?.trim() || "";
     const id = Number(state.screenIds.get(code) || 0);
