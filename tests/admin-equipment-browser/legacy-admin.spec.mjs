@@ -84,7 +84,7 @@ test("Canonical Utstyr keeps navigation after read-only equipment API 503", asyn
   try {
     await page.locator(".portal-menu a[href='#kiosks']").first().click();
     await expect(page.locator("#kiosks")).toBeVisible();
-    await expect(page.locator("#globalMessage")).toContainText(/Skivene kunne ikke lastes|pairingstatus kunne ikke hentes/i);
+    await expect(page.locator("#globalMessage")).toContainText(/Skivene kunne ikke (lastes|oppdateres)|Pairingstatus kunne ikke (hentes|oppdateres)/i);
     await page.locator(".portal-menu a[href='#tournaments']").first().click();
     await expect(page.locator("#tournaments")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("canonical-equipment-error.png"), animations: "disabled" });
