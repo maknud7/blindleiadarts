@@ -238,7 +238,6 @@ function manualRemainingPreview(player: PlayerScore | null, inputMode: InputMode
 }
 
 export function KioskWorkspace() {
-  const kioskViewportRef = useKioskViewportSafety();
   const [health, setHealth] = useState<Health | null>(null);
   const [kioskToken, setKioskToken] = useState(() => ensureKioskToken());
   const [kioskCode, setKioskCode] = useState(() => read("kioskCode"));
@@ -1052,6 +1051,15 @@ export function KioskWorkspace() {
     if (matchIsAssigned(match)) return "assigned";
     return "match";
   }, [health, effectiveTestMode, kioskCode, snapshot, match, completion]);
+
+  // Recheck visible content changes from React state, never by watching DOM
+  // mutations. This avoids an observer loop during frequent score refreshes.
+  const viewportContentKey = [
+    view, match?.id, match?.status, completion?.matchId, completion?.confirmed,
+    manualQueueDepth, manualQueueError, error, scolia.runtimeError,
+    scolia.leasePending, scolia.leaseFallback, scolia.fallbackActive, inputMode,
+  ].join("|");
+  const kioskViewportRef = useKioskViewportSafety(viewportContentKey);
 
   const headerTitle = kiosk?.name || (effectiveTestMode ? "Testterminal" : "Skiveterminal");
   const headerSubtitle = kiosk?.club?.name || (effectiveTestMode ? "Isolert TEST-runtime" : "Blindleia Darts");
