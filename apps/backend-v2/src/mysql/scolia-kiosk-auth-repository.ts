@@ -254,7 +254,7 @@ export class MySqlScoliaKioskAuthRepository {
 
       const recentRows = await db.query<QueryResultRow>(
         `SELECT v.id,v.leg_id,v.player_id,p.display_name AS player_name,v.visit_number,v.score,
-                v.darts_used,v.input_mode,v.is_bust,v.remaining_after,v.created_at
+                v.darts_used,v.input_mode,v.source,v.is_bust,v.remaining_after,v.created_at
            FROM \`${this.runtimePrefix}visits\` v
            INNER JOIN \`${this.runtimePrefix}players\` p ON p.id=v.player_id
           WHERE v.match_id=? ORDER BY v.id DESC LIMIT 8`,
@@ -269,6 +269,7 @@ export class MySqlScoliaKioskAuthRepository {
         score: numberValue(row.score),
         darts_used: numberValue(row.darts_used),
         input_mode: String(row.input_mode ?? "sum"),
+        source: String(row.source ?? "legacy"),
         is_bust: numberValue(row.is_bust),
         remaining_after: numberValue(row.remaining_after),
         created_at: row.created_at ?? null,
