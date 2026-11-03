@@ -234,47 +234,93 @@ if (opsHost) {
         </div>`;
     }).join("") : `<div class="empty">Ingen åpne kamper.</div>`;
 
-    el.opsQueue.querySelectorAll("[data-move-match]").forEach((button) => {
-      button.addEventListener("click", () => moveMatch(Number(button.dataset.moveMatch || 0), button));
-    });
+    // Change handlers are delegated below, so rerendering queue cards cannot
+    // create duplicate listeners or lose the operator's chosen board.
   }
 
   async function moveMatch(matchId, button) {
-    const tournamentId = Number(el.opsTournament.value || 0);
-    const match = (state.snapshot?.queue?.items || []).find((item) => Number(item.id) === matchId);
-    const target = el.opsQueue.querySelector(`[data-move-target="${matchId}"]`);
-    const kioskId = Number(target?.value || 0);
-    if (!tournamentId || !match || !kioskId) return;
+    const tournamentId = exactId(el.opsTournament.value);
+    const match = (state.snapshot?.queue?.items || []).find((item) => exactId(item.id) === matchId);
+    const row = button.closest(".ops-match-row");
+    const target = row?.querySelector("[data-move-target]");
+    const kioskId = exactId(target?.value);
+    const targetBoard = match && movableBoards(match).find((board) => exactId(board.id) === kioskId);
+    if (moveInProgress) return;
+    if (!tournamentId || !match || !kioskId || !targetBoard) {
+      show("Den valgte skiva er ikke lenger ledig. Velg en ny skive og prøv igjen.", "warning");
+      return;
+    }
 
+    const fromLabel = match.board_number ? `skive ${Number(match.board_number)}` : "køen";
+    const toLabel = boardLabel(targetBoard);
     let confirmInProgress = false;
     if (match.status === "in_progress") {
       const players = `${match.player_a_name || "Spiller A"} – ${match.player_b_name || "Spiller B"}`;
       if (!window.confirm(
-        `${players} pågår allerede.\n\nFlytte kampen til den valgte skiven likevel?\n\nEksisterende legs og scoring beholdes. Ny skive blir canonical umiddelbart.`
+        `${players} spiller allerede på ${fromLabel}.\n\nFlytte kampen til ${toLabel}?\n\nAlle registrerte legs og kast beholdes, og den nye skiva overtar kampen.`
       )) return;
       confirmInProgress = true;
     }
 
+    moveInProgress = true;
     button.disabled = true;
+    if (target) target.disabled = true;
     const original = button.textContent;
     button.textContent = "Flytter …";
+    let committed = false;
     try {
-      await api(`/tournaments/${tournamentId}/operations/matches/${matchId}/move`, {
+      await api(`/tournaments/${encodeURIComponent(tournamentId)}/operations/matches/${encodeURIComponent(matchId)}/move`, {
         method: "POST",
         body: { kiosk_id: kioskId, confirm_in_progress: confirmInProgress },
       });
-      show(`Kampen er flyttet til skive ${target.options[target.selectedIndex]?.textContent?.match(/\d+/)?.[0] || ""}.`, "success");
-      await loadSnapshot();
+      committed = true;
+      selectedMoveTargets.delete(matchId);
+      show(`Kampen er flyttet fra ${fromLabel} til ${toLabel}.`, "success");
       window.dispatchEvent(new CustomEvent("bd:tournament-operations-changed", {
         detail: { tournamentId, matchId, kioskId },
       }));
+      try {
+        await loadSnapshot();
+      } catch (refreshError) {
+        // A successful canonical mutation is not a failed move just because
+        // the subsequent GET failed. Do not retry the mutation automatically.
+        show(`Flyttingen til ${toLabel} er lagret, men oversikten kunne ikke oppdateres. Trykk Oppdater.`, "warning");
+      }
     } catch (error) {
-      show(error.message, "error");
+      show(`Flyttingen kunne ikke bekreftes: ${error.message}`, "error");
     } finally {
-      button.disabled = false;
-      button.textContent = original;
+      moveInProgress = false;
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = original;
+      }
+      if (target?.isConnected) target.disabled = false;
+      if (!committed) selectedMoveTargets.set(matchId, kioskId);
     }
   }
+
+  el.opsQueue.addEventListener("change", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("select[data-move-target]") : null;
+    if (!target || moveInProgress) return;
+    const matchId = exactId(target.dataset.moveTarget);
+    const kioskId = exactId(target.value);
+    if (kioskId) selectedMoveTargets.set(matchId, kioskId);
+    else selectedMoveTargets.delete(matchId);
+    const row = target.closest(".ops-match-row");
+    const button = row?.querySelector("[data-move-match]");
+    if (button) button.disabled = !kioskId;
+    const match = (state.snapshot?.queue?.items || []).find((item) => exactId(item.id) === matchId);
+    const board = match && movableBoards(match).find((item) => exactId(item.id) === kioskId);
+    const current = match?.board_number ? `skive ${Number(match.board_number)}` : "køen";
+    const preview = row?.querySelector(".ops-move-preview");
+    if (preview) preview.textContent = board ? `${current} → ${boardLabel(board)}` : "Velg en ledig skive før du flytter kampen.";
+  });
+
+  el.opsQueue.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("button[data-move-match]") : null;
+    if (!button || button.disabled) return;
+    void moveMatch(exactId(button.dataset.moveMatch), button);
+  });
 
   el.opsTournament.addEventListener("change", () => loadSnapshot().catch((e) => show(e.message, "error")));
   el.opsRefresh.addEventListener("click", () => loadBase().catch((e) => show(e.message, "error")));
