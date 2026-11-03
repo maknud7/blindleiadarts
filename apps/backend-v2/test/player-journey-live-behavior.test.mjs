@@ -77,6 +77,7 @@ test("two visible check-in buttons for one tournament share one status request",
   const status = { registration_status: "registered", window_state: "open" };
   const scope = {
     checkinStatusCache: new Map(), checkinStatusInFlight: new Map(),
+    CHECKIN_STATUS_CACHE_MS: 5000,
     api: async (path) => {
       requests.push(path);
       await Promise.resolve();
