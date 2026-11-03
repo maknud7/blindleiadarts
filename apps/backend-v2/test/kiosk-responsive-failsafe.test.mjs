@@ -67,6 +67,12 @@ test("kiosk cannot advance to another match until canonical post-match result co
   assert.doesNotMatch(workspace, /if \(next === 0\) window\.setTimeout\(\(\) => void finishCompletion/);
 });
 
+test("initial kiosk boot never sends next-match mutation before canonical state is loaded", () => {
+  const workspace = read("apps/platform-v2/src/kiosk/KioskWorkspace.tsx");
+  assert.match(workspace, /if \(!kioskCode \|\| !snapshot\?\.kiosk \|\| completion \|\| match/);
+  assert.match(workspace, /Boolean\(snapshot\?\.kiosk\), completion\?\.matchId/);
+});
+
 test("PROD kiosk is only an existing entry point; v2 TEST code loads in TEST iframe", () => {
   const launcher = read("apps/kiosk/prod-test-entry.js");
   const handoff = read("apps/platform-v2/src/kiosk/testHandoff.ts");
