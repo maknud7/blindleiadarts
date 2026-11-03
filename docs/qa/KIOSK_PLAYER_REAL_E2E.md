@@ -22,7 +22,9 @@ Kjør GitHub Actions **TEST UI Browser QA** etter bekreftet TEST-release-SHA. De
 | Kiosk v2 i test-launcher | 600×960, 768×1024, 1440×900 | **PROD kiosk → Start testmodus → TEST iframe**; TEST-banner/velger, klipping, desktop beholdt nettbrettformat |
 | Kiosk v1 PROD | 768×1024 | Kun visning/innstillingsinngang, ingen PROD-kast eller pairingmutasjoner |
 
-Dette er en **read-only visuell smoke**: ikke score, ikke velg skive, ikke endre kontingent eller deltakerdata. Nettlesertester må ikke kjøres mot PROD score-API eller opprette TEST-leaser uten eksplisitt scenario. Bilder inneholder kun offentlig/anonymous innhold. Ved feil lagres trace, konsollhendelser og screenshot som GitHub artifact.
+Dette er en **read-only visuell smoke** som standard: spillerportal og Live hentes fra TEST, ingen score, påmelding, innsjekk eller TEST-lease. **Viktig sikkerhetsdetalj:** Bare det å åpne en *uparret PROD-kiosk* kan automatisk opprette en pairing request i PROD. Derfor er de automatiserte kiosk-iframe-testene eksplisitt **skippet** i den read-only workflowen. De må kjøres under en overvåket, særskilt godkjent test med `ALLOW_PROD_KIOSK_BOOT=1` og etter oppklaring av denne sideeffekten. Ikke slå på denne variabelen i automatisk CI. Vi trenger etter hvert en egen sikker TEST-UI/visual-harness uten PROD-muteringer. Ved feil lagres trace og screenshot som GitHub-artifact.
+
+Automatisk TEST UI QA gir dermed **faktiske browser-screenshots av spillerportalen og Live**. Kioskens K01–K20 bekreftes i første omgang ved den separate, manuelle TEST-kiosk-sesjonen under. Ingen av de automatiserte testene kan i seg selv bevise kiosk-scoring.
 
 **Viktig:** Browser QA som blir grønn er *ikke* nok. Den kan ikke bevise registrering/innsjekk/kamp uten autentiserte testbrukere og aktiv testturnering.
 
