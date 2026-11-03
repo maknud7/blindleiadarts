@@ -389,7 +389,7 @@ export function KioskWorkspace() {
   }, [scoliaConfigured]);
 
   useScoliaRealtimeInput({
-    enabled: scoliaConfigured && !scolia.leaseFallback && !scolia.fallbackActive,
+    enabled: scolia.automatic,
     kioskCode,
     onInput: handleScoliaRealtimeInput,
   });
@@ -1133,6 +1133,7 @@ function ScoliaRuntimePanel({ snapshotMode, board, leasePending, leaseFallback, 
   if (!relevant) return null;
   if (leasePending) return <div className="scolia-kiosk-strip warn"><div><strong>TEST kobler til fysisk Scolia …</strong><span>{leaseError || "Oppretter midlertidig lease. Manuell scoring er sperret mens tilkoblingen etableres."}</span></div><span className="pill warn">TEST · Scolia</span></div>;
   if (leaseFallback) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia kunne ikke kobles til · manuell scoring aktiv</strong><span>{leaseError || "TEST-leasen kunne ikke etableres. Kampen kan fortsette manuelt."}</span></div><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onRetryLease()}>Prøv Scolia igjen</button></div>;
+  if (board?.scolia_service_ready === false) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia API er ikke aktivt · manuell scoring</strong><span>{board.scolia_inactive_reason === "access_token_missing" ? "Service Account-token mangler. Kiosken kan fortsatt score manuelt." : "Scolia er deaktivert for klubben. Kiosken kan fortsatt score manuelt."}</span></div><span className="pill">Manuell</span></div>;
   if (fallbackActive) return <div className="scolia-kiosk-strip warn"><div><strong>{available ? "Scolia er tilbake – score må avstemmes" : "Scolia offline · manuell fallback"}</strong><span>{available ? "Fortsett manuelt til scoren er kontrollert." : "Kampen kan fortsette manuelt mens kiosken følger forbindelsen."}</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><div className="row-actions">{available && <button className="button small" disabled={Boolean(busy)} onClick={() => void onResume()}>Score avstemt · bruk Scolia</button>}<button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
   if (automatic && !available) return <div className="scolia-kiosk-strip warn"><div><strong>Scolia-forbindelsen er brutt</strong><span>Prøver igjen. Manuell fallback {remaining > 0 ? `om ca. ${remaining} sek` : "aktiveres nå"}.</span>{runtimeError && <span className="error-copy">{runtimeError}</span>}</div><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onFallback()}>Bruk manuell nå</button></div>;
   if (automatic && available) return <div className="scolia-kiosk-strip good"><div><strong>Scolia tilkoblet · automatisk scoring</strong><span>{board?.physical_board_status || board?.board_status || "Online"}{board?.board_phase ? ` · ${board.board_phase}` : ""}</span></div><div className="row-actions"><span className="pill good"><span className="dot" />Live</span><button className="button secondary small" disabled={Boolean(busy)} onClick={() => void onResetPhase()}>Reset fase</button></div></div>;
