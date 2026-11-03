@@ -132,6 +132,31 @@ function keepOpenMobileDrawerInteractive() {
   menu.setAttribute("aria-hidden", "false");
 }
 
+function clearStaleNavigationOverlay({ closeDrawer = false } = {}) {
+  // The unified menu can leave a full-page interception layer behind after a
+  // mobile/desktop switch or back navigation. Restoring admin navigation must
+  // not require a full page reload.
+  const smallScreen = window.matchMedia("(max-width: 760px)").matches;
+  const shouldClose = closeDrawer || !smallScreen;
+  const overlay = document.getElementById("unifiedMobileDrawerOverlay");
+  if (shouldClose) {
+    document.body.classList.remove("unified-mobile-drawer-open");
+    if (overlay) overlay.hidden = true;
+  } else if (!document.body.classList.contains("unified-mobile-drawer-open") && overlay) {
+    overlay.hidden = true;
+  }
+  const menu = document.querySelector(".portal-menu");
+  if (!menu) return;
+  if (!smallScreen) {
+    menu.removeAttribute("inert");
+    menu.removeAttribute("aria-hidden");
+    try { menu.inert = false; } catch { /* Safari support */ }
+  } else if (closeDrawer) {
+    menu.setAttribute("aria-hidden", "true");
+    try { menu.inert = true; } catch { menu.setAttribute("inert", ""); }
+  }
+}
+
 function activate(target, { updateHash = true } = {}) {
   const available = targets();
   let next = normalizeTarget(target);
@@ -155,6 +180,7 @@ function activate(target, { updateHash = true } = {}) {
   });
 
   document.body.dataset.portalActive = next;
+  if (changed) clearStaleNavigationOverlay({ closeDrawer: true });
   const nextHash = canonicalHash(next);
   if (updateHash && window.location.hash !== nextHash) history.replaceState(null, "", nextHash);
 
@@ -208,6 +234,7 @@ function refresh() {
     return;
   }
   bindLinks();
+  clearStaleNavigationOverlay();
   keepOpenMobileDrawerInteractive();
   const requested = normalizeTarget(window.location.hash);
   const current = normalizeTarget(document.body.dataset.portalActive);
