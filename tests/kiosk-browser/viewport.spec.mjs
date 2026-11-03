@@ -121,7 +121,7 @@ for (const size of [
       const undo = page.getByRole("button", { name: "Angre siste kast" });
       await reachControl(page, undo);
 
-      await page.screenshot({ path: testInfo.outputPath(`kiosk-${size.width}x${size.height}.png`), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`kiosk-${size.width}x${size.height}.png`), fullPage: false, timeout: 12000, animations: "disabled" });
       expect(errors, "No unhandled render exceptions").toEqual([]);
       expect(requests.every((r) => r.method === "GET"), "No backend mutations in browser visual QA").toBe(true);
     } finally {
