@@ -175,20 +175,25 @@ async function loadAdminData() {
 }
 
 async function loadKioskAdmin() {
-  // Physical boards are canonical equipment and must render independently of
-  // transient pairing/runtime data. A pairing failure must never hide valid
-  // PROD-backed boards in TEST or PROD.
-  const kiosks = await api(`/clubs/${state.clubId}/kiosks`);
-  state.kiosks = kiosks.items || [];
-
-  try {
-    const pairing = await api(`/clubs/${state.clubId}/kiosk-pairing-requests`, { auth: true });
-    state.pairingRequests = pairing.items || [];
-    return null;
-  } catch (error) {
-    state.pairingRequests = [];
-    return `Skivene er lastet, men pairingstatus kunne ikke hentes: ${error.message}`;
+  // Skiver and pairing status are independent READS. Do not block the whole
+  // admin view behind two sequential 12s timeouts, and do not wipe the last
+  // valid board list when a refresh fails.
+  const [boardResult, pairingResult] = await Promise.allSettled([
+    api(`/clubs/${state.clubId}/kiosks`, { timeoutMs: 10000 }),
+    api(`/clubs/${state.clubId}/kiosk-pairing-requests`, { auth: true, timeoutMs: 10000 }),
+  ]);
+  const warnings = [];
+  if (boardResult.status === "fulfilled") {
+    state.kiosks = boardResult.value.items || [];
+  } else {
+    warnings.push(`Skivene kunne ikke oppdateres: ${boardResult.reason?.message || "ukjent feil"}`);
   }
+  if (pairingResult.status === "fulfilled") {
+    state.pairingRequests = pairingResult.value.items || [];
+  } else {
+    warnings.push(`Pairingstatus kunne ikke oppdateres: ${pairingResult.reason?.message || "ukjent feil"}`);
+  }
+  return warnings.join(" ");
 }
 
 async function loadAll() {
