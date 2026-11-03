@@ -115,3 +115,14 @@ test("equipment refreshes are parallel and Scolia background polling cannot bloc
   assert.match(scolia, /\}, 15000\)/);
   assert.doesNotMatch(scolia, /\}, 5000\)/);
 });
+
+test("user-guide observer must never monitor the entire admin document subtree", () => {
+  const guide = read("packages/ui-assets/user-guide-access.js");
+  const menu = read("packages/ui-assets/portal-menu.js");
+  assert.doesNotMatch(guide, /observer\.observe\(document\.documentElement, \{ childList: true, subtree: true \}\)/);
+  assert.match(guide, /observer\.observe\(observedRoot, \{ childList: true \}\)/);
+  assert.match(guide, /menuObserver\.observe\(guideMenu, \{ childList: true \}\)/);
+  assert.match(guide, /node\.id === "unifiedMobileBottomNav"/);
+  assert.match(guide, /window\.requestAnimationFrame\(/);
+  assert.match(menu, /user-guide-access\.js\?v=20261103-equipment-freeze-03/);
+});
