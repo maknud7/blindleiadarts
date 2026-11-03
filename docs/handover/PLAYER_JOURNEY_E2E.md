@@ -11,6 +11,7 @@ A user moves through identity + membership eligibility -> tournament discovery -
 - The code-based check-in modal is the single player-facing gate for home and tournament views. `admin_only` requires an operator; a closed or not-yet-open window must show a human-readable reason; waitlisted users must not be offered check-in.
 - Do not send duplicate registration or check-in writes on rapid taps. Do not automatically retry ambiguous canonical mutations.
 - After check-in, update user dashboard and cards *in place*, retaining scroll/view. A full-page reload is not necessary.
+- Transient player dashboard/API failures (5xx, timeouts) must **preserve** the existing token, identity and registration state. Only an explicit HTTP 401 means sign-out. A confirmed registration must not be reported as failed because the following read is temporarily unavailable.
 - Live checks canonical public/live and check-in display every **3 seconds** for data freshness; its autonomous visual display clocks remain **6 seconds board-page rotation**, **20 seconds group-page rotation**, **20 seconds ELO-page rotation**. These are not polling intervals; data refresh must not reset them.
 - Transient failures of a required API read must not change an already valid `phase-live` or `phase-checkin` display to standby. Valid backend phase transitions still must apply.
 - WebSocket scoring snapshots received during `phase-checkin` must **not** force Live before the authoritative check-in display has ended.
