@@ -2,7 +2,7 @@ import(new URL("./session-badge.js?v=20260904-session-badge-02", import.meta.url
   .catch((error) => console.warn("Session badge unavailable", error));
 
 import(new URL("./user-guide.js?v=20260831-1453", import.meta.url).href)
-  .then(() => import(new URL("./user-guide-access.js?v=20260831-1453", import.meta.url).href))
+  .then(() => import(new URL("./user-guide-access.js?v=20261103-equipment-freeze-03", import.meta.url).href))
   .catch((error) => console.warn("User guide unavailable", error));
 
 const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20261103-clubadmin-equipment-02", import.meta.url).href)).default;
