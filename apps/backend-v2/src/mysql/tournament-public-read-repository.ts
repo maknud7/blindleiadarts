@@ -107,7 +107,7 @@ export class MySqlTournamentPublicReadRepository {
 
       const visits = (await db.query<QueryResultRow>(
         `SELECT v.id,v.leg_id,l.leg_number,v.player_id,v.visit_number,v.score,v.darts_used,v.input_mode,
-                v.darts_json,v.is_bust,v.remaining_after,v.created_at
+                v.darts_json,v.source,v.is_bust,v.remaining_after,v.created_at
            FROM ${this.table("visits")} v
            INNER JOIN ${this.table("legs")} l ON l.id=v.leg_id
           WHERE v.match_id=?
@@ -132,6 +132,7 @@ export class MySqlTournamentPublicReadRepository {
           visit_number: integer(raw.visit_number),
           score: integer(raw.score),
           darts_used: integer(raw.darts_used),
+          source: String(raw.source ?? "legacy"),
           remaining_after: integer(raw.remaining_after),
           is_bust: integer(raw.is_bust) === 1,
           darts,
