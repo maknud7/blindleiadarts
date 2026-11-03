@@ -5,7 +5,7 @@ import(new URL("./user-guide.js?v=20260831-1453", import.meta.url).href)
   .then(() => import(new URL("./user-guide-access.js?v=20260831-1453", import.meta.url).href))
   .catch((error) => console.warn("User guide unavailable", error));
 
-const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20260827-1900", import.meta.url).href)).default;
+const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20261103-clubadmin-equipment-02", import.meta.url).href)).default;
 
 function ensureStylesheet(url) {
   const href = new URL(url, import.meta.url).href;
