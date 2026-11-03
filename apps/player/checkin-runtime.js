@@ -3,6 +3,7 @@ const CHECKIN_STATUS_CACHE_MS = 5000;
 const CHECKIN_REFRESH_MS = 15000;
 
 const checkinStatusCache = new Map();
+const checkinStatusInFlight = new Map();
 let gateRefreshTimer = null;
 let gateMutationTimer = null;
 let gateBusy = false;
@@ -66,9 +67,17 @@ async function getCheckinStatus(tournamentId, force = false) {
   if (!id) return null;
   const cached = checkinStatusCache.get(id);
   if (!force && cached && Date.now() - cached.at < CHECKIN_STATUS_CACHE_MS) return cached.status;
-  const status = await api(`/tournaments/${id}/check-in-status`);
-  checkinStatusCache.set(id, { status, at: Date.now() });
-  return status;
+  // The same registration appears on Home and the tournament list. Share
+  // concurrent read-only checks instead of doubling backend/DB traffic.
+  if (checkinStatusInFlight.has(id)) return checkinStatusInFlight.get(id);
+  const pending = api(`/tournaments/${id}/check-in-status`)
+    .then((status) => {
+      checkinStatusCache.set(id, { status, at: Date.now() });
+      return status;
+    })
+    .finally(() => checkinStatusInFlight.delete(id));
+  checkinStatusInFlight.set(id, pending);
+  return pending;
 }
 
 function ensureGateStyles() {
@@ -114,6 +123,10 @@ function setHomeHint(state, status) {
   hint.textContent = hint.dataset.checkinWindowOriginalText || "Neste steg er innsjekk.";
 }
 
+function updateTextWhenChanged(node, text) {
+  if (node && node.textContent !== text) node.textContent = text;
+}
+
 function applyWindowState(button, status) {
   if (!button || !status) return;
   rememberButtonState(button);
@@ -124,7 +137,7 @@ function applyWindowState(button, status) {
     button.disabled = true;
     button.classList.add("checkin-window-disabled");
     button.dataset.checkinWindowDisabled = "1";
-    button.textContent = `Innsjekk åpner ${formatWindowTime(status.opens_at)}`;
+    updateTextWhenChanged(button, `Innsjekk åpner ${formatWindowTime(status.opens_at)}`);
     button.title = `Innsjekk åpner ${formatWindowTime(status.opens_at)}`;
     button.setAttribute("aria-disabled", "true");
     if (isHome) setHomeHint("not_open", status);
@@ -135,7 +148,7 @@ function applyWindowState(button, status) {
     button.disabled = true;
     button.classList.add("checkin-window-disabled");
     button.dataset.checkinWindowDisabled = "1";
-    button.textContent = "Innsjekk stengt";
+    updateTextWhenChanged(button, "Innsjekk stengt");
     button.title = "Innsjekkvinduet er stengt";
     button.setAttribute("aria-disabled", "true");
     if (isHome) setHomeHint("closed", status);
@@ -147,7 +160,7 @@ function applyWindowState(button, status) {
     delete button.dataset.checkinWindowDisabled;
   }
   button.classList.remove("checkin-window-disabled");
-  button.textContent = button.dataset.checkinWindowOriginalText || button.textContent;
+  updateTextWhenChanged(button, button.dataset.checkinWindowOriginalText || button.textContent);
   button.removeAttribute("title");
   if (!button.disabled) button.removeAttribute("aria-disabled");
   if (isHome) setHomeHint("open", status);
@@ -358,7 +371,15 @@ document.addEventListener("click", (event) => {
   openCheckin(tournamentId).catch((error) => showStatus(error.message, "error"));
 }, true);
 
-const gateObserver = new MutationObserver(scheduleMutationRefresh);
+// Only actual element additions/removals (new cards/buttons) should refresh
+// the gate. Writing our own button label produces text-only childList changes
+// and must never recursively schedule another refresh.
+const gateObserver = new MutationObserver((records) => {
+  const structuralChange = records.some((record) =>
+    [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === Node.ELEMENT_NODE)
+  );
+  if (structuralChange) scheduleMutationRefresh();
+});
 [
   document.getElementById("registrationList"),
   document.getElementById("tournamentList"),
