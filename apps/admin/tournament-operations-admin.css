@@ -4,3 +4,19 @@
 .ops-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}.ops-board-grid{display:grid;gap:8px}.ops-board{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#fff}.ops-board.busy{border-color:#add5c2;background:#f7fcf9}.ops-board small{display:block;color:var(--muted)}.ops-board>span{text-align:right}.ops-board>span small{display:block}.ops-columns .list-row{box-shadow:none!important}
 @media(max-width:980px){.ops-toolbar{grid-template-columns:1fr 1fr}.ops-progress{grid-template-columns:repeat(3,1fr)}.ops-columns{grid-template-columns:1fr}}
 @media(max-width:640px){.ops-admin-panel{padding:13px;border-radius:14px;box-shadow:none}.ops-toolbar{grid-template-columns:1fr}.ops-progress{grid-template-columns:repeat(3,1fr);gap:6px}.ops-progress>div{padding:9px}.ops-progress>div:nth-child(4),.ops-progress>div:nth-child(5){grid-column:auto}.ops-progress strong{font-size:1.05rem}.ops-columns{gap:14px}.ops-board{grid-template-columns:1fr;gap:5px}.ops-board>span{text-align:left}}
+
+/* Tournament floor: skive status must be understood without relying on color. */
+.ops-board-state{display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid #d8e2e9;border-radius:999px;font-size:11px;font-weight:850;letter-spacing:.01em}
+.ops-board-state.available{color:#1e6848;background:#eaf8f0;border-color:#a9d6ba}
+.ops-board-state.busy{color:#875020;background:#fff4e7;border-color:#e6bd91}
+.ops-board-state.reserved{color:#225f8c;background:#eef6ff;border-color:#b4d4ef}
+.ops-board.reserved{border-color:#b4d4ef;background:#f5faff}
+.ops-match-move{min-width:0}
+.ops-match-move label{min-width:0}
+.ops-match-move select{min-height:44px;min-width:0}
+.ops-match-move .button{min-height:44px!important}
+.ops-match-move select:focus-visible,.ops-match-move button:focus-visible{outline:3px solid #2f6fed;outline-offset:2px}
+.ops-move-preview{grid-column:1/-1;margin:0;font-size:12px;color:#536b84;line-height:1.35;overflow-wrap:anywhere}
+.ops-move-unavailable{margin:4px 0 0;color:#6a7480;font-size:12px;line-height:1.45}
+.ops-match-row .ops-match-status{align-self:flex-start}
+@media(max-width:700px){.ops-match-move{grid-template-columns:minmax(0,1fr)}.ops-match-move select,.ops-match-move .button{width:100%}.ops-board-state{margin-top:4px}}
