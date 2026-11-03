@@ -562,18 +562,28 @@ export function KioskWorkspace() {
     void refreshPostMatchState();
   }, [completion?.matchId, manualQueueDepth, manualQueueError, kioskCode]);
 
+  // Result verification is a server decision. Never count down or claim
+  // another match while the last visit/result remains unconfirmed.
   useEffect(() => {
-    if (!completion || completion.remainingSeconds <= 0) return;
-    const handle = window.setInterval(() => {
+    if (!completion || completion.confirmed || manualQueueDepth > 0 || manualQueueError) return;
+    const handle = window.setInterval(() => void refreshPostMatchState(), 2000);
+    return () => window.clearInterval(handle);
+  }, [completion?.matchId, completion?.confirmed, manualQueueDepth, manualQueueError, kioskCode]);
+
+  useEffect(() => {
+    if (!completion?.confirmed || manualQueueDepth > 0 || manualQueueError) return;
+    if (completion.remainingSeconds <= 0) {
+      void finishCompletion();
+      return;
+    }
+    const handle = window.setTimeout(() => {
       setCompletion((current) => {
-        if (!current) return current;
-        const next = Math.max(0, current.remainingSeconds - 1);
-        if (next === 0) window.setTimeout(() => void finishCompletion(), 0);
-        return { ...current, remainingSeconds: next };
+        if (!current?.confirmed) return current;
+        return { ...current, remainingSeconds: Math.max(0, current.remainingSeconds - 1) };
       });
     }, 1000);
-    return () => window.clearInterval(handle);
-  }, [completion?.matchId]);
+    return () => window.clearTimeout(handle);
+  }, [completion?.matchId, completion?.confirmed, completion?.remainingSeconds, manualQueueDepth, manualQueueError]);
 
   useEffect(() => {
     if (!kioskCode || completion || match || busy || manualQueueDepth > 0 || manualQueueError) return;
@@ -676,10 +686,7 @@ export function KioskWorkspace() {
         remainingSeconds: remaining,
         confirmed: Boolean(data.last_completed_match),
       } : current);
-      if (remaining <= 0) {
-        await finishCompletion();
-      }
-    } catch (cause) {
+     } catch (cause) {
       if (mounted.current) setError(text(cause));
     } finally {
       postMatchBusy.current = false;
@@ -687,7 +694,7 @@ export function KioskWorkspace() {
   }
 
   async function finishCompletion() {
-    if (!kioskCode || nextMatchBusy.current) return;
+    if (!kioskCode || !completion?.confirmed || manualQueueDepth > 0 || manualQueueError || nextMatchBusy.current) return;
     nextMatchBusy.current = true;
     try {
       const data = await api<NextMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/next-match`, {
@@ -1065,7 +1072,8 @@ export function KioskWorkspace() {
 
     <main className="kiosk-main"><section className="kiosk-card">
       {error && <div className="notice bad">{error}</div>}
-      {manualQueueError && <div className="notice bad"><span>{manualQueueError}</span><button className="button secondary small" disabled={busy} onClick={() => void refreshManualStatus()}>Oppdater status</button></div>}
+      {manualQueueDepth > 0 && !manualQueueError && <div className="notice kiosk-pending-notice" role="status" aria-live="polite">Lagrer {manualQueueDepth} kast · resultatet er ikke bekreftet ennå</div>}
+      {manualQueueError && <div className="notice bad" role="alert"><span>{manualQueueError}</span><button className="button secondary small" disabled={busy} onClick={() => void refreshManualStatus()}>Oppdater status</button></div>}
       {kioskCode && scoliaConfigured && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseFallback={scolia.leaseFallback} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onRetryLease={scolia.retryLease} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
 
       {view === "loading" && <div className="kiosk-hero"><span className="pill">Skiveterminal</span><h2>Starter terminalen …</h2><p>Henter skive og kampstatus.</p></div>}
