@@ -362,7 +362,26 @@ function renderNow({ me, dashboard, tournaments, matchCalls, eligibility }) {
   if (open) {
     setSituation("open_registration", "Påmelding åpen", "Du kan sikre deg plass direkte herfra.");
     body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Neste mulighet</span><strong>${pxEsc(open.name)}</strong><p class="muted">Påmeldingen er åpen. Meld deg på nå, så følger Hjem deg videre til innsjekk og kamp.</p>${primaryFacts([{ label: "Når", value: fmtDate(open.start_at) }, { label: "Påmeldte", value: `${Number(open.registration_count || 0)}` }])}</div><div class="player-now-actions"><button type="button" data-px-register>Meld meg på</button><button class="ghost" type="button" data-px-tournament>Se detaljer</button></div>`;
-    body.querySelector("[data-px-register]")?.addEventListener("click", () => triggerExisting("register", open.id));
+    body.querySelector("[data-px-register]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = "Melder på …";
+      const hint = document.getElementById("playerNowHint");
+      try {
+        const register = window.BlindleiaPlayerRuntime?.register;
+        if (typeof register !== "function") throw new Error("Påmelding er ikke klar ennå. Prøv igjen.");
+        const result = await register(Number(open.id));
+        if (hint) hint.textContent = result?.message || "Kunne ikke bekrefte påmeldingen.";
+      } catch (error) {
+        if (hint) hint.textContent = error?.message || "Påmeldingen kunne ikke gjennomføres.";
+      } finally {
+        if (button.isConnected) {
+          button.disabled = false;
+          button.textContent = "Meld meg på";
+        }
+      }
+    });
     body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
     return;
   }
