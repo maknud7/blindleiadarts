@@ -54,7 +54,7 @@ export function PlatformNav({ active }: { active: Surface }) {
       try {
         await load("/packages/ui-assets/app-core.js?v=20260910-v2-nav-01");
         await load("/packages/ui-assets/user-guide.js?v=20260831-1453");
-        await load("/packages/ui-assets/user-guide-access.js?v=20260831-1453");
+        await load("/packages/ui-assets/user-guide-access.js?v=20261103-equipment-freeze-03");
         if (disposed) return;
         await (window as GuideWindow).BlindleiaApp?.session?.resolve?.({ force: true });
         (window as GuideWindow).BlindleiaUserGuideAccess?.refresh?.();
