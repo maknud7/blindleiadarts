@@ -110,6 +110,8 @@ export type ScoliaBoard = EquipmentScope & {
   last_disconnect_at?: string | null;
   last_reconciled_at?: string | null;
   effective_scoring_mode?: string;
+  scolia_service_ready?: boolean;
+  scolia_inactive_reason?: "club_disabled" | "access_token_missing" | null;
   queue?: ScoliaQueue;
 };
 
