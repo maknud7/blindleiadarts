@@ -54,8 +54,10 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
       await expect(page.locator("#kiosks")).toBeVisible();
       await expect(page.locator("#kiosks")).not.toHaveClass(/portal-view-hidden/);
 
-      // Both navigation and the create form remain operable.
-      await expect(page.locator("#kioskForm button[type='submit']")).toBeVisible();
+      // The legacy create form is intentionally hidden by the equipment UX
+      // overlay; the real user-visible hardware rows must be present instead.
+      await expect(page.locator("#kioskList .board-row")).toHaveCount(1);
+      await expect(page.locator("#kioskList .board-row")).toBeVisible();
       if (size.width < 760) {
         await page.locator("#unifiedMobileMore").click();
       }
