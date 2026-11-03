@@ -586,12 +586,15 @@ export function KioskWorkspace() {
   }, [completion?.matchId, completion?.confirmed, completion?.remainingSeconds, manualQueueDepth, manualQueueError]);
 
   useEffect(() => {
-    if (!kioskCode || completion || match || busy || manualQueueDepth > 0 || manualQueueError) return;
+    // Do not issue a canonical next-match mutation before the initial
+    // /state response proves the kiosk is actually idle. Otherwise boot
+    // races with the first load and can claim a match unnecessarily.
+    if (!kioskCode || !snapshot?.kiosk || completion || match || busy || manualQueueDepth > 0 || manualQueueError) return;
     const attempt = () => void claimNextMatch({ quiet: true });
     attempt();
     const handle = window.setInterval(attempt, 2500);
     return () => window.clearInterval(handle);
-  }, [kioskCode, completion?.matchId, match?.id, busy, manualQueueDepth, manualQueueError]);
+  }, [kioskCode, Boolean(snapshot?.kiosk), completion?.matchId, match?.id, busy, manualQueueDepth, manualQueueError]);
 
   async function selectTestBoard(board: TestBoard) {
     setBusy(true);
