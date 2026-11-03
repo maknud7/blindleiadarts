@@ -100,6 +100,15 @@
   min-height: 44px;
 }
 
+.score-entry {
+  /* 44px mode buttons plus switch padding need more than old 42px header. */
+  grid-template-rows: minmax(56px, auto) 54px minmax(0, 1fr);
+}
+
+.score-entry.dart-entry-active {
+  grid-template-rows: minmax(56px, auto) minmax(0, 1fr);
+}
+
 .keypad {
   grid-template-rows: repeat(4, minmax(44px, 1fr));
 }
@@ -191,11 +200,11 @@
   height: auto;
   min-height: 0;
   overflow: visible;
-  grid-template-rows: 46px 54px minmax(220px, auto);
+  grid-template-rows: 56px 54px minmax(220px, auto);
 }
 
 .kiosk-shell[data-kiosk-layout="scroll"] .score-entry.dart-entry-active {
-  grid-template-rows: 46px minmax(335px, auto);
+  grid-template-rows: 56px minmax(335px, auto);
 }
 
 .kiosk-shell[data-kiosk-layout="scroll"] .keypad {
