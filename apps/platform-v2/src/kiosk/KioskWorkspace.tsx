@@ -4,6 +4,7 @@ import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/stor
 import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard, Visit } from "../shared/types";
 import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
 import { useScoliaRealtimeInput, type ScoliaRealtimeMessage } from "./useScoliaRealtimeInput";
+import { useKioskSnapshotRealtime } from "./useKioskSnapshotRealtime";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
 type PairingStatusResponse = { status: string; kiosk?: { code?: string; name?: string }; snapshot?: KioskSnapshot | null };
@@ -440,6 +441,17 @@ export function KioskWorkspace() {
       if (mounted.current) setError(text(cause));
     }
   }, [kioskCode, kioskToken, effectiveTestMode, completion]);
+
+  useKioskSnapshotRealtime({
+    enabled: Boolean(kioskCode),
+    kioskCode,
+    clubId: kiosk?.club?.id,
+    onRefresh: () => {
+      // Never replace a locally optimistic turn before the server confirms it.
+      if (manualQueueRef.current.length > 0 || manualQueuePaused.current || scoliaTurnRef.current) return;
+      void loadState().catch(() => undefined);
+    },
+  });
 
   useEffect(() => {
     snapshotRef.current = snapshot;
