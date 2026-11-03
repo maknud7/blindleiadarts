@@ -1,0 +1,43 @@
+name: Kiosk Responsive Browser QA
+
+# Actual kiosk React + CSS in an isolated local Vite server.
+# All API calls are intercepted with fixtures; no PROD/TEST database or
+# hardware is ever contacted by the test browser.
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'apps/platform-v2/**'
+      - 'tests/kiosk-browser/**'
+      - '.github/workflows/kiosk-responsive-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  viewport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies and pinned Playwright
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run six viewport/safe-mode interaction tests with fully mocked API
+        run: npx playwright test --config tests/kiosk-browser/playwright.config.mjs
+      - name: Keep screenshots and trace on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiosk-responsive-qa-${{ github.run_id }}
+          path: |
+            test-results/kiosk-browser-traces/
+            test-results/kiosk-browser-report/
+          retention-days: 14
+          if-no-files-found: warn
