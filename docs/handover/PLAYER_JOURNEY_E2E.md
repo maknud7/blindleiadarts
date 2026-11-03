@@ -7,6 +7,7 @@ Status: architecture/code review + initial UX fixes on a feature branch. Browser
 A user moves through identity + membership eligibility -> tournament discovery -> registration/waitlist -> check-in gate -> code/admin check-in -> ready -> match assignment -> kiosk score -> Live/result/leaderboard -> player views.
 
 - A successful registration or check-in must return canonical status from the server, not just a locally changed label.
+- Home registration acts directly and stays on Home, with a pending button and server acknowledgement. Do not navigate and auto-click a hidden second button. If a follow-up read fails after a successful write, report that the registration is **saved** and only the refresh failed.
 - The code-based check-in modal is the single player-facing gate for home and tournament views. `admin_only` requires an operator; a closed or not-yet-open window must show a human-readable reason; waitlisted users must not be offered check-in.
 - Do not send duplicate registration or check-in writes on rapid taps. Do not automatically retry ambiguous canonical mutations.
 - After check-in, update user dashboard and cards *in place*, retaining scroll/view. A full-page reload is not necessary.
