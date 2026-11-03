@@ -72,11 +72,14 @@ for (const size of [{ width: 375, height: 812 }, { width: 768, height: 1024 }, {
       await page.getByRole("button", { name: "Lukk" }).first().click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
 
-      // Ensure the admin navigation is not covered by a stale overlay.
-      const nav = page.locator('.platform-nav-links a[href="/v2/equipment/"]');
+      // On a PROD-like hostname, the v2 nav must point BACK to canonical
+      // Clubadmin instead of silently keeping administrators on /v2/.
+      // This isolated Vite test does not host the canonical root; the
+      // separate legacy-admin browser test exercises the actual click.
+      const nav = page.locator('.platform-nav-links a[href="/#equipment"]');
       await nav.scrollIntoViewIfNeeded();
       await expect(nav).toBeInViewport();
-      await nav.click();
+      await expect(nav).toContainText("Utstyr · Klubbadmin");
       await expect(page.getByRole("heading", { name: "Utstyr", exact: true })).toBeVisible();
 
       await page.screenshot({ path: testInfo.outputPath(`equipment-${size.width}.png`), animations: "disabled" });
