@@ -13,6 +13,7 @@ A user moves through identity + membership eligibility -> tournament discovery -
 - After check-in, update user dashboard and cards *in place*, retaining scroll/view. A full-page reload is not necessary.
 - Transient player dashboard/API failures (5xx, timeouts) must **preserve** the existing token, identity and registration state. Only an explicit HTTP 401 means sign-out. A confirmed registration must not be reported as failed because the following read is temporarily unavailable.
 - Live checks canonical public/live and check-in display every **3 seconds** for data freshness; its autonomous visual display clocks remain **6 seconds board-page rotation**, **20 seconds group-page rotation**, **20 seconds ELO-page rotation**. These are not polling intervals; data refresh must not reset them.
+- Reuse the existing board/group/ELO DOM when the relevant rendered data is unchanged. A three-second poll must not recreate entire cards/tables and cause visual flashing or scroll resets; only changed scores/data or scheduled visual rotations should repaint.
 - Transient failures of a required API read must not change an already valid `phase-live` or `phase-checkin` display to standby. Valid backend phase transitions still must apply.
 - WebSocket scoring snapshots received during `phase-checkin` must **not** force Live before the authoritative check-in display has ended.
 - Coalesce simultaneous read-only check-in status calls for the same tournament. Updating button/hint text must not cause self-triggered MutationObserver refresh loops.
