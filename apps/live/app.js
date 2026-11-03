@@ -304,6 +304,13 @@ async function startRealtime() {
       try {
         const message = JSON.parse(event.data);
         if (message?.type === "event" && message?.event === "snapshot") {
+          // The check-in wall takes priority until the authoritative check-in
+          // display says it is finished. A scoring snapshot alone must never
+          // flash the Live phase over an active check-in screen.
+          if (state.phase === "checkin") {
+            load().catch(() => undefined);
+            return;
+          }
           const live = message?.payload?.live || null;
           if (live && livePayloadIsRelevant(live)) {
             render(live);
