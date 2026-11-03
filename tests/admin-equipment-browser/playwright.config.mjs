@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 export default defineConfig({
   testDir: ".",
-  testMatch: ["equipment.spec.mjs"],
+  testMatch: ["*.spec.mjs"],
   timeout: 45000,
   expect: { timeout: 16000 },
   retries: 0,
