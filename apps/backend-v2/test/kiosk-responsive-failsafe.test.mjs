@@ -18,13 +18,14 @@ test("kiosk viewport hook uses actual measured dimensions and offers stable scro
   const workspace = read("apps/platform-v2/src/kiosk/KioskWorkspace.tsx");
   assert.match(hook, /window\.visualViewport\?\.height/);
   assert.match(hook, /ResizeObserver/);
-  assert.match(hook, /MutationObserver/);
+  assert.doesNotMatch(hook, /MutationObserver/, "kiosk layout stays within React state architecture");
+  assert.match(hook, /useEffect\(\(\) => \{\s*refreshRef\.current\(\);\s*\}, \[contentKey\]\)/);
   assert.match(hook, /window\.visualViewport\?\.addEventListener\("resize"/);
   assert.match(hook, /height < 790/);
   assert.match(hook, /element\.scrollHeight > element\.clientHeight \+ 3/);
   assert.match(hook, /root\.dataset\.kioskLayout = "scroll"/);
   assert.match(hook, /if \(root\.dataset\.kioskLayout === "scroll"\) return/);
-  assert.match(workspace, /useKioskViewportSafety\(\)/);
+  assert.match(workspace, /useKioskViewportSafety\(viewportContentKey\)/);
   assert.match(workspace, /ref=\{kioskViewportRef\}/);
 });
 
