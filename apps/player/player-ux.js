@@ -297,7 +297,23 @@ function renderNow({ me, dashboard, tournaments, matchCalls, eligibility }) {
     if (regStatus === "registered") {
       setSituation("registered", "Påmeldt", "Neste steg er innsjekk når du kommer til lokalet.");
       body.innerHTML = `<div class="player-now-copy"><span class="player-now-kicker">Plassen er sikret</span><strong>${pxEsc(tournament.name || registration.tournament_name)}</strong><p class="muted">Du er påmeldt. Innsjekk er det neste naturlige steget før turneringen starter.</p>${primaryFacts([{ label: "Når", value: date }, { label: "Status", value: "Påmeldt" }])}${journey("registered")}</div><div class="player-now-actions"><button type="button" data-px-checkin>Gå til innsjekk</button><button class="ghost" type="button" data-px-tournament>Turneringsdetaljer</button></div>`;
-      body.querySelector("[data-px-checkin]")?.addEventListener("click", () => triggerExisting("checkin", registration.tournament_id));
+      body.querySelector("[data-px-checkin]")?.addEventListener("click", async () => {
+        const tournamentId = Number(registration.tournament_id);
+        try {
+          // Home check-in must use exactly the same validation/code dialog as
+          // tournament registration, without switching tabs and auto-clicking
+          // a potentially hidden/disabled legacy button.
+          const checkin = window.BlindleiaCheckinWindow?.open;
+          if (typeof checkin !== "function") {
+            triggerExisting("checkin", tournamentId);
+            return;
+          }
+          await checkin(tournamentId);
+        } catch (error) {
+          const hint = document.getElementById("playerNowHint");
+          if (hint) hint.textContent = error?.message || "Innsjekken kunne ikke åpnes. Prøv igjen.";
+        }
+      });
       body.querySelector("[data-px-tournament]")?.addEventListener("click", () => go("#tournaments"));
       return;
     }
