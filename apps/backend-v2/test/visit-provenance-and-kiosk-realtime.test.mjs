@@ -32,11 +32,14 @@ test("Node and PHP canonical scoring writers both persist explicit source", () =
 test("canonical kiosk and Scolia views expose persisted source rather than guessing", () => {
   const kioskRead = read("apps/backend-v2/src/mysql/scolia-kiosk-auth-repository.ts");
   const scoliaRead = read("apps/backend-v2/src/mysql/scolia-command-repository.ts");
+  const matchRead = read("apps/backend-v2/src/mysql/tournament-public-read-repository.ts");
   assert.match(kioskRead, /v\.input_mode,v\.source/);
   assert.match(kioskRead, /source: String\(row\.source \?\? "legacy"\)/);
   assert.match(scoliaRead, /v\.request_key,v\.source/);
   assert.match(scoliaRead, /source: stringValue\(row\.source\)/);
   assert.match(scoliaRead, /v\.source='scolia'/);
+  assert.match(matchRead, /v\.darts_json,v\.source/);
+  assert.match(matchRead, /source: String\(raw\.source \?\? "legacy"\)/);
 });
 
 test("Platform v2 kiosk subscribes to canonical snapshot notifications independently of Scolia", () => {
