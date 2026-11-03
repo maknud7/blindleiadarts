@@ -57,7 +57,7 @@ final class CanonicalScoringService implements ScoringMutationPort
     public function recordVisit(int $kioskId, array $payload, string $source = 'manual'): void
     {
         $matchId = $this->playoffs->targetMatchIdForKiosk($kioskId, false);
-        $this->scoring->recordVisit($kioskId, $payload);
+        $this->scoring->recordVisit($kioskId, $payload, $source);
         if ($matchId !== null && $this->matchIsCompleted($matchId)) {
             $this->elo->applyCompletedMatch($matchId);
         }
