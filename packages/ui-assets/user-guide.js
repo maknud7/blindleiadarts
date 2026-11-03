@@ -177,6 +177,7 @@ const GUIDES = Object.freeze({
           "Åpne eller opprett skiva som skal bruke automatisk scoring.",
           "Velg Scolia som scoringstype og legg inn riktig Scolia-ID/serienummer for akkurat den skiva.",
           "Kontroller at hver fysisk Scolia-enhet er koblet til riktig skivenummer før bruk.",
+          "Uten aktiv Scolia Service Account eller gyldig access token beholdes skivas Scolia-oppsett, mens kiosken tilbyr manuell scoring. Automatisk scoring krever at klubbtilgangen aktiveres igjen.",
         ],
         note: "Scolia er en scorekilde. Blindleia Darts beholder kamp-, spiller- og resultatdata som canonical data.",
       },
