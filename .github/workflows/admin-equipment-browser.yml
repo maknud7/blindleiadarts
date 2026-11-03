@@ -30,6 +30,8 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test real Equipment and tournament board-move UI with entirely mocked API
         run: npx playwright test --config tests/admin-equipment-browser/playwright.config.mjs
+      - name: Test canonical Clubadmin navigation and Utstyr on local legacy shell
+        run: npx playwright test --config tests/admin-equipment-browser/legacy.config.mjs
       - name: Preserve screenshots and traces
         if: always()
         uses: actions/upload-artifact@v4
@@ -38,5 +40,7 @@ jobs:
           path: |
             test-results/admin-equipment-artifacts/
             test-results/admin-equipment-report/
+            test-results/admin-legacy-artifacts/
+            test-results/admin-legacy-report/
           retention-days: 14
           if-no-files-found: warn
