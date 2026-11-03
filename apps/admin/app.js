@@ -124,10 +124,19 @@ async function loadMe() {
     }
     return true;
   } catch (error) {
-    persistToken("");
-    window.BlindleiaApp?.session?.clear?.();
+    const session = window.BlindleiaApp?.session;
+    // The shared resolver clears only on explicit HTTP 401. Preserve a valid
+    // login token on timeout/502 or a temporarily unreachable auth endpoint.
+    const unauthorized = Number(error?.status || 0) === 401
+      || (typeof session?.token === "function" && !session.token());
+    if (unauthorized) {
+      persistToken("");
+      session?.clear?.();
+    }
     state.me = null;
-    showMessage(el.loginMessage, error.message, "error");
+    showMessage(el.loginMessage, unauthorized
+      ? "Økten er utløpt. Logg inn på nytt."
+      : (error?.message || "Kunne ikke bekrefte innloggingen. Prøv igjen."), "error");
     return false;
   }
 }
