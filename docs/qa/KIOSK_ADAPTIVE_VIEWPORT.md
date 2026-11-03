@@ -10,6 +10,7 @@ Kiosk v2 aims to fit the familiar portrait tablet view, but **saving a visit mus
 - Four latest visits remain accessible even on narrow devices. Core score keys have >=44 CSS px minimum hit areas; scroll mode uses larger 52px keys.
 - Error messages, pairing chooser, Scolia status, check-out dialog and visit editor may scroll; they should not obscure buttons.
 - Pending visit requests visibly say **Lagrer … ikke bekreftet**; completion UI says **AVVENTER RESULTAT** while server confirmation is absent. No next-match mutation is issued before `completion.confirmed`, and post-match status is rechecked every 2 seconds while unconfirmed.
+- Initial boot also waits for an authoritative `/state` response before polling `/next-match`, avoiding premature canonical mutations while the first request is still in flight.
 
 ## PROD and TEST boundary
 
@@ -32,4 +33,6 @@ TEST uses `bd_test_` for tournament/canonical scoring, reads physical board iden
 
 Within each viewport check **assigned → start → sum → per-dart → bust → checkout → edit of last four → pending save → confirmed completion → next match**. Verify the manual override and reload persistence. Also test the entire UI after switching back to automatic mode.
 
-**Not yet done:** Real screenshot-driven UAT or an actual TEST rollout. Passing unit contracts or a frontend build is not browser verification. Track in #385; do not promote to PROD before sign-off.
+**Automated browser QA:** `Kiosk Responsive Browser QA` runs Chromium with actual kiosk React/CSS and **intercepts every `/api/*` request locally**; it tests six viewports plus the persistent manual safe layout, captures screenshots and requires no credentials/PROD/TEST DB. This verifies UI interaction and layout only, not true end-to-end scoring or physical tablets.
+
+**Not yet done:** Real on-device/tablet UAT or an actual TEST rollout. Passing local browser QA is not PROD cutover approval. Track in #385; do not promote to PROD before sign-off.
