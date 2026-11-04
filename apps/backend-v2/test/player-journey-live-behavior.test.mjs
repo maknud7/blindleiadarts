@@ -28,6 +28,7 @@ function liveHarness({ phase, liveResult, checkinResult }) {
     renderCheckin(data) { actions.push("renderCheckin"); return Boolean(data?.checkin?.code); },
     render(data) { actions.push("renderLive"); state.payload = data; },
     renderStandby() { actions.push("renderStandby"); },
+    markCheckinRefreshProblem() { /* stale notice is presentation, not a phase change */ },
     livePayloadIsRelevant(data) { return Boolean(data?.tournament); },
     setPhase(next) { actions.push(`setPhase:${next}`); state.phase = next; },
     encodeURIComponent,
