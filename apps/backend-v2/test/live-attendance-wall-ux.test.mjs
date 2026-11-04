@@ -133,7 +133,7 @@ test("Attendance closure rejects an old confirmation BEFORE marking anybody as a
   const repo = new MySqlTournamentAttendanceRepository(session, "bd_test_");
   await assert.rejects(
     repo.finishCheckin("99", { checked_in_count: 15, not_checked_in_count: 3, waitlisted_count: 1 }),
-    (error) => error?.code === "attendance_changed_since_confirmation" && error?.status === 409,
+    (error) => error?.code === "attendance_changed_since_confirmation" && error?.statusCode === 409,
   );
   assert.equal(executes.length, 0);
   const successful = await repo.finishCheckin("99", { checked_in_count: 16, not_checked_in_count: 2, waitlisted_count: 1 });
