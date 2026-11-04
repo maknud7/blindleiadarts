@@ -150,9 +150,11 @@ function renderCheckin(data) {
   el.checkinCount.textContent = `${checkedIn} av ${total} sjekket inn`;
   el.checkinProgressBar.style.width = `${progress}%`;
   el.checkinRosterCount.textContent = String(participants.length || total);
-  el.checkinParticipants.innerHTML = participants.length
+  const rosterMarkup = participants.length
     ? participants.map((player) => `<div class="checkin-person ${participantClass(String(player.status || ""))}"><strong>${esc(player.display_name)}</strong><span class="checkin-person-status">${esc(participantStatus(String(player.status || "")))}</span></div>`).join("")
     : `<div class="checkin-empty">Ingen påmeldte ennå.</div>`;
+  // Three-second polling must not reset the visible roster/scroll position.
+  if (el.checkinParticipants.innerHTML !== rosterMarkup) el.checkinParticipants.innerHTML = rosterMarkup;
   document.title = `${checkin.tournament_name || "Blindleia Darts"} · Innsjekk`;
   return true;
 }
