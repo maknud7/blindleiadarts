@@ -287,9 +287,12 @@ function scheduleRefresh() {
 // admin scheduled another navigation pass.
 const structuralObserver = new MutationObserver(scheduleRefresh);
 const portalMenu = document.querySelector(".portal-menu");
-const portalMain = document.querySelector("main");
+// The canonical admin's main panel is updated by scoring, pairing, and
+// membership runtime. None of those data changes introduce menu links.
+// Watching main as well as the menu can build an expensive refresh loop and
+// starve user interactions when equipment renders. Only new navigation links
+// need to be rebound.
 if (portalMenu) structuralObserver.observe(portalMenu, { childList: true });
-if (portalMain) structuralObserver.observe(portalMain, { childList: true });
 
 const drawerStateObserver = new MutationObserver(() => {
   if (!document.body.classList.contains("unified-mobile-drawer-open")) return;
