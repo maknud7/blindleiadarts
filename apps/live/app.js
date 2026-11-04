@@ -116,7 +116,7 @@ function participantClass(status) {
 }
 function renderCheckin(data) {
   const checkin = data?.active ? data.checkin : null;
-  if (!checkin || (checkin.method !== "admin_only" && !checkin.code)) return false;
+  if (!checkin) return false;
   const usesCode = checkin.method !== "admin_only" && Boolean(checkin.code);
   state.checkin = checkin;
   state.checkinFetchedAt = Date.now();
@@ -135,7 +135,9 @@ function renderCheckin(data) {
   el.checkinTournamentName.textContent = checkin.tournament_name || "Turnering";
   el.checkinLead.textContent = usesCode
     ? "Sjekk inn på Min side med koden under, eller hos turneringsleder."
-    : "Innsjekk foretas hos turneringsleder. Spillerlisten oppdateres her fortløpende.";
+    : checkin.code_missing
+      ? "Innsjekk-koden er ikke konfigurert. Ta kontakt med turneringsleder. Spillerlisten oppdateres her fortløpende."
+      : "Innsjekk foretas hos turneringsleder. Spillerlisten oppdateres her fortløpende.";
   el.checkinCodeCard?.classList.toggle("admin-only", !usesCode);
   el.checkinCodeLabel.textContent = usesCode ? "Innsjekk-kode" : "Slik sjekker du inn";
   el.checkinCode.textContent = usesCode ? checkin.code : "Hos turneringsleder";
