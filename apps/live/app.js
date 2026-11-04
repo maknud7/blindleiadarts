@@ -8,10 +8,10 @@ const el = Object.fromEntries([
   "clubName", "tournamentName", "tournamentMeta", "connectionLabel", "progressCards", "boards",
   "queue", "results", "tables", "playoffSection", "playoffChampion", "playoff", "elo", "highlights", "updatedAt",
   "checkinTournamentName", "checkinCode", "checkinWindow", "checkinCount", "checkinProgressBar",
-  "checkinRosterCount", "checkinParticipants",
+  "checkinRosterCount", "checkinParticipants", "checkinLead", "checkinCodeLabel", "checkinCodeCard", "checkinUpdatedAt",
 ].map((id) => [id, document.getElementById(id)]));
 
-const state = { payload: null, checkin: null, phase: "loading", socket: null, poll: null, realtime: null, loading: false };
+const state = { payload: null, checkin: null, phase: "loading", socket: null, poll: null, realtime: null, loading: false, checkinFetchedAt: 0 };
 
 function esc(value) {
   return String(value ?? "")
@@ -116,8 +116,10 @@ function participantClass(status) {
 }
 function renderCheckin(data) {
   const checkin = data?.active ? data.checkin : null;
-  if (!checkin?.code) return false;
+  if (!checkin || (checkin.method !== "admin_only" && !checkin.code)) return false;
+  const usesCode = checkin.method !== "admin_only" && Boolean(checkin.code);
   state.checkin = checkin;
+  state.checkinFetchedAt = Date.now();
   state.payload = null;
 
   const total = Math.max(0, Number(checkin.participant_count || 0));
@@ -131,7 +133,16 @@ function renderCheckin(data) {
   el.tournamentMeta.textContent = start ? `Innsjekk · ${start}` : "Innsjekk";
   el.connectionLabel.textContent = "Innsjekk";
   el.checkinTournamentName.textContent = checkin.tournament_name || "Turnering";
-  el.checkinCode.textContent = checkin.code;
+  el.checkinLead.textContent = usesCode
+    ? "Sjekk inn på Min side med koden under, eller hos turneringsleder."
+    : "Innsjekk foretas hos turneringsleder. Spillerlisten oppdateres her fortløpende.";
+  el.checkinCodeCard?.classList.toggle("admin-only", !usesCode);
+  el.checkinCodeLabel.textContent = usesCode ? "Innsjekk-kode" : "Slik sjekker du inn";
+  el.checkinCode.textContent = usesCode ? checkin.code : "Hos turneringsleder";
+  if (el.checkinUpdatedAt) {
+    el.checkinUpdatedAt.dataset.stale = "0";
+    el.checkinUpdatedAt.textContent = `Oppdatert kl. ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(state.checkinFetchedAt))}`;
+  }
   const startTime = formatTime(checkin.start_at);
   el.checkinWindow.textContent = startTime ? `Turneringen starter kl. ${startTime}` : "Innsjekk er åpen";
   el.checkinCount.textContent = `${checkedIn} av ${total} sjekket inn`;
@@ -142,6 +153,18 @@ function renderCheckin(data) {
     : `<div class="checkin-empty">Ingen påmeldte ennå.</div>`;
   document.title = `${checkin.tournament_name || "Blindleia Darts"} · Innsjekk`;
   return true;
+}
+
+function markCheckinRefreshProblem() {
+  if (state.phase !== "checkin") return;
+  const last = state.checkinFetchedAt
+    ? new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(state.checkinFetchedAt))
+    : "ukjent";
+  if (el.checkinUpdatedAt) {
+    el.checkinUpdatedAt.dataset.stale = "1";
+    el.checkinUpdatedAt.textContent = `Oppdatering forsinket – siste bekreftede oppmøte kl. ${last}`;
+  }
+  if (el.connectionLabel) el.connectionLabel.textContent = "Oppdatering forsinket";
 }
 
 function renderProgress(progress = {}) {
@@ -264,7 +287,8 @@ async function load() {
     // A transient failed poll must never turn an active Live/check-in display
     // into standby. The display timelines (board 6s, groups/ELO 20s) own their
     // own clocks and must not be restarted by 3s data refresh failures.
-    if (state.phase === "checkin" && checkinResult.status === "rejected") return;
+    if (state.phase === "checkin" && checkinResult.status === "rejected") { markCheckinRefreshProblem(); return; }
+    if (state.phase === "checkin" && liveResult.status === "rejected" && !checkin?.active) { markCheckinRefreshProblem(); return; }
     if (state.phase === "live" && liveResult.status === "rejected" && !checkin?.active) return;
 
     if (checkin?.active && renderCheckin(checkin)) {
