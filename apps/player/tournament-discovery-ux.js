@@ -8,6 +8,7 @@ const summariesSection = document.getElementById("summaries");
 let upcoming = [];
 let allTournaments = [];
 let registrations = [];
+let eligibility = null;
 let activeFilter = "upcoming";
 let loading = false;
 
@@ -152,6 +153,10 @@ function actionsHtml(t,reg){
   if(s==="registered") return `<div class="tdx-actions"><button data-action="checkin">Sjekk inn</button><button class="ghost" data-action="withdraw">Meld av</button></div>`;
   if(s==="checked_in") return `<div class="tdx-actions"><button disabled>Sjekket inn</button><button class="ghost" data-action="withdraw">Meld av</button></div>`;
   if(s==="waitlisted") return `<div class="tdx-actions"><button class="ghost" data-action="withdraw">Fjern meg fra ventelisten</button></div>`;
+  if(eligibility?.can_register === false) {
+    const reason = esc(eligibility.message || "Kontingenten må ordnes før du kan melde deg på.");
+    return `<div class="tdx-actions"><p class="tdx-action-error" role="status">${reason}</p><button data-action="payments">Ordne kontingent</button></div>`;
+  }
   const state=String(t.registration_state||"open"); return state==="open"||!t.registration_state?`<div class="tdx-actions"><button data-action="register">Meld meg på</button></div>`:`<div class="tdx-actions"><button disabled>${esc(publicStatus(t))}</button></div>`;
 }
 let actionPending = false;
@@ -164,6 +169,12 @@ async function performAction(t,action){
   if(button){button.disabled=true;button.setAttribute("aria-busy","true");}
   dialog.querySelector(".tdx-action-error")?.remove();
   try{
+    if(action==="payments") {
+      dialog.close();
+      window.location.hash="#profile";
+      window.setTimeout(()=>document.getElementById("memberAccountSection")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+      return;
+    }
     if(action==="checkin"){
       // The visible detail must use the same window/method/code validation as
       // Home and the main registration list, never an unauthenticated POST.
@@ -195,7 +206,7 @@ async function performAction(t,action){
 
 async function loadData(){
   if(loading) return; loading=true;
-  try{ const cid=clubId(); if(!cid) return; const [regData,allData,dashboard]=await Promise.all([api(`/clubs/${cid}/registration-tournaments`).catch(()=>({items:[]})),api(`/clubs/${cid}/tournaments`).catch(()=>({items:[]})),token()?api('/me/dashboard',{auth:true}).catch(()=>null):Promise.resolve(null)]); upcoming=regData?.items||[]; const all=allData?.items||[]; const byId=new Map(); [...all,...upcoming].forEach(t=>byId.set(Number(t.id),{...(byId.get(Number(t.id))||{}),...t})); allTournaments=[...byId.values()]; registrations=dashboard?.dashboard?.registrations||[]; render(); }
+  try{ const cid=clubId(); if(!cid) return; const [regData,allData,dashboard,eligibilityData]=await Promise.all([api(`/clubs/${cid}/registration-tournaments`).catch(()=>({items:[]})),api(`/clubs/${cid}/tournaments`).catch(()=>({items:[]})),token()?api('/me/dashboard',{auth:true}).catch(()=>null):Promise.resolve(null),token()?api('/me/eligibility',{auth:true}).catch(()=>null):Promise.resolve(null)]); eligibility=eligibilityData?.eligibility||null; upcoming=regData?.items||[]; const all=allData?.items||[]; const byId=new Map(); [...all,...upcoming].forEach(t=>byId.set(Number(t.id),{...(byId.get(Number(t.id))||{}),...t})); allTournaments=[...byId.values()]; registrations=dashboard?.dashboard?.registrations||[]; render(); }
   finally{ loading=false; }
 }
 window.addEventListener('bd:portal-view',e=>{if(e.detail?.target==='tournaments')loadData();}); window.addEventListener('bd:player-state-changed',()=>loadData()); document.getElementById('clubSelect')?.addEventListener('change',()=>loadData()); window.setTimeout(loadData,350);
