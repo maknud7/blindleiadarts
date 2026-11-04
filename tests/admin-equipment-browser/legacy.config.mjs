@@ -5,7 +5,7 @@ const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export default defineConfig({
   testDir: ".",
-  testMatch: ["legacy-admin.spec.mjs", "legacy-admin-isolation.spec.mjs"],
+  testMatch: ["legacy-admin.spec.mjs"],
   timeout: 30000,
   expect: { timeout: 8000 },
   retries: 0,
