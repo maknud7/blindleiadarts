@@ -58,11 +58,15 @@ test("Live displays admin-only check-in without code while preserving canonical 
   assert.equal(h.sqls.some(({ sql }) => /\b(?:INSERT|UPDATE|DELETE)\b/i.test(sql)), false);
 });
 
-test("Public Live never generates missing check-in codes on reads", async () => {
+test("Public Live shows check-in roster and organizer fallback if code is missing, without writes", async () => {
   const h = publicDisplayFixture({ method: "code", code: null });
   const display = await h.repo.publicCheckinDisplay({ clubSlug: "blindleia-dartklubb" });
-  assert.equal(display.active, false);
-  assert.equal(h.sqls.some(({ sql }) => sql.includes("bd_test_tournament_players")), false);
+  assert.equal(display.active, true);
+  assert.equal(display.checkin.code, null);
+  assert.equal(display.checkin.code_allowed, false);
+  assert.equal(display.checkin.code_missing, true);
+  assert.equal(display.checkin.checked_in_count, 2);
+  assert.equal(h.sqls.some(({ sql }) => /\\b(?:INSERT|UPDATE|DELETE)\\b/i.test(sql)), false);
 });
 
 test("Live retains the 3-second code-based wall and counts when code exists", async () => {
