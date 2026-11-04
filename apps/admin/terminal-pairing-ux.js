@@ -224,21 +224,40 @@ function boot() {
   ensureStyles();
   decorateDynamicCopy();
 
-  const observer = new MutationObserver(() => window.queueMicrotask(decorateDynamicCopy));
-  if (kioskSection) {
-    observer.observe(kioskSection, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ["class"],
+  // Critical: decorateDynamicCopy() itself updates text and class names.
+  // Observing characterData + class attributes and queueing a microtask from
+  // the observer produced an endless observer -> decorator -> observer loop,
+  // starving the entire Clubadmin UI whenever the equipment list rendered.
+  // Only structural changes matter here (new/replaced board rows and panels).
+  let frame = 0;
+  function scheduleDecoration() {
+    if (frame) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = 0;
+      decorateDynamicCopy();
     });
+  }
+  if (kioskSection) {
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => [...record.addedNodes, ...record.removedNodes]
+        .some((node) => node.nodeType === Node.ELEMENT_NODE))) scheduleDecoration();
+    });
+    observer.observe(kioskSection, { childList: true, subtree: true });
   }
 
   const editorRoot = document.getElementById("boardEditorBackdrop");
   if (editorRoot) {
-    const editorObserver = new MutationObserver(() => window.queueMicrotask(decorateBoardEditor));
-    editorObserver.observe(editorRoot, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class"] });
+    let editorFrame = 0;
+    const editorObserver = new MutationObserver((records) => {
+      if (!records.some((record) => [...record.addedNodes, ...record.removedNodes]
+        .some((node) => node.nodeType === Node.ELEMENT_NODE))) return;
+      if (editorFrame) return;
+      editorFrame = window.requestAnimationFrame(() => {
+        editorFrame = 0;
+        decorateBoardEditor();
+      });
+    });
+    editorObserver.observe(editorRoot, { childList: true, subtree: true });
   }
 }
 
