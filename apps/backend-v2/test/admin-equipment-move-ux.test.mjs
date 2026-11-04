@@ -126,3 +126,30 @@ test("user-guide observer must never monitor the entire admin document subtree",
   assert.match(guide, /window\.requestAnimationFrame\(/);
   assert.match(menu, /user-guide-access\.js\?v=20261103-equipment-freeze-03/);
 });
+
+test("terminal pairing decoration cannot recursively invoke its own MutationObserver", () => {
+  const terminal = read("apps/admin/terminal-pairing-ux.js");
+  const bundle = read("apps/admin/pairing-claim.js");
+  const loader = read("apps/admin/admin-section-loader.js");
+  const adminHtml = read("apps/admin/index.html");
+  assert.doesNotMatch(terminal, /window\.queueMicrotask\(decorateDynamicCopy\)/);
+  assert.doesNotMatch(terminal, /window\.queueMicrotask\(decorateBoardEditor\)/);
+  assert.match(terminal, /observer\.observe\(kioskSection, \{ childList: true, subtree: true \}\)/);
+  assert.match(terminal, /editorObserver\.observe\(editorRoot, \{ childList: true, subtree: true \}\)/);
+  assert.match(terminal, /window\.requestAnimationFrame/);
+  assert.match(terminal, /record\.addedNodes, \.\.\.record\.removedNodes/);
+  assert.doesNotMatch(terminal, /attributeFilter: \["class"\]/);
+  assert.match(bundle, /terminal-pairing-ux\.js\?v=20261104-terminal-ux-freeze-01/);
+  assert.match(loader, /pairing-claim\.js\?v=20261104-terminal-ux-freeze-01/);
+  assert.match(adminHtml, /admin-section-loader\.js\?v=20261104-terminal-ux-freeze-01/);
+});
+
+test("TEST legacy equipment hash cannot be hijacked into V2 without an explicit click", () => {
+  const router = read("apps/admin/platform-v2-test-routing.js");
+  assert.match(router, /Åpne Utstyr v2 \(TEST\)/);
+  assert.match(router, /link\.href = ROUTES\.equipment/);
+  assert.doesNotMatch(router, /redirectLegacyEquipmentRoute/);
+  assert.doesNotMatch(router, /window\.location\.assign\(ROUTES\.equipment\)/);
+  assert.doesNotMatch(router, /window\.location\.replace\(ROUTES\.equipment\)/);
+  assert.doesNotMatch(router, /setAttribute\("href", ROUTES\.equipment\)/);
+});
