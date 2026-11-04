@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "tests/player-attendance-browser",
+  testDir: ".",
   timeout: 25000,
   expect: { timeout: 10000 },
   use: {
