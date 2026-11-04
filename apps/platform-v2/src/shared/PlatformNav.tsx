@@ -14,6 +14,7 @@ const routes = Object.freeze({
   admin: "/#club",
   tournament: "/#tournament-admin",
   equipment: "/v2/equipment/",
+  canonicalEquipment: "/#equipment",
   kiosk: "/v2/kiosk/",
 });
 
@@ -33,6 +34,9 @@ function prodKioskHref(): string {
 export function PlatformNav({ active }: { active: Surface }) {
   const testHost = isTestHost();
   const kioskHref = testHost ? prodKioskHref() : routes.kiosk;
+  // PROD club administrators should remain in the canonical Clubadmin menu.
+  // V2 equipment is a separate, explicit TEST-only navigation destination.
+  const equipmentHref = testHost ? routes.equipment : routes.canonicalEquipment;
 
   useEffect(() => {
     const body = document.body;
@@ -50,7 +54,7 @@ export function PlatformNav({ active }: { active: Surface }) {
       try {
         await load("/packages/ui-assets/app-core.js?v=20260910-v2-nav-01");
         await load("/packages/ui-assets/user-guide.js?v=20260831-1453");
-        await load("/packages/ui-assets/user-guide-access.js?v=20260831-1453");
+        await load("/packages/ui-assets/user-guide-access.js?v=20261103-equipment-freeze-03");
         if (disposed) return;
         await (window as GuideWindow).BlindleiaApp?.session?.resolve?.({ force: true });
         (window as GuideWindow).BlindleiaUserGuideAccess?.refresh?.();
@@ -78,7 +82,7 @@ export function PlatformNav({ active }: { active: Surface }) {
     <div className="platform-nav-links">
       <a href={routes.admin}>Administrasjon</a>
       <a href={routes.tournament} className={active === "tournament" ? "active" : ""}>Turneringer</a>
-      <a href={routes.equipment} className={active === "equipment" ? "active" : ""} aria-current={active === "equipment" ? "page" : undefined}>Utstyr</a>
+      <a href={equipmentHref} className={active === "equipment" ? "active" : ""} aria-current={active === "equipment" ? "page" : undefined}>{testHost ? "Utstyr · v2 TEST" : "Utstyr · Klubbadmin"}</a>
       <a href={kioskHref} className={active === "kiosk" ? "active" : ""} aria-current={active === "kiosk" ? "page" : undefined}>{testHost ? "Kiosk · start TEST" : "Kiosk"}</a>
     </div>
   </nav>;

@@ -21,53 +21,30 @@
     equipment: "/v2/equipment/",
     kiosk: prodKioskUrl(),
   });
-  const EQUIPMENT_HASHES = new Set(["#equipment", "#kiosks", "#admin/kiosks"]);
-
+  // TEST still has the canonical Clubadmin equipment view. V2 is an explicit
+  // opt-in link, never a hidden hijack of #equipment or #kiosks.
   function wireLinks() {
-    document.querySelectorAll('a[href="#kiosks"],a[href="#equipment"],a[href$="#equipment"],a[href$="#kiosks"]').forEach((link) => {
-      link.setAttribute("href", ROUTES.equipment);
-      link.dataset.platformV2Route = "equipment";
-      link.removeAttribute("target");
-    });
-
     document.querySelectorAll('#kiosks a[href="../kiosk/"],a[data-platform-route="kiosk"]').forEach((link) => {
       link.setAttribute("href", ROUTES.kiosk);
       link.dataset.platformV2Route = "kiosk";
       link.removeAttribute("target");
       link.removeAttribute("rel");
     });
-  }
 
-  function redirectLegacyEquipmentRoute() {
-    const hash = String(window.location.hash || "").trim().toLowerCase();
-    if (EQUIPMENT_HASHES.has(hash)) {
-      window.location.replace(ROUTES.equipment);
-      return true;
-    }
-    return false;
-  }
-
-  function equipmentLink(link) {
-    const raw = String(link.getAttribute("href") || "").trim();
-    if (!raw) return false;
-    try {
-      const target = new URL(raw, window.location.href);
-      return target.origin === window.location.origin && EQUIPMENT_HASHES.has(target.hash.toLowerCase());
-    } catch {
-      return false;
+    const section = document.getElementById("kiosks");
+    const header = section?.querySelector(":scope > .panel-head");
+    if (header && !header.querySelector("[data-v2-equipment-entry]")) {
+      const link = document.createElement("a");
+      link.className = "button secondary";
+      link.dataset.v2EquipmentEntry = "1";
+      link.href = ROUTES.equipment;
+      link.textContent = "Åpne Utstyr v2 (TEST)";
+      link.title = "Åpnes bare når du velger denne lenken. Den vanlige Utstyr-siden beholdes.";
+      header.appendChild(link);
     }
   }
 
-  if (redirectLegacyEquipmentRoute()) return;
   wireLinks();
   document.addEventListener("DOMContentLoaded", wireLinks, { once: true });
   window.addEventListener("bd:portal-view", wireLinks);
-  window.addEventListener("hashchange", redirectLegacyEquipmentRoute);
-  document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("a") : null;
-    if (!target || !equipmentLink(target)) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.location.assign(ROUTES.equipment);
-  }, true);
 })();

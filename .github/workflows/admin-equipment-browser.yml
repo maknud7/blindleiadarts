@@ -1,0 +1,46 @@
+name: Admin Equipment Browser QA
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'apps/platform-v2/src/equipment/**'
+      - 'apps/platform-v2/src/shared/api.ts'
+      - 'apps/admin/equipment-admin-ux.js'
+      - 'tests/admin-equipment-browser/**'
+      - '.github/workflows/admin-equipment-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  equipment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies and Chromium
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test real Equipment and tournament board-move UI with entirely mocked API
+        run: npx playwright test --config tests/admin-equipment-browser/playwright.config.mjs
+      - name: Test canonical Clubadmin navigation and Utstyr on local legacy shell
+        run: npx playwright test --config tests/admin-equipment-browser/legacy.config.mjs
+      - name: Preserve screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-equipment-qa-${{ github.run_id }}
+          path: |
+            test-results/admin-equipment-artifacts/
+            test-results/admin-equipment-report/
+            test-results/admin-legacy-artifacts/
+            test-results/admin-legacy-report/
+          retention-days: 14
+          if-no-files-found: warn

@@ -23,11 +23,13 @@ assert.equal(shouldPersistRuntimeScoring({ isTestEnvironment: true, configuratio
 
 const adminApp = readFileSync("apps/admin/app.js", "utf8");
 const loadKioskAdmin = adminApp.match(/async function loadKioskAdmin\(\) \{([\s\S]*?)\n\}/)?.[1] || "";
-assert.match(loadKioskAdmin, /const kiosks = await api\(`\/clubs\/\$\{state\.clubId\}\/kiosks`\)/);
-assert.match(loadKioskAdmin, /state\.kiosks = kiosks\.items \|\| \[\]/);
-assert.match(loadKioskAdmin, /try \{[\s\S]*kiosk-pairing-requests/);
-assert.match(loadKioskAdmin, /catch \(error\) \{[\s\S]*state\.pairingRequests = \[\]/);
-assert.doesNotMatch(loadKioskAdmin, /Promise\.all\(/, "Pairing failure must not prevent canonical boards from loading");
+assert.match(loadKioskAdmin, /Promise\.allSettled\(\[/, "Canonical boards and pairing are independent read-only operations");
+assert.match(loadKioskAdmin, /api\(`\/clubs\/\$\{state\.clubId\}\/kiosks`, \{ timeoutMs: 10000 \}\)/);
+assert.match(loadKioskAdmin, /api\(`\/clubs\/\$\{state\.clubId\}\/kiosk-pairing-requests`, \{ auth: true, timeoutMs: 10000 \}\)/);
+assert.match(loadKioskAdmin, /boardResult\.status === "fulfilled"[\s\S]*state\.kiosks = boardResult\.value\.items \|\| \[\]/);
+assert.match(loadKioskAdmin, /pairingResult\.status === "fulfilled"[\s\S]*state\.pairingRequests = pairingResult\.value\.items \|\| \[\]/);
+assert.doesNotMatch(loadKioskAdmin, /state\.kiosks = \[\]/, "Transient pairing or board failure must not remove last-known canonical board display");
+assert.doesNotMatch(loadKioskAdmin, /state\.pairingRequests = \[\]/, "Transient pairing read failure must not erase last-known pairing status");
 assert.match(adminApp, /Promise\.allSettled\(\[loadAdminData\(\), loadKioskAdmin\(\)\]\)/, "Admin must render independent data domains even when one fails");
 
 const equipmentRepository = readFileSync("apps/api/src/Repository/EquipmentRepository.php", "utf8");

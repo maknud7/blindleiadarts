@@ -68,9 +68,9 @@ export function EquipmentWorkspace() {
     if (!activeClubId) return;
     setLoading(true);
     const result = await Promise.allSettled([
-      api<BoardResponse>(`/clubs/${activeClubId}/equipment/boards`, { token: activeToken }),
-      api<BoardResponse>(`/clubs/${activeClubId}/kiosks`),
-      api<{ items: ScreenDevice[] }>(`/clubs/${activeClubId}/screen-devices`, { token: activeToken }),
+      api<BoardResponse>(`/clubs/${activeClubId}/equipment/boards`, { token: activeToken, timeoutMs: 12000 }),
+      api<BoardResponse>(`/clubs/${activeClubId}/kiosks`, { timeoutMs: 12000 }),
+      api<{ items: ScreenDevice[] }>(`/clubs/${activeClubId}/screen-devices`, { token: activeToken, timeoutMs: 12000 }),
     ]);
     const next: LoadErrors = {};
     let activeItems: Board[] = [];
@@ -78,10 +78,10 @@ export function EquipmentWorkspace() {
       activeItems = result[1].value.items || [];
       setActiveBoards(activeItems);
       setScope({ configuration_scope: result[1].value.configuration_scope, shared_across_environments: result[1].value.shared_across_environments });
-    } else { setActiveBoards([]); next.boards = text(result[1].reason); }
+    } else { next.boards = text(result[1].reason); }
     if (result[0].status === "fulfilled") setInventoryBoards(result[0].value.items || []);
-    else { setInventoryBoards(activeItems); next.inventory = text(result[0].reason); }
-    if (result[2].status === "fulfilled") setScreens(result[2].value.items || []); else { setScreens([]); next.screens = text(result[2].reason); }
+    else { if (activeItems.length) setInventoryBoards(activeItems); next.inventory = text(result[0].reason); }
+    if (result[2].status === "fulfilled") setScreens(result[2].value.items || []); else { next.screens = text(result[2].reason); }
     setErrors(next); setLoading(false);
   }, []);
 
@@ -99,7 +99,7 @@ export function EquipmentWorkspace() {
     void (async () => {
       try {
         const [meData, healthData, clubData] = await Promise.all([
-          api<{ user: User }>("/auth/me", { token }), api<Health>("/health"), api<{ items: Club[] }>("/clubs"),
+          api<{ user: User }>("/auth/me", { token, timeoutMs: 12000 }), api<Health>("/health", { timeoutMs: 12000 }), api<{ items: Club[] }>("/clubs", { timeoutMs: 12000 }),
         ]);
         if (cancelled) return;
         if (!["club_admin", "super_admin"].includes(meData.user.role)) throw new Error("Denne kontoen har ikke administratortilgang.");
@@ -165,7 +165,7 @@ export function EquipmentWorkspace() {
   }
 
   if (!token) return <Login onLogin={login} />;
-  if (booting) return <div className="login-shell"><div className="login-card"><h1>Utstyr</h1><p>Laster utstyr …</p></div></div>;
+  if (booting) return <div className="login-shell"><div className="login-card" role="status" aria-live="polite"><h1>Utstyr</h1><p>Laster skiver og tilganger …</p><p className="muted">Hvis datakilden ikke svarer, får du en feilmelding og kan prøve igjen. Menyen er fortsatt tilgjengelig.</p></div></div>;
 
   return <div className="v2-shell">
     <header className="v2-topbar"><div className="v2-brand"><img className="v2-logo" src="/static/club-logos/blindleia-dartklubb-logo.png" alt="" /><div><strong>Blindleia Darts</strong><span>Utstyr</span></div></div>
@@ -195,8 +195,9 @@ export function EquipmentWorkspace() {
         {clubs.length > 1 && <select value={clubId} onChange={(event) => void changeClub(Number(event.target.value))}>{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select>}
         <button className="button secondary" disabled={loading} onClick={() => void loadEquipment(clubId, token)}>{loading ? "Oppdaterer …" : "Oppdater"}</button>
       </div></div>
+      {loading && <div className="notice subtle" role="status" aria-live="polite">Oppdaterer utstyrsstatus. Du kan fortsatt bruke menyen og se tidligere lastede skiver.</div>}
       {masterReadOnly && <div className="notice warn"><strong>TEST bruker samme fysiske skiveoppsett som PROD.</strong> Du kan teste pairing og kampflyt, men ikke endre det fysiske oppsettet her.</div>}
-      {notice && <div className="notice">{notice}</div>}
+      {notice && <div className="notice" role="alert">{notice} <button className="button secondary small" type="button" onClick={() => { setNotice(""); void loadEquipment(clubId, token); }}>Prøv igjen</button></div>}
 
       <section className="panel"><div className="panel-head"><div><h2>Skiver</h2><p>{selectedClub?.name || "Klubb"} · {activeBoards.length} aktive{inactiveCount ? ` · ${inactiveCount} deaktiverte` : ""}</p></div><span className={`pill ${errors.boards || errors.inventory ? "warn" : "good"}`}>{errors.boards ? "Feil" : errors.inventory ? "Delvis lastet" : "Klar"}</span></div>
         {errors.boards && <div className="notice bad">Kunne ikke laste aktive skiver: {errors.boards}</div>}

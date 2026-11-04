@@ -15,7 +15,7 @@ const sectionModules = Object.freeze({
     "./payment-settings.js?v=20260920-admin-perf-01",
   ],
   kiosks: [
-    "./pairing-claim.js?v=20260920-admin-perf-01",
+    "./pairing-claim.js?v=20261104-terminal-ux-freeze-01",
   ],
   superadmin: [
     "./health-tracker.js?v=20260920-admin-perf-01",

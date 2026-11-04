@@ -2,10 +2,10 @@ import(new URL("./session-badge.js?v=20260904-session-badge-02", import.meta.url
   .catch((error) => console.warn("Session badge unavailable", error));
 
 import(new URL("./user-guide.js?v=20260831-1453", import.meta.url).href)
-  .then(() => import(new URL("./user-guide-access.js?v=20260831-1453", import.meta.url).href))
+  .then(() => import(new URL("./user-guide-access.js?v=20261103-equipment-freeze-03", import.meta.url).href))
   .catch((error) => console.warn("User guide unavailable", error));
 
-const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20260827-1900", import.meta.url).href)).default;
+const app = window.BlindleiaApp || (await import(new URL("./app-core.js?v=20261103-clubadmin-equipment-02", import.meta.url).href)).default;
 
 function ensureStylesheet(url) {
   const href = new URL(url, import.meta.url).href;
@@ -132,6 +132,31 @@ function keepOpenMobileDrawerInteractive() {
   menu.setAttribute("aria-hidden", "false");
 }
 
+function clearStaleNavigationOverlay({ closeDrawer = false } = {}) {
+  // The unified menu can leave a full-page interception layer behind after a
+  // mobile/desktop switch or back navigation. Restoring admin navigation must
+  // not require a full page reload.
+  const smallScreen = window.matchMedia("(max-width: 760px)").matches;
+  const shouldClose = closeDrawer || !smallScreen;
+  const overlay = document.getElementById("unifiedMobileDrawerOverlay");
+  if (shouldClose) {
+    document.body.classList.remove("unified-mobile-drawer-open");
+    if (overlay) overlay.hidden = true;
+  } else if (!document.body.classList.contains("unified-mobile-drawer-open") && overlay) {
+    overlay.hidden = true;
+  }
+  const menu = document.querySelector(".portal-menu");
+  if (!menu) return;
+  if (!smallScreen) {
+    menu.removeAttribute("inert");
+    menu.removeAttribute("aria-hidden");
+    try { menu.inert = false; } catch { /* Safari support */ }
+  } else if (closeDrawer) {
+    menu.setAttribute("aria-hidden", "true");
+    try { menu.inert = true; } catch { menu.setAttribute("inert", ""); }
+  }
+}
+
 function activate(target, { updateHash = true } = {}) {
   const available = targets();
   let next = normalizeTarget(target);
@@ -155,6 +180,7 @@ function activate(target, { updateHash = true } = {}) {
   });
 
   document.body.dataset.portalActive = next;
+  if (changed) clearStaleNavigationOverlay({ closeDrawer: true });
   const nextHash = canonicalHash(next);
   if (updateHash && window.location.hash !== nextHash) history.replaceState(null, "", nextHash);
 
@@ -208,6 +234,7 @@ function refresh() {
     return;
   }
   bindLinks();
+  clearStaleNavigationOverlay();
   keepOpenMobileDrawerInteractive();
   const requested = normalizeTarget(window.location.hash);
   const current = normalizeTarget(document.body.dataset.portalActive);
@@ -260,9 +287,12 @@ function scheduleRefresh() {
 // admin scheduled another navigation pass.
 const structuralObserver = new MutationObserver(scheduleRefresh);
 const portalMenu = document.querySelector(".portal-menu");
-const portalMain = document.querySelector("main");
+// The canonical admin's main panel is updated by scoring, pairing, and
+// membership runtime. None of those data changes introduce menu links.
+// Watching main as well as the menu can build an expensive refresh loop and
+// starve user interactions when equipment renders. Only new navigation links
+// need to be rebound.
 if (portalMenu) structuralObserver.observe(portalMenu, { childList: true });
-if (portalMain) structuralObserver.observe(portalMain, { childList: true });
 
 const drawerStateObserver = new MutationObserver(() => {
   if (!document.body.classList.contains("unified-mobile-drawer-open")) return;

@@ -87,25 +87,45 @@ async function resolve({ force = false } = {}) {
   if (!force && inFlight) return inFlight;
 
   inFlight = (async () => {
+    // Auth outages are NOT the same as invalid credentials. An unbounded
+    // /auth/me fetch can otherwise trap Clubadmin on "Kontrollerer tilgang",
+    // or incorrectly route a valid admin to the player profile.
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 10000);
     try {
       const response = await fetch(new URL("auth/me", API_ROOT), {
         headers: { Authorization: `Bearer ${currentToken}` },
         cache: "no-store",
+        signal: controller.signal,
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.ok) {
-        if (response.status === 401) clear();
+      if (response.status === 401) {
+        clear();
         return null;
+      }
+      if (response.status === 403) {
+        resolvedToken = currentToken;
+        resolvedUser = null;
+        emit();
+        return null;
+      }
+      if (!response.ok || !payload?.ok) {
+        throw new Error("Kunne ikke bekrefte innloggingen akkurat nå. Prøv igjen.");
       }
       resolvedToken = currentToken;
       resolvedUser = payload?.data?.user || null;
       emit();
       return resolvedUser;
-    } catch {
-      resolvedToken = currentToken;
-      if (resolvedUser === undefined) resolvedUser = null;
-      return resolvedUser;
+    } catch (error) {
+      // Only a previously verified identity for this exact token can be
+      // retained while an API read fails. Never manufacture admin access.
+      if (resolvedToken === currentToken && resolvedUser) return resolvedUser;
+      if (controller.signal.aborted) {
+        throw new Error("Innloggingstjenesten svarte ikke innen 10 sekunder. Prøv igjen.");
+      }
+      throw error;
     } finally {
+      window.clearTimeout(timeoutId);
       inFlight = null;
     }
   })();
