@@ -183,10 +183,10 @@ export class MySqlPublicLiveReadRepository {
       const method = normalizeCheckinMethod(candidate.effective_method);
       const codeAllowed = methodUsesCode(method);
       const code = codeAllowed ? normalizePersistedCode(candidate.checkin_code) : null;
-      // An admin-only tournament must still appear on the Live attendance wall.
-      // Code-based check-in with a missing code is intentionally unavailable;
-      // public GETs must NEVER generate or persist a code to self-heal.
-      if (codeAllowed && code === null) continue;
+      // Both admin-only and misconfigured code-based check-in must remain
+      // visible as an attendance overview. Without a valid persisted code,
+      // the screen directs players to the organizer instead of inventing one.
+      // Public GETs NEVER generate or persist a check-in code.
 
       const participants = await this.sessions.withConnection(async (db) => {
         const rows = await db.query<QueryResultRow>(
@@ -219,7 +219,8 @@ export class MySqlPublicLiveReadRepository {
         tournament_name: String(candidate.name ?? ""),
         start_at: candidate.start_at ?? null,
         code,
-        code_allowed: codeAllowed,
+        code_allowed: codeAllowed && code !== null,
+        code_missing: codeAllowed && code === null,
         opens_at: candidate.effective_checkin_opens_at ?? null,
         closes_at: null,
         method,
