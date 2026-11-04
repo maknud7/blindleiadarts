@@ -18,6 +18,27 @@ for (const [label, disabled] of [
       await page.addInitScript(() => {
         localStorage.setItem("bd:token", "qa-logged-in-club-admin");
         localStorage.setItem("bd:selectedClubId", "7");
+        // Diagnostic only: instrument and cap runaway DOM observer callbacks
+        // to reveal their source without leaving the browser unusable.
+        const Native = window.MutationObserver;
+        const stats = [];
+        window.__qaObserverCounts = stats;
+        window.MutationObserver = class extends Native {
+          constructor(callback) {
+            const id = stats.length;
+            stats.push({ id, count: 0, stack: (new Error().stack || "").slice(0, 600) });
+            super((records, observer) => {
+              const row = stats[id];
+              row.count += 1;
+              if (row.count > 100) {
+                row.disconnected = true;
+                observer.disconnect();
+                return;
+              }
+              callback(records, observer);
+            });
+          }
+        };
       });
       await page.route("**/packages/ui-assets/**", async (route) => {
         const name = new URL(route.request().url()).pathname.split("/").pop();
@@ -41,6 +62,8 @@ for (const [label, disabled] of [
       await page.locator(".portal-menu a[href='#kiosks']").first().click({ timeout: 3000 });
       await expect(page).toHaveURL(/#equipment$/);
       await expect(page.locator("#kioskList .board-row")).toHaveCount(1, { timeout: 4000 });
+      const counts = await page.evaluate(() => window.__qaObserverCounts);
+      console.log("Observer diagnostics", label, JSON.stringify(counts));
       const heartbeat = await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(document.body.dataset.portalActive))));
       expect(heartbeat).toBe("kiosks");
       await page.locator(".portal-menu a[href='#players']").first().click({ timeout: 3000 });
