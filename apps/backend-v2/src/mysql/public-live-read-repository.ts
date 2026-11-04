@@ -181,11 +181,12 @@ export class MySqlPublicLiveReadRepository {
       const tournamentId = decimalId(candidate.id);
       if (tournamentId === null) continue;
       const method = normalizeCheckinMethod(candidate.effective_method);
-      if (!methodUsesCode(method)) continue;
-      const code = normalizePersistedCode(candidate.checkin_code);
-      // Missing code must be fixed by an explicit mutation. Public polling must
-      // never generate or persist a code as a read-side self-heal.
-      if (code === null) continue;
+      const codeAllowed = methodUsesCode(method);
+      const code = codeAllowed ? normalizePersistedCode(candidate.checkin_code) : null;
+      // An admin-only tournament must still appear on the Live attendance wall.
+      // Code-based check-in with a missing code is intentionally unavailable;
+      // public GETs must NEVER generate or persist a code to self-heal.
+      if (codeAllowed && code === null) continue;
 
       const participants = await this.sessions.withConnection(async (db) => {
         const rows = await db.query<QueryResultRow>(
@@ -218,6 +219,7 @@ export class MySqlPublicLiveReadRepository {
         tournament_name: String(candidate.name ?? ""),
         start_at: candidate.start_at ?? null,
         code,
+        code_allowed: codeAllowed,
         opens_at: candidate.effective_checkin_opens_at ?? null,
         closes_at: null,
         method,
