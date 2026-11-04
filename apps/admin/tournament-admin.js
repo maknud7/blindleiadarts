@@ -206,9 +206,15 @@ if (host) {
     if (!id) return;
     const tournaments = await api(`/clubs/${id}/registration-tournaments`, { timeoutMs: 10000 });
     state.tournaments = tournaments.items || [];
-    const selected = Number(el.tcTournament.value || 0);
+    // A leader coming from the player tournament detail must land in the same
+    // tournament, not silently default to the first item in the admin picker.
+    const requested = sessionStorage.getItem("bd:leader:selectedTournamentId");
+    const selected = Number(requested || el.tcTournament.value || 0);
     el.tcTournament.innerHTML = state.tournaments.map((t) => `<option value="${Number(t.id)}">${esc(t.name)} · ${esc(statusLabel(t.status))}</option>`).join("");
-    if (state.tournaments.some((t) => Number(t.id) === selected)) el.tcTournament.value = String(selected);
+    if (state.tournaments.some((t) => Number(t.id) === selected)) {
+      el.tcTournament.value = String(selected);
+      if (requested) sessionStorage.removeItem("bd:leader:selectedTournamentId");
+    }
 
     const selectedLoad = loadSelectedTournament();
     api(`/clubs/${id}/players`, { timeoutMs: 10000 }).then((players) => {
