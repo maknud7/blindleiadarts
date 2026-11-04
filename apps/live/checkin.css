@@ -8,6 +8,9 @@
 .checkin-code-card span{font-size:clamp(.7rem,.9vw,.9rem);font-weight:900;text-transform:uppercase;letter-spacing:.14em;color:#697c94}
 .checkin-code-card strong{font-size:clamp(4rem,8vw,8.6rem);line-height:.95;letter-spacing:.12em;color:#0b2b50;font-variant-numeric:tabular-nums}
 .checkin-code-card small{font-size:clamp(.85rem,1.15vw,1.05rem);color:#697c94}
+.checkin-code-card.admin-only strong{font-size:clamp(2rem,5vw,4.25rem);line-height:1.08;letter-spacing:normal;overflow-wrap:anywhere}
+.checkin-updated-at{margin:0;font-size:clamp(.8rem,1vw,1rem);color:#64748b;font-weight:600}
+.checkin-updated-at[data-stale="1"]{color:#a04d13;font-weight:800}
 .checkin-progress{display:grid;gap:10px;margin-top:22px;color:#0b2b50}
 .checkin-progress>strong{font-size:clamp(1rem,1.45vw,1.3rem)}
 .checkin-progress-track{height:14px;border-radius:999px;overflow:hidden;background:#e8eef5}
