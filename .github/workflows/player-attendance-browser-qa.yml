@@ -18,6 +18,7 @@ permissions:
 jobs:
   chromium-live-attendance:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,8 +26,8 @@ jobs:
           node-version: '22'
       - name: Install Playwright
         run: npm install --no-save --no-package-lock @playwright/test@1.56.1
-      - name: Install Chromium browser
-        run: npx playwright install --with-deps chromium
+      - name: Install Chromium headless shell
+        run: npx playwright install --only-shell chromium
       - name: Execute real Chromium check-in wall tests with mocked local API
         run: npx playwright test --config=tests/player-attendance-browser/playwright.config.mjs
       - name: Upload screenshot, traces and HTML report
