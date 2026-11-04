@@ -8,10 +8,10 @@ const el = Object.fromEntries([
   "clubName", "tournamentName", "tournamentMeta", "connectionLabel", "progressCards", "boards",
   "queue", "results", "tables", "playoffSection", "playoffChampion", "playoff", "elo", "highlights", "updatedAt",
   "checkinTournamentName", "checkinCode", "checkinWindow", "checkinCount", "checkinProgressBar",
-  "checkinRosterCount", "checkinParticipants",
+  "checkinRosterCount", "checkinParticipants", "checkinLead", "checkinCodeLabel", "checkinCodeCard", "checkinUpdatedAt",
 ].map((id) => [id, document.getElementById(id)]));
 
-const state = { payload: null, checkin: null, phase: "loading", socket: null, poll: null, realtime: null, loading: false };
+const state = { payload: null, checkin: null, phase: "loading", socket: null, poll: null, realtime: null, loading: false, checkinFetchedAt: 0 };
 
 function esc(value) {
   return String(value ?? "")
@@ -116,8 +116,10 @@ function participantClass(status) {
 }
 function renderCheckin(data) {
   const checkin = data?.active ? data.checkin : null;
-  if (!checkin?.code) return false;
+  if (!checkin) return false;
+  const usesCode = checkin.method !== "admin_only" && Boolean(checkin.code);
   state.checkin = checkin;
+  state.checkinFetchedAt = Date.now();
   state.payload = null;
 
   const total = Math.max(0, Number(checkin.participant_count || 0));
@@ -131,17 +133,42 @@ function renderCheckin(data) {
   el.tournamentMeta.textContent = start ? `Innsjekk · ${start}` : "Innsjekk";
   el.connectionLabel.textContent = "Innsjekk";
   el.checkinTournamentName.textContent = checkin.tournament_name || "Turnering";
-  el.checkinCode.textContent = checkin.code;
+  el.checkinLead.textContent = usesCode
+    ? "Sjekk inn på Min side med koden under, eller hos turneringsleder."
+    : checkin.code_missing
+      ? "Innsjekk-koden er ikke konfigurert. Ta kontakt med turneringsleder. Spillerlisten oppdateres her fortløpende."
+      : "Innsjekk foretas hos turneringsleder. Spillerlisten oppdateres her fortløpende.";
+  el.checkinCodeCard?.classList.toggle("admin-only", !usesCode);
+  el.checkinCodeLabel.textContent = usesCode ? "Innsjekk-kode" : "Slik sjekker du inn";
+  el.checkinCode.textContent = usesCode ? checkin.code : "Hos turneringsleder";
+  if (el.checkinUpdatedAt) {
+    el.checkinUpdatedAt.dataset.stale = "0";
+    el.checkinUpdatedAt.textContent = `Oppdatert kl. ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(state.checkinFetchedAt))}`;
+  }
   const startTime = formatTime(checkin.start_at);
   el.checkinWindow.textContent = startTime ? `Turneringen starter kl. ${startTime}` : "Innsjekk er åpen";
   el.checkinCount.textContent = `${checkedIn} av ${total} sjekket inn`;
   el.checkinProgressBar.style.width = `${progress}%`;
   el.checkinRosterCount.textContent = String(participants.length || total);
-  el.checkinParticipants.innerHTML = participants.length
+  const rosterMarkup = participants.length
     ? participants.map((player) => `<div class="checkin-person ${participantClass(String(player.status || ""))}"><strong>${esc(player.display_name)}</strong><span class="checkin-person-status">${esc(participantStatus(String(player.status || "")))}</span></div>`).join("")
     : `<div class="checkin-empty">Ingen påmeldte ennå.</div>`;
+  // Three-second polling must not reset the visible roster/scroll position.
+  if (el.checkinParticipants.innerHTML !== rosterMarkup) el.checkinParticipants.innerHTML = rosterMarkup;
   document.title = `${checkin.tournament_name || "Blindleia Darts"} · Innsjekk`;
   return true;
+}
+
+function markCheckinRefreshProblem() {
+  if (state.phase !== "checkin") return;
+  const last = state.checkinFetchedAt
+    ? new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(state.checkinFetchedAt))
+    : "ukjent";
+  if (el.checkinUpdatedAt) {
+    el.checkinUpdatedAt.dataset.stale = "1";
+    el.checkinUpdatedAt.textContent = `Oppdatering forsinket – siste bekreftede oppmøte kl. ${last}`;
+  }
+  if (el.connectionLabel) el.connectionLabel.textContent = "Oppdatering forsinket";
 }
 
 function renderProgress(progress = {}) {
@@ -155,12 +182,20 @@ function renderProgress(progress = {}) {
   el.progressCards.innerHTML = cards.map(([label, value]) => `<div class="stat-card"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`).join("");
 }
 
+let lastBoardsMarkup = null;
+function paintBoardsIfChanged(markup) {
+  // A 3s read must not recreate the wall's cards/scroll/rotation when scores
+  // are unchanged. Board layout is controlled by its independent 6s timer.
+  if (markup === lastBoardsMarkup && el.boards.firstElementChild) return;
+  lastBoardsMarkup = markup;
+  el.boards.innerHTML = markup;
+}
 function renderBoards(boards = []) {
   if (!boards.length) {
-    el.boards.innerHTML = `<div class="empty">Ingen skiver er koblet til turneringen ennå.</div>`;
+    paintBoardsIfChanged(`<div class="empty">Ingen skiver er koblet til turneringen ennå.</div>`);
     return;
   }
-  el.boards.innerHTML = boards.map((board) => {
+  const markup = boards.map((board) => {
     const match = board.live_match;
     if (!match) return `<article class="board-card idle"><div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge">Ledig</span></div><p class="muted">Venter på neste kamp.</p></article>`;
     const playing = match.status === "in_progress";
@@ -175,6 +210,7 @@ function renderBoards(boards = []) {
       <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best of ${Number(match.best_of_legs)}</div>
     </article>`;
   }).join("");
+  paintBoardsIfChanged(markup);
 }
 
 function renderQueue(items = []) {
@@ -252,6 +288,13 @@ async function load() {
     const checkin = checkinResult.status === "fulfilled" ? checkinResult.value : null;
     const live = liveResult.status === "fulfilled" ? liveResult.value : null;
 
+    // A transient failed poll must never turn an active Live/check-in display
+    // into standby. The display timelines (board 6s, groups/ELO 20s) own their
+    // own clocks and must not be restarted by 3s data refresh failures.
+    if (state.phase === "checkin" && checkinResult.status === "rejected") { markCheckinRefreshProblem(); return; }
+    if (state.phase === "checkin" && liveResult.status === "rejected" && !checkin?.active) { markCheckinRefreshProblem(); return; }
+    if (state.phase === "live" && liveResult.status === "rejected" && !checkin?.active) return;
+
     if (checkin?.active && renderCheckin(checkin)) {
       setPhase("checkin");
       return;
@@ -298,6 +341,13 @@ async function startRealtime() {
       try {
         const message = JSON.parse(event.data);
         if (message?.type === "event" && message?.event === "snapshot") {
+          // The check-in wall takes priority until the authoritative check-in
+          // display says it is finished. A scoring snapshot alone must never
+          // flash the Live phase over an active check-in screen.
+          if (state.phase === "checkin") {
+            load().catch(() => undefined);
+            return;
+          }
           const live = message?.payload?.live || null;
           if (live && livePayloadIsRelevant(live)) {
             render(live);

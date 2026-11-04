@@ -1,6 +1,6 @@
 const API_ROOT = "../api/v1";
 const host = document.getElementById("tournaments");
-const MIN_PLAYERS = 4;
+const MIN_PLAYERS = 2;
 
 if (host) {
   let context = window.__bdTournamentContext || null;
@@ -297,27 +297,121 @@ if (host) {
     }
   }
 
+  let finishingCheckin = false;
+
+  function attendanceSnapshot(tournament) {
+    const list = Array.isArray(tournament?.registrations) ? tournament.registrations : [];
+    const checked = list.filter((row) => String(row.status) === "checked_in");
+    const pending = list.filter((row) => ["registered", "paused"].includes(String(row.status)));
+    const waitlist = list.filter((row) => String(row.status) === "waitlisted");
+    return { checked, pending, waitlist };
+  }
+
+  function confirmAttendanceClosure({ checked, pending, waitlist }) {
+    let dialog = document.getElementById("tcFinishAttendanceConfirm");
+    if (!dialog) {
+      dialog = document.createElement("dialog");
+      dialog.id = "tcFinishAttendanceConfirm";
+      dialog.className = "tc-finish-attendance-dialog";
+      dialog.setAttribute("aria-labelledby", "tcFinishAttendanceTitle");
+      dialog.innerHTML = `
+        <div class="tc-finish-attendance-body">
+          <h2 id="tcFinishAttendanceTitle">Avslutt innsjekken?</h2>
+          <p id="tcFinishAttendanceIntro"></p>
+          <div id="tcFinishAttendanceNumbers" class="tc-finish-attendance-numbers"></div>
+          <div id="tcFinishAttendanceMissing"></div>
+          <p class="tc-finish-attendance-warning">Påmelding og innsjekk stenges. Ikke-innsjekkede blir registrert som «Ikke møtt», og ventelisten avsluttes. Dette kan ikke angres fra vanlig innsjekk.</p>
+          <form method="dialog" class="tc-finish-attendance-actions">
+            <button type="submit" value="cancel" class="button secondary">Tilbake til innsjekk</button>
+            <button type="submit" value="confirm" class="button">Bekreft avslutning</button>
+          </form>
+        </div>`;
+      document.body.appendChild(dialog);
+    }
+    dialog.querySelector("#tcFinishAttendanceIntro").textContent =
+      `Kontroller oppmøtet før ${checked.length} spillere går videre til turneringsoppsettet.`;
+    const counters = dialog.querySelector("#tcFinishAttendanceNumbers");
+    counters.replaceChildren();
+    for (const [label, value] of [
+      ["Sjekket inn", checked.length],
+      ["Mangler", pending.length],
+      ["Venteliste", waitlist.length],
+    ]) {
+      const counter = document.createElement("div");
+      const count = document.createElement("strong");
+      const caption = document.createElement("span");
+      count.textContent = String(value);
+      caption.textContent = label;
+      counter.append(count, caption);
+      counters.appendChild(counter);
+    }
+    const missing = dialog.querySelector("#tcFinishAttendanceMissing");
+    missing.replaceChildren();
+    if (pending.length) {
+      const heading = document.createElement("strong");
+      heading.textContent = "Disse blir markert som «Ikke møtt»:";
+      const list = document.createElement("ul");
+      for (const player of pending) {
+        const row = document.createElement("li");
+        row.textContent = String(player.display_name || player.player_name || "Ukjent spiller");
+        list.appendChild(row);
+      }
+      missing.append(heading, list);
+    }
+    dialog.returnValue = "cancel";
+    return new Promise((resolve) => {
+      dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+      dialog.showModal();
+    });
+  }
+
   async function finishCheckin(event) {
     const id = currentTournamentId();
     if (!id || tournamentStatus() !== "draft") return;
-
     event.preventDefault();
     event.stopImmediatePropagation();
-
-    const checked = checkedRegistrations().length;
-    if (checked < MIN_PLAYERS) {
-      show(`Minst ${MIN_PLAYERS} spillere må være sjekket inn.`, "warning");
-      return;
-    }
+    if (finishingCheckin) return;
+    finishingCheckin = true;
 
     const button = document.getElementById("tcToFormat");
-    if (!button) return;
-    button.disabled = true;
-    setText(button, "Avslutter innsjekk …");
+    if (button) {
+      button.disabled = true;
+      setText(button, "Kontrollerer oppmøte …");
+    }
     try {
-      const data = await api(`/tournaments/${id}/finish-checkin`, { method: "POST" });
+      // Read authoritative attendance before showing the destructive preflight.
+      // The backend checks the same three counts again transactionally.
+      const fresh = await tournamentDetail(id);
+      if (!fresh) throw new Error("Kunne ikke hente oppdatert oppmøte. Prøv igjen.");
+      if (currentTournamentId() !== id) return;
+      if (String(fresh.status) !== "draft") {
+        show("Innsjekken er allerede avsluttet. Oppdater turneringsrommet.", "warning");
+        await sync(context);
+        return;
+      }
+      detail = fresh;
+      const snapshot = attendanceSnapshot(fresh);
+      if (snapshot.checked.length < MIN_PLAYERS) {
+        show(`Minst ${MIN_PLAYERS} spillere må være sjekket inn.`, "warning");
+        await sync(context);
+        return;
+      }
+      const confirmed = await confirmAttendanceClosure(snapshot);
+      if (!confirmed || currentTournamentId() !== id) return;
+
+      setText(button, "Avslutter innsjekk …");
+      const data = await api(`/tournaments/${id}/finish-checkin`, {
+        method: "POST",
+        body: {
+          checked_in_count: snapshot.checked.length,
+          not_checked_in_count: snapshot.pending.length,
+          waitlisted_count: snapshot.waitlist.length,
+        },
+      });
       const noShows = Number(data.attendance?.no_show_count || 0);
-      show(noShows ? `${checked} spillere er med. ${noShows} er markert som ikke møtt.` : `${checked} spillere er med.`, "success");
+      show(noShows
+        ? `${snapshot.checked.length} spillere er med. ${noShows} er markert som ikke møtt.`
+        : `${snapshot.checked.length} spillere er med.`, "success");
       context = { ...(context || {}), id, status: "ready", view: "checkin" };
       await sync(context);
       window.requestAnimationFrame(() => {
@@ -327,9 +421,14 @@ if (host) {
         formatButton.click();
       });
     } catch (error) {
-      show(error.message, "error");
-      button.disabled = false;
-      enforceAttendanceState();
+      show(error?.message || "Innsjekken kunne ikke avsluttes.", "error");
+      await sync(context).catch(() => undefined);
+    } finally {
+      finishingCheckin = false;
+      if (button?.isConnected && tournamentStatus() === "draft") {
+        button.disabled = false;
+        enforceAttendanceState();
+      }
     }
   }
 
@@ -392,6 +491,20 @@ if (host) {
     .tc-no-selection .tc-desktop-grid{grid-template-columns:minmax(0,1fr)!important}
     .tc-attendance-note{display:grid;gap:3px;margin:0 0 10px;padding:11px 13px;border:1px solid #c8ddeb;border-radius:12px;background:#f2f8fc;color:var(--text)}
     .tc-attendance-note strong{font-size:13px}.tc-attendance-note span{font-size:12px;line-height:1.4;color:var(--muted)}
+    .tc-finish-attendance-dialog{width:min(500px,calc(100vw - 26px));max-height:min(780px,calc(100dvh - 26px));border:1px solid #cedbe6;border-radius:18px;padding:0;color:var(--text);background:var(--surface,#fff);box-shadow:0 25px 75px #091a2a66}
+    .tc-finish-attendance-dialog::backdrop{background:#06172a99}
+    .tc-finish-attendance-body{padding:clamp(16px,3vw,28px);display:grid;gap:16px;max-height:calc(100dvh - 30px);overflow:auto}
+    .tc-finish-attendance-body h2{margin:0;font-size:clamp(20px,4vw,26px)}
+    .tc-finish-attendance-body p{margin:0;line-height:1.5}
+    .tc-finish-attendance-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .tc-finish-attendance-numbers>div{padding:12px 6px;border:1px solid #d8e2e9;border-radius:12px;display:grid;gap:4px;text-align:center}
+    .tc-finish-attendance-numbers strong{font-size:28px;font-variant-numeric:tabular-nums}
+    .tc-finish-attendance-numbers span{font-size:12px}
+    #tcFinishAttendanceMissing ul{margin:8px 0 0;padding-left:23px;max-height:160px;overflow:auto}
+    .tc-finish-attendance-warning{background:#fff3e6;border:1px solid #e6c58e;border-radius:10px;padding:12px;color:#6e3f0d}
+    .tc-finish-attendance-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .tc-finish-attendance-actions button{min-height:48px;white-space:normal}
+    @media(max-width:450px){.tc-finish-attendance-actions{grid-template-columns:1fr}}
     .tc-guest-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:10px;align-items:end}
     .tc-guest-form label{display:grid;gap:5px}.tc-guest-form .button{min-height:42px;white-space:nowrap}
     @media(max-width:760px){.tc-guest-form{grid-template-columns:1fr}.tc-guest-form .button{width:100%}}

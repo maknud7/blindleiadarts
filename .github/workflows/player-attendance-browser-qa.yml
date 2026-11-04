@@ -1,0 +1,42 @@
+name: Player and Live Attendance Browser QA
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'apps/player/**'
+      - 'apps/live/**'
+      - 'apps/admin/tournament-*.js'
+      - 'apps/backend-v2/src/mysql/public-live-read-repository.ts'
+      - 'tests/player-attendance-browser/**'
+      - '.github/workflows/player-attendance-browser-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-live-attendance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+      - name: Install Chromium headless shell
+        run: npx playwright install --only-shell chromium
+      - name: Execute real Chromium check-in wall tests with mocked local API
+        run: npx playwright test --config=tests/player-attendance-browser/playwright.config.mjs
+      - name: Upload screenshot, traces and HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-live-browser-${{ github.run_id }}
+          path: |
+            artifacts/player-attendance-browser-report/
+            artifacts/player-attendance-browser-results/
+          if-no-files-found: ignore
+          retention-days: 7

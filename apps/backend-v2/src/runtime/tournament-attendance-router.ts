@@ -132,7 +132,8 @@ export class TournamentAttendanceRouter {
       const tournament = await this.requireTournament(tournamentId);
       const user = await this.requireUser(request);
       this.requireAdmin(user, requiredId(tournament.club_id, "club_id"));
-      return ok({ attendance: await this.attendance.finishCheckin(tournamentId) });
+      const expectations = await readJsonObject(request);
+      return ok({ attendance: await this.attendance.finishCheckin(tournamentId, expectations) });
     }
 
     const startMatch = /^\/v1\/tournaments\/([1-9][0-9]*)\/start$/.exec(path);

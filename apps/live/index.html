@@ -8,7 +8,7 @@
   <title>Blindleia Darts · Live</title>
   <link rel="icon" href="../static/club-logos/blindleia-dartklubb-logo.png" type="image/png">
   <link rel="stylesheet" href="./styles.css?v=20260826-1528">
-  <link rel="stylesheet" href="./checkin.css?v=20260826-1508">
+  <link rel="stylesheet" href="./checkin.css?v=20261104-attendance-wall-01">
   <link rel="stylesheet" href="./mobile.css?v=20260826-1536">
   <link rel="stylesheet" href="./venue.css?v=20260827-0811">
   <link rel="stylesheet" href="./venue-fluid.css?v=20260827-0830">
@@ -75,20 +75,21 @@
         <div class="checkin-stage-main">
           <p class="eyebrow">Innsjekk er åpen</p>
           <h2 id="checkinTournamentName">Turnering</h2>
-          <p class="checkin-lead">Sjekk inn på Min side med koden under, eller hos turneringsleder.</p>
-          <div class="checkin-code-card">
-            <span>Innsjekk-kode</span>
+          <p id="checkinLead" class="checkin-lead">Sjekk inn på Min side med koden under, eller hos turneringsleder.</p>
+          <div id="checkinCodeCard" class="checkin-code-card">
+            <span id="checkinCodeLabel">Innsjekk-kode</span>
             <strong id="checkinCode">------</strong>
             <small id="checkinWindow">Innsjekk er åpen</small>
           </div>
           <div class="checkin-progress">
             <strong id="checkinCount">0 av 0 sjekket inn</strong>
             <div class="checkin-progress-track"><span id="checkinProgressBar"></span></div>
+            <p id="checkinUpdatedAt" class="checkin-updated-at" role="status" aria-live="off">Henter oppmøte …</p>
           </div>
         </div>
         <div class="checkin-roster-panel">
           <div class="checkin-roster-head">
-            <div><p class="eyebrow">Deltakere</p><h3>Påmeldte</h3></div>
+            <div><p class="eyebrow">Oppmøte</p><h3>Spillere og venteliste</h3></div>
             <span id="checkinRosterCount" class="checkin-roster-count">0</span>
           </div>
           <div id="checkinParticipants" class="checkin-participants"></div>
@@ -138,6 +139,6 @@
     </div>
   </main>
   <script src="./venue-wall-boards.js?v=20260904-live-runtime-sync-01"></script>
-  <script src="./route-bootstrap.js?v=20260904-live-runtime-sync-01"></script>
+  <script src="./route-bootstrap.js?v=20261104-attendance-wall-01"></script>
 </body>
 </html>
