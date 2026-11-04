@@ -75,15 +75,16 @@
         <div class="checkin-stage-main">
           <p class="eyebrow">Innsjekk er åpen</p>
           <h2 id="checkinTournamentName">Turnering</h2>
-          <p class="checkin-lead">Sjekk inn på Min side med koden under, eller hos turneringsleder.</p>
-          <div class="checkin-code-card">
-            <span>Innsjekk-kode</span>
+          <p id="checkinLead" class="checkin-lead">Sjekk inn på Min side med koden under, eller hos turneringsleder.</p>
+          <div id="checkinCodeCard" class="checkin-code-card">
+            <span id="checkinCodeLabel">Innsjekk-kode</span>
             <strong id="checkinCode">------</strong>
             <small id="checkinWindow">Innsjekk er åpen</small>
           </div>
           <div class="checkin-progress">
             <strong id="checkinCount">0 av 0 sjekket inn</strong>
             <div class="checkin-progress-track"><span id="checkinProgressBar"></span></div>
+            <p id="checkinUpdatedAt" class="checkin-updated-at" role="status" aria-live="off">Henter oppmøte …</p>
           </div>
         </div>
         <div class="checkin-roster-panel">
