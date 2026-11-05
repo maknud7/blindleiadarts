@@ -1,6 +1,6 @@
 const API_ROOT = "../api/v1";
 const host = document.getElementById("tournaments");
-const MIN_PLAYERS = 2;
+const MIN_PLAYERS = 4;
 
 if (host) {
   let context = window.__bdTournamentContext || null;
