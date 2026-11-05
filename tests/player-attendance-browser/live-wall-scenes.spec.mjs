@@ -116,17 +116,16 @@ test("arena queue and results fill the right column without clipped or overlappi
       return {x:r.left,y:r.top,right:r.right,bottom:r.bottom,height:r.height,width:r.width};
     };
     const board=get(".priority-section");
-    const queuePanel=get("#queue" + ""); // the content area
-    const qCard=get("#queue" + "").height;
-    const qParent=get("#queue").parentElement.getBoundingClientRect();
-    const rParent=get("#results").parentElement.getBoundingClientRect();
+    const queuePanel=get("#queue"); // content area
+    const qParent=document.querySelector("#queue").parentElement.getBoundingClientRect();
+    const rParent=document.querySelector("#results").parentElement.getBoundingClientRect();
     const queueRows=[...document.querySelectorAll("#queue .list-row")].map(el=>{
       const b=el.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height};
     });
     const resultRows=[...document.querySelectorAll("#results .list-row")].map(el=>{
       const b=el.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height};
     });
-    return {board,queuePanel,qCard,
+    return {board,queuePanel,
       queue:{top:qParent.top,bottom:qParent.bottom,left:qParent.left,right:qParent.right,height:qParent.height},
       results:{top:rParent.top,bottom:rParent.bottom,left:rParent.left,right:rParent.right,height:rParent.height},
       queueRows,resultRows,viewport:{width:innerWidth,height:innerHeight}};
