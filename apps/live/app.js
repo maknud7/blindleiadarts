@@ -85,7 +85,64 @@ function setPhase(phase) {
   el.checkinStage?.classList.toggle("hidden", phase !== "checkin");
   el.liveDashboard?.classList.toggle("hidden", phase !== "live");
   if (phase === "standby") document.title = "Blindleia Dartklubb";
+  if (phase === "live") showWallScene("arena");
 }
+
+// The wall is an event display, not a dashboard to be read from 40 cm.
+// Each scene uses the SAME canonical DOM and data sources. No duplicate
+// renderers or fetches; board/group/ELO inner pagination keeps its own timing.
+const WALL_SCENES = ["arena", "tables", "stats"];
+const WALL_SCENE_MS = 18000;
+const wallSceneState = { current: "arena", paused: false, nextAt: Date.now() + WALL_SCENE_MS };
+
+function showWallScene(name, { resetClock = true } = {}) {
+  if (!WALL_SCENES.includes(name)) return;
+  wallSceneState.current = name;
+  if (resetClock) wallSceneState.nextAt = Date.now() + WALL_SCENE_MS;
+  if (el.liveDashboard) el.liveDashboard.dataset.wallScene = name;
+  for (const button of document.querySelectorAll("#wallScenes [data-wall-target]")) {
+    const selected = button.getAttribute("data-wall-target") === name;
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+  updateWallSceneStatus();
+}
+
+function updateWallSceneStatus() {
+  const label = document.getElementById("wallSceneStatus");
+  const pause = document.getElementById("wallScenePause");
+  if (label) {
+    const seconds = Math.max(0, Math.ceil((wallSceneState.nextAt - Date.now()) / 1000));
+    label.textContent = wallSceneState.paused ? "Automatisk rotasjon er pauset" : `Bytter visning om ${seconds} sek`;
+  }
+  if (pause) {
+    pause.textContent = wallSceneState.paused ? "Fortsett" : "Pause";
+    pause.setAttribute("aria-pressed", wallSceneState.paused ? "true" : "false");
+    pause.setAttribute("aria-label", wallSceneState.paused ? "Start automatisk rotasjon" : "Stopp automatisk rotasjon");
+  }
+}
+
+document.getElementById("wallScenes")?.addEventListener("click", (event) => {
+  const target = event.target?.closest?.("[data-wall-target]");
+  if (target) {
+    showWallScene(target.getAttribute("data-wall-target"));
+    return;
+  }
+  if (event.target?.closest?.("#wallScenePause")) {
+    wallSceneState.paused = !wallSceneState.paused;
+    wallSceneState.nextAt = Date.now() + WALL_SCENE_MS;
+    updateWallSceneStatus();
+  }
+});
+
+window.setInterval(() => {
+  if (state.phase !== "live" || el.liveDashboard?.classList.contains("hidden")) return;
+  if (!wallSceneState.paused && Date.now() >= wallSceneState.nextAt) {
+    const index = WALL_SCENES.indexOf(wallSceneState.current);
+    showWallScene(WALL_SCENES[(index + 1) % WALL_SCENES.length]);
+  } else {
+    updateWallSceneStatus();
+  }
+}, 1000);
 
 function sameLocalDay(value, reference = new Date()) {
   const date = asDate(value);
@@ -204,13 +261,14 @@ function renderBoards(boards = []) {
     const playing = match.status === "in_progress";
     const aActive = Number(match.current_player_id) === Number(match.player_a.id);
     const bActive = Number(match.current_player_id) === Number(match.player_b.id);
+    const showLegScore = Number(match.best_of_legs || 1) > 1;
     return `<article class="board-card">
       <div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge ${playing ? "live" : ""}">${playing ? "LIVE" : "Klar"}</span></div>
       <div class="players">
-        <div class="player-line ${aActive ? "active" : ""}"><strong>${esc(match.player_a.display_name)}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${Number(match.player_a.legs_won)}</span></div>
-        <div class="player-line ${bActive ? "active" : ""}"><strong>${esc(match.player_b.display_name)}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${Number(match.player_b.legs_won)}</span></div>
+        <div class="player-line ${aActive ? "active" : ""}"><strong title="${esc(match.player_a.display_name)}">${esc(match.player_a.display_name)}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_a.legs_won) : ""}</span></div>
+        <div class="player-line ${bActive ? "active" : ""}"><strong title="${esc(match.player_b.display_name)}">${esc(match.player_b.display_name)}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_b.legs_won) : ""}</span></div>
       </div>
-      <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best of ${Number(match.best_of_legs)}</div>
+      <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best av ${Number(match.best_of_legs)}</div>
     </article>`;
   }).join("");
   paintBoardsIfChanged(markup);

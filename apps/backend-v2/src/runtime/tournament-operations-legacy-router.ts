@@ -61,7 +61,10 @@ export class TournamentOperationsLegacyRouter {
         return ok({ released: true });
       }
 
-      const assignment = await this.operations.assignNextToKiosk(kiosk.kiosk_id);
+      const nextBody = await readJsonObject(request);
+      // Only a deliberate kiosk action may bypass the result-hold timer.
+      // Silent polling/auto-assignment continues to respect that timer.
+      const assignment = await this.operations.assignNextToKiosk(kiosk.kiosk_id, nextBody.advance_now === true);
       const state = await this.kioskAuth.scoringSnapshot(kiosk.kiosk_id);
       if (assignment.assigned === true) {
         await this.realtime.publishClubRefresh(kiosk.club_id, "board_ready_for_next_match");

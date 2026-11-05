@@ -34,12 +34,12 @@ function config() {
   };
 }
 
-function request(method, path, token = "pair-token") {
+function request(method, path, token = "pair-token", body = null) {
   return {
     method,
     url: path,
     headers: { "x-kiosk-pairing-token": token },
-    async *[Symbol.asyncIterator]() {},
+    async *[Symbol.asyncIterator]() { if (body !== null) yield Buffer.from(JSON.stringify(body)); },
   };
 }
 
@@ -86,8 +86,8 @@ function fixture() {
     async releaseReservationForKiosk(kioskId) {
       calls.push(["release", kioskId]);
     },
-    async assignNextToKiosk(kioskId) {
-      calls.push(["assign", kioskId]);
+    async assignNextToKiosk(kioskId, advanceNow = false) {
+      calls.push(advanceNow ? ["assign", kioskId, true] : ["assign", kioskId]);
       return {
         assigned: true,
         reason: null,
@@ -150,6 +150,18 @@ test("next-match assigns once, returns canonical kiosk state and publishes refre
     ["snapshot", "90071992547409931"],
     ["publish", "7", "board_ready_for_next_match"],
   ]);
+});
+
+test("explicit next-match press bypasses the result hold only when requested", async () => {
+  const { router, calls } = fixture();
+  const result = await router.handle(
+    "POST",
+    "/v1/kiosks/BOARD-1/next-match",
+    request("POST", "/v1/kiosks/BOARD-1/next-match", "pair-token", { advance_now: true }),
+  );
+  assert.equal(result.payload.assignment.assigned, true);
+  assert.deepEqual(calls.find((call) => call[0] === "assign"),
+    ["assign", "90071992547409931", true]);
 });
 
 test("release-next-match deletes only the current kiosk reservation", async () => {

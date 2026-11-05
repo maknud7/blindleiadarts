@@ -39,6 +39,31 @@ export function isCheckoutNumber(remaining: number): boolean {
   return !IMPOSSIBLE_CHECKOUTS.has(remaining);
 }
 
+/**
+ * Minimum number of physical darts needed to finish a 501 leg on a double.
+ * Aggregate 'sum' input cannot prove the actual darts thrown, but impossible
+ * claims (such as 150 checkout in one dart) must be rejected at the source.
+ */
+export function minimumCheckoutDarts(score: number): number {
+  if (!Number.isInteger(score) || score < 2 || score > 170) return 4;
+  const finishes = new Set<number>([50]);
+  const singleDarts = new Set<number>([0, 25, 50]);
+  for (let n = 1; n <= 20; n += 1) {
+    finishes.add(2 * n);
+    singleDarts.add(n);
+    singleDarts.add(2 * n);
+    singleDarts.add(3 * n);
+  }
+  if (finishes.has(score)) return 1;
+  for (const first of singleDarts) if (finishes.has(score - first)) return 2;
+  for (const first of singleDarts) {
+    for (const second of singleDarts) {
+      if (finishes.has(score - first - second)) return 3;
+    }
+  }
+  return 4;
+}
+
 export function isPossibleVisitScore(score: number): boolean {
   if (!possibleVisitScores) {
     const values = new Set<number>([0, 25, 50]);
@@ -107,6 +132,13 @@ function evaluateSum(remainingBefore: number, payload: VisitInput): EvaluatedVis
 
   if (remainingAfter === 0) {
     if (isCheckoutNumber(remainingBefore)) {
+      const minimum = minimumCheckoutDarts(remainingBefore);
+      if (dartsUsed < minimum) {
+        throw new DomainValidationError(
+          "checkout_darts_impossible",
+          `Checkout på ${remainingBefore} krever minst ${minimum} ${minimum === 1 ? "pil" : "piler"}.`,
+        );
+      }
       isCheckout = true;
     } else {
       isBust = true;
