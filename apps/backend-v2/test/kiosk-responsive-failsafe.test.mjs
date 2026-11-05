@@ -63,7 +63,10 @@ test("kiosk cannot advance to another match until canonical post-match result co
   assert.match(workspace, /if \(!kioskCode \|\| !completion\?\.confirmed \|\| manualQueueDepth > 0/);
   assert.match(workspace, /confirmed: Boolean\(data\.last_completed_match\)/);
   assert.match(workspace, /completion\.confirmed \? "KAMP FERDIG" : "AVVENTER RESULTAT"/);
-  assert.match(workspace, /Lagrer \{manualQueueDepth\} kast/);
+  assert.doesNotMatch(workspace, /className="notice kiosk-pending-notice"/, "queued saves never insert a layout-changing row");
+  assert.match(workspace, /aria-busy=\{manualQueueDepth > 0 \? "true" : undefined\}/);
+  assert.match(workspace, /manualQueueDepth > 0 \? \x60\$\{manualQueueDepth\} kast venter på bekreftelse\x60/);
+  assert.match(workspace, /\{manualQueueError && <div className="notice bad" role="alert"/, "failed saves still require explicit reconciliation");
   assert.doesNotMatch(workspace, /if \(next === 0\) window\.setTimeout\(\(\) => void finishCompletion/);
 });
 
