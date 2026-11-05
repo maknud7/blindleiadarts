@@ -2462,7 +2462,30 @@ body[data-live-profile="broadcast-dark"].phase-live {
     grid-template-columns: minmax(0,1fr) !important;
     grid-template-rows: minmax(0,1.22fr) minmax(0,.78fr) !important;
     gap: 9px !important;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
     overflow: hidden;
+  }
+
+  /* Venue-wall-v8 positioned these panels in columns 3/4, row 2 of the
+     ORIGINAL four-column dashboard. In arena mode their parent is a new,
+     single-column nested grid; without resetting their grid areas they
+     create implicit columns and an empty first row. This caused the huge
+     blank space above the queue and 5 matches squeezed into ~200px.
+     Fix the original grid ownership rather than adding another CSS layer. */
+  body.phase-live #liveDashboard[data-wall-scene="arena"] > .two-column:has(#queue) > .panel:has(#queue) {
+    grid-area: 1 / 1 / 2 / 2 !important;
+    min-width: 0;
+    min-height: 0;
+    height: 100% !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="arena"] > .two-column:has(#queue) > .panel:has(#results) {
+    grid-area: 2 / 1 / 3 / 2 !important;
+    min-width: 0;
+    min-height: 0;
+    height: 100% !important;
   }
 
   body.phase-live #liveDashboard[data-wall-scene="arena"] .priority-section > .boards-grid {
