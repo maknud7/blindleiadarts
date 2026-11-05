@@ -19,7 +19,7 @@ html{-webkit-text-size-adjust:100%;background:var(--bg)}
 body{margin:0;background:var(--bg);min-height:100vh;color:#0c2340}
 .hidden{display:none!important}
 
-.live-shell{width:min(1480px,calc(100% - 28px));margin:0 auto;padding:max(18px,env(safe-area-inset-top)) 0 max(60px,calc(28px + env(safe-area-inset-bottom)))}
+.live-shell{box-sizing:border-box;width:min(1480px,calc(100% - 28px));margin:0 auto;padding:max(18px,env(safe-area-inset-top)) 0 max(60px,calc(28px + env(safe-area-inset-bottom)))}
 .active-experience{width:100%}
 
 /* The public display is intentionally quiet until the evening actually starts. */
