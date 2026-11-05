@@ -1330,7 +1330,7 @@ function ScoliaScoreSurface({ pending, board, lastVisit, throwing }: { pending: 
   const showingBuffer = buffer.length > 0;
   const darts = showingBuffer ? buffer : (lastVisit?.darts || []);
   const total = showingBuffer ? darts.reduce((sum, dart) => sum + dartScore(dart), 0) : (lastVisit?.score ?? null);
-  const title = showingBuffer ? "Kaster nå" : lastVisit ? "Siste kast" : "Klar for kast";
+  const title = showingBuffer ? "Kaster" : lastVisit ? "Siste kast" : "Klar for kast";
   const player = showingBuffer ? throwing?.display_name : lastVisit?.player_name;
   return <div className="scolia-score-v2"><div className="scolia-score-head"><div><span className="pill good">Scolia live</span><h3>{title}</h3><p>{showingBuffer ? `${darts.length}/3 piler${player ? ` · ${player}` : ""}` : (player || "Kast når du er klar")}</p></div><div className={`scolia-score-total ${lastVisit?.is_bust && !showingBuffer ? "bust" : ""}`}><span>{lastVisit?.is_bust && !showingBuffer ? "Bust" : "Sum"}</span><strong>{total === null ? "—" : total}</strong></div></div><div className="scolia-darts-v2">{[0, 1, 2].map((index) => <div className={darts[index] ? "has-dart" : ""} key={index}><span>Pil {index + 1}</span><strong>{dartLabel(darts[index])}</strong></div>)}</div></div>;
 }
