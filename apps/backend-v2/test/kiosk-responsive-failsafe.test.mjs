@@ -61,7 +61,10 @@ test("kiosk cannot advance to another match until canonical post-match result co
   const workspace = read("apps/platform-v2/src/kiosk/KioskWorkspace.tsx");
   assert.match(workspace, /if \(!completion\?\.confirmed \|\| manualQueueDepth > 0 \|\| manualQueueError\) return/);
   assert.match(workspace, /if \(!kioskCode \|\| !completion\?\.confirmed \|\| manualQueueDepth > 0/);
-  assert.match(workspace, /confirmed: Boolean\(data\.last_completed_match\)/);
+  // A prior match must not unlock the next-match action for this checkout.
+  assert.match(workspace, /String\(data\.last_completed_match\.id \?\? ""\) === String\(current\.matchId\)/);
+  assert.match(workspace, /if \(!confirmedMatch\) return current\.confirmed/);
+  assert.match(workspace, /confirmed: true/);
   assert.match(workspace, /completion\.confirmed \? "KAMP FERDIG" : "AVVENTER RESULTAT"/);
   assert.doesNotMatch(workspace, /className="notice kiosk-pending-notice"/, "queued saves never insert a layout-changing row");
   assert.match(workspace, /aria-busy=\{manualQueueDepth > 0 \? "true" : undefined\}/);

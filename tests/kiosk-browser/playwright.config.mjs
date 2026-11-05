@@ -5,7 +5,8 @@ const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export default defineConfig({
   testDir: ".",
-  testMatch: ["viewport.spec.mjs"],
+  // Run the real checkout/next-match lifecycle in the same PR gate as viewport QA.
+  testMatch: ["viewport.spec.mjs", "completion-flow.spec.mjs"],
   timeout: 60000,
   expect: { timeout: 15000 },
   workers: 1,

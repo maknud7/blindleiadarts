@@ -676,8 +676,13 @@ export function KioskWorkspace() {
     if (!kioskCode || busy) return;
     setBusy(true);
     setError("");
+    // A GET started before start/undo must not overwrite the canonical
+    // response and temporarily show the previous player or match status.
+    stateMutationEpochRef.current += 1;
     try {
       const data = await action();
+      snapshotRef.current = data;
+      if (data.match) lastActiveMatchRef.current = data.match;
       setSnapshot(data);
       resetInput();
     } catch (cause) {
@@ -703,6 +708,9 @@ export function KioskWorkspace() {
   async function claimNextMatch({ quiet = true }: { quiet?: boolean } = {}) {
     if (!kioskCode || nextMatchBusy.current || completion || manualQueueDepth > 0 || manualQueueError) return;
     nextMatchBusy.current = true;
+    // An idle-state poll can finish after assignment. Fence those reads
+    // before the POST, then keep the ref in sync with the returned match.
+    stateMutationEpochRef.current += 1;
     try {
       const data = await api<NextMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/next-match`, {
         method: "POST",
@@ -710,6 +718,8 @@ export function KioskWorkspace() {
       });
       if (data.assignment?.assigned) {
         if (mounted.current) {
+          snapshotRef.current = data.state;
+          lastActiveMatchRef.current = data.state?.match || null;
           setSnapshot(data.state);
           resetInput();
           setError("");
@@ -727,18 +737,34 @@ export function KioskWorkspace() {
   async function refreshPostMatchState() {
     if (!kioskCode || !completion || postMatchBusy.current || manualQueueDepth > 0 || manualQueueError) return;
     postMatchBusy.current = true;
+    const requestedMatchId = completion.matchId;
     try {
       const data = await api<PostMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/post-match`, { kioskToken });
       if (!mounted.current) return;
       const remaining = Math.max(0, Number(data.remaining_seconds ?? data.result_display_seconds ?? 30));
-      setCompletion((current) => current ? {
-        ...current,
-        serverMatch: data.last_completed_match ?? current.serverMatch,
-        reservation: data.reservation ?? null,
-        remainingSeconds: remaining,
-        confirmed: Boolean(data.last_completed_match),
-      } : current);
-     } catch (cause) {
+      setCompletion((current) => {
+        // The endpoint returns the kiosk's most recent completed match, which
+        // may still be the PREVIOUS one while this checkout is being saved.
+        // Never unlock "Vis neste kamp nå" for the wrong canonical match.
+        if (!current || current.matchId !== requestedMatchId) return current;
+        const confirmedMatch = data.last_completed_match
+          && String(data.last_completed_match.id ?? "") === String(current.matchId)
+          ? data.last_completed_match : null;
+        if (!confirmedMatch) return current.confirmed ? current : {
+          ...current,
+          serverMatch: null,
+          reservation: null,
+          confirmed: false,
+        };
+        return {
+          ...current,
+          serverMatch: confirmedMatch,
+          reservation: data.reservation ?? null,
+          remainingSeconds: remaining,
+          confirmed: true,
+        };
+      });
+    } catch (cause) {
       if (mounted.current) setError(text(cause));
     } finally {
       postMatchBusy.current = false;

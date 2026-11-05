@@ -2,7 +2,7 @@ import {test,expect} from "@playwright/test";
 
 // Real KioskWorkspace/React bundle, but every API route is intercepted before
 // the browser can access a database or physical board.
-const URL="http://127.0.0.1:4173/v2/kiosk/";
+const KIOSK_URL="http://127.0.0.1:4173/v2/kiosk/";
 const club={id:7,name:"Blindleia Dartklubb",slug:"blindleia-dartklubb"};
 const kiosk={id:7,code:"QA-MANUAL",board_number:1,name:"Skive 1",scoring_mode:"manual",club};
 const players={
@@ -15,7 +15,8 @@ const nextMatch={...firstMatch,id:43,status:"assigned",round_label:"Gruppe B · 
  current_player_id:102,player_a:{...players.player_a,remaining:501},player_b:{...players.player_b,remaining:501}};
 const state=(match)=>({kiosk,active_tournament:{id:10,name:"QA test",status:"in_progress"},match});
 
-async function boot(browser,{nextAssigned=true}={}){
+async function boot(browser,{nextAssigned=true,staleCompletedMatch=false}={}){
+  let latestResultVisible=!staleCompletedMatch;
   const context=await browser.newContext({viewport:{width:768,height:1024},hasTouch:true});
   const page=await context.newPage();
   const calls=[];
@@ -39,8 +40,11 @@ async function boot(browser,{nextAssigned=true}={}){
     if(method==="POST"&&p.endsWith("/kiosks/QA-MANUAL/visit")) return ok({recorded:true});
     if(p.endsWith("/kiosks/QA-MANUAL/post-match")) return ok({
       active_match:false,
-      last_completed_match:{id:42,player_a_name:"Anna Langnes",player_b_name:"Bjørn Sørensen",
-        winner_name:"Anna Langnes",legs_a:1,legs_b:0},
+      last_completed_match:{id:latestResultVisible?42:41,
+        player_a_name:latestResultVisible?"Anna Langnes":"Cecilie Eide",
+        player_b_name:latestResultVisible?"Bjørn Sørensen":"Dan Birkeland",
+        winner_name:latestResultVisible?"Anna Langnes":"Cecilie Eide",
+        legs_a:1,legs_b:0},
       reservation:{match_id:43,player_a_name:"Anna Langnes",player_b_name:"Bjørn Sørensen",
         remaining_seconds:24,round_label:"Gruppe B · Runde 2"},
       remaining_seconds:24,
@@ -57,11 +61,11 @@ async function boot(browser,{nextAssigned=true}={}){
     return route.fulfill({status:409,contentType:"application/json",
       body:JSON.stringify({ok:false,error:{message:"Unmocked mutation"}})});
   });
-  await page.goto(URL);
+  await page.goto(KIOSK_URL);
   await expect(page.getByText("Registrer kast")).toBeVisible();
-  return {context,page,calls,errors};
+  return {context,page,calls,errors,revealLatestResult:()=>{latestResultVisible=true;}};
 }
-async function finish150(page){
+async function finish150(page,{expectWinner=true}={}){
   const keypad=page.locator(".keypad");
   for(const digit of ["1","5","0"]) await keypad.getByRole("button",{name:digit,exact:true}).click();
   await keypad.getByRole("button",{name:"Lagre",exact:true}).click();
@@ -71,7 +75,8 @@ async function finish150(page){
   await expect(dialog.getByRole("button",{name:"2 piler",exact:true})).toBeDisabled();
   await expect(dialog.getByRole("button",{name:"3 piler",exact:true})).toBeEnabled();
   await dialog.getByRole("button",{name:"3 piler",exact:true}).click();
-  await expect(page.getByText("Anna Langnes vinner")).toBeVisible({timeout:12000});
+  if(expectWinner) await expect(page.getByText("Anna Langnes vinner")).toBeVisible({timeout:12000});
+  else await expect(page.getByText("Bekrefter kampen …")).toBeVisible({timeout:12000});
 }
 test("150 checkout cannot claim 1 dart and manual next skips the reservation hold",async({browser})=>{
   const {context,page,calls,errors}=await boot(browser);
@@ -101,6 +106,29 @@ test("no ready match after checkout shows idle instead of resurrecting the old w
     await page.waitForTimeout(3200);
     await expect(page.getByText("Anna Langnes vinner")).toHaveCount(0);
     expect(calls.some(c=>c.method==="POST"&&c.p.endsWith("/next-match")&&c.body.advance_now===true)).toBe(true);
+    expect(errors).toEqual([]);
+  } finally {await context.close();}
+});
+
+
+test("an older completed match cannot confirm the current checkout or unlock next match",async({browser})=>{
+  const {context,page,calls,errors,revealLatestResult}=await boot(browser,{staleCompletedMatch:true});
+  try {
+    await finish150(page,{expectWinner:false});
+    // Wait until the stale post-match payload is actually served; a transient
+    // local pending screen alone would not prove the canonical-ID safeguard.
+    await expect.poll(()=>calls.filter(c=>c.method==="GET"&&c.p.endsWith("/post-match")).length,
+      {timeout:12000}).toBeGreaterThan(0);
+    await page.waitForTimeout(400);
+    await expect(page.getByText("Bekrefter kampen …")).toBeVisible();
+    await expect(page.getByRole("button",{name:"Vis neste kamp nå"})).toBeDisabled();
+    await expect(page.getByText("Cecilie Eide vinner")).toHaveCount(0);
+    expect(calls.filter(c=>c.method==="POST"&&c.p.endsWith("/next-match"))).toHaveLength(0);
+
+    // Canonical completion for match 42 becomes visible on the next poll.
+    revealLatestResult();
+    await expect(page.getByText("Anna Langnes vinner")).toBeVisible({timeout:12000});
+    await expect(page.getByRole("button",{name:"Vis neste kamp nå"})).toBeEnabled();
     expect(errors).toEqual([]);
   } finally {await context.close();}
 });
