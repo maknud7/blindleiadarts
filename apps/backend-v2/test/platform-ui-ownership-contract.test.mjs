@@ -40,14 +40,14 @@ test("a single owned presentation layer replaces late Live, kiosk and player CSS
   const live = read("apps/live/index.html");
   const kiosk = read("apps/kiosk/index.html");
   const player = read("apps/player/index.html");
-  assert.match(live, /venue-wall-current\.css/);
-  for (let n = 5; n <= 10; n += 1) assert.doesNotMatch(live, new RegExp("venue-wall-v" + n + "\\\\.css"));
-  assert.match(kiosk, /kiosk-state-actions\.css/);
+  assert.match(live, /venue-wall-current[.]css/);
+  for (let n = 5; n <= 10; n += 1) assert.doesNotMatch(live, new RegExp("venue-wall-v" + n + "[.]css"));
+  assert.match(kiosk, /kiosk-state-actions[.]css/);
   for (const old of ["state-visibility-fix.css", "tablet-action-row-fix.css", "mode-switch-visibility-fix.css"]) {
-    assert.doesNotMatch(kiosk, new RegExp(old.replace(".", "\\\\.")));
+    assert.doesNotMatch(kiosk, new RegExp(old.replace(".", "[.]")));
   }
-  assert.match(read("apps/kiosk/service-worker.js"), /kiosk-state-actions\.css/);
-  assert.doesNotMatch(player, /player-card-polish\.css/);
-  assert.match(player, /player-design-system\.css/);
-  assert.match(read("apps/live/venue-wall-current.css"), /Former venue-wall-v10\.css/);
+  assert.match(read("apps/kiosk/service-worker.js"), /kiosk-state-actions[.]css/);
+  assert.doesNotMatch(player, /player-card-polish[.]css/);
+  assert.match(player, /player-design-system[.]css/);
+  assert.match(read("apps/live/venue-wall-current.css"), /Former venue-wall-v10[.]css/);
 });
