@@ -18,6 +18,8 @@ function people() {
     { player_id: "2", display_name: "Ben", status: "checked_in" },
     { player_id: "3", display_name: "Cam", status: "registered" },
     { player_id: "4", display_name: "Dan", status: "waitlisted" },
+    { player_id: "5", display_name: "Eve", status: "checked_in" },
+    { player_id: "6", display_name: "Finn", status: "checked_in" },
   ];
 }
 
@@ -42,7 +44,7 @@ async function boot(page, { onFinish } = {}) {
       }
       state.status = "ready";
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
-        data: { attendance: { status: "ready", checked_in_count: 2, no_show_count: 1, withdrawn_waitlist_count: 1 } } }) });
+        data: { attendance: { status: "ready", checked_in_count: 4, no_show_count: 1, withdrawn_waitlist_count: 1 } } }) });
     }
     return route.fulfill({ status: 404, body: "" });
   });
@@ -73,7 +75,7 @@ test("Leader sees exact no-shows and can cancel without a mutation", async ({ pa
   await page.locator("#tcToFormat").click();
   await modal.getByRole("button", { name: "Bekreft avslutning" }).click();
   await expect(page.locator("#tcMessage")).toContainText("ikke møtt");
-  expect(state.writes).toEqual([{ checked_in_count: 2, not_checked_in_count: 1, waitlisted_count: 1 }]);
+  expect(state.writes).toEqual([{ checked_in_count: 4, not_checked_in_count: 1, waitlisted_count: 1 }]);
 });
 
 test("Leader gets explicit 409 and preserves draft if attendance changes during preflight", async ({ page }) => {
