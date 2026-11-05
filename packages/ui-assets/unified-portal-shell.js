@@ -544,8 +544,10 @@ window.addEventListener("storage", (event) => {
   if (event.key === "bd:token") resolveRole().catch(() => undefined);
 });
 window.addEventListener("bd:session", () => resolveRole().catch(() => undefined));
+// Navigation state is owned by portal-menu. Rebuilding sidebar links on
+// every portal-view event used to compete with its observer and touch targets.
+// The sidebar is rebuilt only when the user role/session changes.
 window.addEventListener("bd:portal-view", () => {
-  if (surface === "admin") window.setTimeout(syncMenu, 0);
   syncMobileBottomNav();
 });
 
