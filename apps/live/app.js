@@ -85,7 +85,64 @@ function setPhase(phase) {
   el.checkinStage?.classList.toggle("hidden", phase !== "checkin");
   el.liveDashboard?.classList.toggle("hidden", phase !== "live");
   if (phase === "standby") document.title = "Blindleia Dartklubb";
+  if (phase === "live") showWallScene("arena");
 }
+
+// The wall is an event display, not a dashboard to be read from 40 cm.
+// Each scene uses the SAME canonical DOM and data sources. No duplicate
+// renderers or fetches; board/group/ELO inner pagination keeps its own timing.
+const WALL_SCENES = ["arena", "tables", "stats"];
+const WALL_SCENE_MS = 18000;
+const wallSceneState = { current: "arena", paused: false, nextAt: Date.now() + WALL_SCENE_MS };
+
+function showWallScene(name, { resetClock = true } = {}) {
+  if (!WALL_SCENES.includes(name)) return;
+  wallSceneState.current = name;
+  if (resetClock) wallSceneState.nextAt = Date.now() + WALL_SCENE_MS;
+  if (el.liveDashboard) el.liveDashboard.dataset.wallScene = name;
+  for (const button of document.querySelectorAll("#wallScenes [data-wall-target]")) {
+    const selected = button.getAttribute("data-wall-target") === name;
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+  updateWallSceneStatus();
+}
+
+function updateWallSceneStatus() {
+  const label = document.getElementById("wallSceneStatus");
+  const pause = document.getElementById("wallScenePause");
+  if (label) {
+    const seconds = Math.max(0, Math.ceil((wallSceneState.nextAt - Date.now()) / 1000));
+    label.textContent = wallSceneState.paused ? "Automatisk rotasjon er pauset" : `Bytter visning om ${seconds} sek`;
+  }
+  if (pause) {
+    pause.textContent = wallSceneState.paused ? "Fortsett" : "Pause";
+    pause.setAttribute("aria-pressed", wallSceneState.paused ? "true" : "false");
+    pause.setAttribute("aria-label", wallSceneState.paused ? "Start automatisk rotasjon" : "Stopp automatisk rotasjon");
+  }
+}
+
+document.getElementById("wallScenes")?.addEventListener("click", (event) => {
+  const target = event.target?.closest?.("[data-wall-target]");
+  if (target) {
+    showWallScene(target.getAttribute("data-wall-target"));
+    return;
+  }
+  if (event.target?.closest?.("#wallScenePause")) {
+    wallSceneState.paused = !wallSceneState.paused;
+    wallSceneState.nextAt = Date.now() + WALL_SCENE_MS;
+    updateWallSceneStatus();
+  }
+});
+
+window.setInterval(() => {
+  if (state.phase !== "live" || el.liveDashboard?.classList.contains("hidden")) return;
+  if (!wallSceneState.paused && Date.now() >= wallSceneState.nextAt) {
+    const index = WALL_SCENES.indexOf(wallSceneState.current);
+    showWallScene(WALL_SCENES[(index + 1) % WALL_SCENES.length]);
+  } else {
+    updateWallSceneStatus();
+  }
+}, 1000);
 
 function sameLocalDay(value, reference = new Date()) {
   const date = asDate(value);
