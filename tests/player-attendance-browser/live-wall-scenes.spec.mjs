@@ -63,8 +63,8 @@ async function mountLive(page, size, options = {}) {
   const response=await page.goto(origin+"/live/1234");
   expect(response?.ok()).toBe(true);
   await expect(page.locator("body")).toHaveClass(/phase-live/,{timeout:12000});
-  await expect(page.locator("#boards .board-card")).toHaveCount(4);
-  await expect(page.locator("#tables .table-card")).toHaveCount(2);
+  await expect(page.locator("#boards .board-card")).toHaveCount((options.liveData || liveData).boards.length);
+  await expect(page.locator("#tables .table-card")).toHaveCount(Math.min(2, (options.liveData || liveData).tables.groups.length));
 }
 
 test("large venue shows all original information through three readable scenes",async({page},testInfo)=>{
