@@ -42,10 +42,10 @@ async function boot(page, mock) {
   });
   await page.goto(LIVE_PAGE, { waitUntil: "domcontentloaded" });
   await page.setContent(html, { waitUntil: "domcontentloaded" });
-  await page.addStyleTag({ path: "apps/live/styles.css" });
-  await page.addStyleTag({ path: "apps/live/checkin.css" });
-  await page.addStyleTag({ path: "apps/live/mobile.css" });
-  await page.addScriptTag({ path: "apps/live/app.js" });
+  await page.addStyleTag({ content: fs.readFileSync("apps/live/styles.css", "utf8") });
+  await page.addStyleTag({ content: fs.readFileSync("apps/live/checkin.css", "utf8") });
+  await page.addStyleTag({ content: fs.readFileSync("apps/live/mobile.css", "utf8") });
+  await page.addScriptTag({ content: fs.readFileSync("apps/live/app.js", "utf8") });
 }
 
 test("Admin-only registration appears on actual Live HTML and refreshes without roster rebuild", async ({ page }) => {
