@@ -2639,3 +2639,247 @@ body[data-live-profile="broadcast-dark"].phase-live {
 @media (max-width:1179px), (max-height:649px) {
   .wall-scenes { display:none !important; }
 }
+
+
+/* ── Adaptive 1080p+ overview ────────────────────────────────────────────────
+ * One maintained wall CSS owner. Never create/clone data: scene=all
+ * repositions the SAME panels that render in the rotated modes.
+ * JS enables this only for <=4 boards, <=2 groups, <=9 players per group,
+ * no active playoff bracket, and a sufficiently large CSS viewport.
+ */
+#wallScenes [data-wall-target="all"] { display:none; }
+
+@media (min-width:1880px) and (min-height:1030px) {
+  body.phase-live #liveDashboard[data-wall-full-available="true"] #wallScenes [data-wall-target="all"] {
+    display:inline-flex;
+    align-items:center;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] {
+    display:grid !important;
+    grid-template-columns:minmax(0,1.55fr) minmax(0,.57fr) minmax(0,.57fr) !important;
+    grid-template-rows:51px 41px minmax(0,.43fr) minmax(0,.57fr) !important;
+    column-gap:9px !important;
+    row-gap:8px !important;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > #progressCards {
+    grid-area:1 / 1 / 2 / -1 !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .wall-scenes {
+    grid-area:2 / 1 / 3 / -1 !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .priority-section {
+    display:block !important;
+    grid-area:3 / 1 / 4 / 2 !important;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .two-column:has(#queue) {
+    display:grid !important;
+    grid-area:3 / 2 / 4 / -1 !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+    gap:9px !important;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .section:has(#tables) {
+    display:block !important;
+    grid-area:4 / 1 / 5 / 2 !important;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > #playoffSection {
+    display:none !important; /* JS never selects overview when playoff exists */
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .two-column:has(#elo) {
+    display:grid !important;
+    grid-area:4 / 2 / 5 / -1 !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+    gap:9px !important;
+    min-width:0;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .two-column:has(#elo) > .panel:has(#highlights) {
+    display:grid !important;
+    grid-area:1 / 1 / 2 / 2 !important;
+    grid-template-rows:30px minmax(0,1fr);
+    min-width:0;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .two-column:has(#elo) > .panel:has(#elo) {
+    display:grid !important;
+    grid-area:1 / 2 / 2 / 3 !important;
+    grid-template-rows:30px minmax(0,1fr);
+    min-width:0;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] > .priority-section .boards-grid {
+    display:grid !important;
+    height:calc(100% - 38px) !important;
+    min-height:0;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+    gap:8px !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .priority-section .boards-grid .board-card {
+    height:100% !important;
+    min-width:0;
+    min-height:0 !important;
+    padding:8px 12px !important;
+    border-radius:12px;
+    grid-template-rows:23px minmax(0,1fr) 18px !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .priority-section .board-card .board-number {
+    font-size:clamp(.8rem,.9vw,1.05rem) !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .priority-section .board-card .player-line {
+    grid-template-columns:minmax(0,1fr) minmax(58px,auto) 22px !important;
+    gap:5px !important;
+    padding:3px 0 !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .priority-section .board-card .player-line strong {
+    font-size:clamp(.88rem,1vw,1.16rem) !important;
+    line-height:1.08 !important;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .priority-section .board-card .remaining {
+    font-size:clamp(1.85rem,2.2vw,2.7rem) !important;
+    line-height:1 !important;
+    font-variant-numeric:tabular-nums;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .priority-section .board-card .round {
+    font-size:.75rem !important;
+    line-height:1.1 !important;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] .two-column:has(#queue) > .panel {
+    height:100% !important;
+    min-width:0;
+    min-height:0;
+    display:grid !important;
+    grid-template-rows:30px minmax(0,1fr) !important;
+    padding:8px 10px !important;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #queue .list-row,
+  body.phase-live #liveDashboard[data-wall-scene="all"] #results .list-row {
+    min-height:46px !important;
+    padding:6px 4px !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #queue .list-row strong,
+  body.phase-live #liveDashboard[data-wall-scene="all"] #results .list-row strong {
+    font-size:clamp(.78rem,.85vw,.99rem) !important;
+    line-height:1.1 !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #queue .list-row small,
+  body.phase-live #liveDashboard[data-wall-scene="all"] #results .list-row small {
+    font-size:clamp(.65rem,.73vw,.8rem) !important;
+    line-height:1.1 !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables {
+    display:grid !important;
+    height:calc(100% - 38px) !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:9px !important;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables .table-card {
+    padding:9px 9px !important;
+    min-width:0;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables .table-card h3 {
+    margin-bottom:5px !important;
+    font-size:clamp(1.03rem,1.17vw,1.35rem) !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables .portal-table {
+    min-width:0 !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables .portal-table th,
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables .portal-table td {
+    padding:clamp(6px,.5vw,9px) 4px !important;
+    font-size:clamp(.66rem,.7vw,.82rem) !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #tables .portal-table td:nth-child(2) strong {
+    font-size:clamp(.73rem,.76vw,.91rem) !important;
+    display:block;
+    max-width:100%;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #highlights {
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    grid-template-rows:repeat(3,minmax(0,1fr)) !important;
+    gap:6px !important;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #highlights .live-top3-block {
+    padding:6px 9px !important;
+    min-height:0;
+    overflow:hidden;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #highlights .live-top3-block h3 {
+    margin:0 0 2px !important;
+    font-size:clamp(.78rem,.84vw,1rem) !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #highlights .live-top3-row {
+    min-height:25px !important;
+    padding:2px 3px !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #highlights .live-top3-row strong {
+    font-size:clamp(.7rem,.76vw,.9rem) !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #elo .list-row {
+    min-height:54px !important;
+    padding:6px 5px !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #elo .list-row strong {
+    font-size:clamp(.78rem,.82vw,1rem) !important;
+  }
+
+  body.phase-live #liveDashboard[data-wall-scene="all"] #elo .rating {
+    font-size:clamp(.86rem,.94vw,1.12rem) !important;
+  }
+}
