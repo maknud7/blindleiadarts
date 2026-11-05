@@ -18,6 +18,25 @@ function esc(value) {
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
+/**
+ * Keep the full canonical name in title/aria-label; shorten only the TV label.
+ * "Magnus Nicolai Flørenæs Knudsen" → "Magnus Knudsen".
+ */
+function shortLiveName(value, maxLength = 23) {
+  const original = String(value || "").trim().replace(/\s+/g, " ");
+  if (!original) return "Spiller";
+  if (Array.from(original).length <= maxLength) return original;
+  const words = original.split(" ");
+  const start = words[0] || "";
+  const last = words[words.length - 1] || "";
+  const combined = words.length > 1 ? `${start} ${last}` : original;
+  if (Array.from(combined).length <= maxLength) return combined;
+  const initial = Array.from(start)[0] || "";
+  const shortened = words.length > 1 ? `${initial}. ${last}` : original;
+  if (Array.from(shortened).length <= maxLength) return shortened;
+  return `${Array.from(shortened).slice(0, maxLength - 1).join("")}…`;
+}
+
 function asDate(value) {
   if (!value) return null;
   const date = new Date(String(value).replace(" ", "T"));
@@ -85,7 +104,11 @@ function setPhase(phase) {
   el.checkinStage?.classList.toggle("hidden", phase !== "checkin");
   el.liveDashboard?.classList.toggle("hidden", phase !== "live");
   if (phase === "standby") document.title = "Blindleia Dartklubb";
-  if (phase === "live") showWallScene("arena");
+  if (phase === "live") {
+    wallSceneState.manualSelection = false;
+    showWallScene(canShowFullWall() ? "all" : "arena");
+    syncWallAutoLayout();
+  }
 }
 
 // The wall is an event display, not a dashboard to be read from 40 cm.
@@ -93,10 +116,41 @@ function setPhase(phase) {
 // renderers or fetches; board/group/ELO inner pagination keeps its own timing.
 const WALL_SCENES = ["arena", "tables", "stats"];
 const WALL_SCENE_MS = 18000;
-const wallSceneState = { current: "arena", paused: false, nextAt: Date.now() + WALL_SCENE_MS };
+const WALL_FULL_MIN_WIDTH = 1880;
+const WALL_FULL_MIN_HEIGHT = 1030;
+const wallSceneState = {
+  current: "arena", paused: false, nextAt: Date.now() + WALL_SCENE_MS,
+  manualSelection: false,
+};
+
+// TV overview is enabled only when there is enough *pixel space AND data fits*.
+// The unusual tournament (more than four boards, two groups, or a playoff
+// bracket) stays in scene rotation rather than quietly cropping information.
+function canShowFullWall(payload = state.payload) {
+  if (window.innerWidth < WALL_FULL_MIN_WIDTH || window.innerHeight < WALL_FULL_MIN_HEIGHT) return false;
+  const boards = Array.isArray(payload?.boards) ? payload.boards : [];
+  const groups = Array.isArray(payload?.tables?.groups) ? payload.tables.groups : [];
+  const maxGroupRows = Math.max(0, ...groups.map((group) => Array.isArray(group.rows) ? group.rows.length : 0));
+  const hasPlayoff = Boolean(payload?.playoff?.playoff);
+  return boards.length <= 4 && groups.length <= 2 && maxGroupRows <= 9 && !hasPlayoff;
+}
+
+function syncWallAutoLayout() {
+  if (state.phase !== "live") return;
+  const full = canShowFullWall();
+  if (el.liveDashboard) el.liveDashboard.dataset.wallFullAvailable = full ? "true" : "false";
+  if (!full && wallSceneState.current === "all") {
+    showWallScene("arena");
+  } else if (full && !wallSceneState.manualSelection && wallSceneState.current !== "all") {
+    showWallScene("all");
+  }
+  updateWallSceneStatus();
+}
+
+window.addEventListener("resize", syncWallAutoLayout);
 
 function showWallScene(name, { resetClock = true } = {}) {
-  if (!WALL_SCENES.includes(name)) return;
+  if (name !== "all" && !WALL_SCENES.includes(name)) return;
   wallSceneState.current = name;
   if (resetClock) wallSceneState.nextAt = Date.now() + WALL_SCENE_MS;
   if (el.liveDashboard) el.liveDashboard.dataset.wallScene = name;
@@ -112,9 +166,12 @@ function updateWallSceneStatus() {
   const pause = document.getElementById("wallScenePause");
   if (label) {
     const seconds = Math.max(0, Math.ceil((wallSceneState.nextAt - Date.now()) / 1000));
-    label.textContent = wallSceneState.paused ? "Automatisk rotasjon er pauset" : `Bytter visning om ${seconds} sek`;
+    label.textContent = wallSceneState.current === "all"
+      ? "Alle opplysninger vises"
+      : wallSceneState.paused ? "Automatisk rotasjon er pauset" : `Bytter visning om ${seconds} sek`;
   }
   if (pause) {
+    pause.hidden = wallSceneState.current === "all";
     pause.textContent = wallSceneState.paused ? "Fortsett" : "Pause";
     pause.setAttribute("aria-pressed", wallSceneState.paused ? "true" : "false");
     pause.setAttribute("aria-label", wallSceneState.paused ? "Start automatisk rotasjon" : "Stopp automatisk rotasjon");
@@ -124,7 +181,10 @@ function updateWallSceneStatus() {
 document.getElementById("wallScenes")?.addEventListener("click", (event) => {
   const target = event.target?.closest?.("[data-wall-target]");
   if (target) {
-    showWallScene(target.getAttribute("data-wall-target"));
+    const requested = target.getAttribute("data-wall-target");
+    if (requested === "all" && !canShowFullWall()) return;
+    wallSceneState.manualSelection = true;
+    showWallScene(requested);
     return;
   }
   if (event.target?.closest?.("#wallScenePause")) {
@@ -136,6 +196,7 @@ document.getElementById("wallScenes")?.addEventListener("click", (event) => {
 
 window.setInterval(() => {
   if (state.phase !== "live" || el.liveDashboard?.classList.contains("hidden")) return;
+  if (wallSceneState.current === "all") return;
   if (!wallSceneState.paused && Date.now() >= wallSceneState.nextAt) {
     const index = WALL_SCENES.indexOf(wallSceneState.current);
     showWallScene(WALL_SCENES[(index + 1) % WALL_SCENES.length]);
@@ -336,6 +397,7 @@ function render(payload) {
   renderPlayoff(payload.playoff);
   renderElo(payload.elo);
   renderHighlights(payload.highlights);
+  syncWallAutoLayout();
   document.title = `${payload.tournament?.name || "Blindleia Darts"} · Live`;
 }
 
