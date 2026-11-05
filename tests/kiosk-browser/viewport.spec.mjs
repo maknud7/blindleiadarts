@@ -310,7 +310,7 @@ test("sum bust keeps next thrower stable when an earlier poll returns after save
     await sumKeys.getByRole("button", { name: "0", exact: true }).click();
     await expect(page.locator(".scoring-head")).toContainText("Bust");
     await sumKeys.getByRole("button", { name: "Lagre", exact: true }).click();
-    await expect(page.locator(".player-tile.active")).toContainText("Spiller B");
+    await expect(page.locator(".player-tile.active h2")).toHaveAttribute("aria-label", "Spiller B med et tilsvarende langt navn");
     await expect(page.locator(".player-tile").first().locator(".remaining")).toHaveText("32");
     await expect(page.locator('.match-view[aria-busy="true"]')).toHaveCount(0, { timeout: 10000 });
 
@@ -331,7 +331,7 @@ test("sum bust keeps next thrower stable when an earlier poll returns after save
       return window.__bustTurnTrace;
     });
     expect(turns, "a stale GET must not flip back to the player who busted").toEqual([turns[0]]);
-    await expect(page.locator(".player-tile.active")).toContainText("Spiller B");
+    await expect(page.locator(".player-tile.active h2")).toHaveAttribute("aria-label", "Spiller B med et tilsvarende langt navn");
     expect(requests.filter(r => r.method === "POST" && r.path.endsWith("/visit"))).toHaveLength(1);
     expect(errors).toEqual([]);
   } finally {
@@ -358,7 +358,7 @@ test("per-dart bust uses first busting dart and ignores later darts optimistical
     await page.locator(".multiplier-column").getByRole("button", { name: "S", exact: true }).click();
     await grid.getByRole("button", { name: "1", exact: true }).click();
     await page.locator(".save-visit-button").click();
-    await expect(page.locator(".player-tile.active")).toContainText("Spiller B");
+    await expect(page.locator(".player-tile.active h2")).toHaveAttribute("aria-label", "Spiller B med et tilsvarende langt navn");
     await expect(page.locator(".player-tile").first().locator(".remaining")).toHaveText("32");
     const recent = page.locator(".editable-visits-v2 .visit-editable-v2").first();
     await expect(recent).toContainText("80");
