@@ -97,6 +97,21 @@ function possibleVisitScores(): Set<number> {
 }
 const POSSIBLE_VISIT_SCORES = possibleVisitScores();
 function isCheckoutNumber(value: number): boolean { return value > 1 && value <= 170 && ![159, 162, 163, 165, 166, 168, 169].includes(value); }
+
+/** Same physical-dart checkout bounds enforced by backend-v2/dart501. */
+function minimumCheckoutDarts(score: number): number {
+  if (!Number.isInteger(score) || score < 2 || score > 170) return 4;
+  const finishes = new Set<number>([50]);
+  const singles = new Set<number>([0, 25, 50]);
+  for (let n = 1; n <= 20; n += 1) {
+    finishes.add(n * 2);
+    singles.add(n); singles.add(n * 2); singles.add(n * 3);
+  }
+  if (finishes.has(score)) return 1;
+  for (const a of singles) if (finishes.has(score - a)) return 2;
+  for (const a of singles) for (const b of singles) if (finishes.has(score - a - b)) return 3;
+  return 4;
+}
 function manualDartScore(dart: ManualDart): number {
   if (dart.value === "BULL") return dart.multiplier === "D" ? 50 : 25;
   if (dart.value === 0) return 0;
@@ -295,6 +310,8 @@ export function KioskWorkspace() {
   const stateReadSequenceRef = useRef(0);
   const skipNextThrowingReset = useRef(false);
   const lastActiveMatchRef = useRef<KioskMatch | null>(null);
+  // Never resurrect a result screen that the user has deliberately left.
+  const dismissedCompletedMatchRef = useRef<number | null>(null);
   const postMatchBusy = useRef(false);
   const nextMatchBusy = useRef(false);
 
@@ -443,7 +460,7 @@ export function KioskWorkspace() {
       const data = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(code)}/state`, { kioskToken: token });
       if (isCurrentRead()) {
         const previous = lastActiveMatchRef.current;
-        if (!data.match && previous?.id && String(previous.status || "") === "in_progress" && !completion) {
+        if (!data.match && previous?.id && String(previous.status || "") === "in_progress" && !completion && Number(previous.id) !== dismissedCompletedMatchRef.current) {
           setCompletion({
             matchId: Number(previous.id),
             localMatch: previous,
@@ -605,7 +622,7 @@ export function KioskWorkspace() {
   useEffect(() => {
     if (!completion?.confirmed || manualQueueDepth > 0 || manualQueueError) return;
     if (completion.remainingSeconds <= 0) {
-      void finishCompletion();
+      void finishCompletion(false);
       return;
     }
     const handle = window.setTimeout(() => {
@@ -728,23 +745,43 @@ export function KioskWorkspace() {
     }
   }
 
-  async function finishCompletion() {
+  async function finishCompletion(advanceNow = false) {
     if (!kioskCode || !completion?.confirmed || manualQueueDepth > 0 || manualQueueError || nextMatchBusy.current) return;
     nextMatchBusy.current = true;
+    setBusy(true);
+    // Fence already-started polling responses while this canonical mutation
+    // decides whether to assign the next reserved match.
+    stateMutationEpochRef.current += 1;
+    const finishedId = completion.matchId;
     try {
       const data = await api<NextMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/next-match`, {
         method: "POST",
         kioskToken,
+        body: { advance_now: advanceNow },
       });
       if (!mounted.current) return;
+      if (data.assignment?.reason === "reservation_wait") {
+        // Keep the confirmed winner display and retry when the hold ends,
+        // rather than flashing an empty board with a pending reservation.
+        setError("Neste kamp er reservert, men ikke frigitt ennå. Prøv igjen.");
+        return;
+      }
+      // Clear the previous match before exposing the new snapshot. A poll
+      // returning "no active match" must not revive this old winner screen.
+      dismissedCompletedMatchRef.current = finishedId;
+      lastActiveMatchRef.current = data.state?.match || null;
+      snapshotRef.current = data.state;
       setCompletion(null);
       setSnapshot(data.state);
       resetInput();
-      setError("");
+      setError(data.assignment?.assigned === false && data.assignment?.reason === "no_ready_match"
+        ? "Ingen kamp er klar på denne skiven ennå. Vi følger kampkøen."
+        : "");
     } catch (cause) {
       if (mounted.current) setError(text(cause));
     } finally {
       nextMatchBusy.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -900,6 +937,10 @@ export function KioskWorkspace() {
   }
 
   function submitSumVisit(value: number, dartsUsed = 3) {
+    if (Number(throwing?.remaining || 0) === value && dartsUsed < minimumCheckoutDarts(value)) {
+      setError(`Checkout på ${value} kan ikke gjøres med ${dartsUsed} ${dartsUsed === 1 ? "pil" : "piler"}.`);
+      return;
+    }
     enqueueManualVisit(
       { score: value, darts_used: dartsUsed, input_mode: "sum" },
       "sum",
@@ -1127,14 +1168,14 @@ export function KioskWorkspace() {
       {view === "test-chooser" && <TestChooser boards={testBoards} busy={busy} onChoose={selectTestBoard} onExit={() => void leaveTestMode()} />}
       {view === "pairing" && <PairingView code={pairingCode} expires={pairingExpires} busy={busy} onNew={() => void createPairing(true)} />}
       {view === "idle" && kiosk && <div className="kiosk-hero"><span className="pill good"><span className="dot" />Klar</span><p>{kiosk.club?.name || "Blindleia Dartklubb"}</p><h1>Skive {kiosk.board_number}</h1>{snapshot?.active_tournament?.name ? <><span className="pill">{snapshot.active_tournament.name}</span><p>Venter på kamp i aktiv turnering</p></> : <><span className="pill">Ingen aktiv turnering</span><p>Skiva er klar, men er ikke med i en aktiv turnering akkurat nå.</p></>}</div>}
-      {view === "completed" && completion && kiosk && <CompletionView completion={completion} board={kiosk.board_number} busy={busy || nextMatchBusy.current} onNext={() => void finishCompletion()} />}
+      {view === "completed" && completion && kiosk && <CompletionView completion={completion} board={kiosk.board_number} busy={busy || nextMatchBusy.current} onNext={() => void finishCompletion(true)} />}
       {view === "assigned" && match && kiosk && <AssignedView match={match} board={kiosk.board_number} busy={busy} onStart={() => void startMatch()} />}
       {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scoliaRealtimeDarts.length > 0 ? { ...(scolia.board || {}), buffer: { ...(scolia.board?.buffer || {}), darts: scoliaRealtimeDarts } } as ScoliaRuntimeBoard : scolia.board} lastScoliaVisit={scoliaRealtimeLastVisit || scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
 
     {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} safeLayout={safeLayout} onToggleSafeLayout={() => { const next = !safeLayout; setSafeLayout(next); write("kioskSafeLayout", next ? "1" : null); }} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
 
-    {checkoutScore !== null && <div className="login-shell kiosk-dialog-overlay"><div className="login-card kiosk-dialog-card"><span className="pill good">Checkout</span><h1>Hvor mange piler?</h1><p>Registrer hvor mange piler som ble brukt på checkouten.</p><div className="grid three">{[1, 2, 3].map((used) => <button key={used} className="button" disabled={busy} onClick={() => submitSumVisit(checkoutScore, used)}>{used} pil{used > 1 ? "er" : ""}</button>)}</div><button className="button secondary" onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
+    {checkoutScore !== null && <div className="login-shell kiosk-dialog-overlay"><div className="login-card kiosk-dialog-card" role="dialog" aria-modal="true" aria-label="Antall checkout-piler"><span className="pill good">Checkout · {checkoutScore}</span><h1>Hvor mange piler?</h1><p>Velg antall piler som faktisk ble kastet. Denne summen krever minst {minimumCheckoutDarts(checkoutScore)} {minimumCheckoutDarts(checkoutScore) === 1 ? "pil" : "piler"}. Ved «Per pil» registreres antallet automatisk.</p><div className="grid three">{[1, 2, 3].map((used) => <button key={used} className="button" disabled={busy || used < minimumCheckoutDarts(checkoutScore)} title={used < minimumCheckoutDarts(checkoutScore) ? "Umulig checkout med så få piler" : undefined} onClick={() => submitSumVisit(checkoutScore, used)}>{used} pil{used > 1 ? "er" : ""}</button>)}</div><button className="button secondary" onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
 
     {visitEditIndex !== null && (() => {
       const selected = recentEditableVisits().find((visit) => Number(visit.id || 0) === visitEditId);
