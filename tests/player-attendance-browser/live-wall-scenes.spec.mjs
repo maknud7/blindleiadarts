@@ -19,8 +19,8 @@ const liveData = {
     board_number:n,
     live_match:{status:n===3?"assigned":"in_progress",current_player_id:1,best_of_legs:1,leg_number:1,
       round_label:"Gruppe A · Runde 2",
-      player_a:{id:1,display_name:"Sven Einar Davidsen",remaining:200+n,legs_won:0},
-      player_b:{id:2,display_name:"Jon-Henning Næss",remaining:320+n,legs_won:0}},
+      player_a:{id:1,display_name:"Magnus Nicolai Flørenæs Knudsen",remaining:200+n,legs_won:0},
+      player_b:{id:2,display_name:"Andreas Tingstveit Hansen",remaining:320+n,legs_won:0}},
   })),
   next_matches:Array.from({length:5},(_,n)=>({player_a_name:"Spiller "+(n+1),player_b_name:"Motspiller "+(n+1),round_label:"Gruppe B · Runde 3"})),
   recent_results:Array.from({length:3},(_,n)=>({winner_name:"Vinner "+(n+1),player_a_name:"Vinner "+(n+1),player_b_name:"Taper "+(n+1),round_label:"Gruppe A · Runde 2",legs_a:1,legs_b:0})),
@@ -30,12 +30,12 @@ const liveData = {
   playoff:null,
 };
 const highlights = {
-  top_visits:[{display_name:"Sven Einar Davidsen",score:180},{display_name:"Thomas Kildal",score:171},{display_name:"Magnus Knudsen",score:160}],
+  top_visits:[{display_name:"Magnus Nicolai Flørenæs Knudsen",score:180},{display_name:"Thomas Kildal",score:171},{display_name:"Magnus Knudsen",score:160}],
   top_checkouts:[{display_name:"Kjell Moyle",checkout:120},{display_name:"Andreas Hasselgård",checkout:88},{display_name:"Andre Kendrick",checkout:70}],
   top_three_dart_averages:[{display_name:"Thomas Kildal",three_dart_average:65},{display_name:"Bjørn Jarle Jahnsen",three_dart_average:60},{display_name:"Tormod Haga",three_dart_average:58}],
 };
 
-async function mountLive(page, size) {
+async function mountLive(page, size, options = {}) {
   await page.setViewportSize(size);
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url());
@@ -49,7 +49,7 @@ async function mountLive(page, size) {
         : p.endsWith("/check-in-display") ? {active:false}
         : p.endsWith("/live-highlights") ? highlights
         : p.endsWith("/realtime/config") ? {enabled:false}
-        : p.endsWith("/live") ? liveData : {};
+        : p.endsWith("/live") ? (options.liveData || liveData) : {};
       return route.fulfill({contentType:"application/json",body:JSON.stringify({ok:true,data})});
     }
     const safe = p.replace(/^\/+/,"");
@@ -108,4 +108,66 @@ test("phone keeps every section scrollable with no rotating-TV-only hiding",asyn
     await expect(page.locator(id)).toBeVisible();
   }
   await expect(page.locator("#boards .board-card")).toHaveCount(4);
+});
+
+
+test("1920x1080 TV automatically shows all original data on one page with readable names", async ({page},testInfo) => {
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await mountLive(page,{width:1920,height:1080});
+  const dashboard=page.locator("#liveDashboard");
+  await expect(dashboard).toHaveAttribute("data-wall-full-available","true");
+  await expect(dashboard).toHaveAttribute("data-wall-scene","all");
+  await expect(page.getByRole("button",{name:"Alle på én skjerm"})).toHaveAttribute("aria-pressed","true");
+  for (const id of ["#progressCards","#boards","#queue","#results","#tables","#elo","#highlights"]) {
+    await expect(page.locator(id)).toBeVisible();
+  }
+  await expect(page.locator("#boards .board-card")).toHaveCount(4);
+  await expect(page.locator("#tables .table-card")).toHaveCount(2);
+  await expect(page.locator("#tables .portal-table tbody tr")).toHaveCount(14);
+  await expect(page.locator("#elo .list-row")).toHaveCount(6);
+  await expect(page.locator("#highlights .live-top3-block")).toHaveCount(3,{timeout:12000});
+  await expect(page.locator("#boards .player-line strong").first()).toHaveText("Magnus Knudsen");
+  await expect(page.locator("#boards .player-line strong").first()).toHaveAttribute("title","Magnus Nicolai Flørenæs Knudsen");
+  await expect(page.locator("#boards .player-line strong").nth(1)).toHaveText("Andreas Hansen");
+  await expect(page.locator("#highlights .live-top3-row strong").first()).toHaveText("Magnus Knudsen");
+  const withinViewport=await page.evaluate(()=>{
+    const ids=["progressCards","wallScenes","boards","queue","results","tables","elo","highlights"];
+    return ids.map(id=>{
+      const element=document.getElementById(id);
+      const box=element.getBoundingClientRect();
+      return {id,x:Math.round(box.left),right:Math.round(box.right),y:Math.round(box.top),bottom:Math.round(box.bottom),
+        visible:box.width>0&&box.height>0&&box.left>=-1&&box.right<=innerWidth+1&&box.top>=-1&&box.bottom<=innerHeight+1,
+        clipped:element.scrollHeight>element.clientHeight+3};
+    });
+  });
+  expect(withinViewport.filter(item=>!item.visible),JSON.stringify(withinViewport)).toEqual([]);
+  await page.screenshot({path:testInfo.outputPath("all-1920x1080.png"),animations:"disabled",fullPage:true});
+  expect(errors).toEqual([]);
+});
+
+test("overview falls back to readable rotating scenes when the screen shrinks",async({page})=>{
+  await mountLive(page,{width:1920,height:1080});
+  await expect(page.locator("#liveDashboard")).toHaveAttribute("data-wall-scene","all");
+  await page.setViewportSize({width:1668,height:900});
+  await expect(page.locator("#liveDashboard")).toHaveAttribute("data-wall-scene","arena");
+  await expect(page.getByRole("button",{name:"Alle på én skjerm"})).toBeHidden();
+  await page.setViewportSize({width:1920,height:1080});
+  await expect(page.locator("#liveDashboard")).toHaveAttribute("data-wall-scene","all");
+});
+
+test("dense tournaments keep scenes rather than silently dropping boards or groups",async({page})=>{
+  const dense={
+    ...liveData,
+    boards:[...liveData.boards,{...liveData.boards[0],board_number:5}],
+    tables:{groups:[...liveData.tables.groups,{name:"Gruppe C",rows:rows("C")}]},
+  };
+  await mountLive(page,{width:2560,height:1440},{liveData:dense});
+  await expect(page.locator("#liveDashboard")).toHaveAttribute("data-wall-full-available","false");
+  await expect(page.locator("#liveDashboard")).toHaveAttribute("data-wall-scene","arena");
+  await expect(page.getByRole("button",{name:"Alle på én skjerm"})).toBeHidden();
+  await expect(page.locator("#boards .board-card")).toHaveCount(5);
+  await page.getByRole("button",{name:"Tabell og sluttspill"}).click();
+  await expect(page.locator("#tables")).toBeVisible();
+  await expect(page.locator("#tables")).toHaveAttribute("data-group-count","3");
 });
