@@ -1,4 +1,22 @@
 const loaded = new Map();
+const loadedModules = new Map();
+const failedModuleAttempts = new Map();
+
+function importOnce(path) {
+  if (!loadedModules.has(path)) {
+    const attempt = failedModuleAttempts.get(path) || 0;
+    const url = new URL(path, import.meta.url);
+    // A browser may cache a failed dynamic import by URL. Retry only that
+    // module at a new URL, leaving successfully loaded modules untouched.
+    if (attempt) url.searchParams.set("moduleRetry", String(attempt));
+    loadedModules.set(path, import(url.href).catch((error) => {
+      loadedModules.delete(path);
+      failedModuleAttempts.set(path, attempt + 1);
+      throw error;
+    }));
+  }
+  return loadedModules.get(path);
+}
 // Opening Utstyr repeatedly must never flood Scolia reads or block navigation.
 const equipmentRefreshedForClub = new Set();
 
@@ -53,7 +71,7 @@ async function loadSection(target) {
   if (!paths?.length) return;
 
   if (!loaded.has(key)) {
-    loaded.set(key, Promise.all(paths.map((path) => import(new URL(path, import.meta.url).href))).catch((error) => {
+    loaded.set(key, Promise.all(paths.map(importOnce)).catch((error) => {
       loaded.delete(key);
       console.warn(`Adminseksjonen ${key} kunne ikke lastes`, error);
       throw error;
