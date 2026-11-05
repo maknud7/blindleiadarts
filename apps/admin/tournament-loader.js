@@ -1,5 +1,5 @@
 const host = document.getElementById("tournaments");
-const MODULE_VERSION = "20261104-attendance-leader-01";
+const MODULE_VERSION = "20261105-journey-attendance-live-02";
 let requested = false;
 let loading = null;
 let waitTimer = null;
