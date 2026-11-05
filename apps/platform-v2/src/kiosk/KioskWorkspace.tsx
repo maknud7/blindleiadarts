@@ -1188,14 +1188,14 @@ function CompletionView({ completion, board, busy, onNext }: {
   const winner = server?.winner_name || (aLegs > bLegs ? aName : bName);
   const next = completion.reservation;
   return <div className="assigned-view">
-    <div className="match-tools"><span className="pill good">Skive {board} · resultat registrert</span><span className="pill">{server?.round_label || server?.bracket_label || local.round_label || local.bracket_label || "Kamp"}</span></div>
+    <div className="match-tools"><span className="pill good" title={`Skive ${board} · resultat registrert`}>Resultat registrert</span><span className="pill">{server?.round_label || server?.bracket_label || local.round_label || local.bracket_label || "Kamp"}</span></div>
     <div className="kiosk-hero">
       <span className={`pill ${completion.confirmed ? "good" : "warn"}`}>{completion.confirmed ? "KAMP FERDIG" : "AVVENTER RESULTAT"}</span>
-      <h1>{completion.confirmed ? `${winner} vinner` : "Bekrefter kampen …"}</h1>
+      <h1 title={completion.confirmed ? `${winner} vinner` : undefined}>{completion.confirmed ? `${compactKioskPlayerName(winner)} vinner` : "Bekrefter kampen …"}</h1>
       <div className="versus assigned-versus">
-        <div className="player-tile"><p>{aName}</p><div className="remaining">{aLegs}</div></div>
+        <div className="player-tile"><p title={aName} aria-label={aName}>{compactKioskPlayerName(aName)}</p><div className="remaining">{aLegs}</div></div>
         <div className="vs-mark">–</div>
-        <div className="player-tile"><p>{bName}</p><div className="remaining">{bLegs}</div></div>
+        <div className="player-tile"><p title={bName} aria-label={bName}>{compactKioskPlayerName(bName)}</p><div className="remaining">{bLegs}</div></div>
       </div>
       {next ? <div className="notice"><strong>Neste kamp</strong><span>{next.player_a_name || "Spiller"} – {next.player_b_name || "Spiller"} · {next.round_label || next.bracket_label || "Kamp"}</span></div> : <p>Skiva følger kampkøen og klargjør neste kvalifiserte kamp.</p>}
       <p role="status" aria-live="polite">{completion.confirmed ? `Neste kamp vises om ${completion.remainingSeconds} sek` : "Resultatet er ikke bekreftet av serveren. Skiva blir på denne kampen til lagringen er kontrollert."}</p>
@@ -1204,8 +1204,29 @@ function CompletionView({ completion, board, busy, onNext }: {
   </div>;
 }
 
+/**
+ * Kiosk cards must remain readable at 500–820 CSS px, also for several
+ * middle names. This only changes presentation; IDs and canonical names
+ * remain untouched. The entire name stays on title/accessible labels.
+ */
+function compactKioskPlayerName(value: string): string {
+  const name = String(value || "").trim().replace(/\s+/g, " ");
+  if (!name) return "Spiller";
+  const words = name.split(" ");
+  if (name.length <= 22 && words.length <= 3) return name;
+  if (words.length === 1) return name.length > 24 ? `${Array.from(name).slice(0, 23).join("")}…` : name;
+  const first = words[0]!;
+  const last = words[words.length - 1]!;
+  const firstLast = `${first} ${last}`;
+  if (firstLast.length <= 24) return firstLast;
+  const initial = Array.from(first)[0] || "";
+  const abbreviated = `${initial}. ${last}`;
+  if (abbreviated.length <= 24) return abbreviated;
+  return `${initial}. ${Array.from(last).slice(0, 20).join("")}…`;
+}
+
 function AssignedView({ match, board, busy, onStart }: { match: KioskMatch; board: number; busy: boolean; onStart: () => void }) {
-  return <div className="assigned-view"><div className="match-tools"><span className="pill good">Skive {board} · kamp klar</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"} · Best av {match.best_of_legs}</span></div><div className="versus assigned-versus"><div className="player-tile"><p>Spiller 1</p><h2>{match.player_a.display_name}</h2></div><div className="vs-mark">VS</div><div className="player-tile"><p>Spiller 2</p><h2>{match.player_b.display_name}</h2></div></div><button className="button start-match-button" disabled={busy} onClick={onStart}>{busy ? "Starter …" : "Start kamp"}</button></div>;
+  return <div className="assigned-view"><div className="match-tools"><span className="pill good" title={`Skive ${board} · kamp klar`}>Kamp klar</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"} · Best av {match.best_of_legs}</span></div><div className="versus assigned-versus"><div className="player-tile"><p>Spiller 1</p><h2 title={match.player_a.display_name} aria-label={match.player_a.display_name}>{compactKioskPlayerName(match.player_a.display_name)}</h2></div><div className="vs-mark">VS</div><div className="player-tile"><p>Spiller 2</p><h2 title={match.player_b.display_name} aria-label={match.player_b.display_name}>{compactKioskPlayerName(match.player_b.display_name)}</h2></div></div><button className="button start-match-button" disabled={busy} onClick={onStart}>{busy ? "Starter …" : "Start kamp"}</button></div>;
 }
 
 function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, inputMode, multiplier, darts, score, busy, manualQueueDepth, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit, onUndo, onEditVisit, visitEditingAllowed }: {
@@ -1239,7 +1260,7 @@ function MatchView({ match, board, scoringMode, scoliaBoard, lastScoliaVisit, in
   const recentVisits = ((match.recent_visits || []) as EditableVisit[]).slice(0, 4);
   const bestOf = Math.max(1, Number(match.best_of_legs || 1));
   const showLegScores = bestOf > 1;
-  return <div className="match-view" aria-busy={manualQueueDepth > 0 ? "true" : undefined}><div className="match-tools"><span className="pill good">Skive {board} · live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy || manualQueueDepth > 0} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} showLegScores={showLegScores} /><div className="vs-mark match-leg-context"><strong className="match-best-of">Best av {bestOf}</strong>{showLegScores && <><span className="match-current-leg">Leg {match.current_leg || 1}</span><span className="match-leg-score">{Number(match.player_a.legs_won || 0)} – {Number(match.player_b.legs_won || 0)}</span></>}</div><PlayerTile player={match.player_b} active={playerBActive} showLegScores={showLegScores} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} preview={preview} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits"><div className="editable-visits-v2" aria-label="Siste fire kast">{recentVisits.length ? recentVisits.map((visit, index) => { const bust = Number(visit.is_bust) === 1; const editable = visitEditingAllowed && Boolean(visit.id); return <button type="button" className="visit visit-editable-v2" key={`${visit.id || visit.visit_number || index}-${index}`} disabled={!editable || busy || manualQueueDepth > 0} onClick={() => onEditVisit(index)} aria-label={editable ? `Rediger kast ${Number(visit.score || 0)} av ${visit.player_name || "spiller"}` : undefined}><span><strong>{visit.player_name || "Spiller"}</strong><small>#{Number(visit.visit_number || 0)}</small></span><span><strong>{Number(visit.score || 0)}</strong><small>{bust ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</small></span>{editable && <span className="visit-edit-icon-v2" aria-hidden="true">✎</span>}</button>; }) : <div className="empty">Ingen kast registrert ennå.</div>}</div></div></div>;
+  return <div className="match-view" aria-busy={manualQueueDepth > 0 ? "true" : undefined}><div className="match-tools"><span className="pill good" title={`Skive ${board} · live`}>Live</span><span className="pill">{match.round_label || match.bracket_label || "Kamp"}</span><button className="button secondary small" disabled={busy || manualQueueDepth > 0} onClick={onUndo}>Angre siste kast</button></div><div className="versus"><PlayerTile player={match.player_a} active={playerAActive} showLegScores={showLegScores} /><div className="vs-mark match-leg-context"><strong className="match-best-of">Best av {bestOf}</strong>{showLegScores && <><span className="match-current-leg">Leg {match.current_leg || 1}</span><span className="match-leg-score">{Number(match.player_a.legs_won || 0)} – {Number(match.player_b.legs_won || 0)}</span></>}</div><PlayerTile player={match.player_b} active={playerBActive} showLegScores={showLegScores} /></div>{automatic ? <ScoliaScoreSurface pending={scoringMode === "scolia-pending"} board={scoliaBoard} lastVisit={lastScoliaVisit} throwing={throwing} /> : <ManualScoreSurface inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} preview={preview} busy={busy} onMode={onMode} onMultiplier={onMultiplier} onDart={onDart} onDartBack={onDartBack} onDartSubmit={onDartSubmit} onScore={onScore} onSubmit={onSubmit} />}<div className="visits"><div className="editable-visits-v2" aria-label="Siste fire kast">{recentVisits.length ? recentVisits.map((visit, index) => { const bust = Number(visit.is_bust) === 1; const editable = visitEditingAllowed && Boolean(visit.id); return <button type="button" className="visit visit-editable-v2" key={`${visit.id || visit.visit_number || index}-${index}`} disabled={!editable || busy || manualQueueDepth > 0} onClick={() => onEditVisit(index)} aria-label={editable ? `Rediger kast ${Number(visit.score || 0)} av ${visit.player_name || "spiller"}` : undefined}><span><strong>{visit.player_name || "Spiller"}</strong><small>#{Number(visit.visit_number || 0)}</small></span><span><strong>{Number(visit.score || 0)}</strong><small>{bust ? "Bust" : `→ ${Number(visit.remaining_after ?? 0)}`}</small></span>{editable && <span className="visit-edit-icon-v2" aria-hidden="true">✎</span>}</button>; }) : <div className="empty">Ingen kast registrert ennå.</div>}</div></div></div>;
 }
 
 function ManualScoreSurface({ inputMode, multiplier, darts, score, preview, busy, onMode, onMultiplier, onDart, onDartBack, onDartSubmit, onScore, onSubmit }: {
@@ -1316,8 +1337,8 @@ function ScoliaScoreSurface({ pending, board, lastVisit, throwing }: { pending: 
 
 function PlayerTile({ player, active, showLegScores }: { player: PlayerScore; active: boolean; showLegScores: boolean }) {
   return <article className={`player-tile ${active ? "active" : ""}`} aria-current={active ? "true" : undefined}>
-    <p className="turn-indicator"><span className="turn-indicator-dot" aria-hidden="true" />{active ? "Kaster nå" : "Venter"}</p>
-    <h2>{player.display_name}</h2>
+    <p className={`turn-indicator ${active ? "" : "turn-indicator-idle"}`} aria-hidden={!active}><span className="turn-indicator-dot" aria-hidden="true" />{active ? "Kaster" : "\u00a0"}</p>
+    <h2 title={player.display_name} aria-label={player.display_name}>{compactKioskPlayerName(player.display_name)}</h2>
     <div className="remaining">{player.remaining}</div>
     {showLegScores && <p className="player-leg-score">{Number(player.legs_won || 0)} {Number(player.legs_won || 0) === 1 ? "leg" : "legs"}</p>}
   </article>;
