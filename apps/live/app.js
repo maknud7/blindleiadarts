@@ -261,13 +261,14 @@ function renderBoards(boards = []) {
     const playing = match.status === "in_progress";
     const aActive = Number(match.current_player_id) === Number(match.player_a.id);
     const bActive = Number(match.current_player_id) === Number(match.player_b.id);
+    const showLegScore = Number(match.best_of_legs || 1) > 1;
     return `<article class="board-card">
       <div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge ${playing ? "live" : ""}">${playing ? "LIVE" : "Klar"}</span></div>
       <div class="players">
-        <div class="player-line ${aActive ? "active" : ""}"><strong>${esc(match.player_a.display_name)}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${Number(match.player_a.legs_won)}</span></div>
-        <div class="player-line ${bActive ? "active" : ""}"><strong>${esc(match.player_b.display_name)}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${Number(match.player_b.legs_won)}</span></div>
+        <div class="player-line ${aActive ? "active" : ""}"><strong title="${esc(match.player_a.display_name)}">${esc(match.player_a.display_name)}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_a.legs_won) : ""}</span></div>
+        <div class="player-line ${bActive ? "active" : ""}"><strong title="${esc(match.player_b.display_name)}">${esc(match.player_b.display_name)}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_b.legs_won) : ""}</span></div>
       </div>
-      <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best of ${Number(match.best_of_legs)}</div>
+      <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best av ${Number(match.best_of_legs)}</div>
     </article>`;
   }).join("");
   paintBoardsIfChanged(markup);
