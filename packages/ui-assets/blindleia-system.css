@@ -71,13 +71,11 @@ body[data-bd-surface]{
   text-rendering:optimizeLegibility;
 }
 
-body[data-bd-surface] h1,
-body[data-bd-surface] h2,
-body[data-bd-surface] h3,
-body[data-bd-surface] h4,
-body[data-bd-surface] strong{
-  color:var(--bd-text);
-}
+/* Text on navy/blue surfaces must inherit its container's foreground.
+ * Global foreground rules on headings and strong outranked component-level
+ * white text and created dark-on-blue labels throughout the platform.
+ * The body below supplies the light-surface default instead.
+ */
 
 body[data-bd-surface] h1,
 body[data-bd-surface] h2,
@@ -87,13 +85,13 @@ body[data-bd-surface] h4{
   letter-spacing:-.02em;
 }
 
-body[data-bd-surface] .eyebrow{
+.eyebrow{
   color:var(--bd-blue-600);
   font-weight:850;
   letter-spacing:.1em;
 }
 
-body[data-bd-surface] .muted{color:var(--bd-muted)}
+.muted{color:var(--bd-muted)}
 
 body[data-bd-surface] input,
 body[data-bd-surface] select,
