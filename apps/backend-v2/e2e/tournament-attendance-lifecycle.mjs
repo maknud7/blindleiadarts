@@ -69,7 +69,7 @@ try {
 
   const finished = await postJson(`/v1/tournaments/${manualTournament}/finish-checkin`, {});
   assert.equal(finished.attendance.status, "ready");
-  assert.equal(finished.attendance.checked_in_count, 2);
+  assert.equal(finished.attendance.checked_in_count, 4);
   assert.equal(finished.attendance.no_show_count, 1);
   assert.equal(finished.attendance.withdrawn_waitlist_count, 1);
   assert.equal(finished.attendance.already_finished, false);
@@ -87,7 +87,7 @@ try {
 
   const started = await postJson(`/v1/tournaments/${manualTournament}/start`, {});
   assert.equal(started.start.status, "in_progress");
-  assert.equal(started.start.checked_in_count, 2);
+  assert.equal(started.start.checked_in_count, 4);
   assert.equal(started.start.already_started, false);
 
   const directCheckin = await postJson(`/v1/tournaments/${directStartTournament}/check-in`, { code: "d-e-f" });
@@ -96,7 +96,7 @@ try {
 
   const directStarted = await postJson(`/v1/tournaments/${directStartTournament}/start`, {});
   assert.equal(directStarted.start.status, "in_progress");
-  assert.equal(directStarted.start.checked_in_count, 2);
+  assert.equal(directStarted.start.checked_in_count, 4);
 
   const directState = await provider.withConnection(async (db) => {
     const tournamentRows = await db.query(
@@ -112,7 +112,7 @@ try {
   assert.equal(directState.tournament.status, "in_progress");
   assert.ok(directState.tournament.checkin_closes_at, "direct start must finalize attendance first");
   assert.ok(directState.tournament.registration_closes_at, "direct start must close registration first");
-  assert.equal(directState.players.checked_in, 2);
+  assert.equal(directState.players.checked_in, 4);
   assert.equal(directState.players.no_show, 1);
   assert.equal(directState.players.withdrawn, 1);
 
@@ -149,7 +149,7 @@ async function createFixture() {
     );
     fixture.club = requireInsertId(club, "club");
 
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 6; index += 1) {
       const inserted = await sql.execute(
         `INSERT INTO \`${prefix}players\` (club_id,display_name) VALUES (?,?)`,
         [fixture.club, `Attendance E2E Player ${index + 1} ${suffix}`],
@@ -179,12 +179,14 @@ async function createFixture() {
     for (const tournamentId of fixture.tournaments) {
       await sql.execute(
         `INSERT INTO \`${prefix}tournament_players\` (tournament_id,player_id,status,registration_source)
-         VALUES (?,?,'registered','player'),(?,?,'checked_in','admin'),(?,?,'registered','admin'),(?,?,'waitlisted','admin')`,
+         VALUES (?,?,'registered','player'),(?,?,'checked_in','admin'),(?,?,'registered','admin'),(?,?,'waitlisted','admin'),(?,?,'checked_in','admin'),(?,?,'checked_in','admin')`,
         [
           tournamentId, fixture.players[0],
           tournamentId, fixture.players[1],
           tournamentId, fixture.players[2],
           tournamentId, fixture.players[3],
+          tournamentId, fixture.players[4],
+          tournamentId, fixture.players[5],
         ],
       );
       await sql.execute(
