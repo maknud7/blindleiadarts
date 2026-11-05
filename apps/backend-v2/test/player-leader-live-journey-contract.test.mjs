@@ -59,6 +59,6 @@ test("Live wall reads canonical check-in roster every 3s with visible stale indi
 });
 
 test("Admin asset versions expose updated attendance controller on browser cache", () => {
-  assert.match(read("apps/admin/index.html"), /tournament-loader\.js\?v=20261105-journey-attendance-live-02/);
+  assert.match(read("apps/admin/index.html"), /tournament-loader\.js\?v=20261105-platform-ux-equipment-01/);
   assert.match(read("apps/admin/tournament-loader.js"), /MODULE_VERSION = "20261105-journey-attendance-live-02"/);
 });
