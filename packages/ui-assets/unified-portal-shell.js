@@ -39,24 +39,8 @@ function rootRoute(targetSurface, view) {
   return `${base}${hash}`;
 }
 
-function ensureRuntimeStyles() {
-  if (document.getElementById("unifiedRuntimeStyles")) return;
-  const style = document.createElement("style");
-  style.id = "unifiedRuntimeStyles";
-  style.textContent = `
-    .unified-group-label.admin.club-admin{color:#b8cbe0!important}
-    .unified-group-label.admin.club-admin::before{content:"◆"!important;font-size:8px!important;color:#7fb2e8!important}
-    .unified-group-label.admin.super-admin{color:var(--unified-gold,#f0bd42)!important}
-    .unified-group-label.admin.super-admin::before{content:"♛"!important}
-    .unified-clubadmin-link::after{background:#7fb2e8!important;opacity:.55!important}
-    .unified-superadmin-link::after{background:var(--unified-gold,#f0bd42)!important;opacity:1!important}
-    #unifiedPlayerTopbar .portal-context.unified-single-club label[for="clubSelect"],
-    #unifiedPlayerTopbar .portal-context.unified-single-club #clubSelect{display:none!important}
-    #superadmin{display:grid;gap:16px}
-    #superadmin .superadmin-stack{display:grid;gap:16px}
-  `;
-  document.head.appendChild(style);
-}
+// Shared portal and role presentation is owned by unified-portal-shell.css.
+
 
 function ensurePlayerTopbar() {
   if (surface !== "player" || document.getElementById("unifiedPlayerTopbar")) return;
@@ -529,7 +513,6 @@ async function resolveRole() {
 }
 
 function initialize() {
-  ensureRuntimeStyles();
   ensurePlayerTopbar();
   watchClubChooser();
   ensureMobileNavigation();
