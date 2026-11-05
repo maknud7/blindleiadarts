@@ -72,8 +72,8 @@ export function BoardEditor({ board, clubId, token, readOnly, onClose, onSaved }
     setLoadingScolia(true);
     try {
       const [scoliaResult, bridgeResult] = await Promise.allSettled([
-        api<ScoliaResponse>(`/clubs/${clubId}/kiosks/${board.id}/scolia`, { token }),
-        legacyApi<BridgeResponse>(bridgeUrl(clubId, board.id), { token }),
+        api<ScoliaResponse>(`/clubs/${clubId}/kiosks/${board.id}/scolia`, { token, timeoutMs: 12000 }),
+        legacyApi<BridgeResponse>(bridgeUrl(clubId, board.id), { token, timeoutMs: 8000 }),
       ]);
       if (scoliaResult.status === "fulfilled") {
         const next = scoliaResult.value.board || null;

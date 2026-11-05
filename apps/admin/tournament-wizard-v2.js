@@ -69,8 +69,8 @@ if (host) {
   function renderAutoText() {
     const start = new Date(document.getElementById("twStart").value);
     const text = document.getElementById("twAutoText");
-    if (Number.isNaN(start.getTime())) { text.textContent = "Påmelding åpner 6 dager og 23 timer før start og stenger først når du starter turneringen."; return; }
-    text.textContent = `Påmelding åpner ${formatDate(registrationOpen(start))} og stenger først når du trykker «Start turnering».`;
+    if (Number.isNaN(start.getTime())) { text.textContent = "Påmelding åpner 6 dager og 23 timer før start og stenger når turneringsleder avslutter innsjekken."; return; }
+    text.textContent = `Påmelding åpner ${formatDate(registrationOpen(start))} og stenger når du trykker «Avslutt innsjekk».`;
   }
   function syncCheckinDefault(force = false) {
     const start = new Date(document.getElementById("twStart").value);

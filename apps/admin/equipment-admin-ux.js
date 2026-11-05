@@ -13,12 +13,25 @@ function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replac
 async function requestJson(path, { method = "GET", body } = {}) {
   const headers = { Authorization: `Bearer ${token()}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(`${API_ROOT}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
+  // Equipment list reads must not block admin interaction indefinitely.
+  // Mutations retain their single-attempt semantics; they are not retried.
+  const controller = method === "GET" ? new AbortController() : null;
+  const timer = controller ? window.setTimeout(() => controller.abort(), 12000) : null;
+  let response;
+  try {
+    response = await fetch(`${API_ROOT}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (controller?.signal.aborted) throw new Error("Utstyr svarte ikke innen 12 sekunder. Prøv Oppdater.");
+    throw error;
+  } finally {
+    if (timer !== null) window.clearTimeout(timer);
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || `Forespørselen feilet (${response.status})`);
   return payload.data;
@@ -281,8 +294,12 @@ async function decorateDeleteActions() {
     controls.appendChild(button);
   });
 
-  await loadScreenIds().catch(() => undefined);
-  document.querySelectorAll("#screenList .screen-row").forEach((row) => {
+  const screenRows = [...document.querySelectorAll("#screenList .screen-row")];
+  // On clubs with no venue screens, never issue a screen-devices GET merely
+  // because a board's delete control was added or the board list rerendered.
+  if (!screenRows.length) return;
+  if (!state.screenIds.size) await loadScreenIds().catch(() => undefined);
+  screenRows.forEach((row) => {
     if (row.querySelector(".equipment-delete-button")) return;
     const code = row.querySelector(".screen-code")?.textContent?.trim() || "";
     const id = Number(state.screenIds.get(code) || 0);
@@ -301,7 +318,23 @@ async function decorateDeleteActions() {
 }
 
 function observeLists() {
-  const callback = () => window.queueMicrotask(() => decorateDeleteActions().catch(() => undefined));
+  let pending = false;
+  const callback = (records) => {
+    // Only new equipment rows, never the delete buttons we ourselves add.
+    // Otherwise observer -> decoration -> fetch screen IDs -> observer loops.
+    const rowsChanged = records.some((record) =>
+      [...record.addedNodes, ...record.removedNodes].some((node) =>
+        node.nodeType === Node.ELEMENT_NODE
+        && (node.matches?.(".board-row,.screen-row") || node.querySelector?.(".board-row,.screen-row"))
+      )
+    );
+    if (!rowsChanged || pending) return;
+    pending = true;
+    window.setTimeout(() => {
+      pending = false;
+      void decorateDeleteActions().catch(() => undefined);
+    }, 80);
+  };
   [document.getElementById("kioskList"), document.getElementById("screenList")].filter(Boolean).forEach((node) => {
     new MutationObserver(callback).observe(node, { childList: true, subtree: true });
   });

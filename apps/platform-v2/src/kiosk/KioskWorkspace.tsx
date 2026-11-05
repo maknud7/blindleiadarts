@@ -4,6 +4,7 @@ import { clearKioskRuntime, ensureKioskToken, read, write } from "../shared/stor
 import type { Health, KioskMatch, KioskSnapshot, PlayerScore, TestBoard, Visit } from "../shared/types";
 import { useScoliaRuntime, type ScoliaDart, type ScoliaLastVisit, type ScoliaRuntimeBoard } from "./useScoliaRuntime";
 import { useScoliaRealtimeInput, type ScoliaRealtimeMessage } from "./useScoliaRealtimeInput";
+import { useKioskViewportSafety } from "./useKioskViewportSafety";
 
 type PairingCreateResponse = { request: { request_code: string; expires_at?: string | null } };
 type PairingStatusResponse = { status: string; kiosk?: { code?: string; name?: string }; snapshot?: KioskSnapshot | null };
@@ -255,6 +256,7 @@ export function KioskWorkspace() {
   const [multiplier, setMultiplier] = useState<Multiplier>("S");
   const [checkoutScore, setCheckoutScore] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [safeLayout, setSafeLayout] = useState(() => read("kioskSafeLayout") === "1");
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [visitEditIndex, setVisitEditIndex] = useState<number | null>(null);
   const [visitEditId, setVisitEditId] = useState<number | null>(null);
@@ -560,26 +562,39 @@ export function KioskWorkspace() {
     void refreshPostMatchState();
   }, [completion?.matchId, manualQueueDepth, manualQueueError, kioskCode]);
 
+  // Result verification is a server decision. Never count down or claim
+  // another match while the last visit/result remains unconfirmed.
   useEffect(() => {
-    if (!completion || completion.remainingSeconds <= 0) return;
-    const handle = window.setInterval(() => {
-      setCompletion((current) => {
-        if (!current) return current;
-        const next = Math.max(0, current.remainingSeconds - 1);
-        if (next === 0) window.setTimeout(() => void finishCompletion(), 0);
-        return { ...current, remainingSeconds: next };
-      });
-    }, 1000);
+    if (!completion || completion.confirmed || manualQueueDepth > 0 || manualQueueError) return;
+    const handle = window.setInterval(() => void refreshPostMatchState(), 2000);
     return () => window.clearInterval(handle);
-  }, [completion?.matchId]);
+  }, [completion?.matchId, completion?.confirmed, manualQueueDepth, manualQueueError, kioskCode]);
 
   useEffect(() => {
-    if (!kioskCode || completion || match || busy || manualQueueDepth > 0 || manualQueueError) return;
+    if (!completion?.confirmed || manualQueueDepth > 0 || manualQueueError) return;
+    if (completion.remainingSeconds <= 0) {
+      void finishCompletion();
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setCompletion((current) => {
+        if (!current?.confirmed) return current;
+        return { ...current, remainingSeconds: Math.max(0, current.remainingSeconds - 1) };
+      });
+    }, 1000);
+    return () => window.clearTimeout(handle);
+  }, [completion?.matchId, completion?.confirmed, completion?.remainingSeconds, manualQueueDepth, manualQueueError]);
+
+  useEffect(() => {
+    // Do not issue a canonical next-match mutation before the initial
+    // /state response proves the kiosk is actually idle. Otherwise boot
+    // races with the first load and can claim a match unnecessarily.
+    if (!kioskCode || !snapshot?.kiosk || completion || match || busy || manualQueueDepth > 0 || manualQueueError) return;
     const attempt = () => void claimNextMatch({ quiet: true });
     attempt();
     const handle = window.setInterval(attempt, 2500);
     return () => window.clearInterval(handle);
-  }, [kioskCode, completion?.matchId, match?.id, busy, manualQueueDepth, manualQueueError]);
+  }, [kioskCode, Boolean(snapshot?.kiosk), completion?.matchId, match?.id, busy, manualQueueDepth, manualQueueError]);
 
   async function selectTestBoard(board: TestBoard) {
     setBusy(true);
@@ -674,10 +689,7 @@ export function KioskWorkspace() {
         remainingSeconds: remaining,
         confirmed: Boolean(data.last_completed_match),
       } : current);
-      if (remaining <= 0) {
-        await finishCompletion();
-      }
-    } catch (cause) {
+     } catch (cause) {
       if (mounted.current) setError(text(cause));
     } finally {
       postMatchBusy.current = false;
@@ -685,7 +697,7 @@ export function KioskWorkspace() {
   }
 
   async function finishCompletion() {
-    if (!kioskCode || nextMatchBusy.current) return;
+    if (!kioskCode || !completion?.confirmed || manualQueueDepth > 0 || manualQueueError || nextMatchBusy.current) return;
     nextMatchBusy.current = true;
     try {
       const data = await api<NextMatchResponse>(`/kiosks/${encodeURIComponent(kioskCode)}/next-match`, {
@@ -1043,11 +1055,20 @@ export function KioskWorkspace() {
     return "match";
   }, [health, effectiveTestMode, kioskCode, snapshot, match, completion]);
 
+  // Recheck visible content changes from React state, never by watching DOM
+  // mutations. This avoids an observer loop during frequent score refreshes.
+  const viewportContentKey = [
+    view, match?.id, match?.status, completion?.matchId, completion?.confirmed,
+    manualQueueDepth, manualQueueError, error, scolia.runtimeError,
+    scolia.leasePending, scolia.leaseFallback, scolia.fallbackActive, inputMode,
+  ].join("|");
+  const kioskViewportRef = useKioskViewportSafety(viewportContentKey);
+
   const headerTitle = kiosk?.name || (effectiveTestMode ? "Testterminal" : "Skiveterminal");
   const headerSubtitle = kiosk?.club?.name || (effectiveTestMode ? "Isolert TEST-runtime" : "Blindleia Darts");
   const connectionLabel = kiosk ? `Skive ${kiosk.board_number}` : effectiveTestMode ? "TEST" : "Ikke paret";
 
-  return <div className="kiosk-shell">
+  return <div ref={kioskViewportRef} className="kiosk-shell" data-kiosk-layout="fit">
     {effectiveTestMode && <div className="test-banner">TESTMODUS · isolert fra PROD{testBoardLabel ? ` · ${testBoardLabel}` : " · velg skive"}</div>}
 
     <header className="kiosk-topbar">
@@ -1063,7 +1084,8 @@ export function KioskWorkspace() {
 
     <main className="kiosk-main"><section className="kiosk-card">
       {error && <div className="notice bad">{error}</div>}
-      {manualQueueError && <div className="notice bad"><span>{manualQueueError}</span><button className="button secondary small" disabled={busy} onClick={() => void refreshManualStatus()}>Oppdater status</button></div>}
+      {manualQueueDepth > 0 && !manualQueueError && <div className="notice kiosk-pending-notice" role="status" aria-live="polite">Lagrer {manualQueueDepth} kast · resultatet er ikke bekreftet ennå</div>}
+      {manualQueueError && <div className="notice bad" role="alert"><span>{manualQueueError}</span><button className="button secondary small" disabled={busy} onClick={() => void refreshManualStatus()}>Oppdater status</button></div>}
       {kioskCode && scoliaConfigured && <ScoliaRuntimePanel snapshotMode={kiosk?.scoring_mode || "manual"} board={scolia.board} leasePending={scolia.leasePending} leaseFallback={scolia.leaseFallback} leaseError={scolia.leaseError} runtimeError={scolia.runtimeError} available={scolia.available} fallbackActive={scolia.fallbackActive} automatic={scolia.automatic} remaining={scolia.fallbackRemainingSeconds} busy={scolia.busy} onRetryLease={scolia.retryLease} onFallback={scolia.fallback} onResume={scolia.resume} onResetPhase={scolia.resetPhase} />}
 
       {view === "loading" && <div className="kiosk-hero"><span className="pill">Skiveterminal</span><h2>Starter terminalen …</h2><p>Henter skive og kampstatus.</p></div>}
@@ -1075,7 +1097,7 @@ export function KioskWorkspace() {
       {view === "match" && match && kiosk && <MatchView match={match} board={kiosk.board_number} scoringMode={effectiveScoringMode} scoliaBoard={scoliaRealtimeDarts.length > 0 ? { ...(scolia.board || {}), buffer: { ...(scolia.board?.buffer || {}), darts: scoliaRealtimeDarts } } as ScoliaRuntimeBoard : scolia.board} lastScoliaVisit={scoliaRealtimeLastVisit || scolia.lastVisit} inputMode={inputMode} multiplier={multiplier} darts={darts} score={score} busy={busy || Boolean(scolia.busy) || Boolean(manualQueueError)} manualQueueDepth={manualQueueDepth} onMode={setManualMode} onMultiplier={setMultiplier} onDart={addDart} onDartBack={() => setDarts((current) => current.slice(0, -1))} onDartSubmit={() => void submitDartVisit()} onScore={setScore} onSubmit={submitScore} onUndo={() => void undo()} onEditVisit={openVisitEditor} visitEditingAllowed={String(kiosk?.scoring_mode || "manual") !== "scolia"} />}
     </section></main>
 
-    {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
+    {settingsOpen && <SettingsDialog isTest={effectiveTestMode} hasKiosk={Boolean(kioskCode)} busy={busy} safeLayout={safeLayout} onToggleSafeLayout={() => { const next = !safeLayout; setSafeLayout(next); write("kioskSafeLayout", next ? "1" : null); }} manualQueueDepth={manualQueueDepth} manualQueueError={manualQueueError} onRefreshStatus={() => void refreshManualStatus()} onClose={() => setSettingsOpen(false)} onReload={() => window.location.reload()} onReset={() => void resetTerminal()} onExitTest={() => void leaveTestMode()} />}
 
     {checkoutScore !== null && <div className="login-shell kiosk-dialog-overlay"><div className="login-card kiosk-dialog-card"><span className="pill good">Checkout</span><h1>Hvor mange piler?</h1><p>Registrer hvor mange piler som ble brukt på checkouten.</p><div className="grid three">{[1, 2, 3].map((used) => <button key={used} className="button" disabled={busy} onClick={() => submitSumVisit(checkoutScore, used)}>{used} pil{used > 1 ? "er" : ""}</button>)}</div><button className="button secondary" onClick={() => setCheckoutScore(null)}>Avbryt</button></div></div>}
 
@@ -1087,10 +1109,12 @@ export function KioskWorkspace() {
   </div>;
 }
 
-function SettingsDialog({ isTest, hasKiosk, busy, manualQueueDepth, manualQueueError, onRefreshStatus, onClose, onReload, onReset, onExitTest }: {
+function SettingsDialog({ isTest, hasKiosk, busy, safeLayout, onToggleSafeLayout, manualQueueDepth, manualQueueError, onRefreshStatus, onClose, onReload, onReset, onExitTest }: {
   isTest: boolean;
   hasKiosk: boolean;
   busy: boolean;
+  safeLayout: boolean;
+  onToggleSafeLayout: () => void;
   manualQueueDepth: number;
   manualQueueError: string;
   onRefreshStatus: () => void;
@@ -1104,6 +1128,7 @@ function SettingsDialog({ isTest, hasKiosk, busy, manualQueueDepth, manualQueueE
       <div className="kiosk-settings-head"><div><span>Skiveterminal</span><h2>Innstillinger</h2></div><button className="kiosk-settings-button" type="button" aria-label="Lukk" onClick={onClose}>×</button></div>
       <div className="kiosk-settings-actions">
         <div className="notice"><strong>Lagringsstatus</strong><span>{manualQueueError ? "Krever avstemming" : manualQueueDepth > 0 ? `${manualQueueDepth} kast venter på bekreftelse` : "Alle kast er bekreftet"}</span>{(manualQueueDepth > 0 || manualQueueError) && <button className="button secondary small" disabled={busy} onClick={onRefreshStatus}>Oppdater status</button>}</div>
+        <button className="button secondary" type="button" onClick={onToggleSafeLayout}>{safeLayout ? "Bruk automatisk visning" : "Vis alle knapper (sikker visning)"}</button>
         <button className="button secondary" disabled={busy} onClick={onReload}>Last inn terminalen på nytt</button>
         {hasKiosk && <button className="button secondary" disabled={busy} onClick={onReset}>{isTest ? "Bytt testskive" : "Fjern pairing"}</button>}
         {isTest && <button className="button danger" disabled={busy} onClick={onExitTest}>Avslutt testmodus</button>}
@@ -1164,15 +1189,15 @@ function CompletionView({ completion, board, busy, onNext }: {
   return <div className="assigned-view">
     <div className="match-tools"><span className="pill good">Skive {board} · resultat registrert</span><span className="pill">{server?.round_label || server?.bracket_label || local.round_label || local.bracket_label || "Kamp"}</span></div>
     <div className="kiosk-hero">
-      <span className="pill good">KAMP FERDIG</span>
-      <h1>{winner} vinner</h1>
+      <span className={`pill ${completion.confirmed ? "good" : "warn"}`}>{completion.confirmed ? "KAMP FERDIG" : "AVVENTER RESULTAT"}</span>
+      <h1>{completion.confirmed ? `${winner} vinner` : "Bekrefter kampen …"}</h1>
       <div className="versus assigned-versus">
         <div className="player-tile"><p>{aName}</p><div className="remaining">{aLegs}</div></div>
         <div className="vs-mark">–</div>
         <div className="player-tile"><p>{bName}</p><div className="remaining">{bLegs}</div></div>
       </div>
       {next ? <div className="notice"><strong>Neste kamp</strong><span>{next.player_a_name || "Spiller"} – {next.player_b_name || "Spiller"} · {next.round_label || next.bracket_label || "Kamp"}</span></div> : <p>Skiva følger kampkøen og klargjør neste kvalifiserte kamp.</p>}
-      <p>{completion.confirmed ? `Neste kamp vises om ${completion.remainingSeconds} sek` : "Bekrefter resultatet …"}</p>
+      <p role="status" aria-live="polite">{completion.confirmed ? `Neste kamp vises om ${completion.remainingSeconds} sek` : "Resultatet er ikke bekreftet av serveren. Skiva blir på denne kampen til lagringen er kontrollert."}</p>
       <button className="button start-match-button" disabled={busy || !completion.confirmed} onClick={onNext}>Vis neste kamp nå</button>
     </div>
   </div>;

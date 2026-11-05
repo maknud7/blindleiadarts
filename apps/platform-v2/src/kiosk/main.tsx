@@ -8,6 +8,7 @@ import "./scolia-runtime.css";
 import "./kiosk-tablet.css";
 import "./kiosk-interactions.css";
 import "./recent-visit-editor.css";
+import "./kiosk-responsive-failsafe.css";
 
 if (initializeTestHandoff()) {
   createRoot(document.getElementById("root")!).render(

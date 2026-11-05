@@ -17,6 +17,8 @@ type RequestOptions = {
   body?: unknown;
   token?: string;
   kioskToken?: string;
+  /** Opt-in network deadline for UI reads; mutations must never auto-retry. */
+  timeoutMs?: number;
 };
 
 type KioskMatchWire = {
@@ -61,12 +63,25 @@ function normalizeResponse<T>(path: string, data: T): T {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(path, {
-    method: options.method ?? "GET",
-    headers: headers(options),
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    cache: "no-store",
-  });
+  const controller = options.timeoutMs && options.timeoutMs > 0 ? new AbortController() : null;
+  const timeout = controller ? window.setTimeout(() => controller.abort(), options.timeoutMs) : null;
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: options.method ?? "GET",
+      headers: headers(options),
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+  } catch (cause) {
+    if (controller?.signal.aborted) {
+      throw new ApiError("Forespørselen tok for lang tid. Prøv Oppdater.", 408, "request_timeout");
+    }
+    throw cause;
+  } finally {
+    if (timeout !== null) window.clearTimeout(timeout);
+  }
 
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
   if (!response.ok || !payload?.ok) {

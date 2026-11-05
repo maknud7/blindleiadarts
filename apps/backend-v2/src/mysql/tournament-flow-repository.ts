@@ -29,7 +29,7 @@ export interface TournamentStartResult {
 }
 
 export class MySqlTournamentFlowRepository {
-  private static readonly MIN_PLAYERS = 2;
+  private static readonly MIN_PLAYERS = 4;
 
   constructor(
     private readonly sessions: MySqlSessionProvider,
@@ -69,7 +69,7 @@ export class MySqlTournamentFlowRepository {
     if (checkedIn < MySqlTournamentFlowRepository.MIN_PLAYERS) {
       throw new DomainValidationError(
         "not_enough_checked_in_players",
-        "Minst to spillere må delta før turneringen kan startes.",
+        "Minst fire spillere må delta før turneringen kan startes.",
       );
     }
 

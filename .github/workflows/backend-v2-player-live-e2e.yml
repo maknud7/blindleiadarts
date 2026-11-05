@@ -50,7 +50,7 @@ jobs:
       - name: Verify current TEST realtime client source
         env:
           BASE_URL: ${{ vars.TEST_BASE_URL || 'https://test.blindleiadarts.ingenting.org' }}
-          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL || 'wss://blindleia-realtime-test.onrender.com/ws' }}
         run: |
           set -Eeuo pipefail
           verified=no
@@ -90,7 +90,7 @@ jobs:
           HOST: 127.0.0.1
           PORT: '18089'
           RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL }}
+          REALTIME_WEBSOCKET_URL: ${{ vars.TEST_REALTIME_WEBSOCKET_URL || 'wss://blindleia-realtime-test.onrender.com/ws' }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT || '3306' }}
           DB_NAME: ${{ secrets.DB_NAME }}

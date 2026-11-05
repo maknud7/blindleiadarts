@@ -35,7 +35,7 @@ export interface TournamentAttendanceResult {
 }
 
 export class MySqlTournamentAttendanceRepository {
-  private static readonly MIN_PLAYERS = 2;
+  private static readonly MIN_PLAYERS = 4;
   private readonly admin: MySqlTournamentAttendanceAdminRepository;
   private readonly wizard: MySqlTournamentWizardRepository;
 
@@ -207,7 +207,7 @@ export class MySqlTournamentAttendanceRepository {
     });
   }
 
-  async finishCheckin(tournamentIdInput: unknown): Promise<TournamentAttendanceResult> {
+  async finishCheckin(tournamentIdInput: unknown, expected: Record<string, unknown> = {}): Promise<TournamentAttendanceResult> {
     const tournamentId = requiredId(tournamentIdInput, "tournament_id");
     return this.sessions.withTransaction(async (db) => {
       const tournament = await this.requireTournamentWith(db, tournamentId);
@@ -225,10 +225,37 @@ export class MySqlTournamentAttendanceRepository {
       }
 
       const checkedIn = await this.countStatusWith(db, tournamentId, ["checked_in"]);
+      // A leader must never unknowingly close attendance after another player
+      // checked in or a registration changed while the confirmation was open.
+      // Legacy clients may omit these expectations; new clients send all three.
+      const keys = ["checked_in_count", "not_checked_in_count", "waitlisted_count"] as const;
+      const hasExpectations = keys.some((key) => Object.prototype.hasOwnProperty.call(expected, key));
+      if (hasExpectations) {
+        if (!keys.every((key) => Object.prototype.hasOwnProperty.call(expected, key))) {
+          throw new DomainValidationError("invalid_attendance_confirmation", "Mangler antall fra bekreftelsen.", 422);
+        }
+        const actual = {
+          checked_in_count: checkedIn,
+          not_checked_in_count: await this.countStatusWith(db, tournamentId, ["registered", "paused"]),
+          waitlisted_count: await this.countStatusWith(db, tournamentId, ["waitlisted"]),
+        };
+        const differs = keys.some((key) => {
+          const value = expected[key];
+          const number = typeof value === "number" ? value : NaN;
+          return !Number.isSafeInteger(number) || number < 0 || number !== actual[key];
+        });
+        if (differs) {
+          throw new DomainValidationError(
+            "attendance_changed_since_confirmation",
+            "Oppmøtet har endret seg. Oppdater listen og bekreft avslutningen på nytt.",
+            409,
+          );
+        }
+      }
       if (checkedIn < MySqlTournamentAttendanceRepository.MIN_PLAYERS) {
         throw new DomainValidationError(
           "not_enough_checked_in_players",
-          "Minst to spillere må være sjekket inn før du kan gå videre.",
+          "Minst fire spillere må være sjekket inn før du kan gå videre.",
         );
       }
 
