@@ -592,6 +592,28 @@ if (host) {
       return;
     }
 
+    // While attendance is open, only the authoritative tournament detail is
+    // needed every 8 seconds. Keep the existing plan/board snapshots intact.
+    // This prevents expensive simultaneous reads and visible stage resets.
+    if (snapshot.detail && String(snapshot.detail.status) === "draft"
+        && Number(snapshot.detail.id) === id) {
+      const latest = await optional(`/tournaments/${id}`);
+      if (request !== requestId) return;
+      if (!latest?.tournament) {
+        rootCheckinFreshness("Innsjekklisten kunne ikke oppdateres. Viser siste bekreftede status.");
+        return;
+      }
+      if (String(latest.tournament.status) === "draft") {
+        snapshot.detail = latest.tournament;
+        rootCheckinFreshness("");
+        render();
+        announceAttendanceSnapshot(id, latest.tournament);
+        if (announce) showMessage("Oppmøtet er oppdatert.", "success");
+        return;
+      }
+      // Status changed while the screen was open: load the full next phase.
+    }
+
     const [detailData, planData, groupData, boardData] = await Promise.all([
       optional(`/tournaments/${id}`),
       optional(`/tournaments/${id}/wizard-plan`),
@@ -621,7 +643,32 @@ if (host) {
     };
     context = { ...(context || {}), id, status: detail?.status || context?.status || "" };
     render();
+    if (String(detail?.status) === "draft") {
+      rootCheckinFreshness("");
+      announceAttendanceSnapshot(id, detail);
+    }
     if (announce) showMessage("Turneringsstatusen er oppdatert.", "success");
+  }
+
+  function announceAttendanceSnapshot(id, tournament) {
+    if (!tournament || !Array.isArray(tournament.registrations)) return;
+    window.dispatchEvent(new CustomEvent("bd:tournament-attendance-updated", {
+      detail: { tournamentId: String(id), tournament },
+    }));
+  }
+
+  function rootCheckinFreshness(message) {
+    const root = document.getElementById("tcLeaderV2");
+    if (!root) return;
+    let marker = root.querySelector("#tcAttendanceFreshness");
+    if (!marker) {
+      marker = document.createElement("small");
+      marker.id = "tcAttendanceFreshness";
+      marker.setAttribute("role", "status");
+      root.querySelector(".tc-leader-current")?.appendChild(marker);
+    }
+    marker.textContent = message || `Oppmøte oppdatert kl. ${new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date())}`;
+    marker.dataset.stale = message ? "1" : "0";
   }
 
   function scheduleRefresh(delay = 100) {
@@ -634,8 +681,11 @@ if (host) {
       window.clearInterval(pollTimer);
       pollTimer = null;
     }
-    if (status() === "in_progress" && !document.hidden) {
-      pollTimer = window.setInterval(() => refresh().catch(() => undefined), 15000);
+    if (!document.hidden && (status() === "draft" || status() === "in_progress")) {
+      pollTimer = window.setInterval(
+        () => refresh().catch(() => undefined),
+        status() === "draft" ? 8000 : 15000
+      );
     }
   }
 
@@ -654,7 +704,7 @@ if (host) {
   });
   document.addEventListener("visibilitychange", () => {
     configurePolling();
-    if (!document.hidden && status() === "in_progress") scheduleRefresh(0);
+    if (!document.hidden && ["draft", "in_progress"].includes(status())) scheduleRefresh(0);
   });
   host.addEventListener("click", (event) => {
     if (event.target.closest("#tcRefresh,#tcStart,#tcToFormat,#opsReconcile,#poGenerate,#poReconcile,.tc-checkin,.tc-remove")) {
