@@ -6,7 +6,7 @@
 .checkin-lead{max-width:700px;margin:0 0 clamp(22px,3vw,38px);font-size:clamp(1rem,1.5vw,1.35rem);color:#697c94}
 .checkin-code-card{box-sizing:border-box;width:100%;min-width:0;display:grid;place-items:center;gap:7px;padding:clamp(22px,3vw,38px);border:2px solid #b8cee5;border-radius:18px;background:linear-gradient(145deg,#f8fbff,#fff);text-align:center}
 .checkin-code-card span{font-size:clamp(.7rem,.9vw,.9rem);font-weight:900;text-transform:uppercase;letter-spacing:.14em;color:#697c94}
-.checkin-code-card strong{font-size:clamp(4rem,8vw,8.6rem);line-height:.95;letter-spacing:.12em;color:#0b2b50;font-variant-numeric:tabular-nums}
+.checkin-code-card strong{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word;text-align:center;font-size:clamp(4rem,8vw,8.6rem);line-height:.95;letter-spacing:.12em;color:#0b2b50;font-variant-numeric:tabular-nums}
 .checkin-code-card small{font-size:clamp(.85rem,1.15vw,1.05rem);color:#697c94}
 .checkin-code-card.admin-only strong{font-size:clamp(2rem,5vw,4.25rem);line-height:1.08;letter-spacing:normal;overflow-wrap:anywhere}
 .checkin-updated-at{margin:0;font-size:clamp(.8rem,1vw,1rem);color:#64748b;font-weight:600}
