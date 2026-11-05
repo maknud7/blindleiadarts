@@ -42,10 +42,22 @@ async function boot(page, mock) {
   });
   await page.goto(LIVE_PAGE, { waitUntil: "domcontentloaded" });
   await page.setContent(html, { waitUntil: "domcontentloaded" });
-  await page.addStyleTag({ content: fs.readFileSync("apps/live/styles.css", "utf8") });
-  await page.addStyleTag({ content: fs.readFileSync("apps/live/checkin.css", "utf8") });
-  await page.addStyleTag({ content: fs.readFileSync("apps/live/mobile.css", "utf8") });
-  await page.addScriptTag({ content: fs.readFileSync("apps/live/app.js", "utf8") });
+  // Some Playwright/CDP versions reject injected style-tag load events on
+  // document.write() fixtures. Append exact source via native DOM instead.
+  const css = ["apps/live/styles.css", "apps/live/checkin.css", "apps/live/mobile.css"]
+    .map((path) => fs.readFileSync(path, "utf8"));
+  await page.evaluate((sheets) => {
+    for (const sheet of sheets) {
+      const element = document.createElement("style");
+      element.textContent = sheet;
+      document.head.appendChild(element);
+    }
+  }, css);
+  await page.evaluate((source) => {
+    const script = document.createElement("script");
+    script.textContent = source;
+    document.body.appendChild(script);
+  }, fs.readFileSync("apps/live/app.js", "utf8"));
 }
 
 test("Admin-only registration appears on actual Live HTML and refreshes without roster rebuild", async ({ page }) => {
