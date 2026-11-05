@@ -25,7 +25,7 @@ const sectionModules = Object.freeze({
     "./club-live-admin.js?v=20260920-admin-perf-01",
   ],
   players: [
-    "./member-onboarding-admin.js?v=20260920-admin-perf-01",
+    "./member-onboarding-admin.js?v=20261105-ui-cleanup-01",
   ],
   playerbase: [
     "./player-identity-admin.js?v=20260920-admin-perf-01",
