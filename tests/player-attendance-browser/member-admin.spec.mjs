@@ -57,6 +57,15 @@ for (const width of [375, 768, 1440]) {
     await expect(page.locator("#memberAccessRows")).toContainText("Ada A");
     await expect(page.locator("#memberAccessSummary")).toBeVisible();
     await expect(page.locator("#memberAccessSummary button")).toHaveCount(4);
+    const noHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+    expect(noHorizontalOverflow).toBe(true);
+    if (width <= 760) {
+      const row = page.locator("#memberAccessRows tr[data-member-id]").first();
+      await expect(row.locator('td[data-label="Handling"]')).toBeHidden();
+      await row.click();
+      await expect(row.locator('td[data-label="Handling"]')).toBeVisible();
+      await expect(row).toHaveAttribute("aria-expanded", "true");
+    }
     await expect(page.locator("#memberAccessRows")).not.toContainText("Bo Inaktiv");
     await page.locator('[data-member-filter="inactive"]').click();
     await expect(page.locator("#memberAccessRows")).toContainText("Bo Inaktiv");
