@@ -23,8 +23,8 @@ function fixture(options = {}) {
       current_player_id: options.currentPlayerId ?? 101,
       best_of_legs: options.bestOfLegs ?? 3,
       round_label: "Gruppespill - runde 1",
-      player_a: { id: 101, display_name: options.playerAName ?? "Spiller A med et ekstraordinært langt navn", remaining: 301, legs_won: 0 },
-      player_b: { id: 102, display_name: options.playerBName ?? "Spiller B med et tilsvarende langt navn", remaining: 321, legs_won: 0 },
+      player_a: { id: 101, display_name: options.playerAName ?? "Spiller A med et ekstraordinært langt navn", remaining: options.playerARemaining ?? 301, legs_won: 0 },
+      player_b: { id: 102, display_name: options.playerBName ?? "Spiller B med et tilsvarende langt navn", remaining: options.playerBRemaining ?? 321, legs_won: 0 },
       recent_visits: [
         { id: 1, player_id: 102, player_name: "Spiller B med et tilsvarende langt navn", visit_number: 2, score: 100, remaining_after: 321, darts_used: 3 },
         { id: 2, player_id: 101, player_name: "Spiller A med et ekstraordinært langt navn", visit_number: 2, score: 140, remaining_after: 301, darts_used: 3 },
@@ -46,6 +46,12 @@ async function startMockKiosk(browser, size, options = {}) {
   const page = await context.newPage();
   const requests = [];
   const errors = [];
+  let canonicalTurn = options.currentPlayerId ?? 101;
+  let stateReadCount = 0;
+  let signalStaleReadStarted;
+  let releaseStaleRead;
+  const staleReadStarted = new Promise((resolve) => { signalStaleReadStarted = resolve; });
+  const staleReadGate = new Promise((resolve) => { releaseStaleRead = resolve; });
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript((forcedSafe) => {
     localStorage.setItem("bd:kioskCode", "QA-MANUAL");
@@ -58,6 +64,7 @@ async function startMockKiosk(browser, size, options = {}) {
     requests.push({ method: request.method(), path: new URL(request.url()).pathname });
     if (request.method() === "POST" && options.mockSuccessfulVisit && pathOf(request).endsWith("/visit")) {
       await new Promise((resolve) => setTimeout(resolve, 1200));
+      if (options.canonicalTurnAfterVisit) canonicalTurn = options.canonicalTurnAfterVisit;
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data: {} }) });
       return;
     }
@@ -70,17 +77,24 @@ async function startMockKiosk(browser, size, options = {}) {
       return;
     }
     const path = new URL(request.url()).pathname;
+    const isStateRead = path.endsWith("/kiosks/QA-MANUAL/state");
     const data = path.endsWith("/health")
       ? { status: "ok", environment: "test" }
-      : path.endsWith("/kiosks/QA-MANUAL/state") ? fixture(options) : {};
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data }) });
+      : isStateRead ? fixture({ ...options, currentPlayerId: canonicalTurn }) : {};
+    if (isStateRead && options.holdPreSavePoll && ++stateReadCount === 2) {
+      // Preserve a server answer generated BEFORE the bust. Let it arrive
+      // only AFTER the client has applied an optimistic turn and POST succeeded.
+      signalStaleReadStarted();
+      await staleReadGate;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data }) }).catch(() => {});
   });
 
   const response = await page.goto(ORIGIN + "/v2/kiosk/", { waitUntil: "domcontentloaded" });
   expect(response?.ok()).toBeTruthy();
   await expect(page.getByText(options.matchStatus === "assigned" ? "Start kamp" : "Registrer kast")).toBeVisible();
   await expect(page.locator(".kiosk-shell")).toHaveAttribute("data-kiosk-layout", /^(fit|scroll)$/);
-  return { context, page, requests, errors };
+  return { context, page, requests, errors, staleReadStarted, releaseStaleRead };
 }
 
 async function reachControl(page, locator) {
@@ -273,6 +287,83 @@ test("assigned match uses the same shortened names and no duplicate board number
     await expect(page.locator(".assigned-view .player-tile").last().locator("h2")).toHaveText("Kristian Mellestad");
     expect(await page.locator(".assigned-view .match-tools").innerText()).not.toContain("Skive 1");
     await expect(page.locator(".kiosk-topbar .v2-top-actions .pill")).toContainText("Skive 1");
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+
+test("sum bust keeps next thrower stable when an earlier poll returns after save", async ({ browser }) => {
+  // A queued GET is purposely held until AFTER the bust POST commits.
+  // This reproduces A -> B -> A -> B flicker from an out-of-order network.
+  const { context, page, requests, errors, staleReadStarted, releaseStaleRead } =
+    await startMockKiosk(browser, { width: 768, height: 1024 }, {
+      playerARemaining: 32,
+      currentPlayerId: 101,
+      canonicalTurnAfterVisit: 102,
+      mockSuccessfulVisit: true,
+      holdPreSavePoll: true,
+    });
+  try {
+    await staleReadStarted;
+    const sumKeys = page.locator(".keypad");
+    await sumKeys.getByRole("button", { name: "6", exact: true }).click();
+    await sumKeys.getByRole("button", { name: "0", exact: true }).click();
+    await expect(page.locator(".scoring-head")).toContainText("Bust");
+    await sumKeys.getByRole("button", { name: "Lagre", exact: true }).click();
+    await expect(page.locator(".player-tile.active")).toContainText("Spiller B");
+    await expect(page.locator(".player-tile").first().locator(".remaining")).toHaveText("32");
+    await expect(page.locator('.match-view[aria-busy="true"]')).toHaveCount(0, { timeout: 10000 });
+
+    await page.evaluate(() => {
+      const match = document.querySelector(".match-view .versus");
+      const read = () => match.querySelector(".player-tile.active h2")?.textContent?.trim() || "none";
+      window.__bustTurnTrace = [read()];
+      window.__bustTurnObserver = new MutationObserver(() => {
+        const current = read();
+        if (window.__bustTurnTrace.at(-1) !== current) window.__bustTurnTrace.push(current);
+      });
+      window.__bustTurnObserver.observe(match, { childList: true, attributes: true, subtree: true });
+    });
+    releaseStaleRead();
+    await page.waitForTimeout(1900);
+    const turns = await page.evaluate(() => {
+      window.__bustTurnObserver.disconnect();
+      return window.__bustTurnTrace;
+    });
+    expect(turns, "a stale GET must not flip back to the player who busted").toEqual([turns[0]]);
+    await expect(page.locator(".player-tile.active")).toContainText("Spiller B");
+    expect(requests.filter(r => r.method === "POST" && r.path.endsWith("/visit"))).toHaveLength(1);
+    expect(errors).toEqual([]);
+  } finally {
+    releaseStaleRead();
+    await context.close();
+  }
+});
+
+test("per-dart bust uses first busting dart and ignores later darts optimistically", async ({ browser }) => {
+  // Server dart501.evaluatePerDart stops at the first bust: S20, T20, then S1
+  // from 32 should record 80 (not 81), keep 32 and advance to player B.
+  const { context, page, requests, errors } = await startMockKiosk(browser, { width: 600, height: 960 }, {
+    playerARemaining: 32,
+    mockSuccessfulVisit: true,
+    canonicalTurnAfterVisit: 102,
+  });
+  try {
+    await page.getByRole("button", { name: "Per pil" }).click();
+    const grid = page.locator(".number-grid-v2");
+    await grid.getByRole("button", { name: "20", exact: true }).click();
+    await page.locator(".multiplier-column").getByRole("button", { name: "T", exact: true }).click();
+    await grid.getByRole("button", { name: "20", exact: true }).click();
+    await expect(page.locator(".scoring-head")).toContainText("Bust");
+    await page.locator(".multiplier-column").getByRole("button", { name: "S", exact: true }).click();
+    await grid.getByRole("button", { name: "1", exact: true }).click();
+    await page.locator(".save-visit-button").click();
+    await expect(page.locator(".player-tile.active")).toContainText("Spiller B");
+    await expect(page.locator(".player-tile").first().locator(".remaining")).toHaveText("32");
+    const recent = page.locator(".editable-visits-v2 .visit-editable-v2").first();
+    await expect(recent).toContainText("80");
+    await expect(recent).toContainText("Bust");
+    expect(requests.filter(r => r.method === "POST" && r.path.endsWith("/visit"))).toHaveLength(1);
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });
