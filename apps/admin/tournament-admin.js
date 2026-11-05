@@ -1,4 +1,5 @@
 const API_ROOT = "../api/v1";
+const MIN_PLAYERS = 4;
 const host = document.getElementById("tournaments");
 
 if (host) {
@@ -401,19 +402,19 @@ if (host) {
     const sizes = checked.length ? Array.from({ length: recommendation }, (_, i) => Math.floor(checked.length / recommendation) + (i < checked.length % recommendation ? 1 : 0)).join(" + ") : "—";
 
     el.tcFormatBadge.textContent = checked.length ? `${checked.length} sjekket inn` : "Venter på innsjekk";
-    el.tcRecommendation.innerHTML = checked.length >= 2
+    el.tcRecommendation.innerHTML = checked.length >= MIN_PLAYERS
       ? `<div class="tc-recommendation-icon">✓</div><div><p class="eyebrow">Anbefalt</p><strong>${recommendation} ${recommendation === 1 ? "gruppe" : "grupper"} → sluttspill</strong><p class="muted">${checked.length} spillere gir ${sizes}. ELO-seedet trekning og Best of 3 brukes som standard.</p></div>`
-      : `<div class="tc-recommendation-icon">…</div><div><strong>Check inn minst to spillere først</strong><p class="muted">Formatet foreslås automatisk når vi vet hvem som faktisk møter.</p></div>`;
+      : `<div class="tc-recommendation-icon">…</div><div><strong>Sjekk inn minst fire spillere først</strong><p class="muted">Formatet foreslås automatisk når vi vet hvem som faktisk møter.</p></div>`;
 
-    el.tcNextTitle.textContent = registered.length ? `${registered.length} mangler innsjekk` : checked.length >= 2 ? "Oppmøtet ser klart ut" : "Check inn spillerne";
-    el.tcNextText.textContent = checked.length >= 2 ? `${checked.length} spillere er klare. Du kan gå videre og velge format når du vil.` : "Du trenger minst to innsjekkede spillere før turneringen kan startes.";
-    el.tcToFormat.disabled = locked || checked.length < 2;
+    el.tcNextTitle.textContent = registered.length ? `${registered.length} mangler innsjekk` : checked.length >= MIN_PLAYERS ? "Oppmøtet ser klart ut" : "Check inn spillerne";
+    el.tcNextText.textContent = checked.length >= MIN_PLAYERS ? `${checked.length} spillere er klare. Du kan gå videre og velge format når du vil.` : "Du trenger minst fire innsjekkede spillere før turneringen kan startes.";
+    el.tcToFormat.disabled = locked || checked.length < MIN_PLAYERS;
 
     el.tcStartWarning.innerHTML = started
       ? `<strong>Turneringen er i gang</strong><p class="muted">Deltakerfeltet er låst. ${noShows.length} påmeldte falt ut fordi de ikke var sjekket inn ved start.</p>`
       : `<strong>${checked.length} spillere blir med</strong><p class="muted">Ved start stenges påmeldingen. ${registered.length ? `${registered.length} påmeldte som ikke er sjekket inn blir markert som «ikke møtt».` : "Alle med bekreftet plass er sjekket inn."}</p>`;
     el.tcStart.textContent = started ? "Turneringen er startet" : completed ? "Turneringen er ferdig" : `Start turnering med ${checked.length} spillere`;
-    el.tcStart.disabled = locked || checked.length < 2;
+    el.tcStart.disabled = locked || checked.length < MIN_PLAYERS;
 
     el.tcGroups.innerHTML = state.groups.length
       ? state.groups.map((group) => `<article class="tc-group-card"><div class="subsection-head"><h3>${esc(group.name)}</h3><span class="pill">${group.players.length} spillere</span></div><ol>${group.players.map((p) => `<li><span>${esc(p.display_name)}</span><small>Seed ${p.seed_number ?? "—"} · ELO ${p.seed_rating !== null ? Number(p.seed_rating).toFixed(1) : "—"}</small></li>`).join("")}</ol></article>`).join("")
@@ -421,7 +422,7 @@ if (host) {
     el.tcDrawMeta.textContent = state.groups[0] ? `${state.groups[0].draw_mode} · seed ${state.groups[0].draw_seed}` : "Ikke trukket";
 
     el.tcNavCheckinMeta.textContent = locked ? `${checked.length} deltakere` : `${checked.length}/${Math.max(0, active.length - waiting.length)} klare`;
-    el.tcNavFormatMeta.textContent = started || completed ? "Låst" : checked.length >= 2 ? "Klar" : "Venter";
+    el.tcNavFormatMeta.textContent = started || completed ? "Låst" : checked.length >= MIN_PLAYERS ? "Klar" : "Venter";
     el.tcNavLiveMeta.textContent = started ? "Pågår" : completed ? "Ferdig" : "Ikke startet";
     el.tcNavAfterMeta.textContent = completed ? "Klar" : started ? "Senere" : "Ikke ennå";
 
@@ -481,7 +482,7 @@ if (host) {
   async function startTournament() {
     const id = Number(state.tournament?.id || 0);
     const checked = checkedInRegistrations().length;
-    if (!id || checked < 2) return;
+    if (!id || checked < MIN_PLAYERS) return;
     const groupCount = Number(el.tcGroupCount.value || 0);
     const groupBestOf = Number(el.tcBestOf.value || 0);
     const playoffBestOf = Number(el.tcPlayoffBestOf.value || 0);
