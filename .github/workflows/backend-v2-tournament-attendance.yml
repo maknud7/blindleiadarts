@@ -10,6 +10,12 @@ on:
       - 'apps/backend-v2/src/runtime/tournament-attendance-router.ts'
       - 'apps/backend-v2/src/server.ts'
       - 'apps/backend-v2/test/tournament-attendance*.test.mjs'
+      - 'apps/backend-v2/test/live-attendance-wall-ux.test.mjs'
+      - 'apps/backend-v2/test/player-journey-live-*.test.mjs'
+      - 'apps/backend-v2/src/mysql/public-live-read-repository.ts'
+      - 'apps/player/**'
+      - 'apps/live/**'
+      - 'apps/admin/tournament-*.js'
       - 'apps/backend-v2/e2e/tournament-attendance-lifecycle.mjs'
       - 'apps/backend-v2/e2e/tournament-attendance-admin-lifecycle.mjs'
       - 'apps/api/src/BackendV2TournamentProxyApplication.php'
@@ -38,8 +44,13 @@ jobs:
           set -Eeuo pipefail
           npm run backend-v2:typecheck
           npm run backend-v2:build
-      - name: Run attendance unit coverage
-        run: node --test apps/backend-v2/test/tournament-attendance*.test.mjs
+      - name: Run attendance / player / Live behavior coverage
+        run: |
+          node --test \
+            apps/backend-v2/test/tournament-attendance*.test.mjs \
+            apps/backend-v2/test/live-attendance-wall-ux.test.mjs \
+            apps/backend-v2/test/player-journey-live-behavior.test.mjs \
+            apps/backend-v2/test/player-journey-live-timing-contract.test.mjs
       - name: Verify PHP tournament frontdoor routing
         run: |
           php -l apps/api/src/BackendV2TournamentProxyApplication.php
