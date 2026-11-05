@@ -1,5 +1,5 @@
 (() => {
-  const RUNTIME_VERSION = "20261104-attendance-wall-01";
+  const RUNTIME_VERSION = "20261105-attendance-live-02";
   const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const match = window.location.pathname.match(/\/live\/(\d{4})\/?$/i);
   const liveCode = match?.[1] || "";
