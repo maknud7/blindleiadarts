@@ -30,7 +30,7 @@ jobs:
         run: npx playwright install --only-shell chromium
       - name: Execute real Chromium check-in wall tests with mocked local API
         run: npx playwright test --config=tests/player-attendance-browser/playwright.config.mjs
-      - name: Upload screenshot, traces and HTML report
+      - name: Upload passing/failing screenshots, traces and HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -38,5 +38,5 @@ jobs:
           path: |
             artifacts/player-attendance-browser-report/
             artifacts/player-attendance-browser-results/
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 7
