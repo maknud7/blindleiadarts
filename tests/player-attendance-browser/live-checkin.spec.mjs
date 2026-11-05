@@ -110,7 +110,13 @@ test("Check-in wall is readable on a phone, including a misconfigured code fallb
     viewport: window.innerWidth,
     document: document.documentElement.scrollWidth,
     code: document.getElementById("checkinCodeCard").getBoundingClientRect().width,
+    overflow: [...document.querySelectorAll("body *")].map((element) => {
+      const box = element.getBoundingClientRect();
+      return { tag: element.tagName, id: element.id, className: String(element.className).slice(0, 65), left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width) };
+    }).filter((row) => row.right > window.innerWidth + 1 || row.left < -1)
+      .sort((a, b) => b.right - a.right).slice(0, 12),
   }));
+  console.log("CHECKIN MOBILE OVERFLOW", JSON.stringify(size));
   expect(size.document).toBeLessThanOrEqual(size.viewport + 2);
   expect(size.code).toBeLessThan(size.viewport);
 });
