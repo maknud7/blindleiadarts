@@ -14,6 +14,7 @@ on:
       - 'apps/admin/index.html'
       - 'packages/ui-assets/unified-portal-shell.js'
       - 'apps/backend-v2/src/mysql/public-live-read-repository.ts'
+      - 'packages/ui-assets/blindleia-system.css'
       - 'tests/player-attendance-browser/**'
       - '.github/workflows/player-attendance-browser-qa.yml'
   workflow_dispatch:
