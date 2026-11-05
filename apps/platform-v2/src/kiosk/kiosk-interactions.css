@@ -106,6 +106,26 @@
   white-space: nowrap;
 }
 
+/* The inactive card reserves the same badge height without showing "Venter".
+ * Names never move vertically when the turn changes. */
+.match-view .turn-indicator-idle {
+  visibility: hidden;
+}
+
+/* Reduce displayed long names within the card rather than shrinking all text or
+ * letting a single long surname overflow into the score. Full names stay accessible. */
+.match-view .player-tile h2,
+.assigned-view .player-tile h2 {
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: 2;
+}
+
 .match-view .turn-indicator-dot {
   width: 8px;
   height: 8px;
