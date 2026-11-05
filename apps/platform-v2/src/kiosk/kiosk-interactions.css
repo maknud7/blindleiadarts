@@ -118,6 +118,13 @@
 .assigned-view .player-tile h2 {
   max-width: 100%;
   min-width: 0;
+  /* The fixed-height scoreboard must reserve two full text lines. Otherwise
+     flex shrinking crops the second line even after long names are shortened. */
+  flex: 0 0 auto;
+  min-height: 2.12em;
+  max-height: 2.12em;
+  font-size: clamp(15px, 3vw, 22px);
+  line-height: 1.06;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: normal;
