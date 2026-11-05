@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const URL = "http://127.0.0.1:4191/admin/";
+const ADMIN_PAGE = "http://127.0.0.1:4191/admin/";
 const fixture = `<!doctype html><html lang="no"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body data-portal-active="tournaments"><div id="tournaments"><div class="tc-workspace">
   <div class="tc-phase-nav"><button type="button" data-tc-view="checkin">Innsjekk</button><button type="button" data-tc-view="format" disabled>Format</button></div>
@@ -46,7 +46,7 @@ async function boot(page, { onFinish } = {}) {
     }
     return route.fulfill({ status: 404, body: "" });
   });
-  await page.goto(URL, { waitUntil: "domcontentloaded" });
+  await page.goto(ADMIN_PAGE, { waitUntil: "domcontentloaded" });
   await page.setContent(fixture);
   await page.evaluate(() => {
     localStorage.setItem("bd:token", "qa-admin");
