@@ -228,7 +228,7 @@
   height: auto;
   min-height: 335px;
   overflow: visible;
-  grid-template-rows: 48px minmax(230px, auto) 52px;
+  grid-template-rows: 48px minmax(230px, auto) 60px;
 }
 
 .kiosk-shell[data-kiosk-layout="scroll"] .dart-pick-area {

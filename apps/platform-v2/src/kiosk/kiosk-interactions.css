@@ -72,6 +72,96 @@
   font-size: 15px;
 }
 
+/* Tournament scoring: the active thrower is a distinct state, not a faint outline.
+ * All colors and badges are owned here rather than by another global CSS patch. */
+.match-view .player-tile {
+  border-color: #d7e2ec;
+  background: #f8fafc;
+}
+
+.match-view .player-tile.active {
+  border-color: #11834b;
+  border-left-width: 6px;
+  background: #e5f7ed;
+  box-shadow: inset 0 0 0 1px rgba(17, 131, 75, .2), 0 0 0 1px rgba(17, 131, 75, .12);
+}
+
+.match-view .turn-indicator {
+  min-height: 25px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: clamp(10px, 1.6vw, 12px);
+  font-weight: 900;
+  letter-spacing: .025em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.match-view .turn-indicator-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #9baabc;
+}
+
+.match-view .player-tile.active .turn-indicator {
+  border-color: #075e37;
+  background: #087647;
+  color: #fff;
+}
+
+.match-view .player-tile.active .turn-indicator-dot {
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .17);
+}
+
+.match-view .player-leg-score {
+  color: #52687e;
+  font-weight: 750;
+}
+
+.match-view .match-leg-context {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.match-view .match-best-of {
+  color: #144c76;
+  font-size: clamp(10px, 1.6vw, 12px);
+  font-weight: 950;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.match-view .match-current-leg {
+  color: #536b80;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.match-view .match-leg-score {
+  color: #0a385d;
+  font-size: clamp(13px, 2.1vw, 17px);
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
 .start-match-button {
   flex: 0 0 auto;
   width: 100%;
@@ -128,7 +218,7 @@
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: 48px minmax(0, 1fr) 46px;
+  grid-template-rows: 48px minmax(0, 1fr) 60px;
   gap: 5px;
   overflow: hidden;
 }
@@ -228,15 +318,28 @@
 .dart-entry-actions {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+  grid-template-columns: minmax(0, .62fr) minmax(0, 1.38fr);
   gap: 5px;
 }
 
 .dart-entry-actions .button {
-  min-height: 0;
-  height: 46px;
-  padding: 5px 8px;
-  font-size: 12px;
+  min-height: 60px;
+  height: 60px;
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.dart-entry-actions .save-visit-button {
+  border: 1px solid #07598a;
+  background: #086aa4;
+  color: #fff;
+  font-size: clamp(16px, 2.7vw, 20px);
+  font-weight: 950;
+  box-shadow: 0 3px 9px rgba(8, 68, 106, .22);
+}
+
+.dart-entry-actions .save-visit-button:hover:not(:disabled) {
+  background: #075987;
 }
 
 @media (orientation: portrait) and (max-width: 479px) {
@@ -251,7 +354,7 @@
   }
 
   .manual-dart-entry {
-    grid-template-rows: 42px minmax(0, 1fr) 42px;
+    grid-template-rows: 42px minmax(0, 1fr) 56px;
   }
 
   .dart-pick-area {
@@ -259,7 +362,11 @@
   }
 
   .dart-entry-actions .button {
-    height: 42px;
-    font-size: 10px;
+    min-height: 56px;
+    height: 56px;
+    font-size: 11px;
+  }
+  .dart-entry-actions .save-visit-button {
+    font-size: 16px;
   }
 }
