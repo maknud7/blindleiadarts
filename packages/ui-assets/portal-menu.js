@@ -54,7 +54,7 @@ if (document.body.dataset.bdSurface === "admin") {
     .catch((error) => console.warn("Admin shell unavailable", error));
 }
 
-import(new URL("./unified-portal-shell.js?v=20260921-desktop-inert-01", import.meta.url).href)
+import(new URL("./unified-portal-shell.js?v=20261105-ui-cleanup-01", import.meta.url).href)
   .catch((error) => console.warn("Unified portal shell unavailable", error));
 import(new URL("./password-reset.js", import.meta.url).href).catch((error) => console.warn("Password reset UI unavailable", error));
 
