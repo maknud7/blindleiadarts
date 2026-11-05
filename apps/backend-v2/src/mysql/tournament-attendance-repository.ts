@@ -35,7 +35,7 @@ export interface TournamentAttendanceResult {
 }
 
 export class MySqlTournamentAttendanceRepository {
-  private static readonly MIN_PLAYERS = 2;
+  private static readonly MIN_PLAYERS = 4;
   private readonly admin: MySqlTournamentAttendanceAdminRepository;
   private readonly wizard: MySqlTournamentWizardRepository;
 
@@ -255,7 +255,7 @@ export class MySqlTournamentAttendanceRepository {
       if (checkedIn < MySqlTournamentAttendanceRepository.MIN_PLAYERS) {
         throw new DomainValidationError(
           "not_enough_checked_in_players",
-          "Minst to spillere må være sjekket inn før du kan gå videre.",
+          "Minst fire spillere må være sjekket inn før du kan gå videre.",
         );
       }
 
