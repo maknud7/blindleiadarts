@@ -181,8 +181,6 @@ th,td{border-bottom-color:var(--line)}
   #tournaments .tc-code-box strong{font-size:34px!important;letter-spacing:.18em!important}
 
   /* Members become a flat directory instead of a pile of individual cards. */
-  #players .member-access-summary{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
-  #players .member-access-summary button{min-height:64px!important;align-items:flex-start!important;flex-direction:column!important;justify-content:center!important}
   .member-access-table-wrap{border:1px solid #e0e7ee!important;border-radius:14px!important;overflow:hidden!important;background:#fff!important}
   .member-access-table-wrap tr:not(.member-empty-row){margin:0!important;padding:12px 13px!important;border:0!important;border-bottom:1px solid #edf1f4!important;border-radius:0!important;box-shadow:none!important;background:#fff!important}
   .member-access-table-wrap tr:not(.member-empty-row):last-child{border-bottom:0!important}
