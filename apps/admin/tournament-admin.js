@@ -119,6 +119,7 @@ if (host) {
   ];
   const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
   const state = { tournaments: [], players: [], tournament: null, groups: [], plan: null, formatTouched: false, view: "checkin", filter: "pending", selectionVersion: 0 };
+  let attendancePollBusy = false;
 
   function token() { return localStorage.getItem("bd:token") || ""; }
   function clubId() { return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:selectedClubId") || 0); }
@@ -205,9 +206,15 @@ if (host) {
     if (!id) return;
     const tournaments = await api(`/clubs/${id}/registration-tournaments`, { timeoutMs: 10000 });
     state.tournaments = tournaments.items || [];
-    const selected = Number(el.tcTournament.value || 0);
+    // A leader coming from the player tournament detail must land in the same
+    // tournament, not silently default to the first item in the admin picker.
+    const requested = sessionStorage.getItem("bd:leader:selectedTournamentId");
+    const selected = Number(requested || el.tcTournament.value || 0);
     el.tcTournament.innerHTML = state.tournaments.map((t) => `<option value="${Number(t.id)}">${esc(t.name)} · ${esc(statusLabel(t.status))}</option>`).join("");
-    if (state.tournaments.some((t) => Number(t.id) === selected)) el.tcTournament.value = String(selected);
+    if (state.tournaments.some((t) => Number(t.id) === selected)) {
+      el.tcTournament.value = String(selected);
+      if (requested) sessionStorage.removeItem("bd:leader:selectedTournamentId");
+    }
 
     const selectedLoad = loadSelectedTournament();
     api(`/clubs/${id}/players`, { timeoutMs: 10000 }).then((players) => {
@@ -218,11 +225,13 @@ if (host) {
     await selectedLoad;
   }
 
-  async function loadSelectedTournament() {
+  async function loadSelectedTournament({ preserveContext = false } = {}) {
     const tournamentId = Number(el.tcTournament.value || 0);
     const selectionVersion = ++state.selectionVersion;
-    state.formatTouched = false;
-    state.filter = "pending";
+    if (!preserveContext) {
+      state.formatTouched = false;
+      state.filter = "pending";
+    }
     if (!tournamentId) {
       state.tournament = null;
       state.groups = [];
@@ -279,6 +288,46 @@ if (host) {
       render();
     });
   }
+
+  // Refresh read-only attendance while players are checking in independently.
+  // Keep the current filter, scroll, and focused controls; do not repopulate
+  // the full tournament room unless the canonical roster actually changed.
+  function attendanceRevision(tournament) {
+    const people = Array.isArray(tournament?.registrations) ? tournament.registrations : [];
+    return JSON.stringify([
+      String(tournament?.status || ""),
+      ...people.map((person) => `${String(person.player_id)}:${String(person.status)}:${String(person.checked_in_at || "")}`).sort(),
+    ]);
+  }
+
+  async function refreshAttendanceSilently() {
+    if (attendancePollBusy || document.hidden) return;
+    if (document.body.dataset.portalActive !== "tournaments" || state.view !== "checkin") return;
+    if (String(state.tournament?.status || "") !== "draft") return;
+    if (document.activeElement?.closest("#tcRegistrations,#tcCheckinSettings,#tcGuestDisclosure")) return;
+    const id = Number(state.tournament?.id || 0);
+    if (!id) return;
+    const version = state.selectionVersion;
+    attendancePollBusy = true;
+    try {
+      const data = await api(`/tournaments/${id}`, { timeoutMs: 9000 });
+      const next = data.tournament || null;
+      if (!next || version !== state.selectionVersion || id !== Number(el.tcTournament.value || 0)) return;
+      if (attendanceRevision(next) === attendanceRevision(state.tournament)) return;
+      const previousScroll = window.scrollY;
+      state.tournament = next;
+      render();
+      window.requestAnimationFrame(() => {
+        if (document.body.dataset.portalActive === "tournaments" && state.view === "checkin") window.scrollTo({ top: previousScroll, behavior: "instant" });
+      });
+    } catch (error) {
+      console.warn("Oppmøtet kunne ikke oppdateres akkurat nå; siste kjente liste beholdes", error);
+    } finally {
+      attendancePollBusy = false;
+    }
+  }
+
+  window.setInterval(() => refreshAttendanceSilently().catch(() => undefined), 8000);
 
   function renderPlayerOptions() {
     const used = new Set(activeRegistrations().map((r) => Number(r.player_id)));
@@ -395,13 +444,13 @@ if (host) {
     try {
       await api(`/tournaments/${tournamentId}/admin-check-in/${playerId}`, { method: "POST", auth: true, body: {} });
       show("Spilleren er sjekket inn.", "success");
-      await loadSelectedTournament();
+      await loadSelectedTournament({ preserveContext: true });
     } catch (error) {
       if (["checkin_not_open","checkin_closed"].includes(error.code) && window.confirm(`${error.message} Vil du sjekke inn spilleren manuelt likevel?`)) {
         try {
           await api(`/tournaments/${tournamentId}/admin-check-in/${playerId}`, { method: "POST", auth: true, body: { force: true } });
           show("Spilleren er sjekket inn manuelt.", "success");
-          await loadSelectedTournament();
+          await loadSelectedTournament({ preserveContext: true });
           return;
         } catch (forcedError) {
           show(forcedError.message, "error");
@@ -468,6 +517,26 @@ if (host) {
     const showing = host.classList.toggle("tc-show-overview");
     el.tcBrowse.textContent = showing ? "Skjul oversikten" : "Vis alle turneringer";
   });
+  // Keep the canonical check-in rows in sync with player self check-ins and
+  // the Live wall without resetting the active filter, scroll or leader view.
+  // Ignore events for other tournaments or an already started/closed phase.
+  window.addEventListener("bd:tournament-attendance-updated", (event) => {
+    const update = event.detail || {};
+    if (!state.tournament || String(state.tournament.id) !== String(update.tournamentId)) return;
+    if (String(state.tournament.status) !== "draft" || String(update.tournament?.status) !== "draft") return;
+    if (!Array.isArray(update.tournament?.registrations)) return;
+    const before = JSON.stringify(state.tournament.registrations || []);
+    const after = JSON.stringify(update.tournament.registrations);
+    if (before === after) return;
+    const list = el.tcRegistrations;
+    const scroll = list?.scrollTop || 0;
+    const focusId = document.activeElement?.closest?.(".tc-registration")?.dataset.playerId || "";
+    state.tournament = { ...state.tournament, ...update.tournament };
+    render();
+    if (list) list.scrollTop = scroll;
+    if (focusId) list?.querySelector(`.tc-registration[data-player-id="${focusId}"] button:not(:disabled)`)?.focus({ preventScroll: true });
+  });
+
   el.tcRefresh.addEventListener("click", () => loadBase().catch((e) => show(e.message, "error")));
   el.tcTournament.addEventListener("change", () => loadSelectedTournament().catch((e) => show(e.message, "error")));
   el.tcAddPlayer.addEventListener("click", async () => {
