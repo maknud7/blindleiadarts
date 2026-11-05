@@ -326,8 +326,8 @@ function renderBoards(boards = []) {
     return `<article class="board-card">
       <div class="board-top"><span class="board-number">Skive ${Number(board.board_number)}</span><span class="badge ${playing ? "live" : ""}">${playing ? "LIVE" : "Klar"}</span></div>
       <div class="players">
-        <div class="player-line ${aActive ? "active" : ""}"><strong title="${esc(match.player_a.display_name)}">${esc(match.player_a.display_name)}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_a.legs_won) : ""}</span></div>
-        <div class="player-line ${bActive ? "active" : ""}"><strong title="${esc(match.player_b.display_name)}">${esc(match.player_b.display_name)}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_b.legs_won) : ""}</span></div>
+        <div class="player-line ${aActive ? "active" : ""}"><strong title="${esc(match.player_a.display_name)}" aria-label="${esc(match.player_a.display_name)}">${esc(shortLiveName(match.player_a.display_name))}</strong><span class="remaining">${Number(match.player_a.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_a.legs_won) : ""}</span></div>
+        <div class="player-line ${bActive ? "active" : ""}"><strong title="${esc(match.player_b.display_name)}" aria-label="${esc(match.player_b.display_name)}">${esc(shortLiveName(match.player_b.display_name))}</strong><span class="remaining">${Number(match.player_b.remaining)}</span><span class="legs">${showLegScore ? Number(match.player_b.legs_won) : ""}</span></div>
       </div>
       <div class="round">${esc(match.round_label || match.bracket_label || "Kamp")}${match.leg_number ? ` · Leg ${Number(match.leg_number)}` : ""} · Best av ${Number(match.best_of_legs)}</div>
     </article>`;
@@ -336,14 +336,14 @@ function renderBoards(boards = []) {
 }
 
 function renderQueue(items = []) {
-  el.queue.innerHTML = items.length ? items.map((match) => `<div class="list-row"><div><strong>${esc(match.player_a_name)} – ${esc(match.player_b_name)}</strong><small>${esc(match.round_label || match.bracket_label || "Kamp")}</small></div><span class="badge">venter</span></div>`).join("") : `<div class="empty">Ingen kamper venter.</div>`;
+  el.queue.innerHTML = items.length ? items.map((match) => `<div class="list-row"><div><strong title="${esc(match.player_a_name)} – ${esc(match.player_b_name)}" aria-label="${esc(match.player_a_name)} mot ${esc(match.player_b_name)}">${esc(shortLiveName(match.player_a_name))} – ${esc(shortLiveName(match.player_b_name))}</strong><small>${esc(match.round_label || match.bracket_label || "Kamp")}</small></div><span class="badge">venter</span></div>`).join("") : `<div class="empty">Ingen kamper venter.</div>`;
 }
 function renderResults(items = []) {
-  el.results.innerHTML = items.length ? items.map((match) => `<div class="list-row"><div><strong>${esc(match.winner_name || "Ferdig")}</strong><small>${esc(match.player_a_name)} – ${esc(match.player_b_name)} · ${esc(match.round_label || match.bracket_label || "Kamp")}</small></div><span class="result-score">${Number(match.legs_a || 0)}–${Number(match.legs_b || 0)}</span></div>`).join("") : `<div class="empty">Ingen ferdige kamper ennå.</div>`;
+  el.results.innerHTML = items.length ? items.map((match) => `<div class="list-row"><div><strong title="${esc(match.winner_name || "Ferdig")}">${esc(shortLiveName(match.winner_name || "Ferdig"))}</strong><small title="${esc(match.player_a_name)} – ${esc(match.player_b_name)}">${esc(shortLiveName(match.player_a_name))} – ${esc(shortLiveName(match.player_b_name))} · ${esc(match.round_label || match.bracket_label || "Kamp")}</small></div><span class="result-score">${Number(match.legs_a || 0)}–${Number(match.legs_b || 0)}</span></div>`).join("") : `<div class="empty">Ingen ferdige kamper ennå.</div>`;
 }
 function renderTables(data = {}) {
   const groups = data.groups || [];
-  el.tables.innerHTML = groups.length ? groups.map((group) => `<article class="table-card"><h3>${esc(group.name)}</h3><div class="table-scroll"><table class="portal-table"><thead><tr><th>#</th><th>Spiller</th><th>K</th><th>V</th><th>U</th><th>T</th><th>Leg</th><th>P</th></tr></thead><tbody>${(group.rows || []).map((row) => `<tr><td>${Number(row.position)}</td><td><strong>${esc(row.display_name)}</strong></td><td>${Number(row.played)}</td><td>${Number(row.wins)}</td><td>${Number(row.draws)}</td><td>${Number(row.losses)}</td><td>${Number(row.leg_diff) >= 0 ? "+" : ""}${Number(row.leg_diff)}</td><td><strong>${Number(row.points)}</strong></td></tr>`).join("")}</tbody></table></div></article>`).join("") : `<div class="empty">Tabellen kommer når kampene er i gang.</div>`;
+  el.tables.innerHTML = groups.length ? groups.map((group) => `<article class="table-card"><h3>${esc(group.name)}</h3><div class="table-scroll"><table class="portal-table"><thead><tr><th>#</th><th>Spiller</th><th>K</th><th>V</th><th>U</th><th>T</th><th>Leg</th><th>P</th></tr></thead><tbody>${(group.rows || []).map((row) => `<tr><td>${Number(row.position)}</td><td><strong title="${esc(row.display_name)}" aria-label="${esc(row.display_name)}">${esc(shortLiveName(row.display_name))}</strong></td><td>${Number(row.played)}</td><td>${Number(row.wins)}</td><td>${Number(row.draws)}</td><td>${Number(row.losses)}</td><td>${Number(row.leg_diff) >= 0 ? "+" : ""}${Number(row.leg_diff)}</td><td><strong>${Number(row.points)}</strong></td></tr>`).join("")}</tbody></table></div></article>`).join("") : `<div class="empty">Tabellen kommer når kampene er i gang.</div>`;
 }
 function playoffStatus(node) {
   const status = String(node.status || "");
@@ -362,13 +362,13 @@ function renderPlayoff(data) {
   el.playoffSection?.classList.remove("hidden");
   el.playoffChampion.textContent = data.playoff.champion_name ? `🏆 ${data.playoff.champion_name}` : `${Number(data.entries?.length || 0)} kvalifiserte`;
   el.playoff.innerHTML = (data.rounds || []).map((round) => `<section class="live-bracket-round"><h3>${esc(round.label)}</h3><div class="live-bracket-matches">${(round.nodes || []).map((node) => `<article class="live-bracket-match">
-    <div class="live-bracket-player ${Number(node.winner_player_id) === Number(node.player_a_id) ? "winner" : ""}">${node.player_a_name ? esc(node.player_a_name) : "Venter …"}</div>
-    <div class="live-bracket-player ${Number(node.winner_player_id) === Number(node.player_b_id) ? "winner" : ""}">${node.player_b_name ? esc(node.player_b_name) : "Venter …"}</div>
+    <div class="live-bracket-player ${Number(node.winner_player_id) === Number(node.player_a_id) ? "winner" : ""}">${node.player_a_name ? esc(shortLiveName(node.player_a_name)) : "Venter …"}</div>
+    <div class="live-bracket-player ${Number(node.winner_player_id) === Number(node.player_b_id) ? "winner" : ""}">${node.player_b_name ? esc(shortLiveName(node.player_b_name)) : "Venter …"}</div>
     <small>${esc(playoffStatus(node))}</small>
   </article>`).join("")}</div></section>`).join("");
 }
 function renderElo(rows = []) {
-  el.elo.innerHTML = rows.length ? rows.map((row) => `<div class="list-row"><span class="rank">#${Number(row.position)}</span><div><strong>${esc(row.display_name)}</strong><small>${Number(row.elo_matches_played || 0)} ELO-kamper</small></div><span class="rating">${Number(row.elo_rating || 1000).toFixed(1)}</span></div>`).join("") : `<div class="empty">Ingen ELO-data.</div>`;
+  el.elo.innerHTML = rows.length ? rows.map((row) => `<div class="list-row"><span class="rank">#${Number(row.position)}</span><div><strong title="${esc(row.display_name)}" aria-label="${esc(row.display_name)}">${esc(shortLiveName(row.display_name))}</strong><small>${Number(row.elo_matches_played || 0)} ELO-kamper</small></div><span class="rating">${Number(row.elo_rating || 1000).toFixed(1)}</span></div>`).join("") : `<div class="empty">Ingen ELO-data.</div>`;
 }
 function renderHighlights(highlights = {}) {
   const items = [
