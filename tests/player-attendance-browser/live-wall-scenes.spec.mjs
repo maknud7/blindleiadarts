@@ -142,6 +142,23 @@ test("1920x1080 TV automatically shows all original data on one page with readab
     });
   });
   expect(withinViewport.filter(item=>!item.visible),JSON.stringify(withinViewport)).toEqual([]);
+  const panelGeometry=await page.evaluate(()=>{
+    const ids=["boards","queue","results","tables","elo","highlights"];
+    const rectangles=ids.map(id=>{
+      const rect=document.getElementById(id).getBoundingClientRect();
+      return {id,left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height};
+    });
+    const overlaps=[];
+    for(let i=0;i<rectangles.length;i++) for(let j=i+1;j<rectangles.length;j++){
+      const a=rectangles[i],b=rectangles[j];
+      const dx=Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left));
+      const dy=Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
+      if(dx*dy>64) overlaps.push(`${a.id}/${b.id}: ${Math.round(dx*dy)}px²`);
+    }
+    return {rectangles,overlaps};
+  });
+  expect(panelGeometry.overlaps,JSON.stringify(panelGeometry.rectangles)).toEqual([]);
+  expect(panelGeometry.rectangles.every(item=>item.width>140&&item.height>145),JSON.stringify(panelGeometry.rectangles)).toBe(true);
   await page.screenshot({path:testInfo.outputPath("all-1920x1080.png"),animations:"disabled",fullPage:true});
   expect(errors).toEqual([]);
 });
