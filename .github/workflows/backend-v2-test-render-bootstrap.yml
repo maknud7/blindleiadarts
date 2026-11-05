@@ -4,7 +4,13 @@ on:
   workflow_dispatch:
   push:
     branches: [develop]
+    # TEST backend must match canonical develop source. Frontend SFTP releases
+    # alone cannot deploy changes to scoring or next-match on Render.
     paths:
+      - 'apps/backend-v2/src/**'
+      - 'apps/backend-v2/Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/backend-v2-test-render-bootstrap.yml'
 
 permissions:
