@@ -45,7 +45,9 @@ jobs:
           live_html="$(curl -fsS "$base/live/?cb=$RANDOM")"
           grep -Fq 'live-v2.css' <<<"$live_html"
           grep -Fq 'route-bootstrap.js' <<<"$live_html"
-          grep -Fq 'venue-wall-v10.css' <<<"$live_html"
+          grep -Fq 'venue-wall-current.css' <<<"$live_html"
+          live_wall_css="$(curl -fsS "$base/live/venue-wall-current.css?cb=$RANDOM")"
+          grep -Fq 'Former venue-wall-v10.css' <<<"$live_wall_css"
           grep -Fq 'venue-playoff-v7.css' <<<"$live_html"
 
           bootstrap_js="$(curl -fsS "$base/live/route-bootstrap.js?cb=$RANDOM")"
