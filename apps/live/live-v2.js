@@ -8,10 +8,12 @@
     tableGroups: [],
     tablePage: 0,
     tableTimer: null,
+    tableMarkup: null,
     eloTournamentId: 0,
     eloRows: [],
     eloPage: 0,
     eloTimer: null,
+    eloMarkup: null,
   };
 
   function fmtV2(value, decimals = 2) {
@@ -116,13 +118,17 @@
     el.tables.dataset.visibleGroups = String(visibleGroups.length);
     el.tables.dataset.qualifiersPerGroup = String(qualifiers);
 
-    el.tables.innerHTML = visibleGroups.length ? visibleGroups.map((group) => {
+    const groupMarkup = visibleGroups.length ? visibleGroups.map((group) => {
       const rows = Array.isArray(group.rows) ? group.rows : [];
       return `<article class="table-card"><h3>${esc(group.name)}</h3><div class="table-scroll"><table class="portal-table live-table-v2"><thead><tr><th>#</th><th>Spiller</th><th>K</th><th>V</th><th>U</th><th>T</th><th>Leg</th><th class="three-da-col" title="3-dart average">3DA</th><th>P</th></tr></thead><tbody>${rows.map((row) => {
         const cutoff = qualifiers > 0 && qualifiers < rows.length && Number(row.position) === qualifiers;
         return `<tr${cutoff ? ' class="qualifier-cutoff"' : ""}><td>${Number(row.position)}</td><td><strong>${esc(row.display_name)}</strong></td><td>${Number(row.played)}</td><td>${Number(row.wins)}</td><td>${Number(row.draws)}</td><td>${Number(row.losses)}</td><td>${Number(row.leg_diff) >= 0 ? "+" : ""}${Number(row.leg_diff)}</td><td class="three-da-col"><strong>${fmtV2(row.three_dart_average)}</strong></td><td><strong>${Number(row.points)}</strong></td></tr>`;
       }).join("")}</tbody></table></div></article>`;
     }).join("") : `<div class="empty">Tabellen kommer når kampene er i gang.</div>`;
+    if (liveV2State.tableMarkup !== groupMarkup || !el.tables.firstElementChild) {
+      el.tables.innerHTML = groupMarkup;
+      liveV2State.tableMarkup = groupMarkup;
+    }
 
     const meta = groupPageMetaElement();
     if (!meta) return;
@@ -204,7 +210,11 @@
 
     el.elo.dataset.eloPage = String(liveV2State.eloPage + 1);
     el.elo.dataset.eloPages = String(totalPages);
-    el.elo.innerHTML = visibleRows.length ? visibleRows.map((row) => `<div class="list-row"><span class="elo-rank-cell"><span class="rank">#${Number(row.position)}</span>${eloRankMovementHtml(row)}</span><div><strong>${esc(row.display_name)}</strong><small>${Number(row.elo_matches_played || 0)} ELO-kamper</small></div><span class="elo-live-score"><span class="rating">${Number(row.elo_rating || 1000).toFixed(1)}</span>${eloDeltaHtml(row)}</span></div>`).join("") : `<div class="empty">Ingen ELO-data.</div>`;
+    const eloMarkup = visibleRows.length ? visibleRows.map((row) => `<div class="list-row"><span class="elo-rank-cell"><span class="rank">#${Number(row.position)}</span>${eloRankMovementHtml(row)}</span><div><strong>${esc(row.display_name)}</strong><small>${Number(row.elo_matches_played || 0)} ELO-kamper</small></div><span class="elo-live-score"><span class="rating">${Number(row.elo_rating || 1000).toFixed(1)}</span>${eloDeltaHtml(row)}</span></div>`).join("") : `<div class="empty">Ingen ELO-data.</div>`;
+    if (liveV2State.eloMarkup !== eloMarkup || !el.elo.firstElementChild) {
+      el.elo.innerHTML = eloMarkup;
+      liveV2State.eloMarkup = eloMarkup;
+    }
 
     const meta = eloPageMetaElement();
     if (!meta) return;

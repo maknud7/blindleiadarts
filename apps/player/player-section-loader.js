@@ -1,4 +1,4 @@
-const VERSION = "20260929-ui-system-01";
+const VERSION = "20261104-player-journey-01";
 const loaded = new Map();
 const deferredLoaded = new Set();
 
