@@ -45,7 +45,7 @@ ensureFavicon();
 ensureStylesheet("./portal-brand.css?v=20260826-1205");
 ensureStylesheet("./password-reset.css");
 ensureStylesheet("./mobile-portal.css?v=20260826-1205");
-ensureStylesheet("./unified-portal-shell.css?v=20260921-desktop-inert-01");
+ensureStylesheet("./unified-portal-shell.css?v=20261105-ui-cleanup-01");
 ensureStylesheet("./mobile-app-nav.css?v=20260921-admin-interaction-01");
 
 if (document.body.dataset.bdSurface === "admin") {
