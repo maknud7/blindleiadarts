@@ -1,4 +1,22 @@
 const loaded = new Map();
+const loadedModules = new Map();
+const failedModuleAttempts = new Map();
+
+function importOnce(path) {
+  if (!loadedModules.has(path)) {
+    const attempt = failedModuleAttempts.get(path) || 0;
+    const url = new URL(path, import.meta.url);
+    // A browser may cache a failed dynamic import by URL. Retry only that
+    // module at a new URL, leaving successfully loaded modules untouched.
+    if (attempt) url.searchParams.set("moduleRetry", String(attempt));
+    loadedModules.set(path, import(url.href).catch((error) => {
+      loadedModules.delete(path);
+      failedModuleAttempts.set(path, attempt + 1);
+      throw error;
+    }));
+  }
+  return loadedModules.get(path);
+}
 // Opening Utstyr repeatedly must never flood Scolia reads or block navigation.
 const equipmentRefreshedForClub = new Set();
 
@@ -7,7 +25,7 @@ const sectionModules = Object.freeze({
     "./club-live-admin.js?v=20260920-admin-perf-01",
   ],
   players: [
-    "./member-onboarding-admin.js?v=20260920-admin-perf-01",
+    "./member-onboarding-admin.js?v=20261105-ui-cleanup-01",
   ],
   playerbase: [
     "./player-identity-admin.js?v=20260920-admin-perf-01",
@@ -53,7 +71,7 @@ async function loadSection(target) {
   if (!paths?.length) return;
 
   if (!loaded.has(key)) {
-    loaded.set(key, Promise.all(paths.map((path) => import(new URL(path, import.meta.url).href))).catch((error) => {
+    loaded.set(key, Promise.all(paths.map(importOnce)).catch((error) => {
       loaded.delete(key);
       console.warn(`Adminseksjonen ${key} kunne ikke lastes`, error);
       throw error;
@@ -76,7 +94,23 @@ async function loadSection(target) {
       }
     }
   } catch {
-    // Section modules own their visible error handling after a retry.
+    // A failed dynamic import is not handled by the module, because it never
+    // executed. Give members a visible retry instead of an endless "Laster".
+    if (key === "players") {
+      const status = document.getElementById("memberRegistryStatus");
+      if (status && !document.querySelector("#players .member-access-block")) {
+        status.classList.remove("hidden");
+        status.removeAttribute("hidden");
+        const message = document.createElement("span");
+        message.textContent = "Medlemsregisteret kunne ikke åpnes. ";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "button secondary";
+        retry.textContent = "Prøv igjen";
+        retry.addEventListener("click", () => loadSection("players"));
+        status.replaceChildren(message, retry);
+      }
+    }
   }
 }
 

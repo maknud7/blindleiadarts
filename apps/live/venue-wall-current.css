@@ -1,0 +1,2352 @@
+/* Blindleia Live: consolidated wall presentation. Former stylesheets are kept in their original cascade order.
+ * This is the only maintained wall style entry; see UI ownership contract. */
+
+/* ===== Former venue-wall-v5.css ===== */
+/*
+ * Venue Wall v5
+ * Shared wall-display geometry for every Live profile.
+ * Theme/profile files may recolour this layout, but must not redefine its grid.
+ * Goal: readable at 2-5 metres, less dead space, more room for standings/context.
+ */
+@media (min-width: 1180px) and (min-height: 650px) {
+  body.phase-live .live-shell {
+    padding: 8px 10px;
+  }
+
+  body.phase-live .active-experience {
+    grid-template-rows: 78px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  body.phase-live .hero {
+    min-height: 0;
+    height: 78px;
+    padding: 8px 14px;
+  }
+
+  body.phase-live .live-logo {
+    width: 50px;
+    height: 50px;
+  }
+
+  body.phase-live .hero .eyebrow {
+    font-size: .7rem;
+  }
+
+  body.phase-live .hero h1 {
+    font-size: clamp(2.1rem, 2.65vw, 3.35rem);
+    line-height: .93;
+  }
+
+  body.phase-live .hero .muted {
+    margin-top: 4px;
+    font-size: .82rem;
+  }
+
+  body.phase-live .live-status {
+    padding: 7px 12px;
+    font-size: .82rem;
+  }
+
+  /* KPI + compact Live area + dominant standings area. */
+  body.phase-live #liveDashboard {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(350px, .76fr);
+    grid-template-rows: 58px minmax(220px, .78fr) minmax(0, 1.32fr);
+    gap: 7px;
+  }
+
+  body.phase-live #progressCards {
+    gap: 7px;
+  }
+
+  body.phase-live .stat-card {
+    padding: 7px 13px;
+  }
+
+  body.phase-live .stat-card small {
+    font-size: .68rem;
+    line-height: 1;
+  }
+
+  body.phase-live .stat-card strong {
+    margin-top: 3px;
+    font-size: clamp(1.45rem, 1.7vw, 2rem);
+    line-height: .95;
+  }
+
+  body.phase-live #liveDashboard > .priority-section {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) {
+    grid-column: 3;
+    grid-row: 2;
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, .8fr);
+    gap: 7px;
+  }
+
+  body.phase-live #liveDashboard > .section:has(#tables) {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) {
+    grid-column: 3;
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, .88fr) minmax(0, 1.12fr);
+    gap: 7px;
+  }
+
+  /* Highlights first, rotating ELO below. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#highlights) {
+    grid-row: 1;
+    display: grid;
+    min-height: 0;
+    height: 100%;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) {
+    grid-row: 2;
+    display: grid !important;
+    min-height: 0;
+    height: 100%;
+    padding: 8px 10px;
+    grid-template-rows: 28px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  body.phase-live .section {
+    padding: 9px 10px;
+  }
+
+  body.phase-live .section-head {
+    min-height: 28px;
+    margin-bottom: 5px;
+  }
+
+  body.phase-live .section-head .eyebrow {
+    font-size: .62rem;
+  }
+
+  body.phase-live .section-head h2,
+  body.phase-live .section h2 {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  body.phase-live #updatedAt {
+    font-size: .65rem;
+  }
+
+  /* Live boards are intentionally compact. Idle boards disappear whenever
+     at least one board is actually active, so standings get visual priority. */
+  body.phase-live .boards-grid,
+  body.phase-live .boards-grid:has(> .board-card:only-child) {
+    height: calc(100% - 33px);
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  body.phase-live .boards-grid:has(.board-card:not(.idle)) .board-card.idle {
+    display: none;
+  }
+
+  body.phase-live .boards-grid:has(.board-card:not(.idle)):not(:has(.board-card:not(.idle):nth-child(3))) {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  body.phase-live .boards-grid:not(:has(.board-card:not(.idle))) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  body.phase-live .board-card,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-card {
+    padding: 8px 10px;
+    grid-template-rows: 25px minmax(0, 1fr) 19px;
+  }
+
+  body.phase-live .board-number,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-number {
+    font-size: .88rem;
+  }
+
+  body.phase-live .board-card .badge {
+    font-size: .58rem;
+    padding: 3px 6px;
+  }
+
+  body.phase-live .board-card .player-line,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line {
+    grid-template-columns: minmax(0, 1fr) 90px 30px;
+    gap: 8px;
+    padding: 3px 0;
+  }
+
+  body.phase-live .board-card .player-line strong,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line strong {
+    font-size: clamp(.94rem, 1.05vw, 1.28rem);
+  }
+
+  body.phase-live .board-card .remaining,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .remaining {
+    font-size: clamp(2rem, 2.45vw, 3rem);
+    line-height: .84;
+  }
+
+  body.phase-live .board-card .legs,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .legs {
+    height: 30px;
+    font-size: 1rem;
+  }
+
+  body.phase-live .board-card .player-line.active::after {
+    right: 128px;
+    font-size: .52rem;
+  }
+
+  body.phase-live .board-card .round,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .round {
+    font-size: .63rem;
+  }
+
+  body.phase-live .board-card.idle {
+    grid-template-rows: 25px 1fr;
+  }
+
+  body.phase-live .board-card.idle .empty,
+  body.phase-live .board-card.idle .muted {
+    font-size: .82rem;
+  }
+
+  /* Upcoming/recent: large enough to scan from across the room. */
+  body.phase-live #liveDashboard > .two-column:has(#queue) .panel {
+    padding: 8px 10px;
+    grid-template-rows: 27px minmax(0, 1fr);
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head h2 {
+    font-size: .94rem;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row {
+    padding: 6px 2px;
+    gap: 8px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong {
+    font-size: clamp(.78rem, .78vw, .94rem);
+    line-height: 1.12;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small {
+    margin-top: 3px;
+    font-size: .62rem;
+    line-height: 1.12;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .badge,
+  body.phase-live #liveDashboard > .two-column:has(#queue) .result-score {
+    font-size: .68rem;
+  }
+
+  /* Standings are the visual anchor of the lower half. */
+  body.phase-live .tables-grid,
+  body.phase-live .tables-grid:has(> .table-card:only-child) {
+    gap: 7px;
+  }
+
+  body.phase-live .table-card {
+    grid-template-rows: 32px minmax(0, 1fr);
+  }
+
+  body.phase-live .table-card h3 {
+    padding: 8px 11px 6px;
+    font-size: .88rem;
+  }
+
+  body.phase-live .portal-table {
+    font-size: clamp(.7rem, .72vw, .92rem);
+    line-height: 1.05;
+  }
+
+  body.phase-live .portal-table thead {
+    height: 25px;
+  }
+
+  body.phase-live .portal-table tbody {
+    height: calc(100% - 25px);
+  }
+
+  body.phase-live .portal-table th,
+  body.phase-live .portal-table td {
+    padding: 2px 5px;
+  }
+
+  body.phase-live .portal-table th {
+    font-size: .56rem;
+  }
+
+  body.phase-live .portal-table th:nth-child(1),
+  body.phase-live .portal-table td:nth-child(1) {
+    width: 30px;
+  }
+
+  body.phase-live .portal-table th:nth-child(n+3),
+  body.phase-live .portal-table td:nth-child(n+3) {
+    width: 34px;
+  }
+
+  body.phase-live .portal-table th.three-da-col,
+  body.phase-live .portal-table td.three-da-col {
+    width: 52px;
+  }
+
+  body.phase-live .portal-table td:nth-child(2) strong {
+    font-size: 1em;
+    font-weight: 900;
+  }
+
+  /* Highlights: three categories side by side, not three tiny vertical strips. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) {
+    padding: 8px 9px;
+    grid-template-rows: 27px minmax(0, 1fr);
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) .section-head h2 {
+    font-size: .94rem;
+  }
+
+  body.phase-live #highlights.highlight-grid {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    gap: 6px;
+  }
+
+  body.phase-live .live-top3-block {
+    padding: 6px 7px;
+    gap: 3px;
+  }
+
+  body.phase-live .live-top3-block h3 {
+    font-size: .62rem;
+  }
+
+  body.phase-live .live-top3-row {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    gap: 4px;
+    font-size: .58rem;
+  }
+
+  body.phase-live .live-top3-row strong {
+    font-size: .6rem;
+  }
+
+  body.phase-live .live-top3-row em {
+    font-size: .72rem;
+  }
+
+  /* ELO keeps the existing 20 second pagination, but uses readable rows. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head {
+    min-height: 24px;
+    margin: 0 0 3px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head h2 {
+    font-size: .94rem;
+  }
+
+  body.phase-live .elo-page-meta {
+    font-size: .6rem;
+  }
+
+  body.phase-live #elo {
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+  }
+
+  body.phase-live #elo .list-row {
+    grid-template-columns: 31px minmax(0, 1fr) auto;
+    gap: 7px;
+    padding: 4px 2px;
+  }
+
+  body.phase-live #elo .rank {
+    font-size: .7rem;
+  }
+
+  body.phase-live #elo .list-row strong {
+    font-size: clamp(.72rem, .72vw, .86rem);
+  }
+
+  body.phase-live #elo .rating {
+    font-size: clamp(.76rem, .76vw, .9rem);
+  }
+
+  /* Playoff still gets the lower-left priority area. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+}
+
+/* 1366x768 and similarly short wall displays: keep the same hierarchy,
+   trim spacing before shrinking important text. */
+@media (min-width: 1180px) and (max-height: 800px) {
+  body.phase-live .active-experience {
+    grid-template-rows: 66px minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  body.phase-live .hero {
+    height: 66px;
+    padding: 5px 10px;
+  }
+
+  body.phase-live .live-logo {
+    width: 42px;
+    height: 42px;
+  }
+
+  body.phase-live .hero h1 {
+    font-size: 1.9rem;
+  }
+
+  body.phase-live .hero .muted {
+    font-size: .72rem;
+  }
+
+  body.phase-live #liveDashboard {
+    grid-template-rows: 48px minmax(190px, .72fr) minmax(0, 1.38fr);
+    gap: 5px;
+  }
+
+  body.phase-live .stat-card {
+    padding: 5px 9px;
+  }
+
+  body.phase-live .stat-card small {
+    font-size: .61rem;
+  }
+
+  body.phase-live .stat-card strong {
+    font-size: 1.25rem;
+  }
+
+  body.phase-live .section {
+    padding: 6px 7px;
+  }
+
+  body.phase-live .section-head {
+    min-height: 24px;
+    margin-bottom: 3px;
+  }
+
+  body.phase-live .section-head h2,
+  body.phase-live .section h2 {
+    font-size: .92rem;
+  }
+
+  body.phase-live .boards-grid,
+  body.phase-live .boards-grid:has(> .board-card:only-child) {
+    height: calc(100% - 27px);
+    gap: 5px;
+  }
+
+  body.phase-live .board-card,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-card {
+    padding: 5px 7px;
+    grid-template-rows: 20px minmax(0, 1fr) 16px;
+  }
+
+  body.phase-live .board-card .player-line,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line {
+    grid-template-columns: minmax(0, 1fr) 70px 24px;
+    gap: 5px;
+  }
+
+  body.phase-live .board-card .player-line strong,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line strong {
+    font-size: .84rem;
+  }
+
+  body.phase-live .board-card .remaining,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .remaining {
+    font-size: 1.9rem;
+  }
+
+  body.phase-live .board-card .player-line.active::after {
+    right: 98px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row {
+    padding: 4px 1px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong {
+    font-size: .72rem;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small {
+    font-size: .57rem;
+  }
+
+  body.phase-live .table-card {
+    grid-template-rows: 26px minmax(0, 1fr);
+  }
+
+  body.phase-live .table-card h3 {
+    padding: 6px 9px 5px;
+    font-size: .74rem;
+  }
+
+  body.phase-live .portal-table {
+    font-size: .66rem;
+  }
+
+  body.phase-live .portal-table th {
+    font-size: .49rem;
+  }
+
+  body.phase-live .live-top3-block {
+    padding: 4px 5px;
+  }
+
+  body.phase-live .live-top3-block h3 {
+    font-size: .54rem;
+  }
+
+  body.phase-live .live-top3-row strong {
+    font-size: .54rem;
+  }
+
+  body.phase-live #elo .list-row strong {
+    font-size: .68rem;
+  }
+
+  body.phase-live #elo .rating {
+    font-size: .72rem;
+  }
+}
+
+/* ===== Former venue-wall-v6.css ===== */
+/*
+ * Venue Wall v6
+ * One shared geometry, two themes:
+ * - blindleia: bright club profile
+ * - broadcast-dark: high-contrast dark mode
+ *
+ * This file is intentionally loaded last and owns the final wall-display
+ * presentation. Profile selectors only set visual tokens; layout stays shared.
+ */
+
+body.phase-live {
+  --wall-bg:#eef4fa;
+  --wall-bg-accent:#dfeaf5;
+  --wall-surface:#ffffff;
+  --wall-surface-2:#f5f8fb;
+  --wall-surface-3:#eaf1f8;
+  --wall-text:#071b31;
+  --wall-text-strong:#031225;
+  --wall-muted:#587087;
+  --wall-line:#cad8e5;
+  --wall-line-soft:#e2eaf1;
+  --wall-blue:#0a4da0;
+  --wall-blue-2:#08366f;
+  --wall-blue-soft:#dfeeff;
+  --wall-accent:#f0b51d;
+  --wall-green:#12944e;
+  --wall-green-soft:#def6e7;
+  --wall-shadow:0 5px 16px rgba(8,42,79,.10);
+  --wall-rank-one:#fff6d6;
+  --wall-rank-two:#edf5ff;
+  color-scheme:light;
+  background:linear-gradient(135deg,var(--wall-bg) 0%,var(--wall-bg-accent) 100%);
+  color:var(--wall-text);
+}
+
+body[data-live-profile="broadcast-dark"].phase-live {
+  --wall-bg:#020812;
+  --wall-bg-accent:#07172a;
+  --wall-surface:#071523;
+  --wall-surface-2:#0a1c2f;
+  --wall-surface-3:#0d2742;
+  --wall-text:#f5f9ff;
+  --wall-text-strong:#ffffff;
+  --wall-muted:#a9bfd3;
+  --wall-line:#244660;
+  --wall-line-soft:#17334a;
+  --wall-blue:#1670d2;
+  --wall-blue-2:#0a4b97;
+  --wall-blue-soft:#102f50;
+  --wall-accent:#f3be2f;
+  --wall-green:#38d978;
+  --wall-green-soft:#0d3a26;
+  --wall-shadow:0 8px 22px rgba(0,0,0,.34);
+  --wall-rank-one:#142e45;
+  --wall-rank-two:#0d243a;
+  color-scheme:dark;
+  background:radial-gradient(circle at 16% 0%,#0c2748 0%,var(--wall-bg) 43%,#01050b 100%);
+}
+
+@media (min-width:1180px) and (min-height:650px) {
+  /* Overall broadcast shell */
+  body.phase-live .live-shell {
+    padding:8px 10px;
+    background:transparent;
+  }
+
+  body.phase-live .active-experience {
+    grid-template-rows:82px minmax(0,1fr);
+    gap:7px;
+  }
+
+  body.phase-live .hero {
+    height:82px;
+    min-height:0;
+    padding:8px 14px;
+    border:1px solid color-mix(in srgb,var(--wall-blue) 66%,var(--wall-line));
+    border-radius:13px;
+    background:linear-gradient(108deg,var(--wall-blue) 0%,var(--wall-blue-2) 58%,#06294f 100%);
+    box-shadow:var(--wall-shadow);
+  }
+
+  body.phase-live .live-logo {
+    width:52px;
+    height:52px;
+    padding:3px;
+    border-radius:11px;
+    background:#fff;
+  }
+
+  body.phase-live .hero .eyebrow,
+  body.phase-live .hero h1,
+  body.phase-live .hero .muted {
+    color:#fff !important;
+  }
+
+  body.phase-live .hero .eyebrow {
+    font-size:.78rem;
+    letter-spacing:.065em;
+    opacity:.92;
+  }
+
+  body.phase-live .hero h1 {
+    margin-top:0;
+    font-size:clamp(2.35rem,2.9vw,3.7rem);
+    line-height:.9;
+    font-weight:950;
+    letter-spacing:-.03em;
+  }
+
+  body.phase-live .hero .muted {
+    margin-top:5px;
+    font-size:.88rem;
+    font-weight:700;
+    opacity:.9;
+  }
+
+  body.phase-live .live-status {
+    padding:8px 13px;
+    border:1px solid rgba(255,255,255,.26);
+    border-radius:999px;
+    background:rgba(1,14,29,.44);
+    color:#fff;
+    font-size:.9rem;
+    font-weight:900;
+  }
+
+  body.phase-live .pulse {
+    background:var(--wall-green);
+    box-shadow:0 0 0 5px color-mix(in srgb,var(--wall-green) 18%,transparent);
+  }
+
+  /* Shared composition: quick status / live / standings / context rail. */
+  body.phase-live #liveDashboard {
+    height:100%;
+    min-height:0;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(370px,.78fr);
+    grid-template-rows:60px minmax(245px,.8fr) minmax(0,1.2fr);
+    gap:7px;
+    overflow:hidden;
+    background:transparent;
+  }
+
+  body.phase-live #progressCards {
+    grid-column:1 / -1;
+    grid-row:1;
+    gap:7px;
+    margin:0;
+  }
+
+  body.phase-live .stat-card,
+  body.phase-live .section,
+  body.phase-live .panel,
+  body.phase-live .table-card,
+  body.phase-live .board-card {
+    border-color:var(--wall-line) !important;
+    background:var(--wall-surface) !important;
+    color:var(--wall-text) !important;
+    box-shadow:var(--wall-shadow) !important;
+  }
+
+  body.phase-live .stat-card {
+    position:relative;
+    min-width:0;
+    padding:8px 14px 7px 17px;
+    border:1px solid var(--wall-line);
+    border-radius:11px;
+    overflow:hidden;
+  }
+
+  body.phase-live .stat-card::before {
+    content:"";
+    position:absolute;
+    inset:0 auto 0 0;
+    width:4px;
+    background:var(--wall-blue);
+  }
+
+  body.phase-live .stat-card:last-child::before {
+    background:var(--wall-accent);
+  }
+
+  body.phase-live .stat-card small {
+    color:var(--wall-muted) !important;
+    font-size:.7rem;
+    line-height:1;
+    font-weight:950;
+    letter-spacing:.055em;
+    text-transform:uppercase;
+  }
+
+  body.phase-live .stat-card strong {
+    margin-top:3px;
+    color:var(--wall-text-strong) !important;
+    font-size:clamp(1.55rem,1.9vw,2.2rem);
+    line-height:.9;
+    font-weight:950;
+  }
+
+  body.phase-live #liveDashboard > .priority-section {
+    grid-column:1 / 3;
+    grid-row:2;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) {
+    grid-column:3;
+    grid-row:2;
+    display:grid;
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,1.08fr) minmax(0,.92fr);
+    gap:7px;
+  }
+
+  body.phase-live #liveDashboard > .section:has(#tables) {
+    grid-column:1 / 3;
+    grid-row:3;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) {
+    grid-column:3;
+    grid-row:3;
+    display:grid;
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,.82fr) minmax(0,1.18fr);
+    gap:7px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#highlights) {
+    grid-row:1;
+    display:grid;
+    min-height:0;
+    height:100%;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) {
+    grid-row:2;
+    display:grid !important;
+    min-height:0;
+    height:100%;
+    padding:8px 10px;
+    grid-template-rows:30px minmax(0,1fr);
+    overflow:hidden;
+  }
+
+  body.phase-live .section {
+    margin:0;
+    padding:9px 10px;
+    border:1px solid var(--wall-line);
+    border-radius:11px;
+    overflow:hidden;
+  }
+
+  body.phase-live .section-head {
+    min-height:30px;
+    margin-bottom:5px;
+    align-items:center;
+  }
+
+  body.phase-live .section-head .eyebrow {
+    color:var(--wall-muted) !important;
+    font-size:.63rem;
+    font-weight:900;
+    letter-spacing:.06em;
+  }
+
+  body.phase-live .section-head h2,
+  body.phase-live .section h2 {
+    position:relative;
+    padding-left:10px;
+    color:var(--wall-text-strong) !important;
+    font-size:1.08rem;
+    line-height:1;
+    font-weight:950;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+  }
+
+  body.phase-live .section-head h2::before,
+  body.phase-live .section > h2::before {
+    content:"";
+    position:absolute;
+    left:0;
+    top:0;
+    bottom:0;
+    width:4px;
+    border-radius:3px;
+    background:var(--wall-blue);
+  }
+
+  body.phase-live #updatedAt {
+    color:var(--wall-muted) !important;
+    font-size:.67rem;
+  }
+
+  /* Live cards: compact, punchy, score-first. */
+  body.phase-live .boards-grid,
+  body.phase-live .boards-grid:has(> .board-card:only-child) {
+    height:calc(100% - 35px);
+    min-height:0;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:minmax(0,1fr);
+    grid-auto-rows:minmax(0,1fr);
+    gap:8px;
+    align-items:stretch;
+  }
+
+  body.phase-live .boards-grid:has(.board-card:not(.idle)) .board-card.idle {
+    display:none;
+  }
+
+  body.phase-live .boards-grid:not(:has(.board-card:not(.idle))) {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+
+  body.phase-live .board-card,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-card {
+    min-height:0;
+    height:100%;
+    padding:9px 11px;
+    display:grid;
+    grid-template-rows:29px minmax(0,1fr) 22px;
+    border:1px solid var(--wall-line);
+    border-radius:10px;
+    overflow:hidden;
+    box-shadow:none !important;
+  }
+
+  body.phase-live .board-top {
+    min-height:0;
+    margin:0;
+  }
+
+  body.phase-live .board-number {
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    padding:0 8px;
+    border-radius:5px;
+    background:var(--wall-blue-soft);
+    color:var(--wall-blue) !important;
+    font-size:.88rem;
+    font-weight:950;
+    text-transform:uppercase;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live .board-number {
+    color:#b9dcff !important;
+  }
+
+  body.phase-live .board-card .badge.live {
+    color:#fff !important;
+    background:var(--wall-green) !important;
+    border-color:var(--wall-green) !important;
+  }
+
+  body.phase-live .board-card .players {
+    min-height:0;
+    display:grid;
+    grid-template-rows:repeat(2,minmax(0,1fr));
+  }
+
+  body.phase-live .board-card .player-line,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .player-line {
+    position:relative;
+    min-height:0;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 100px 34px;
+    gap:9px;
+    align-items:center;
+    padding:4px 2px;
+    border-top:1px solid var(--wall-line-soft) !important;
+  }
+
+  body.phase-live .board-card .player-line:first-child {
+    border-top:0 !important;
+  }
+
+  body.phase-live .board-card .player-line strong {
+    min-width:0;
+    color:var(--wall-text-strong) !important;
+    font-size:clamp(1.02rem,1.15vw,1.4rem);
+    line-height:1.02;
+    font-weight:900;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  body.phase-live .board-card .remaining {
+    color:var(--wall-text-strong) !important;
+    font-size:clamp(2.25rem,2.75vw,3.35rem);
+    line-height:.82;
+    font-weight:950;
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+
+  body.phase-live .board-card .legs {
+    display:grid;
+    place-items:center;
+    height:32px;
+    border-left:1px solid var(--wall-line) !important;
+    color:var(--wall-accent) !important;
+    font-size:1.02rem;
+    font-weight:950;
+  }
+
+  body.phase-live .board-card .player-line.active {
+    background:linear-gradient(90deg,color-mix(in srgb,var(--wall-blue) 15%,transparent),transparent) !important;
+  }
+
+  body.phase-live .board-card .player-line.active::after {
+    right:142px;
+    padding:2px 5px;
+    border:1px solid color-mix(in srgb,var(--wall-blue) 55%,var(--wall-line));
+    border-radius:4px;
+    color:var(--wall-blue) !important;
+    background:var(--wall-blue-soft) !important;
+    font-size:.52rem;
+    font-weight:950;
+  }
+
+  body.phase-live .board-card .round {
+    margin:0;
+    align-self:end;
+    color:var(--wall-muted) !important;
+    font-size:.68rem;
+    font-weight:700;
+  }
+
+  body.phase-live .board-card.idle {
+    grid-template-rows:29px 1fr;
+    background:var(--wall-surface-2) !important;
+    opacity:.92;
+  }
+
+  body.phase-live .board-card.idle .empty,
+  body.phase-live .board-card.idle .muted {
+    color:var(--wall-muted) !important;
+    font-size:.86rem;
+  }
+
+  /* Queue and recent results: strong scanability from across the room. */
+  body.phase-live #liveDashboard > .two-column:has(#queue) .panel {
+    min-height:0;
+    height:100%;
+    padding:8px 10px;
+    display:grid;
+    grid-template-rows:28px minmax(0,1fr);
+    border-radius:10px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head {
+    min-height:24px;
+    margin:0 0 3px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head .eyebrow {
+    display:none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .section-head h2 {
+    font-size:.98rem;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list {
+    min-height:0;
+    height:100%;
+    overflow:hidden;
+    display:grid;
+    grid-auto-rows:minmax(0,1fr);
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row {
+    min-height:0;
+    padding:5px 2px;
+    gap:8px;
+    border-top:1px solid var(--wall-line-soft) !important;
+    background:transparent !important;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row:first-child {
+    border-top:0 !important;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong {
+    color:var(--wall-text-strong) !important;
+    font-size:clamp(.83rem,.82vw,.99rem);
+    line-height:1.12;
+    font-weight:900;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small {
+    margin-top:3px;
+    color:var(--wall-muted) !important;
+    font-size:.66rem;
+    line-height:1.12;
+  }
+
+  body.phase-live .badge {
+    border-color:var(--wall-line) !important;
+    background:var(--wall-blue-soft) !important;
+    color:var(--wall-blue) !important;
+    font-weight:900;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live .badge {
+    color:#d6eaff !important;
+  }
+
+  body.phase-live .result-score {
+    color:var(--wall-green) !important;
+    font-size:.78rem !important;
+    font-weight:950;
+  }
+
+  /* Standings: no artificial 10%-height rows. Rows stay compact and readable. */
+  body.phase-live #liveDashboard > .section:has(#tables) > .section-head {
+    display:none;
+  }
+
+  body.phase-live .tables-grid,
+  body.phase-live .tables-grid:has(> .table-card:only-child) {
+    height:100%;
+    min-height:0;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px;
+    align-items:start;
+    align-content:start;
+  }
+
+  body.phase-live .table-card {
+    min-height:0;
+    height:auto !important;
+    padding:0;
+    display:grid;
+    grid-template-rows:36px auto;
+    border:1px solid var(--wall-line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+
+  body.phase-live .table-card h3 {
+    margin:0;
+    padding:9px 12px 7px;
+    color:#fff !important;
+    background:linear-gradient(90deg,var(--wall-blue),var(--wall-blue-2)) !important;
+    font-size:.96rem;
+    line-height:1;
+    font-weight:950;
+    text-transform:uppercase;
+    letter-spacing:.035em;
+  }
+
+  body.phase-live .table-scroll {
+    height:auto !important;
+    min-height:0;
+    overflow:hidden;
+    background:var(--wall-surface) !important;
+  }
+
+  body.phase-live .portal-table {
+    width:100%;
+    height:auto !important;
+    min-width:0;
+    table-layout:fixed;
+    border-collapse:collapse;
+    background:var(--wall-surface) !important;
+    color:var(--wall-text) !important;
+    font-size:clamp(.79rem,.82vw,1rem);
+    line-height:1.05;
+  }
+
+  body.phase-live .portal-table thead,
+  body.phase-live .portal-table tbody {
+    height:auto !important;
+  }
+
+  body.phase-live .portal-table thead {
+    background:var(--wall-surface-2) !important;
+  }
+
+  body.phase-live .portal-table th {
+    height:30px;
+    padding:5px 5px;
+    border-bottom:1px solid var(--wall-line) !important;
+    background:var(--wall-surface-2) !important;
+    color:var(--wall-muted) !important;
+    font-size:.61rem;
+    font-weight:950;
+    text-transform:uppercase;
+    letter-spacing:.035em;
+  }
+
+  body.phase-live .portal-table tbody tr {
+    height:50px !important;
+    background:var(--wall-surface) !important;
+  }
+
+  body.phase-live .portal-table tbody tr:nth-child(even) {
+    background:var(--wall-surface-2) !important;
+  }
+
+  body.phase-live .portal-table tbody tr:first-child {
+    background:var(--wall-rank-one) !important;
+  }
+
+  body.phase-live .portal-table tbody tr:nth-child(2) {
+    background:var(--wall-rank-two) !important;
+  }
+
+  body.phase-live .portal-table tbody:has(tr:nth-child(8)) tr {
+    height:36px !important;
+  }
+
+  body.phase-live .portal-table tbody:has(tr:nth-child(10)) tr {
+    height:32px !important;
+  }
+
+  body.phase-live .portal-table td {
+    height:auto !important;
+    padding:4px 5px;
+    border-bottom:1px solid var(--wall-line-soft) !important;
+    color:var(--wall-text) !important;
+    vertical-align:middle;
+  }
+
+  body.phase-live .portal-table td:nth-child(1) {
+    color:var(--wall-blue) !important;
+    font-weight:950;
+  }
+
+  body.phase-live .portal-table td:nth-child(2) strong {
+    color:var(--wall-text-strong) !important;
+    font-size:1.06em;
+    font-weight:950;
+  }
+
+  body.phase-live .portal-table th:nth-child(1),
+  body.phase-live .portal-table td:nth-child(1) { width:34px; text-align:center; }
+
+  body.phase-live .portal-table th:nth-child(2),
+  body.phase-live .portal-table td:nth-child(2) { width:auto; text-align:left; }
+
+  body.phase-live .portal-table th:nth-child(n+3),
+  body.phase-live .portal-table td:nth-child(n+3) { width:38px; text-align:center; }
+
+  body.phase-live .portal-table th.three-da-col,
+  body.phase-live .portal-table td.three-da-col {
+    width:58px;
+    background:color-mix(in srgb,var(--wall-blue) 10%,var(--wall-surface)) !important;
+    color:var(--wall-blue) !important;
+    font-weight:950;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live .portal-table th.three-da-col,
+  body[data-live-profile="broadcast-dark"].phase-live .portal-table td.three-da-col {
+    color:#7eb9ff !important;
+  }
+
+  /* Highlights: compact categories, but no low-contrast micro text. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) {
+    padding:8px 9px;
+    grid-template-rows:29px minmax(0,1fr);
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) .section-head .eyebrow {
+    display:none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) .panel:has(#highlights) .section-head h2 {
+    font-size:.98rem;
+  }
+
+  body.phase-live #highlights.highlight-grid {
+    height:100%;
+    min-height:0;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+    gap:6px;
+    background:transparent !important;
+  }
+
+  body.phase-live .live-top3-block {
+    min-width:0;
+    min-height:0;
+    padding:7px;
+    display:grid;
+    grid-template-rows:23px minmax(0,1fr);
+    gap:3px;
+    border:1px solid var(--wall-line) !important;
+    border-radius:8px;
+    background:var(--wall-surface-2) !important;
+    box-shadow:none !important;
+  }
+
+  body.phase-live .live-top3-block h3 {
+    margin:0;
+    color:var(--wall-text-strong) !important;
+    font-size:.68rem;
+    line-height:1;
+    font-weight:950;
+    text-transform:uppercase;
+  }
+
+  body.phase-live .live-top3-list {
+    min-height:0;
+    display:grid;
+    grid-template-rows:repeat(3,minmax(0,1fr));
+  }
+
+  body.phase-live .live-top3-row {
+    min-width:0;
+    display:grid;
+    grid-template-columns:18px minmax(0,1fr) auto;
+    align-items:center;
+    gap:5px;
+    border-top:1px solid var(--wall-line-soft) !important;
+    color:var(--wall-text) !important;
+    font-size:.65rem;
+  }
+
+  body.phase-live .live-top3-row:first-child { border-top:0 !important; }
+  body.phase-live .live-top3-rank { color:var(--wall-blue) !important; font-size:.63rem; font-weight:950; }
+  body.phase-live .live-top3-row strong { color:var(--wall-text-strong) !important; font-size:.68rem; font-weight:900; }
+  body.phase-live .live-top3-row em { color:var(--wall-accent) !important; font-size:.8rem; font-style:normal; font-weight:950; }
+
+  /* ELO: 20-second pagination remains, values pop without overpowering standings. */
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head {
+    min-height:26px;
+    margin:0 0 3px;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head .eyebrow {
+    display:none;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#elo) > .panel:has(#elo) .section-head h2 {
+    font-size:.98rem;
+  }
+
+  body.phase-live .elo-page-meta {
+    margin-left:auto;
+    color:var(--wall-muted) !important;
+    font-size:.62rem;
+    font-weight:900;
+  }
+
+  body.phase-live #elo {
+    min-height:0;
+    height:100%;
+    display:grid;
+    grid-template-rows:repeat(6,minmax(0,1fr));
+  }
+
+  body.phase-live #elo .list-row {
+    min-height:0;
+    display:grid;
+    grid-template-columns:34px minmax(0,1fr) auto;
+    align-items:center;
+    gap:8px;
+    padding:5px 3px;
+    border-top:1px solid var(--wall-line-soft) !important;
+    background:transparent !important;
+  }
+
+  body.phase-live #elo .list-row:first-child { border-top:0 !important; }
+  body.phase-live #elo .rank { color:var(--wall-blue) !important; font-size:.72rem; font-weight:950; }
+  body.phase-live #elo .list-row strong { color:var(--wall-text-strong) !important; font-size:clamp(.78rem,.78vw,.94rem); font-weight:900; }
+  body.phase-live #elo .rating { color:var(--wall-accent) !important; font-size:clamp(.82rem,.82vw,.98rem); font-weight:950; }
+
+  /* Knockout keeps the same lower-left priority as standings. */
+  body.phase-live #liveDashboard:has(#playoffSection:not(.hidden)) > #playoffSection {
+    grid-column:1 / 3;
+    grid-row:3;
+  }
+
+  body.phase-live .live-bracket-match {
+    background:var(--wall-surface-2) !important;
+    border-color:var(--wall-line) !important;
+  }
+
+  body.phase-live .live-bracket-player {
+    color:var(--wall-text) !important;
+    border-color:var(--wall-line-soft) !important;
+  }
+
+  body.phase-live .live-bracket-player.winner {
+    color:var(--wall-green) !important;
+  }
+}
+
+/* Short 16:9 displays: keep typography readable; compress gaps/row heights first. */
+@media (min-width:1180px) and (max-height:800px) {
+  body.phase-live .active-experience { grid-template-rows:68px minmax(0,1fr); gap:5px; }
+  body.phase-live .hero { height:68px; padding:6px 10px; }
+  body.phase-live .live-logo { width:43px; height:43px; }
+  body.phase-live .hero .eyebrow { font-size:.66rem; }
+  body.phase-live .hero h1 { font-size:2rem; }
+  body.phase-live .hero .muted { font-size:.72rem; }
+  body.phase-live #liveDashboard { grid-template-rows:49px minmax(205px,.77fr) minmax(0,1.23fr); gap:5px; }
+  body.phase-live .stat-card { padding:5px 9px 5px 13px; }
+  body.phase-live .stat-card small { font-size:.61rem; }
+  body.phase-live .stat-card strong { font-size:1.3rem; }
+  body.phase-live .section { padding:6px 7px; }
+  body.phase-live .section-head { min-height:24px; margin-bottom:3px; }
+  body.phase-live .section-head h2,
+  body.phase-live .section h2 { font-size:.94rem; }
+  body.phase-live .boards-grid,
+  body.phase-live .boards-grid:has(> .board-card:only-child) { height:calc(100% - 27px); gap:5px; }
+  body.phase-live .board-card,
+  body.phase-live .boards-grid:has(> .board-card:only-child) .board-card { padding:6px 8px; grid-template-rows:24px minmax(0,1fr) 17px; }
+  body.phase-live .board-card .player-line { grid-template-columns:minmax(0,1fr) 76px 28px; gap:6px; }
+  body.phase-live .board-card .player-line strong { font-size:.9rem; }
+  body.phase-live .board-card .remaining { font-size:2rem; }
+  body.phase-live .board-card .legs { height:27px; font-size:.9rem; }
+  body.phase-live .board-card .player-line.active::after { right:108px; }
+  body.phase-live .board-card .round { font-size:.56rem; }
+  body.phase-live #liveDashboard > .two-column:has(#queue) .panel { padding:6px 7px; grid-template-rows:24px minmax(0,1fr); }
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row { padding:3px 1px; }
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row strong { font-size:.72rem; }
+  body.phase-live #liveDashboard > .two-column:has(#queue) .list-row small { font-size:.56rem; }
+  body.phase-live .table-card { grid-template-rows:28px auto; }
+  body.phase-live .table-card h3 { padding:7px 9px 5px; font-size:.8rem; }
+  body.phase-live .portal-table { font-size:.7rem; }
+  body.phase-live .portal-table th { height:24px; font-size:.52rem; }
+  body.phase-live .portal-table tbody tr { height:39px !important; }
+  body.phase-live .portal-table tbody:has(tr:nth-child(8)) tr { height:29px !important; }
+  body.phase-live .portal-table tbody:has(tr:nth-child(10)) tr { height:26px !important; }
+  body.phase-live #liveDashboard > .two-column:has(#elo) { grid-template-rows:minmax(0,.78fr) minmax(0,1.22fr); gap:5px; }
+  body.phase-live .live-top3-block { padding:4px 5px; grid-template-rows:18px minmax(0,1fr); }
+  body.phase-live .live-top3-block h3 { font-size:.57rem; }
+  body.phase-live .live-top3-row strong { font-size:.57rem; }
+  body.phase-live .live-top3-row em { font-size:.68rem; }
+  body.phase-live #elo .list-row { padding:3px 2px; }
+  body.phase-live #elo .list-row strong { font-size:.7rem; }
+  body.phase-live #elo .rating { font-size:.74rem; }
+}
+
+/* ===== Former venue-wall-v7.css ===== */
+/* Venue Wall v7
+ * Content-aware wall layout + header readability.
+ * Shared by both Blindleia and Dark themes: only colours differ between themes.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  /* Header: all three text lines must always remain fully visible. */
+  body.phase-live .active-experience {
+    grid-template-rows:94px minmax(0,1fr);
+  }
+
+  body.phase-live .hero {
+    height:94px;
+    min-height:94px;
+    padding:8px 14px;
+    align-items:center;
+  }
+
+  body.phase-live .live-brand {
+    min-width:0;
+    height:100%;
+    display:flex;
+    align-items:center;
+  }
+
+  body.phase-live .live-brand > div {
+    min-width:0;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    overflow:visible;
+  }
+
+  body.phase-live .hero .eyebrow {
+    margin:0;
+    padding:0;
+    font-size:.72rem;
+    line-height:1.08;
+  }
+
+  body.phase-live .hero h1 {
+    margin:1px 0 0;
+    padding:0;
+    font-size:clamp(2.2rem,2.65vw,3.35rem);
+    line-height:1;
+  }
+
+  body.phase-live .hero .muted {
+    margin:3px 0 0;
+    padding:0;
+    font-size:.8rem;
+    line-height:1.15;
+  }
+
+  body.phase-live .live-logo {
+    flex:0 0 auto;
+    width:52px;
+    height:52px;
+  }
+
+  /* Give standings more room when there is only one live match. */
+  body.phase-live #liveDashboard:has(#boards > .board-card:not(.idle)):not(:has(#boards > .board-card:not(.idle) ~ .board-card:not(.idle))) {
+    grid-template-rows:60px 205px minmax(0,1fr);
+  }
+
+  /* One active match: one compact wide card instead of a half-empty 2-column grid. */
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) {
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,1fr);
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .players {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:minmax(0,1fr);
+    gap:0;
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .player-line {
+    grid-template-columns:minmax(0,1fr) 108px 36px;
+    border-top:0 !important;
+    padding:5px 12px;
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .player-line + .player-line {
+    border-left:1px solid var(--wall-line-soft) !important;
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .player-line strong {
+    font-size:clamp(1.12rem,1.3vw,1.55rem);
+  }
+
+  body.phase-live #boards:has(> .board-card:not(.idle)):not(:has(> .board-card:not(.idle) ~ .board-card:not(.idle))) > .board-card:not(.idle) .remaining {
+    font-size:clamp(2.35rem,2.8vw,3.35rem);
+  }
+
+  /* Three or four active matches become a genuine 2x2 matrix. */
+  body.phase-live #boards:has(> .board-card:not(.idle) ~ .board-card:not(.idle) ~ .board-card:not(.idle)) {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:repeat(2,minmax(0,1fr));
+  }
+
+  /* Standings use natural row height. A single group gets the full main width;
+     two visible groups sit side by side. More groups are paged by live-v2.js. */
+  body.phase-live #tables.tables-grid {
+    height:calc(100% - 35px);
+    min-height:0;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-auto-rows:max-content;
+    align-content:start;
+    gap:8px;
+    overflow:hidden;
+  }
+
+  body.phase-live #tables.tables-grid:has(> .table-card:only-child) {
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  body.phase-live #tables .table-card {
+    width:100%;
+    min-width:0;
+    height:auto;
+    align-self:start;
+  }
+
+  body.phase-live #tables .portal-table tbody {
+    height:auto !important;
+  }
+
+  body.phase-live #tables .portal-table tbody tr {
+    height:auto !important;
+  }
+
+  body.phase-live #tables .portal-table td {
+    height:42px;
+    padding-top:5px;
+    padding-bottom:5px;
+  }
+
+  body.phase-live #tables.tables-grid:has(> .table-card:only-child) .portal-table td:nth-child(2) strong {
+    font-size:clamp(.92rem,1vw,1.15rem);
+  }
+
+  body.phase-live .group-page-meta {
+    margin-left:auto;
+    color:var(--wall-muted);
+    font-size:.62rem;
+    font-weight:900;
+    letter-spacing:.035em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  body.phase-live .group-page-meta.hidden {
+    display:none;
+  }
+}
+
+/* Short 16:9 panels still get three complete text lines without spending too
+ * much vertical space on the header. */
+@media (min-width:1180px) and (max-height:800px) {
+  body.phase-live .active-experience {
+    grid-template-rows:78px minmax(0,1fr);
+  }
+
+  body.phase-live .hero {
+    height:78px;
+    min-height:78px;
+    padding:6px 11px;
+  }
+
+  body.phase-live .live-logo {
+    width:44px;
+    height:44px;
+  }
+
+  body.phase-live .hero .eyebrow {
+    font-size:.62rem;
+    line-height:1.05;
+  }
+
+  body.phase-live .hero h1 {
+    margin-top:0;
+    font-size:2rem;
+    line-height:1;
+  }
+
+  body.phase-live .hero .muted {
+    margin-top:2px;
+    font-size:.68rem;
+    line-height:1.1;
+  }
+
+  body.phase-live #liveDashboard:has(#boards > .board-card:not(.idle)):not(:has(#boards > .board-card:not(.idle) ~ .board-card:not(.idle))) {
+    grid-template-rows:48px 170px minmax(0,1fr);
+  }
+
+  body.phase-live #tables .portal-table td {
+    height:34px;
+    padding-top:3px;
+    padding-bottom:3px;
+  }
+}
+
+/* ===== Former venue-wall-v8.css ===== */
+/* Venue Wall v8
+ * Broadcast-style rebalance: the wall is information-first, not a giant
+ * live-score canvas. One shared geometry for both Blindleia and dark themes.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  /*
+   * 4-column wall:
+   *   top:    LIVE (50%) | NEXT (25%) | RECENT (25%)
+   *   bottom: TABLES (50%) | HIGHLIGHTS (25%) | ELO (25%)
+   * This deliberately gives secondary tournament information real room.
+   */
+  body.phase-live #liveDashboard {
+    grid-template-columns:minmax(0,1.08fr) minmax(0,1.08fr) minmax(285px,.92fr) minmax(285px,.92fr) !important;
+    grid-template-rows:58px 220px minmax(0,1fr) !important;
+    gap:7px !important;
+  }
+
+  body.phase-live #progressCards {
+    grid-column:1 / -1 !important;
+    grid-row:1 !important;
+  }
+
+  body.phase-live #liveDashboard > .priority-section {
+    grid-column:1 / 3 !important;
+    grid-row:2 !important;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard > .two-column:has(#queue),
+  body.phase-live #liveDashboard > .two-column:has(#elo) {
+    display:contents !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#queue) {
+    grid-column:3 !important;
+    grid-row:2 !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#results) {
+    grid-column:4 !important;
+    grid-row:2 !important;
+  }
+
+  body.phase-live #liveDashboard > .section:has(#tables) {
+    grid-column:1 / 3 !important;
+    grid-row:3 !important;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#highlights) {
+    grid-column:3 !important;
+    grid-row:3 !important;
+    min-height:0;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#elo) {
+    grid-column:4 !important;
+    grid-row:3 !important;
+    min-height:0;
+  }
+
+  body.phase-live .priority-section .section-head {
+    margin-bottom:4px !important;
+  }
+
+  body.phase-live .priority-section .boards-grid,
+  body.phase-live .priority-section .boards-grid:has(> .board-card:only-child) {
+    height:calc(100% - 34px) !important;
+    gap:7px !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:only-child) {
+    grid-template-columns:1fr !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:only-child) .board-card {
+    max-width:none !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:only-child) .players {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:1fr !important;
+    gap:0 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:only-child) .player-line {
+    grid-template-columns:minmax(0,1fr) 92px 30px !important;
+    padding:5px 10px !important;
+    border-top:0 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid:has(> .board-card:only-child) .player-line + .player-line {
+    border-left:1px solid var(--wall-line-soft) !important;
+  }
+
+  body.phase-live .priority-section .board-card .player-line strong {
+    font-size:clamp(1rem,1.18vw,1.34rem) !important;
+  }
+
+  body.phase-live .priority-section .board-card .remaining {
+    font-size:clamp(2.15rem,2.55vw,3rem) !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#queue),
+  body.phase-live #liveDashboard .panel:has(#results) {
+    height:100% !important;
+    padding:9px 10px !important;
+    display:grid !important;
+    grid-template-rows:30px minmax(0,1fr) !important;
+    overflow:hidden !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#queue) .section-head,
+  body.phase-live #liveDashboard .panel:has(#results) .section-head {
+    min-height:28px !important;
+    margin:0 0 4px !important;
+  }
+
+  body.phase-live #queue,
+  body.phase-live #results {
+    min-height:0;
+    overflow:hidden;
+  }
+
+  body.phase-live #queue .list-row,
+  body.phase-live #results .list-row {
+    min-height:42px !important;
+    padding:5px 1px !important;
+  }
+
+  body.phase-live #queue .list-row strong,
+  body.phase-live #results .list-row strong {
+    font-size:.91rem !important;
+    line-height:1.05 !important;
+  }
+
+  body.phase-live #queue .list-row small,
+  body.phase-live #results .list-row small {
+    margin-top:2px !important;
+    font-size:.66rem !important;
+    line-height:1.05 !important;
+  }
+
+  body.phase-live #liveDashboard > .section:has(#tables) {
+    padding:9px 10px !important;
+    overflow:hidden !important;
+  }
+
+  body.phase-live #tables {
+    height:auto !important;
+    min-height:0 !important;
+    align-content:start !important;
+    gap:7px !important;
+  }
+
+  body.phase-live #tables[data-visible-groups="1"] {
+    grid-template-columns:1fr !important;
+  }
+
+  body.phase-live #tables[data-visible-groups="2"] {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  body.phase-live #tables .table-card {
+    height:auto !important;
+    min-height:0 !important;
+    align-self:start !important;
+  }
+
+  body.phase-live #tables .table-card h3 {
+    min-height:34px !important;
+    padding:8px 11px !important;
+    font-size:1rem !important;
+  }
+
+  body.phase-live #tables .portal-table th {
+    padding:6px 6px !important;
+    font-size:.64rem !important;
+  }
+
+  body.phase-live #tables .portal-table td {
+    height:43px !important;
+    padding:6px 7px !important;
+    font-size:.88rem !important;
+  }
+
+  body.phase-live #tables .portal-table td:nth-child(2) strong {
+    font-size:.94rem !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#highlights) {
+    height:100% !important;
+    padding:9px 10px !important;
+    display:grid !important;
+    grid-template-rows:32px minmax(0,1fr) !important;
+    overflow:hidden !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#highlights) .section-head {
+    min-height:30px !important;
+    margin:0 0 5px !important;
+  }
+
+  body.phase-live #highlights.highlight-grid {
+    min-height:0 !important;
+    height:100% !important;
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    grid-template-rows:repeat(3,minmax(0,1fr)) !important;
+    gap:7px !important;
+  }
+
+  body.phase-live #highlights .live-top3-block {
+    min-height:0 !important;
+    padding:8px 9px !important;
+    display:grid !important;
+    grid-template-rows:24px minmax(0,1fr) !important;
+    border-radius:8px !important;
+  }
+
+  body.phase-live #highlights .live-top3-block h3 {
+    font-size:.78rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live #highlights .live-top3-list {
+    min-height:0 !important;
+    display:grid !important;
+    grid-template-rows:repeat(3,minmax(0,1fr)) !important;
+  }
+
+  body.phase-live #highlights .live-top3-row {
+    min-height:0 !important;
+    padding:4px 0 !important;
+    grid-template-columns:24px minmax(0,1fr) auto !important;
+  }
+
+  body.phase-live #highlights .live-top3-row strong {
+    font-size:.82rem !important;
+  }
+
+  body.phase-live #highlights .live-top3-row em {
+    font-size:.91rem !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#elo) {
+    height:100% !important;
+    padding:9px 10px !important;
+    display:grid !important;
+    grid-template-rows:32px minmax(0,1fr) !important;
+    overflow:hidden !important;
+  }
+
+  body.phase-live #liveDashboard .panel:has(#elo) .section-head {
+    min-height:30px !important;
+    margin:0 0 5px !important;
+  }
+
+  body.phase-live #elo {
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  body.phase-live #elo .list-row {
+    min-height:54px !important;
+    padding:6px 2px !important;
+  }
+
+  body.phase-live #elo .list-row strong {
+    font-size:.9rem !important;
+  }
+
+  body.phase-live #elo .rating {
+    font-size:1rem !important;
+  }
+
+  /* Final contrast guardrails for the Blindleia light profile. */
+  body[data-live-profile="blindleia"].phase-live .table-card > h3,
+  body[data-live-profile="blindleia"].phase-live .table-card h3 {
+    color:#fff !important;
+    text-shadow:0 1px 1px rgba(0,0,0,.12);
+  }
+
+  body[data-live-profile="blindleia"].phase-live .section-head h2,
+  body[data-live-profile="blindleia"].phase-live .section h2,
+  body[data-live-profile="blindleia"].phase-live .list-row strong,
+  body[data-live-profile="blindleia"].phase-live .board-card .player-line strong,
+  body[data-live-profile="blindleia"].phase-live .board-card .remaining,
+  body[data-live-profile="blindleia"].phase-live .live-top3-block h3,
+  body[data-live-profile="blindleia"].phase-live .live-top3-row strong,
+  body[data-live-profile="blindleia"].phase-live #elo .list-row strong,
+  body[data-live-profile="blindleia"].phase-live .portal-table td,
+  body[data-live-profile="blindleia"].phase-live .portal-table td strong {
+    color:#071b31 !important;
+  }
+
+  body[data-live-profile="blindleia"].phase-live .portal-table thead th,
+  body[data-live-profile="blindleia"].phase-live .section-head .eyebrow,
+  body[data-live-profile="blindleia"].phase-live .list-row small,
+  body[data-live-profile="blindleia"].phase-live .round,
+  body[data-live-profile="blindleia"].phase-live .muted,
+  body[data-live-profile="blindleia"].phase-live .elo-page-meta,
+  body[data-live-profile="blindleia"].phase-live .group-page-meta {
+    color:#536b82 !important;
+  }
+
+  body[data-live-profile="blindleia"].phase-live .portal-table td:nth-child(1),
+  body[data-live-profile="blindleia"].phase-live .portal-table .three-da-col,
+  body[data-live-profile="blindleia"].phase-live .portal-table .three-da-col strong,
+  body[data-live-profile="blindleia"].phase-live .live-top3-rank,
+  body[data-live-profile="blindleia"].phase-live #elo .rank,
+  body[data-live-profile="blindleia"].phase-live .board-number {
+    color:#0a4da0 !important;
+  }
+
+  /* Gold remains a non-text club accent on light surfaces. */
+  body[data-live-profile="blindleia"].phase-live .board-card .legs,
+  body[data-live-profile="blindleia"].phase-live .live-top3-row em,
+  body[data-live-profile="blindleia"].phase-live #elo .rating {
+    color:#08366f !important;
+  }
+
+  body[data-live-profile="blindleia"].phase-live .result-score {
+    color:#08733e !important;
+  }
+
+  /* Dark mode: explicitly protect all text on dark surfaces. */
+  body[data-live-profile="broadcast-dark"].phase-live .table-card > h3,
+  body[data-live-profile="broadcast-dark"].phase-live .table-card h3,
+  body[data-live-profile="broadcast-dark"].phase-live .section-head h2,
+  body[data-live-profile="broadcast-dark"].phase-live .section h2,
+  body[data-live-profile="broadcast-dark"].phase-live .list-row strong,
+  body[data-live-profile="broadcast-dark"].phase-live .board-card .player-line strong,
+  body[data-live-profile="broadcast-dark"].phase-live .board-card .remaining,
+  body[data-live-profile="broadcast-dark"].phase-live .live-top3-block h3,
+  body[data-live-profile="broadcast-dark"].phase-live .live-top3-row strong,
+  body[data-live-profile="broadcast-dark"].phase-live #elo .list-row strong,
+  body[data-live-profile="broadcast-dark"].phase-live .portal-table tbody td,
+  body[data-live-profile="broadcast-dark"].phase-live .portal-table tbody td strong {
+    color:#f5f9ff !important;
+  }
+}
+
+@media (min-width:1180px) and (max-height:800px) {
+  body.phase-live #liveDashboard {
+    grid-template-rows:52px 190px minmax(0,1fr) !important;
+  }
+
+  body.phase-live #tables .portal-table td {
+    height:36px !important;
+    padding-top:4px !important;
+    padding-bottom:4px !important;
+  }
+
+  body.phase-live #queue .list-row,
+  body.phase-live #results .list-row {
+    min-height:35px !important;
+  }
+
+  body.phase-live #elo .list-row {
+    min-height:44px !important;
+  }
+}
+
+/* ===== Former venue-wall-v9.css ===== */
+/* Venue Wall v9
+ * Format-aware qualification marker + ELO pagination / movement polish.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  /* Placement alone is not special. Qualification is defined by tournament format. */
+  body.phase-live #tables .portal-table tbody tr:first-child {
+    background:var(--wall-surface) !important;
+  }
+
+  body.phase-live #tables .portal-table tbody tr:nth-child(2) {
+    background:var(--wall-surface-2) !important;
+  }
+
+  body.phase-live #tables .portal-table tbody tr.qualifier-cutoff td {
+    border-bottom:3px solid var(--wall-blue) !important;
+  }
+
+  body.phase-live .elo-page-meta {
+    margin-left:auto;
+    color:var(--wall-muted) !important;
+    font-size:.62rem;
+    font-weight:900;
+    letter-spacing:.035em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  body.phase-live .elo-page-meta.hidden {
+    display:none;
+  }
+
+  /* The base ranking list reserves only 42px for column one. Rank movement
+     needs more room, otherwise the digit after the arrow gets clipped by the
+     following name column / panel overflow. Keep this column explicit. */
+  body.phase-live #elo .list-row {
+    grid-template-columns:4.8rem minmax(0,1fr) auto !important;
+    column-gap:.45rem !important;
+  }
+
+  /* Current rank and movement are one compact, fixed-width unit. */
+  body.phase-live #elo .elo-rank-cell {
+    width:4.8rem;
+    min-width:4.8rem;
+    display:grid;
+    grid-template-columns:2rem minmax(2.45rem,auto);
+    align-items:center;
+    column-gap:.2rem;
+    overflow:visible !important;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+
+  body.phase-live #elo .elo-rank-cell .rank {
+    min-width:0;
+    width:auto;
+  }
+
+  body.phase-live #elo .elo-rank-move {
+    display:inline-flex;
+    align-items:center;
+    justify-content:flex-start;
+    width:max-content;
+    min-width:2.25rem;
+    overflow:visible !important;
+    white-space:nowrap;
+    font-size:.66rem;
+    line-height:1;
+    font-style:normal;
+    font-weight:950;
+    letter-spacing:0;
+  }
+
+  body.phase-live #elo .elo-rank-move.positive {
+    color:#087348 !important;
+  }
+
+  body.phase-live #elo .elo-rank-move.negative {
+    color:#b3263b !important;
+  }
+
+  body.phase-live #elo .elo-rank-move.neutral {
+    color:#7a8a9c !important;
+    opacity:.72;
+  }
+
+  body.phase-live #elo .elo-rank-move.new {
+    width:max-content;
+    padding:.18rem .3rem;
+    border-radius:.35rem;
+    color:#0a4da0 !important;
+    background:#e7f0fb !important;
+    font-size:.56rem;
+    letter-spacing:.035em;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.positive {
+    color:#62e6a2 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.negative {
+    color:#ff8795 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.neutral {
+    color:#8ea3ba !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-rank-move.new {
+    color:#c9e3ff !important;
+    background:#173d65 !important;
+  }
+
+  /* Keep the rating in one fixed right-hand column on every row.
+     Tournament movement gets its own reserved column immediately to the left. */
+  body.phase-live #elo .elo-live-score {
+    margin-left:auto;
+    display:grid;
+    grid-template-columns:3.15rem 4.35rem;
+    align-items:center;
+    justify-content:end;
+    column-gap:.48rem;
+    min-width:7.98rem;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+
+  body.phase-live #elo .elo-live-score .rating {
+    grid-column:2;
+    grid-row:1;
+    justify-self:end;
+    min-width:4.35rem;
+    margin:0;
+    text-align:right;
+  }
+
+  body.phase-live #elo .elo-live-delta {
+    grid-column:1;
+    grid-row:1;
+    justify-self:end;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:3.15rem;
+    padding:.22rem .38rem;
+    border-radius:.45rem;
+    font-size:.72rem;
+    line-height:1;
+    font-style:normal;
+    font-weight:950;
+    letter-spacing:.01em;
+  }
+
+  body.phase-live #elo .elo-live-delta.positive {
+    color:#087348 !important;
+    background:#e3f6eb !important;
+  }
+
+  body.phase-live #elo .elo-live-delta.negative {
+    color:#a51f32 !important;
+    background:#fbe6e9 !important;
+  }
+
+  body.phase-live #elo .elo-live-delta.neutral {
+    color:#586b82 !important;
+    background:#edf1f5 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-live-delta.positive {
+    color:#b9f7d4 !important;
+    background:#124c36 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-live-delta.negative {
+    color:#ffd0d5 !important;
+    background:#642532 !important;
+  }
+
+  body[data-live-profile="broadcast-dark"].phase-live #elo .elo-live-delta.neutral {
+    color:#d3deea !important;
+    background:#33465b !important;
+  }
+}
+
+/* ===== Former venue-wall-v10.css ===== */
+/* Venue Wall v10
+ * Adaptive live-board density for 1-8 simultaneous matches.
+ * More than eight boards are paged by venue-wall-boards.js in groups of eight.
+ */
+
+@media (min-width:1180px) and (min-height:650px) {
+  body.phase-live .priority-section .boards-grid {
+    height:calc(100% - 34px) !important;
+    min-height:0 !important;
+    gap:7px !important;
+  }
+
+  body.phase-live .priority-section .board-card.wall-page-hidden {
+    display:none !important;
+  }
+
+  body.phase-live .board-page-meta {
+    margin-left:auto;
+    margin-right:8px;
+    color:var(--wall-muted, #536b82);
+    font-size:.58rem;
+    font-weight:900;
+    letter-spacing:.025em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+  /* 1-2 boards: use the full height of the live row. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="1"] {
+    grid-template-columns:1fr !important;
+    grid-template-rows:minmax(0,1fr) !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="2"] {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+  }
+
+  /* Three boards remain 2x2 on narrower wall displays. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"],
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* Five or more live boards own the complete top information row. Queue and
+     recent results return automatically as soon as the count drops below 5. */
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="5"]) > .priority-section,
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="6"]) > .priority-section,
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="7"]) > .priority-section,
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="8"]) > .priority-section {
+    grid-column:1 / -1 !important;
+  }
+
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="5"]) > .two-column:has(#queue),
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="6"]) > .two-column:has(#queue),
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="7"]) > .two-column:has(#queue),
+  body.phase-live #liveDashboard:has(.priority-section .boards-grid[data-layout-count="8"]) > .two-column:has(#queue) {
+    display:none !important;
+  }
+
+  /* 5-6 boards: 3 x 2 across the full wall width. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"],
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] {
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* 7-8 boards, and every rotation page above 8: fixed 4 x 2 geometry. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"],
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] {
+    grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+    grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* Compact card treatment from three boards and up. */
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .board-card,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .board-card {
+    padding:4px 7px !important;
+    grid-template-rows:19px minmax(0,1fr) 14px !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .board-number,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .board-number {
+    font-size:.66rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .board-card .badge,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .board-card .badge {
+    padding:2px 5px !important;
+    font-size:.52rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .player-line,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .player-line {
+    grid-template-columns:minmax(0,1fr) 60px 22px !important;
+    gap:5px !important;
+    padding:1px 0 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .player-line strong,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .player-line strong {
+    font-size:clamp(.72rem,.82vw,.92rem) !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .remaining,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .remaining {
+    font-size:clamp(1.34rem,1.55vw,1.72rem) !important;
+    line-height:.9 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .legs,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .legs {
+    height:21px !important;
+    font-size:.74rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .round,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .round {
+    font-size:.48rem !important;
+    line-height:1 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="4"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="5"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="6"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="7"] .player-line.active::after,
+  body.phase-live .priority-section .boards-grid[data-layout-count="8"] .player-line.active::after {
+    display:none !important;
+  }
+}
+
+/* A 1500px+ wall has enough width for three full-height cards side by side. */
+@media (min-width:1500px) and (min-height:650px) {
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] {
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    grid-template-rows:minmax(0,1fr) !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card {
+    padding:7px 9px !important;
+    grid-template-rows:24px minmax(0,1fr) 18px !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-number {
+    font-size:.8rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .board-card .badge {
+    padding:3px 7px !important;
+    font-size:.6rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line {
+    grid-template-columns:minmax(0,1fr) 70px 26px !important;
+    gap:7px !important;
+    padding:2px 0 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .player-line strong {
+    font-size:clamp(.82rem,.92vw,1.04rem) !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .remaining {
+    font-size:clamp(1.8rem,2.05vw,2.35rem) !important;
+    line-height:.86 !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .legs {
+    height:28px !important;
+    font-size:.86rem !important;
+  }
+
+  body.phase-live .priority-section .boards-grid[data-layout-count="3"] .round {
+    font-size:.54rem !important;
+  }
+}

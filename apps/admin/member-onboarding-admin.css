@@ -99,7 +99,8 @@
   .member-filters button{min-height:38px!important;padding:7px 11px!important}
   .member-toolbar>.pill{margin-left:auto;align-self:center}
 
-  .member-access-summary{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;overflow:visible!important;margin-bottom:12px!important}
+  /* Two columns keep labels readable and match every Clubadmin viewport. */
+  #players .member-access-summary{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;overflow:visible!important;margin-bottom:12px!important}
   .member-access-summary button{display:block!important;min-width:0!important;min-height:70px!important;padding:10px 8px!important;border-radius:12px!important}
   .member-access-summary strong{display:block!important;font-size:20px!important;line-height:1.1!important;margin-bottom:5px!important}
   .member-access-summary span{display:block!important;font-size:10px!important;line-height:1.2!important}
@@ -128,6 +129,16 @@
   .member-access-table-wrap .member-payment-overview small{display:none!important}
   .member-access-table-wrap td[data-label="Betaling"] .badge::before{content:"Betaling ";font-weight:inherit}
 
+
+  /* Account and access actions are details on a small touchscreen.
+     Keep the entire interactive row keyboard-accessible. */
+  #players .member-access-table-wrap tr[data-member-id]{position:relative;cursor:pointer}
+  #players .member-access-table-wrap tr[data-member-id]::after{
+    content:"⌄";position:absolute;right:12px;top:11px;font-size:18px;color:var(--muted,#667085)
+  }
+  #players .member-access-table-wrap tr[data-member-id].member-expanded::after{transform:rotate(180deg)}
+  #players .member-access-table-wrap tr[data-member-id]:not(.member-expanded) td[data-label="Konto og tilgang"],
+  #players .member-access-table-wrap tr[data-member-id]:not(.member-expanded) td[data-label="Handling"]{display:none!important}
   .member-access-table-wrap td[data-label="Konto og tilgang"]{grid-area:account!important;padding-top:10px!important;border-top:1px solid #edf1f4!important;min-width:0!important}
   .member-access-table-wrap .member-account-compact{display:grid!important;gap:4px!important;align-items:start!important}
   .member-access-table-wrap .member-account-compact::before{content:"Konto";display:block;font-size:10px;font-weight:800;color:var(--muted);line-height:1.1}

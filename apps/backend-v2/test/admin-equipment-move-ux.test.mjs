@@ -141,7 +141,7 @@ test("terminal pairing decoration cannot recursively invoke its own MutationObse
   assert.doesNotMatch(terminal, /attributeFilter: \["class"\]/);
   assert.match(bundle, /terminal-pairing-ux\.js\?v=20261104-terminal-ux-freeze-01/);
   assert.match(loader, /pairing-claim\.js\?v=20261104-terminal-ux-freeze-01/);
-  assert.match(adminHtml, /admin-section-loader\.js\?v=20261104-terminal-ux-freeze-01/);
+  assert.match(adminHtml, /admin-section-loader\.js\?v=20261105-ui-cleanup-01/);
 });
 
 test("TEST legacy equipment hash cannot be hijacked into V2 without an explicit click", () => {
