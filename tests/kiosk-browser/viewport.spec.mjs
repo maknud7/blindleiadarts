@@ -18,13 +18,13 @@ function fixture(options = {}) {
     active_tournament: { id: 10, name: "QA turnering med langt norsk navn", status: "in_progress" },
     match: {
       id: 42,
-      status: "in_progress",
+      status: options.matchStatus ?? "in_progress",
       current_leg: 1,
       current_player_id: options.currentPlayerId ?? 101,
       best_of_legs: options.bestOfLegs ?? 3,
       round_label: "Gruppespill - runde 1",
-      player_a: { id: 101, display_name: "Spiller A med et ekstraordinært langt navn", remaining: 301, legs_won: 0 },
-      player_b: { id: 102, display_name: "Spiller B med et tilsvarende langt navn", remaining: 321, legs_won: 0 },
+      player_a: { id: 101, display_name: options.playerAName ?? "Spiller A med et ekstraordinært langt navn", remaining: 301, legs_won: 0 },
+      player_b: { id: 102, display_name: options.playerBName ?? "Spiller B med et tilsvarende langt navn", remaining: 321, legs_won: 0 },
       recent_visits: [
         { id: 1, player_id: 102, player_name: "Spiller B med et tilsvarende langt navn", visit_number: 2, score: 100, remaining_after: 321, darts_used: 3 },
         { id: 2, player_id: 101, player_name: "Spiller A med et ekstraordinært langt navn", visit_number: 2, score: 140, remaining_after: 301, darts_used: 3 },
@@ -78,7 +78,7 @@ async function startMockKiosk(browser, size, options = {}) {
 
   const response = await page.goto(ORIGIN + "/v2/kiosk/", { waitUntil: "domcontentloaded" });
   expect(response?.ok()).toBeTruthy();
-  await expect(page.getByText("Registrer kast")).toBeVisible();
+  await expect(page.getByText(options.matchStatus === "assigned" ? "Start kamp" : "Registrer kast")).toBeVisible();
   await expect(page.locator(".kiosk-shell")).toHaveAttribute("data-kiosk-layout", /^(fit|scroll)$/);
   return { context, page, requests, errors };
 }
@@ -163,8 +163,11 @@ test("best av 1 shows match format but not leg standings, with an obvious throwe
     await expect(page.locator(".match-best-of")).toHaveText("Best av 1");
     await expect(page.locator(".match-leg-score")).toHaveCount(0);
     await expect(page.locator(".player-leg-score")).toHaveCount(0);
-    await expect(page.locator(".player-tile.active .turn-indicator")).toHaveText("Kaster nå");
-    await expect(page.locator(".player-tile:not(.active) .turn-indicator")).toHaveText("Venter");
+    await expect(page.locator(".player-tile.active .turn-indicator")).toHaveText("Kaster");
+    await expect(page.locator(".player-tile:not(.active) .turn-indicator")).toBeHidden();
+    await expect(page.locator(".match-tools .pill.good")).toHaveText("Live");
+    await expect(page.locator(".kiosk-topbar .v2-top-actions .pill")).toContainText("Skive 1");
+    expect(await page.locator(".match-tools").innerText()).not.toContain("Skive 1");
     const { activeBackground, inactiveBackground, activeBorder } = await page.locator(".versus").evaluate(el => {
       const a = getComputedStyle(el.querySelector(".player-tile.active"));
       const b = getComputedStyle(el.querySelector(".player-tile:not(.active)"));
@@ -186,7 +189,7 @@ test("best av 3 shows leg number and standings; active side follows current thro
     await expect(page.locator(".match-leg-score")).toHaveText("0 – 0");
     await expect(page.locator(".player-leg-score")).toHaveCount(2);
     await expect(page.locator(".player-tile").nth(1)).toHaveClass(/active/);
-    await expect(page.locator(".player-tile").nth(1).locator(".turn-indicator")).toHaveText("Kaster nå");
+    await expect(page.locator(".player-tile").nth(1).locator(".turn-indicator")).toHaveText("Kaster");
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });
@@ -217,6 +220,59 @@ test("saving a throw keeps keypad, save action and recent visits fixed in place"
     }
     await expect(page.locator('.match-view[aria-busy="true"]')).toHaveCount(0, { timeout: 10000 });
     expect(requests.some(request => request.method === "POST" && request.path.endsWith("/visit"))).toBe(true);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("both long names are shortened visually without losing full accessible identity", async ({ browser }) => {
+  const first = "Magnus Nicolai Flørenæs Knudsen";
+  const second = "Kristian Aleksander Julius Mellestad";
+  for (const size of [{ width: 500, height: 720 }, { width: 768, height: 1024 }]) {
+    const { context, page, errors } = await startMockKiosk(browser, size, { playerAName: first, playerBName: second });
+    try {
+      const left = page.locator(".match-view .player-tile").first().locator("h2");
+      const right = page.locator(".match-view .player-tile").last().locator("h2");
+      await expect(left).toHaveText("Magnus Knudsen");
+      await expect(right).toHaveText("Kristian Mellestad");
+      await expect(left).toHaveAttribute("title", first);
+      await expect(right).toHaveAttribute("title", second);
+      await expect(left).toHaveAttribute("aria-label", first);
+      await expect(right).toHaveAttribute("aria-label", second);
+      const nameFits = await page.locator(".match-view .player-tile h2").evaluateAll(headings => headings.every(h => h.scrollWidth <= h.clientWidth + 1 && h.scrollHeight <= h.clientHeight + 1));
+      expect(nameFits, "Both compact names should fit within their score cards").toBe(true);
+      const inactive = page.locator(".player-tile:not(.active) .turn-indicator");
+      await expect(inactive).toBeHidden();
+      await expect(page.getByText("Venter", { exact: true })).toHaveCount(0);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  }
+});
+
+test("very long two-part names abbreviate the first name while preserving full name", async ({ browser }) => {
+  const full = "Alexandermaksimilian Konstantinopoulos";
+  const { context, page, errors } = await startMockKiosk(browser, { width: 500, height: 720 }, { playerAName: full });
+  try {
+    const heading = page.locator(".match-view .player-tile").first().locator("h2");
+    await expect(heading).toHaveText("A. Konstantinopoulos");
+    await expect(heading).toHaveAttribute("aria-label", full);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("assigned match uses the same shortened names and no duplicate board number", async ({ browser }) => {
+  const first = "Magnus Nicolai Flørenæs Knudsen";
+  const second = "Kristian Aleksander Julius Mellestad";
+  const { context, page, errors } = await startMockKiosk(browser, { width: 768, height: 1024 }, {
+    matchStatus: "assigned",
+    playerAName: first,
+    playerBName: second,
+  });
+  try {
+    await expect(page.locator(".assigned-view .match-tools .pill.good")).toHaveText("Kamp klar");
+    await expect(page.locator(".assigned-view .player-tile").first().locator("h2")).toHaveText("Magnus Knudsen");
+    await expect(page.locator(".assigned-view .player-tile").last().locator("h2")).toHaveText("Kristian Mellestad");
+    expect(await page.locator(".assigned-view .match-tools").innerText()).not.toContain("Skive 1");
+    await expect(page.locator(".kiosk-topbar .v2-top-actions .pill")).toContainText("Skive 1");
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });
