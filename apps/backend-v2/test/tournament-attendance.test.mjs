@@ -75,3 +75,27 @@ test("finish-checkin moves no-shows and waitlist before ready", async () => {
   assert.ok(executed.some((sql) => sql.includes("checkin_closes_at=NOW()")));
   assert.ok(executed.some((sql) => sql.includes("registration_closes_at=NOW()")));
 });
+
+
+test("finish-checkin refuses three players without writing no-shows or closing registration", async () => {
+  const executed = [];
+  const db = {
+    query: async (sql) => {
+      if (sql.includes("FROM `bd_test_tournaments` t")) {
+        return [{ id: "20", club_id: "1", status: "draft", start_at: "2026-09-13 18:00:00", window_open: 1 }];
+      }
+      if (sql.includes("COUNT(*)")) return [{ cnt: 3 }];
+      return [];
+    },
+    execute: async (sql) => {
+      executed.push(sql);
+      return { affectedRows: 1 };
+    },
+  };
+  const repo = new MySqlTournamentAttendanceRepository(provider(db), "bd_test_");
+  await assert.rejects(
+    () => repo.finishCheckin("20"),
+    (error) => error.code === "not_enough_checked_in_players",
+  );
+  assert.deepEqual(executed, [], "denied closure must perform no mutations");
+});
