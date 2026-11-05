@@ -50,4 +50,10 @@ test("a single owned presentation layer replaces late Live, kiosk and player CSS
   assert.doesNotMatch(player, /player-card-polish[.]css/);
   assert.match(player, /player-design-system[.]css/);
   assert.match(read("apps/live/venue-wall-current.css"), /Former venue-wall-v10[.]css/);
+  assert.doesNotMatch(read("packages/ui-assets/portal-menu.js"), /style[.]textContent = `/);
+  assert.doesNotMatch(read("packages/ui-assets/unified-portal-shell.js"), /ensureRuntimeStyles/);
+  const shell = read("packages/ui-assets/unified-portal-shell.css");
+  assert.match(shell, /[.]portal-view-hidden\{display:none!important\}/);
+  assert.match(shell, /[.]unified-group-label[.]admin[.]club-admin/);
+
 });
