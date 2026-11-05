@@ -408,7 +408,7 @@ export class MySqlTournamentOperationsRepository {
     });
   }
 
-  async assignNextToKiosk(kioskIdInput: unknown): Promise<Record<string, unknown>> {
+  async assignNextToKiosk(kioskIdInput: unknown, advanceNow = false): Promise<Record<string, unknown>> {
     const kioskId = requiredId(kioskIdInput, "kiosk_id");
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const outcome = await this.sessions.withTransaction(async (db) => {
@@ -427,10 +427,26 @@ export class MySqlTournamentOperationsRepository {
         const reservation = await this.reservationForKioskWith(db, kioskId, true);
         if (reservation !== null) {
           if (Math.max(0, numberValue(reservation.remaining_seconds)) > 0) {
-            return {
-              retry: false,
-              result: { assigned: false, reason: "reservation_wait", match: null, reservation: formatReservation(reservation) },
-            };
+            // A normal automatic claim must honor result-hold. Only the
+            // explicit "Vis neste kamp nå" action may skip it, and only
+            // while the kiosk has a recently finished canonical match.
+            let allowAdvance = false;
+            if (advanceNow) {
+              const finished = await db.query<QueryResultRow>(
+                `SELECT id FROM \`${this.prefix}matches\`
+                 WHERE kiosk_id=? AND status='completed'
+                   AND finished_at>=DATE_SUB(NOW(),INTERVAL 2 MINUTE)
+                 ORDER BY finished_at DESC,id DESC LIMIT 1 FOR UPDATE`,
+                [kioskId],
+              );
+              allowAdvance = finished.length > 0;
+            }
+            if (!allowAdvance) {
+              return {
+                retry: false,
+                result: { assigned: false, reason: "reservation_wait", match: null, reservation: formatReservation(reservation) },
+              };
+            }
           }
           const reservationId = requiredId(reservation.id, "reservation_id");
           const matchId = requiredId(reservation.match_id, "match_id");
