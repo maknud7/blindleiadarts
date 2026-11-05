@@ -18,7 +18,8 @@ test("shared typography inherits foreground from colored components", () => {
   // The old selector repainted every strong and heading dark on top of blue CTA
   // surfaces, regardless of the actual foreground of the containing component.
   assert.doesNotMatch(css, /body\[data-bd-surface\] strong\s*\{/);
-  assert.doesNotMatch(css, /body\[data-bd-surface\] h1\s*,/);
+  const headingStyle = css.match(/body\[data-bd-surface\] h1,[\s\S]*?h4\s*\{([^}]*)\}/)?.[1] || "";
+  assert.doesNotMatch(headingStyle, /(?:^|;)\s*color\s*:/);
   assert.doesNotMatch(css, /body\[data-bd-surface\] \.muted\s*\{/);
   assert.doesNotMatch(css, /body\[data-bd-surface\] \.eyebrow\s*\{/);
   assert.match(css, /\.muted\{color:var\(--bd-muted\)\}/);
