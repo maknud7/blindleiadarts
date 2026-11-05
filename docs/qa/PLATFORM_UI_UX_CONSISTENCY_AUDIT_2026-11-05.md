@@ -67,3 +67,21 @@ Gjennomgått kildekode for canonical root, admin, medlemsregister, spiller, turn
 | Betaling / medlemskobling / Stripe | Ikke ferdig e2e-dekket | Separate data- og tilgangstester |
 
 **Status:** De tre avgrensede UI/UX-rettelsene og regrestestene leveres i egen PR. Punktene om designkonsolidering, medlem-/spillerreise og full visuell verifikasjon er **funn og videre arbeid**, ikke påstått løst. Ingen automatisk produksjonspublisering.
+
+## Utført strukturell opprydding i samme PR
+
+- **Medlemmer:** Fjernet 5,7 kB runtime-injisert CSS. Medlemskort, oppsummering og mobilutvidelse eies nå av `apps/admin/member-onboarding-admin.css`; fjernet medlemsspesifikk CSS-override fra global `admin-ux.css`. Oppdatert cacheversjon for medlemsmodul og styles.
+- **Felles navigasjon:** Fjernet CSS-injeksjon i både `portal-menu.js` og `unified-portal-shell.js`. Regler for aktiv rute, sidebar, rolletilgang og klubbvelger ligger i `unified-portal-shell.css`. De to skriptene eier ikke lenger visuelle CSS-regler, men fortsatt den avgrensede tilstanden de trenger.
+- **Live:** Slått sammen seks sekvensielle og overlappende `venue-wall-v5.css`–`v10.css` til én `venue-wall-current.css`, med identisk regelrekkefølge. Gamle filer er fjernet fra repository og HTML. Hensikten er én vedlikeholdt visuell autoritet for den delen av veggen.
+- **Kiosk:** Slått sammen `state-visibility-fix.css`, `tablet-action-row-fix.css` og `mode-switch-visibility-fix.css` til `kiosk-state-actions.css`; gamle filer fjernet. Oppdatert service worker sin precache-liste og økt cacheversjon til v46. Ingen hardware-API eller scoring-mutering er endret.
+- **Spiller:** Flyttet reglene fra `player-card-polish.css` inn i `player-design-system.css` i samme cascade-rekkefølge og fjernet den gamle filen og importen.
+- **Cache/kontrakter:** Alle berørte HTML-lenker og import-versjoner er oppdatert i root, admin og spiller, slik at nye og gamle moduler ikke blandes fra cache. Nye Node-regresjonskontrakter og Chromium-medlemstester inkluderer mobilutvidelse, overflow, gammel klubb-respons og retry.
+
+Dette fjerner **10 utdaterte CSS-filer og tre JS-injiserte CSS-blokker**. Det er en reell reduksjon i UI-lag, ikke bare nye overstyringer.
+
+### Hva som fortsatt gjenstår
+
+- Live har fortsatt en del eldre CSS- og visningsmoduler som må konsolideres i nye, isolerte leveranser med TV-snapshots; denne PR tar de seks siste wall-versjonene.
+- Kiosk har fortsatt historisk styling og separat v1/v2-runtime; vi konsoliderer ikke sikkerhetskritiske interaksjoner blindt før praktisk Scolia-akseptansetest.
+- Medlem ↔ spillerkobling, superadmin-rollegrenser og full Stripe-avstemming er produktdesign/forretningslogikk og krever egen avklaring, ikke bare CSS.
+- Ingen innlogget, fullstendig TEST-visual QA av alle flater er gjennomført; automatisk CI og browser QA viser bare de testede tilstandene.
