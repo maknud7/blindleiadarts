@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="./venue-wall-readability.css?v=20260831-2205">
   <link rel="stylesheet" href="./code-entry.css?v=20260829-01">
   <link rel="stylesheet" href="./live-profiles.css?v=20260901-1330">
-  <link rel="stylesheet" href="./venue-wall-current.css?v=20261105-ui-cleanup-01">
+  <link rel="stylesheet" href="./venue-wall-current.css?v=20261105-live-rotation-01">
   <link rel="stylesheet" href="./venue-playoff-v5.css?v=20260903-playoff-wall-01">
   <link rel="stylesheet" href="./venue-playoff-v6.css?v=20260904-playoff-polish-02">
   <link rel="stylesheet" href="./venue-playoff-v7.css?v=20260904-bracket-live-01">
@@ -93,6 +93,18 @@
 
       <div id="liveDashboard" class="live-dashboard hidden">
         <section id="progressCards" class="stats-grid" aria-label="Turneringsstatus"></section>
+
+        <nav id="wallScenes" class="wall-scenes" aria-label="Livevisninger">
+          <div class="wall-scenes-tabs">
+            <button type="button" data-wall-target="arena" aria-pressed="true">Kamper nå</button>
+            <button type="button" data-wall-target="tables" aria-pressed="false">Tabell og sluttspill</button>
+            <button type="button" data-wall-target="stats" aria-pressed="false">Statistikk og ELO</button>
+          </div>
+          <div class="wall-scenes-controls">
+            <span id="wallSceneStatus" aria-live="off">Roterer hvert 18. sekund</span>
+            <button type="button" id="wallScenePause" aria-pressed="false" aria-label="Stopp automatisk rotasjon">Pause</button>
+          </div>
+        </nav>
 
         <section class="section priority-section">
           <div class="section-head"><div><p class="eyebrow">På skivene</p><h2>Kamper live</h2></div><span id="updatedAt" class="muted"></span></div>
