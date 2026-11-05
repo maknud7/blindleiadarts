@@ -51,7 +51,7 @@ test("Live wall reads canonical check-in roster every 3s with visible stale indi
   assert.match(wall, /markCheckinRefreshProblem\(\)/);
   assert.match(wall, /state\.phase === "checkin"/);
   assert.match(wall, /checkin\.code_missing/);
-  assert.match(wall, /if \(el\.checkinParticipants\.innerHTML !== rosterMarkup\)/);
+  assert.match(wall, /if \(state\.lastCheckinRosterMarkup !== rosterMarkup\)/);
   assert.match(page, /id="checkinUpdatedAt"/);
   assert.match(db, /status IN \('checked_in','registered','waitlisted'\)/);
   assert.match(db, /code_allowed: codeAllowed && code !== null/);
