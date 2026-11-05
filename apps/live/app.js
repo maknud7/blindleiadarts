@@ -12,7 +12,6 @@ const el = Object.fromEntries([
 ].map((id) => [id, document.getElementById(id)]));
 
 const state = { payload: null, checkin: null, phase: "loading", socket: null, poll: null, realtime: null, loading: false, checkinFetchedAt: 0 };
-let lastCheckinRosterMarkup = null;
 
 function esc(value) {
   return String(value ?? "")
@@ -155,9 +154,9 @@ function renderCheckin(data) {
     ? participants.map((player) => `<div class="checkin-person ${participantClass(String(player.status || ""))}"><strong>${esc(player.display_name)}</strong><span class="checkin-person-status">${esc(participantStatus(String(player.status || "")))}</span></div>`).join("")
     : `<div class="checkin-empty">Ingen påmeldte ennå.</div>`;
   // Three-second polling must not reset the visible roster/scroll position.
-  if (lastCheckinRosterMarkup !== rosterMarkup) {
+  if (state.lastCheckinRosterMarkup !== rosterMarkup) {
     el.checkinParticipants.innerHTML = rosterMarkup;
-    lastCheckinRosterMarkup = rosterMarkup;
+    state.lastCheckinRosterMarkup = rosterMarkup;
   }
   document.title = `${checkin.tournament_name || "Blindleia Darts"} · Innsjekk`;
   return true;
@@ -263,7 +262,7 @@ function renderHighlights(highlights = {}) {
 function render(payload) {
   state.payload = payload;
   state.checkin = null;
-  lastCheckinRosterMarkup = null;
+  state.lastCheckinRosterMarkup = null;
   el.clubName.textContent = payload.club?.name || "Blindleia Dartklubb";
   el.tournamentName.textContent = payload.tournament?.name || "Live";
   const status = String(payload.tournament?.status || "");
