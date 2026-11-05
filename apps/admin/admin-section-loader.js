@@ -1,4 +1,6 @@
 const loaded = new Map();
+// Opening Utstyr repeatedly must never flood Scolia reads or block navigation.
+const equipmentRefreshedForClub = new Set();
 
 const sectionModules = Object.freeze({
   overview: [
@@ -60,8 +62,18 @@ async function loadSection(target) {
 
   try {
     await loaded.get(key);
-    if (key === "kiosks") {
-      window.setTimeout(() => document.getElementById("scoliaRefresh")?.click(), 0);
+    if (key === "kiosks" && currentTarget() === "kiosks") {
+      const clubKey = String(localStorage.getItem("bd:selectedClubId") || "default");
+      const adminVisible = !document.getElementById("adminApp")?.classList.contains("hidden");
+      const refreshButton = document.getElementById("scoliaRefresh");
+      if (adminVisible && refreshButton && !equipmentRefreshedForClub.has(clubKey)) {
+        equipmentRefreshedForClub.add(clubKey);
+        window.setTimeout(() => {
+          if (currentTarget() === "kiosks" && !document.getElementById("adminApp")?.classList.contains("hidden")) {
+            refreshButton.click();
+          }
+        }, 0);
+      }
     }
   } catch {
     // Section modules own their visible error handling after a retry.
