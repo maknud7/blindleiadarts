@@ -14,7 +14,7 @@ type InputMode = "sum" | "per_dart";
 type InputModeMap = Record<string, InputMode>;
 type Multiplier = "S" | "D" | "T";
 type ManualDart = { multiplier: Multiplier; value: number | "BULL" };
-type RemainingPreview = { remaining: number; state: "live" | "bust" | "checkout" };
+type RemainingPreview = { remaining: number; state: "live" | "bust" | "checkout"; recordedScore: number };
 type EditableVisit = Visit & { id?: number; player_id?: number; darts_used?: number };
 type PendingManualVisit = {
   requestId: string;
@@ -185,7 +185,7 @@ function optimisticManualSnapshot(
   const optimisticVisit: EditableVisit = {
     player_name: throwing.display_name,
     visit_number: visitNumber,
-    score: visitScore,
+    score: preview.recordedScore,
     remaining_after: preview.remaining,
     is_bust: bust ? 1 : 0,
   };
@@ -221,20 +221,36 @@ function readPlayerInputModes(): InputModeMap {
 }
 function manualRemainingPreview(player: PlayerScore | null, inputMode: InputMode, score: string, darts: ManualDart[]): RemainingPreview | null {
   if (!player) return null;
-  const hasInput = inputMode === "sum" ? score !== "" : darts.length > 0;
-  if (!hasInput) return null;
-  const visitScore = inputMode === "sum"
-    ? Number(score)
-    : darts.reduce((sum, dart) => sum + manualDartScore(dart), 0);
-  if (!Number.isFinite(visitScore) || visitScore < 0) return null;
-
-  const candidate = Number(player.remaining) - visitScore;
-  if (candidate < 0 || candidate === 1) return { remaining: Number(player.remaining), state: "bust" };
-  if (candidate === 0) {
-    if (inputMode === "per_dart" && !isDoubleOut(darts)) return { remaining: Number(player.remaining), state: "bust" };
-    return { remaining: 0, state: "checkout" };
+  const startingRemaining = Number(player.remaining);
+  if (inputMode === "per_dart") {
+    if (darts.length === 0) return null;
+    let remaining = startingRemaining;
+    let recordedScore = 0;
+    // Canonical dart501.evaluatePerDart stops at the FIRST bust. All darts
+    // after it must be excluded from the optimistic visit, exactly as on server.
+    for (const dart of darts) {
+      const points = manualDartScore(dart);
+      recordedScore += points;
+      const nextRemaining = remaining - points;
+      if (nextRemaining < 0 || nextRemaining === 1 || (nextRemaining === 0 && dart.multiplier !== "D")) {
+        return { remaining: startingRemaining, state: "bust", recordedScore };
+      }
+      if (nextRemaining === 0) return { remaining: 0, state: "checkout", recordedScore };
+      remaining = nextRemaining;
+    }
+    return { remaining, state: "live", recordedScore };
   }
-  return { remaining: candidate, state: "live" };
+
+  if (score === "") return null;
+  const recordedScore = Number(score);
+  if (!Number.isFinite(recordedScore) || recordedScore < 0) return null;
+  const candidate = startingRemaining - recordedScore;
+  if (candidate < 0 || candidate === 1) return { remaining: startingRemaining, state: "bust", recordedScore };
+  if (candidate === 0) {
+    if (!isCheckoutNumber(startingRemaining)) return { remaining: startingRemaining, state: "bust", recordedScore };
+    return { remaining: 0, state: "checkout", recordedScore };
+  }
+  return { remaining: candidate, state: "live", recordedScore };
 }
 
 export function KioskWorkspace() {
@@ -273,6 +289,10 @@ export function KioskWorkspace() {
   const manualQueueRunning = useRef(false);
   const manualQueuePaused = useRef(false);
   const manualQueueSequence = useRef(0);
+  // A read that started before an optimistic visit must never restore the
+  // previous thrower after the local turn has already advanced.
+  const stateMutationEpochRef = useRef(0);
+  const stateReadSequenceRef = useRef(0);
   const skipNextThrowingReset = useRef(false);
   const lastActiveMatchRef = useRef<KioskMatch | null>(null);
   const postMatchBusy = useRef(false);
@@ -361,6 +381,7 @@ export function KioskWorkspace() {
     }
 
     const total = turn.darts.reduce((sum, dart) => sum + manualDartScore(dart), 0);
+    stateMutationEpochRef.current += 1;
     const optimistic = optimisticManualSnapshot(current, "per_dart", total, turn.darts);
     snapshotRef.current = optimistic;
     skipNextThrowingReset.current = true;
@@ -369,7 +390,7 @@ export function KioskWorkspace() {
     const recent = ((optimistic.match?.recent_visits || []) as EditableVisit[])[0];
     setScoliaRealtimeLastVisit({
       player_name: turn.playerName,
-      score: total,
+      score: Number(recent?.score ?? total),
       darts: turn.darts,
       darts_used: turn.darts.length,
       is_bust: Number(recent?.is_bust || 0) === 1,
@@ -409,9 +430,18 @@ export function KioskWorkspace() {
 
   const loadState = useCallback(async (code = kioskCode, token = kioskToken) => {
     if (!code) return;
+    const mutationEpoch = stateMutationEpochRef.current;
+    const readSequence = ++stateReadSequenceRef.current;
+    const isCurrentRead = () =>
+      mounted.current &&
+      mutationEpoch === stateMutationEpochRef.current &&
+      readSequence === stateReadSequenceRef.current &&
+      manualQueueRef.current.length === 0 &&
+      !manualQueueRunning.current &&
+      !manualQueuePaused.current;
     try {
       const data = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(code)}/state`, { kioskToken: token });
-      if (mounted.current) {
+      if (isCurrentRead()) {
         const previous = lastActiveMatchRef.current;
         if (!data.match && previous?.id && String(previous.status || "") === "in_progress" && !completion) {
           setCompletion({
@@ -426,10 +456,12 @@ export function KioskWorkspace() {
         if (data.match && ["assigned", "ready", "pending", "in_progress"].includes(String(data.match.status || ""))) {
           lastActiveMatchRef.current = data.match;
         }
+        snapshotRef.current = data;
         setSnapshot(data);
         setError("");
       }
     } catch (cause) {
+      if (!isCurrentRead()) return;
       if (cause instanceof ApiError && [401, 403, 404, 409].includes(cause.status)) {
         if (mounted.current) {
           setSnapshot(null);
@@ -808,7 +840,9 @@ export function KioskWorkspace() {
     );
     setManualQueueDepth(manualQueueRef.current.length);
     setError("");
-    const optimistic = optimisticManualSnapshot(snapshot, optimisticMode, optimisticScore, optimisticDarts);
+    stateMutationEpochRef.current += 1;
+    const optimistic = optimisticManualSnapshot(snapshotRef.current || snapshot, optimisticMode, optimisticScore, optimisticDarts);
+    snapshotRef.current = optimistic;
     skipNextThrowingReset.current = true;
     setSnapshot(optimistic);
     if (optimistic.match?.status === "completed" && optimistic.match.id) {
