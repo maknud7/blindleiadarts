@@ -517,6 +517,26 @@ if (host) {
     const showing = host.classList.toggle("tc-show-overview");
     el.tcBrowse.textContent = showing ? "Skjul oversikten" : "Vis alle turneringer";
   });
+  // Keep the canonical check-in rows in sync with player self check-ins and
+  // the Live wall without resetting the active filter, scroll or leader view.
+  // Ignore events for other tournaments or an already started/closed phase.
+  window.addEventListener("bd:tournament-attendance-updated", (event) => {
+    const update = event.detail || {};
+    if (!state.tournament || String(state.tournament.id) !== String(update.tournamentId)) return;
+    if (String(state.tournament.status) !== "draft" || String(update.tournament?.status) !== "draft") return;
+    if (!Array.isArray(update.tournament?.registrations)) return;
+    const before = JSON.stringify(state.tournament.registrations || []);
+    const after = JSON.stringify(update.tournament.registrations);
+    if (before === after) return;
+    const list = el.tcRegistrations;
+    const scroll = list?.scrollTop || 0;
+    const focusId = document.activeElement?.closest?.(".tc-registration")?.dataset.playerId || "";
+    state.tournament = { ...state.tournament, ...update.tournament };
+    render();
+    if (list) list.scrollTop = scroll;
+    if (focusId) list?.querySelector(`.tc-registration[data-player-id="${focusId}"] button:not(:disabled)`)?.focus({ preventScroll: true });
+  });
+
   el.tcRefresh.addEventListener("click", () => loadBase().catch((e) => show(e.message, "error")));
   el.tcTournament.addEventListener("change", () => loadSelectedTournament().catch((e) => show(e.message, "error")));
   el.tcAddPlayer.addEventListener("click", async () => {
