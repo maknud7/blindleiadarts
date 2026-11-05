@@ -76,7 +76,23 @@ async function loadSection(target) {
       }
     }
   } catch {
-    // Section modules own their visible error handling after a retry.
+    // A failed dynamic import is not handled by the module, because it never
+    // executed. Give members a visible retry instead of an endless "Laster".
+    if (key === "players") {
+      const status = document.getElementById("memberRegistryStatus");
+      if (status && !document.querySelector("#players .member-access-block")) {
+        status.classList.remove("hidden");
+        status.removeAttribute("hidden");
+        const message = document.createElement("span");
+        message.textContent = "Medlemsregisteret kunne ikke åpnes. ";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "button secondary";
+        retry.textContent = "Prøv igjen";
+        retry.addEventListener("click", () => loadSection("players"));
+        status.replaceChildren(message, retry);
+      }
+    }
   }
 }
 
