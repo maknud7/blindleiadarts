@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 // alias or database is created. Real hardware and mutation UAT remain separate.
 const ORIGIN = "http://127.0.0.1:4173";
 
-function fixture() {
+function fixture(options = {}) {
   return {
     kiosk: {
       id: 7,
@@ -20,8 +20,8 @@ function fixture() {
       id: 42,
       status: "in_progress",
       current_leg: 1,
-      current_player_id: 101,
-      best_of_legs: 3,
+      current_player_id: options.currentPlayerId ?? 101,
+      best_of_legs: options.bestOfLegs ?? 3,
       round_label: "Gruppespill - runde 1",
       player_a: { id: 101, display_name: "Spiller A med et ekstraordinært langt navn", remaining: 301, legs_won: 0 },
       player_b: { id: 102, display_name: "Spiller B med et tilsvarende langt navn", remaining: 321, legs_won: 0 },
@@ -34,6 +34,8 @@ function fixture() {
     },
   };
 }
+
+function pathOf(request) { return new URL(request.url()).pathname; }
 
 async function startMockKiosk(browser, size, options = {}) {
   const context = await browser.newContext({
@@ -54,6 +56,11 @@ async function startMockKiosk(browser, size, options = {}) {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     requests.push({ method: request.method(), path: new URL(request.url()).pathname });
+    if (request.method() === "POST" && options.mockSuccessfulVisit && pathOf(request).endsWith("/visit")) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data: {} }) });
+      return;
+    }
     if (request.method() !== "GET") {
       await route.fulfill({
         status: 409,
@@ -65,7 +72,7 @@ async function startMockKiosk(browser, size, options = {}) {
     const path = new URL(request.url()).pathname;
     const data = path.endsWith("/health")
       ? { status: "ok", environment: "test" }
-      : path.endsWith("/kiosks/QA-MANUAL/state") ? fixture() : {};
+      : path.endsWith("/kiosks/QA-MANUAL/state") ? fixture(options) : {};
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data }) });
   });
 
@@ -147,4 +154,69 @@ test("safe layout can be manually forced and survives reload on same tablet", as
   } finally {
     await context.close();
   }
+});
+
+
+test("best av 1 shows match format but not leg standings, with an obvious thrower", async ({ browser }) => {
+  const { context, page, requests, errors } = await startMockKiosk(browser, { width: 768, height: 1024 }, { bestOfLegs: 1 });
+  try {
+    await expect(page.locator(".match-best-of")).toHaveText("Best av 1");
+    await expect(page.locator(".match-leg-score")).toHaveCount(0);
+    await expect(page.locator(".player-leg-score")).toHaveCount(0);
+    await expect(page.locator(".player-tile.active .turn-indicator")).toHaveText("Kaster nå");
+    await expect(page.locator(".player-tile:not(.active) .turn-indicator")).toHaveText("Venter");
+    const { activeBackground, inactiveBackground, activeBorder } = await page.locator(".versus").evaluate(el => {
+      const a = getComputedStyle(el.querySelector(".player-tile.active"));
+      const b = getComputedStyle(el.querySelector(".player-tile:not(.active)"));
+      return { activeBackground: a.backgroundColor, inactiveBackground: b.backgroundColor, activeBorder: a.borderLeftWidth };
+    });
+    expect(activeBackground).not.toBe(inactiveBackground);
+    expect(Number.parseFloat(activeBorder)).toBeGreaterThanOrEqual(5);
+    expect(page.locator(".player-tile.active")).toHaveCount(1);
+    expect(errors).toEqual([]);
+    expect(requests.every((req) => req.method === "GET")).toBe(true);
+  } finally { await context.close(); }
+});
+
+test("best av 3 shows leg number and standings; active side follows current thrower", async ({ browser }) => {
+  const { context, page, errors } = await startMockKiosk(browser, { width: 500, height: 720 }, { bestOfLegs: 3, currentPlayerId: 102 });
+  try {
+    await expect(page.locator(".match-best-of")).toHaveText("Best av 3");
+    await expect(page.locator(".match-current-leg")).toHaveText("Leg 1");
+    await expect(page.locator(".match-leg-score")).toHaveText("0 – 0");
+    await expect(page.locator(".player-leg-score")).toHaveCount(2);
+    await expect(page.locator(".player-tile").nth(1)).toHaveClass(/active/);
+    await expect(page.locator(".player-tile").nth(1).locator(".turn-indicator")).toHaveText("Kaster nå");
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("saving a throw keeps keypad, save action and recent visits fixed in place", async ({ browser }) => {
+  // All writes below are intercepted by this local Playwright fixture, never sent to a backend.
+  const { context, page, requests, errors } = await startMockKiosk(browser, { width: 768, height: 1024 }, { bestOfLegs: 1, mockSuccessfulVisit: true });
+  try {
+    await page.getByRole("button", { name: "Per pil" }).click();
+    const save = page.locator(".dart-entry-actions .save-visit-button");
+    const undo = page.locator(".dart-entry-actions .button.secondary");
+    const grid = page.locator(".number-grid-v2");
+    const visits = page.locator(".visits");
+    const key = grid.getByRole("button", { name: "1", exact: true });
+    await key.click();
+    await expect(save).toBeEnabled();
+    expect((await save.boundingBox()).height).toBeGreaterThanOrEqual(58);
+    expect((await save.boundingBox()).width).toBeGreaterThan((await undo.boundingBox()).width);
+    const before = await Promise.all([grid, save, visits].map(locator => locator.boundingBox()));
+    await save.click();
+    await expect(page.locator('.match-view[aria-busy="true"]')).toBeVisible();
+    // The former inline "Lagrer X kast" notice physically shortened the score controls.
+    await expect(page.locator(".kiosk-card > .kiosk-pending-notice")).toHaveCount(0);
+    const during = await Promise.all([grid, save, visits].map(locator => locator.boundingBox()));
+    for (let index = 0; index < before.length; index += 1) {
+      expect(Math.abs(before[index].y - during[index].y), "Control " + index + " cannot move while saving").toBeLessThanOrEqual(1);
+      expect(Math.abs(before[index].height - during[index].height), "Control " + index + " cannot resize while saving").toBeLessThanOrEqual(1);
+    }
+    await expect(page.locator('.match-view[aria-busy="true"]')).toHaveCount(0, { timeout: 10000 });
+    expect(requests.some(request => request.method === "POST" && request.path.endsWith("/visit"))).toBe(true);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
 });
