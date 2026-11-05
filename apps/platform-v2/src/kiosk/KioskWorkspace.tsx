@@ -289,6 +289,10 @@ export function KioskWorkspace() {
   const manualQueueRunning = useRef(false);
   const manualQueuePaused = useRef(false);
   const manualQueueSequence = useRef(0);
+  // A read that started before an optimistic visit must never restore the
+  // previous thrower after the local turn has already advanced.
+  const stateMutationEpochRef = useRef(0);
+  const stateReadSequenceRef = useRef(0);
   const skipNextThrowingReset = useRef(false);
   const lastActiveMatchRef = useRef<KioskMatch | null>(null);
   const postMatchBusy = useRef(false);
@@ -377,6 +381,7 @@ export function KioskWorkspace() {
     }
 
     const total = turn.darts.reduce((sum, dart) => sum + manualDartScore(dart), 0);
+    stateMutationEpochRef.current += 1;
     const optimistic = optimisticManualSnapshot(current, "per_dart", total, turn.darts);
     snapshotRef.current = optimistic;
     skipNextThrowingReset.current = true;
@@ -425,9 +430,18 @@ export function KioskWorkspace() {
 
   const loadState = useCallback(async (code = kioskCode, token = kioskToken) => {
     if (!code) return;
+    const mutationEpoch = stateMutationEpochRef.current;
+    const readSequence = ++stateReadSequenceRef.current;
+    const isCurrentRead = () =>
+      mounted.current &&
+      mutationEpoch === stateMutationEpochRef.current &&
+      readSequence === stateReadSequenceRef.current &&
+      manualQueueRef.current.length === 0 &&
+      !manualQueueRunning.current &&
+      !manualQueuePaused.current;
     try {
       const data = await api<KioskSnapshot>(`/kiosks/${encodeURIComponent(code)}/state`, { kioskToken: token });
-      if (mounted.current) {
+      if (isCurrentRead()) {
         const previous = lastActiveMatchRef.current;
         if (!data.match && previous?.id && String(previous.status || "") === "in_progress" && !completion) {
           setCompletion({
@@ -442,10 +456,12 @@ export function KioskWorkspace() {
         if (data.match && ["assigned", "ready", "pending", "in_progress"].includes(String(data.match.status || ""))) {
           lastActiveMatchRef.current = data.match;
         }
+        snapshotRef.current = data;
         setSnapshot(data);
         setError("");
       }
     } catch (cause) {
+      if (!isCurrentRead()) return;
       if (cause instanceof ApiError && [401, 403, 404, 409].includes(cause.status)) {
         if (mounted.current) {
           setSnapshot(null);
@@ -824,7 +840,9 @@ export function KioskWorkspace() {
     );
     setManualQueueDepth(manualQueueRef.current.length);
     setError("");
-    const optimistic = optimisticManualSnapshot(snapshot, optimisticMode, optimisticScore, optimisticDarts);
+    stateMutationEpochRef.current += 1;
+    const optimistic = optimisticManualSnapshot(snapshotRef.current || snapshot, optimisticMode, optimisticScore, optimisticDarts);
+    snapshotRef.current = optimistic;
     skipNextThrowingReset.current = true;
     setSnapshot(optimistic);
     if (optimistic.match?.status === "completed" && optimistic.match.id) {
