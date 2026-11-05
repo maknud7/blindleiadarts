@@ -2,7 +2,7 @@ import {test,expect} from "@playwright/test";
 
 // Real KioskWorkspace/React bundle, but every API route is intercepted before
 // the browser can access a database or physical board.
-const URL="http://127.0.0.1:4173/v2/kiosk/";
+const KIOSK_URL="http://127.0.0.1:4173/v2/kiosk/";
 const club={id:7,name:"Blindleia Dartklubb",slug:"blindleia-dartklubb"};
 const kiosk={id:7,code:"QA-MANUAL",board_number:1,name:"Skive 1",scoring_mode:"manual",club};
 const players={
@@ -61,7 +61,7 @@ async function boot(browser,{nextAssigned=true,staleCompletedMatch=false}={}){
     return route.fulfill({status:409,contentType:"application/json",
       body:JSON.stringify({ok:false,error:{message:"Unmocked mutation"}})});
   });
-  await page.goto(URL);
+  await page.goto(KIOSK_URL);
   await expect(page.getByText("Registrer kast")).toBeVisible();
   return {context,page,calls,errors,revealLatestResult:()=>{latestResultVisible=true;}};
 }
