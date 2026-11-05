@@ -18,7 +18,10 @@ test("member register reads are cancellable, bounded and recoverable", () => {
 test("members dashboard remains visible on mobile", () => {
   const adminCss = read("apps/admin/admin-ux.css");
   assert.doesNotMatch(adminCss, /\.member-access-summary\{display:none!important\}/);
-  assert.match(adminCss, /#players \.member-access-summary\{display:grid!important/);
+  const membersCss = read("apps/admin/member-onboarding-admin.css");
+  assert.doesNotMatch(adminCss, /#players \.member-access-summary\{display:grid!important/);
+  assert.match(membersCss, /#players \.member-access-summary\{display:grid!important/);
+  assert.doesNotMatch(read("apps/admin/member-onboarding-admin.js"), /style\.textContent=`/);
   assert.match(read("apps/admin/index.html"), /Betaling vises som status/);
 });
 
@@ -31,4 +34,20 @@ test("navigation has one owner for route changes, and lazy failures can retry", 
   assert.match(loader, /url\.searchParams\.set\("moduleRetry", String\(attempt\)\)/);
   assert.match(loader, /loadedModules\.delete\(path\)/);
   assert.match(loader, /status\.replaceChildren\(message, retry\)/);
+});
+
+test("a single owned presentation layer replaces late Live, kiosk and player CSS patches", () => {
+  const live = read("apps/live/index.html");
+  const kiosk = read("apps/kiosk/index.html");
+  const player = read("apps/player/index.html");
+  assert.match(live, /venue-wall-current\.css/);
+  for (let n = 5; n <= 10; n += 1) assert.doesNotMatch(live, new RegExp("venue-wall-v" + n + "\\\\.css"));
+  assert.match(kiosk, /kiosk-state-actions\.css/);
+  for (const old of ["state-visibility-fix.css", "tablet-action-row-fix.css", "mode-switch-visibility-fix.css"]) {
+    assert.doesNotMatch(kiosk, new RegExp(old.replace(".", "\\\\.")));
+  }
+  assert.match(read("apps/kiosk/service-worker.js"), /kiosk-state-actions\.css/);
+  assert.doesNotMatch(player, /player-card-polish\.css/);
+  assert.match(player, /player-design-system\.css/);
+  assert.match(read("apps/live/venue-wall-current.css"), /Former venue-wall-v10\.css/);
 });
