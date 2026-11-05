@@ -1,0 +1,292 @@
+/*
+ * Kiosk viewport fail-safe.
+ *
+ * The normal 3:4 portrait-tablet design remains unchanged when it fits.
+ * Other aspect ratios / cramped tablets get a contained scroll surface, not
+ * invisible score controls. This file MUST load last after the base, Scolia
+ * and recent-visit CSS, so previous targeted overrides cannot hide actions.
+ */
+
+/* Never let error/status text force a button off-screen horizontally. */
+.kiosk-shell,
+.kiosk-main,
+.kiosk-card,
+.kiosk-card > *,
+.match-view,
+.score-entry,
+.manual-dart-entry,
+.kiosk-hero {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.kiosk-card > .notice,
+.scolia-kiosk-strip,
+.kiosk-hero p,
+.kiosk-settings-dialog {
+  overflow-wrap: anywhere;
+}
+
+/* Always provide a recoverable scroll path, even if JS is unavailable. */
+.kiosk-main {
+  min-height: 0;
+  overscroll-behavior-y: contain;
+}
+
+.kiosk-card {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+}
+
+/* If a child alone is clipped, it must scroll rather than silently vanish. */
+.kiosk-card > div:not(.kiosk-hero):not(.scolia-kiosk-strip):not(.notice),
+.score-entry,
+.manual-dart-entry {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+}
+
+/* Complete recent visit history must be accessible on tablet: all four,
+ * rather than silently losing the fourth visit or hiding the section. */
+.visits .editable-visits-v2 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.visits .editable-visits-v2 > .visit-editable-v2:nth-child(n) {
+  display: grid;
+}
+
+/* Never remove the visit controls entirely on small devices. */
+@media (max-width: 479px) {
+  .visits {
+    display: grid;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 68px;
+    overflow: visible;
+  }
+
+  .visits .editable-visits-v2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: auto;
+    min-height: 68px;
+  }
+
+  .visits .visit-editable-v2 {
+    min-height: 54px;
+  }
+}
+
+/* Touch-target safety: CSS overrides from v1/v2 must not shrink operational
+ * controls under a practical 44 CSS px target. In a cramped layout we scroll. */
+.kiosk-topbar .kiosk-settings-button,
+.kiosk-settings-head .kiosk-settings-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex-basis: 44px;
+}
+
+.match-tools .button.small,
+.scolia-kiosk-strip .button.small,
+.manual-mode-switch button,
+.dart-entry-actions .button,
+.kiosk-card .button.small {
+  min-height: 44px;
+}
+
+.score-entry {
+  /* 44px mode buttons + switch padding + Norwegian labels must fit above the score display. */
+  grid-template-rows: minmax(72px, auto) 54px minmax(0, 1fr);
+}
+
+.score-entry .panel-head {
+  position: relative;
+  z-index: 2;
+  min-height: 64px;
+}
+
+.score-entry .score-display {
+  position: relative;
+  z-index: 1;
+}
+
+.score-entry.dart-entry-active {
+  grid-template-rows: minmax(72px, auto) minmax(0, 1fr);
+}
+
+.keypad {
+  grid-template-rows: repeat(4, minmax(44px, 1fr));
+}
+
+.number-grid-v2 {
+  grid-template-rows: repeat(5, minmax(44px, 1fr));
+}
+
+.keypad button,
+.number-grid-v2 button,
+.multiplier-column button,
+.test-board,
+.start-match-button,
+.dart-entry-actions .button,
+.manual-mode-switch button {
+  touch-action: manipulation;
+}
+
+/* Pairing and test chooser: don't discard boards if more than four are listed. */
+.test-board-grid {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  grid-auto-rows: minmax(76px, auto);
+}
+
+/* Dialogs must remain usable when the browser/screen keyboard reduces height. */
+.kiosk-settings-dialog,
+.kiosk-dialog-card,
+.login-card,
+.visit-edit-dialog-v2 {
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.kiosk-dialog-overlay,
+.visit-edit-overlay-v2 {
+  overflow-y: auto;
+  align-items: safe center;
+}
+
+/* If measured viewport or nested controls overflow, abandon the strict fixed
+ * single-screen layout. Let the active match grow to its minimum usable size,
+ * with an internal vertical scroll rather than clipped or tiny score buttons. */
+.kiosk-shell[data-kiosk-layout="scroll"] .kiosk-main {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .kiosk-card {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .kiosk-card > .kiosk-hero,
+.kiosk-shell[data-kiosk-layout="scroll"] .kiosk-card > div:not(.kiosk-hero):not(.scolia-kiosk-strip):not(.notice) {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .kiosk-hero {
+  min-height: 300px;
+  height: auto;
+  overflow: visible;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .match-view {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .versus {
+  flex: 0 0 auto;
+  height: clamp(115px, 18dvh, 150px);
+  min-height: 115px;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .score-entry {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  grid-template-rows: minmax(72px, auto) 54px minmax(220px, auto);
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .score-entry.dart-entry-active {
+  grid-template-rows: minmax(72px, auto) minmax(335px, auto);
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .keypad {
+  height: 224px;
+  min-height: 224px;
+  grid-template-rows: repeat(4, minmax(52px, 1fr));
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .manual-dart-entry {
+  height: auto;
+  min-height: 335px;
+  overflow: visible;
+  grid-template-rows: 48px minmax(230px, auto) 52px;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .dart-pick-area {
+  min-height: 230px;
+  height: auto;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .number-grid-v2,
+.kiosk-shell[data-kiosk-layout="scroll"] .multiplier-column {
+  height: auto;
+  min-height: 230px;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .visits {
+  flex: 0 0 auto;
+  min-height: 68px;
+  height: auto;
+  overflow: visible;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .editable-visits-v2 {
+  min-height: 68px;
+  height: auto;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .scolia-score-v2,
+.kiosk-shell[data-kiosk-layout="scroll"] .scolia-wait {
+  flex: 0 0 auto;
+  min-height: 230px;
+  height: auto;
+  overflow: visible;
+}
+
+.kiosk-shell[data-kiosk-layout="scroll"] .scolia-darts-v2 {
+  min-height: 90px;
+}
+
+@media (max-width: 540px) {
+  .kiosk-topbar .kiosk-settings-button {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+  .match-tools {
+    flex-wrap: wrap;
+    min-height: 44px;
+  }
+  .match-tools .pill {
+    max-width: 55%;
+  }
+  .visits .editable-visits-v2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .visits {
+    flex-basis: auto;
+    height: auto;
+    min-height: 68px;
+  }
+}
