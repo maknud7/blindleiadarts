@@ -92,8 +92,8 @@ test("large venue shows all original information through three readable scenes",
   await expect(page.locator("#highlights .live-top3-block")).toHaveCount(3,{timeout:12000});
   await expect(page.locator("#boards")).toBeHidden();
   await page.screenshot({path:testInfo.outputPath("statistics.png"),animations:"disabled"});
-  await nav.getByRole("button",{name:"Pause"}).click();
-  await expect(nav.getByRole("button",{name:"Fortsett"})).toHaveAttribute("aria-pressed","true");
+  await nav.getByRole("button",{name:"Stopp automatisk rotasjon"}).click();
+  await expect(nav.getByRole("button",{name:"Start automatisk rotasjon"})).toHaveAttribute("aria-pressed","true");
   // No data is duplicated/lost by scene switching.
   await expect(page.locator("#boards .board-card")).toHaveCount(4);
   await expect(page.locator("#tables .table-card")).toHaveCount(2);
