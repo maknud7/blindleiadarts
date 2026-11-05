@@ -101,6 +101,60 @@ test("large venue shows all original information through three readable scenes",
   expect(errors).toEqual([]);
 });
 
+test("arena queue and results fill the right column without clipped or overlapping rows", async ({page},testInfo) => {
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await mountLive(page,{width:1680,height:895});
+  await expect(page.locator("#liveDashboard")).toHaveAttribute("data-wall-scene","arena");
+  await expect(page.locator("#queue .list-row")).toHaveCount(5);
+  await expect(page.locator("#results .list-row")).toHaveCount(3);
+
+  const geometry=await page.evaluate(()=>{
+    const get=(query)=>{
+      const el=document.querySelector(query);
+      const r=el.getBoundingClientRect();
+      return {x:r.left,y:r.top,right:r.right,bottom:r.bottom,height:r.height,width:r.width};
+    };
+    const board=get(".priority-section");
+    const queuePanel=get("#queue"); // content area
+    const qParent=document.querySelector("#queue").parentElement.getBoundingClientRect();
+    const rParent=document.querySelector("#results").parentElement.getBoundingClientRect();
+    const queueRows=[...document.querySelectorAll("#queue .list-row")].map(el=>{
+      const b=el.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height};
+    });
+    const resultRows=[...document.querySelectorAll("#results .list-row")].map(el=>{
+      const b=el.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height};
+    });
+    return {board,queuePanel,
+      queue:{top:qParent.top,bottom:qParent.bottom,left:qParent.left,right:qParent.right,height:qParent.height},
+      results:{top:rParent.top,bottom:rParent.bottom,left:rParent.left,right:rParent.right,height:rParent.height},
+      queueRows,resultRows,viewport:{width:innerWidth,height:innerHeight}};
+  });
+
+  // Regression: the old global venue-v8 grid-column:3/4,grid-row:2 made
+  // these nested panels appear side by side at the BOTTOM of a tall empty cell.
+  expect(Math.abs(geometry.queue.top-geometry.board.y),"Queue begins alongside live boards").toBeLessThan(18);
+  expect(geometry.queue.left, "Queue is right of live boards").toBeGreaterThan(geometry.board.right-2);
+  expect(geometry.queue.height, "Five upcoming fixtures get a full-height panel").toBeGreaterThan(290);
+  expect(geometry.results.top, "Recent results are stacked BELOW queue").toBeGreaterThan(geometry.queue.bottom+3);
+  expect(geometry.results.height, "Results get enough height").toBeGreaterThan(160);
+  expect(Math.abs(geometry.queue.left-geometry.results.left)).toBeLessThan(4);
+  expect(geometry.queue.right).toBeLessThanOrEqual(geometry.viewport.width+2);
+
+  for (const [label,rows,panel] of [
+    ["queue",geometry.queueRows,geometry.queue],
+    ["results",geometry.resultRows,geometry.results],
+  ]) {
+    expect(rows[0].top, label+" rows start inside the panel").toBeGreaterThanOrEqual(panel.top+20);
+    expect(rows[rows.length-1].bottom,label+" last row remains inside panel").toBeLessThanOrEqual(panel.bottom+2);
+    for (let i=1;i<rows.length;i++) {
+      expect(rows[i].top,label+" row "+i+" cannot overlap the previous").toBeGreaterThanOrEqual(rows[i-1].bottom-1);
+    }
+  }
+  await page.screenshot({path:testInfo.outputPath("arena-1680x895.png"),animations:"disabled"});
+  expect(errors).toEqual([]);
+});
+
 test("phone keeps every section scrollable with no rotating-TV-only hiding",async({page})=>{
   await mountLive(page,{width:390,height:844});
   await expect(page.locator("#wallScenes")).toBeHidden();
