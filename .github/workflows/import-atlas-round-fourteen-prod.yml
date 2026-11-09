@@ -76,7 +76,8 @@ jobs:
             $d=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);$p=$d["pages"];
             $group1=count($p["group-1"]["matches"]??[]);$playoff=count($p["results"]["matches"]??[]);$players=count($p["group-1"]["players"]??[]);
             if($group1!==55||$playoff!==3||$players!==10)throw new RuntimeException("Source count drift: players={$players} group1={$group1} playoff={$playoff}");
-            echo "ROUND14_SOURCE_OK=yes source_player_rows={$players} canonical_players=11 matches=".($group1+$playoff)."\n";
+            $p["group-1"]["players"]["2bhzMxZ5bdyy"]="Leif Atle Franksson";$d["pages"]=$p;file_put_contents($argv[1],json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
+            echo "ROUND14_SOURCE_OK=yes source_player_rows={$players} canonical_players=11 patched_missing_player=Leif_Atle_Franksson matches=".($group1+$playoff)."\n";
           ' "$target"
 
       - name: Import round-fourteen skeleton into TEST
