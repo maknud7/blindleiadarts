@@ -4,6 +4,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { DomainValidationError } from "../domain/errors.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
+function isDuplicatePendingFingerprint(error: unknown): boolean {
+  const value = error as { code?: string; message?: string } | null;
+  return value?.code === "ER_DUP_ENTRY"
+    && String(value.message || "").includes("uniq_kiosk_pairing_request_fingerprint_status");
+}
+
 export interface EquipmentScope {
   configuration_scope: "production_hardware";
   shared_across_environments: true;
@@ -238,20 +244,20 @@ export class MySqlEquipmentAdminRepository {
 
     return this.sessions.withTransaction(async (db) => {
       if (clubId !== null) await this.environmentClubWith(db, clubId);
+      // A token can only have ONE row per status under the existing unique
+      // (pairing_token_fingerprint,status) index. Changing an expired pending
+      // row to cancelled collides with an older cancelled row and permanently
+      // breaks terminal pairing. Lock and renew pending in place instead.
       const existingRows = await db.query<QueryResultRow>(
-        `SELECT id,club_id,request_code,device_name,status,requested_at,expires_at
+        `SELECT id,club_id,request_code,device_name,status,requested_at,expires_at,
+                (expires_at>NOW()) AS is_fresh
            FROM \`${this.runtimePrefix}kiosk_pairing_requests\`
-          WHERE pairing_token_fingerprint=? AND status='pending' AND expires_at>NOW() LIMIT 1 FOR UPDATE`,
+          WHERE pairing_token_fingerprint=? AND status='pending' LIMIT 1 FOR UPDATE`,
         [fingerprint],
       );
-      if (existingRows[0]) return publicPairingRequest(existingRows[0]);
-
-      await db.execute(
-        `UPDATE \`${this.runtimePrefix}kiosk_pairing_requests\`
-            SET status='cancelled'
-          WHERE pairing_token_fingerprint=? AND status='pending'`,
-        [fingerprint],
-      );
+      if (existingRows[0] && Number(existingRows[0].is_fresh) === 1) {
+        return publicPairingRequest(existingRows[0]);
+      }
       let requestCode = "";
       for (let attempts = 0; attempts < 8; attempts += 1) {
         const candidate = generatePairingCode();
@@ -265,12 +271,40 @@ export class MySqlEquipmentAdminRepository {
         }
       }
       if (!requestCode) throw new DomainValidationError("pairing_code_generation_failed", "Kunne ikke lage pairingkode.", 500);
-      await db.execute(
-        `INSERT INTO \`${this.runtimePrefix}kiosk_pairing_requests\`
-          (club_id,request_code,pairing_token_hash,pairing_token_fingerprint,device_name,status,expires_at)
-         VALUES (?,?,?,?,?,'pending',DATE_ADD(NOW(),INTERVAL 30 MINUTE))`,
-        [clubId, requestCode, tokenHash, fingerprint, deviceName],
-      );
+      if (existingRows[0]) {
+        // An expired request owns the pending slot: rotating the code in place
+        // preserves the unique constraint without accumulating cancelled rows.
+        await db.execute(
+          `UPDATE \`${this.runtimePrefix}kiosk_pairing_requests\`
+              SET club_id=?,request_code=?,pairing_token_hash=?,device_name=?,
+                  requested_at=NOW(),expires_at=DATE_ADD(NOW(),INTERVAL 30 MINUTE),
+                  approved_kiosk_id=NULL,approved_by_user_account_id=NULL,
+                  approved_at=NULL,consumed_at=NULL
+            WHERE id=? AND status='pending'`,
+          [clubId, requestCode, tokenHash, deviceName, requiredId(existingRows[0].id, "pairing_request_id")],
+        );
+      } else {
+        try {
+          await db.execute(
+            `INSERT INTO \`${this.runtimePrefix}kiosk_pairing_requests\`
+              (club_id,request_code,pairing_token_hash,pairing_token_fingerprint,device_name,status,expires_at)
+             VALUES (?,?,?,?,?,'pending',DATE_ADD(NOW(),INTERVAL 30 MINUTE))`,
+            [clubId, requestCode, tokenHash, fingerprint, deviceName],
+          );
+        } catch (error) {
+          // Concurrent creation with the same token is a read/reconcile case,
+          // never a reason to dispatch the mutation a second time.
+          if (!isDuplicatePendingFingerprint(error)) throw error;
+          const concurrent = await db.query<QueryResultRow>(
+            `SELECT id,club_id,request_code,device_name,status,requested_at,expires_at
+               FROM \`${this.runtimePrefix}kiosk_pairing_requests\`
+              WHERE pairing_token_fingerprint=? AND status='pending' LIMIT 1 FOR UPDATE`,
+            [fingerprint],
+          );
+          if (!concurrent[0]) throw error;
+          return publicPairingRequest(concurrent[0]);
+        }
+      }
       const rows = await db.query<QueryResultRow>(
         `SELECT id,club_id,request_code,device_name,status,requested_at,expires_at
            FROM \`${this.runtimePrefix}kiosk_pairing_requests\` WHERE request_code=? LIMIT 1`,
