@@ -117,7 +117,7 @@ test("manual v1 kiosk never issues Scolia status requests; Scolia kiosk polls at
   function node() {
     return {
       parentNode: { insertBefore() {} },
-      style, classList, setAttribute() {},
+      style, classList, setAttribute() {}, insertAdjacentElement() {},
       querySelector() { return null; },
       innerHTML: "",
     };
