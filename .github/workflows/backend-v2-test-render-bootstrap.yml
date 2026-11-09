@@ -81,7 +81,10 @@ jobs:
           update_env IDENTITY_TABLE_PREFIX bd_prod_
           update_env HARDWARE_TABLE_PREFIX bd_prod_
           update_env BD_BACKEND_V2_MAX_CONNECTIONS 1
-          update_env BD_BACKEND_V2_DB_IDLE_MS 15000
+          # Reuse one connection for a longer idle window so short gaps do not
+          # create repeated external MySQL TCP handshakes against Domeneshop.
+          # This NEVER increases the one-connection budget or retries writes.
+          update_env BD_BACKEND_V2_DB_IDLE_MS 60000
           update_env REALTIME_WEBSOCKET_URL "wss://blindleia-realtime-test.onrender.com/ws"
           update_env REALTIME_PUBLISH_URL "https://blindleia-realtime-test.onrender.com/publish"
           # REALTIME_PUBLISH_SECRET is provisioned directly on Render and must not be
@@ -123,6 +126,20 @@ jobs:
       - name: Verify TEST DB connectivity without mutation
         run: |
           set -Eeuo pipefail
-          ready="$(curl -fsS --max-time 20 "$HOST_URL/ready")"
-          jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and (.checked_tables | type == "array") and (.checked_tables | length > 0)' <<<"$ready" >/dev/null
-          echo 'TEST backend-v2 preflight reached bd_test_ successfully.'
+          # /health only checks process/config. /ready performs read-only SQL.
+          # External MySQL can reject a single cold TCP dial transiently.
+          # Retry ONLY this safe GET, never a canonical mutation.
+          for attempt in 1 2 3 4 5 6; do
+            response_file="$(mktemp)"
+            http_code="$(curl -sS --max-time 20 --output "$response_file" -w '%{http_code}' "$HOST_URL/ready" || true)"
+            if [[ "$http_code" == "200" ]] && jq -e '.ok == true and .environment == "test" and .mode == "test-write" and .writes_armed == true and (.checked_tables | type == "array") and (.checked_tables | length > 0)' "$response_file" >/dev/null 2>&1; then
+              rm -f "$response_file"
+              echo 'TEST backend-v2 preflight reached bd_test_ successfully.'
+              exit 0
+            fi
+            rm -f "$response_file"
+            echo "TEST /ready check $attempt/6 not ready (HTTP ${http_code:-unknown}); read-only retry."
+            if [[ "$attempt" -lt 6 ]]; then sleep "$(( 5 + attempt * 2 ))"; fi
+          done
+          echo 'TEST backend-v2 could not read bd_test_ after six separate checks; do not approve host.' >&2
+          exit 1
