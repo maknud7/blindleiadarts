@@ -173,7 +173,7 @@
   function renderTestLeaseTransition() {
     clearManualFallbackUi();
     offlineSince = 0;
-    autoFallbackRetryAt = 0;
+    autoFallbackAttempted = false;
     document.body.classList.add("scolia-live-active");
     surface.classList.remove("hidden");
 
@@ -248,7 +248,7 @@
       ? "Fortsett manuelt til scoren er kontrollert. Scolia overtar ikke igjen før du bekrefter avstemmingen."
       : "Kampen kan fortsette manuelt. Vi sjekker automatisk om Scolia kommer tilbake.";
     const buttonText = available ? "Score er avstemt · bruk Scolia igjen" : "Venter på Scolia";
-    const fingerprint = JSON.stringify({ fallback: true, title, text, available, fallbackError, mutating });
+    const fingerprint = JSON.stringify({ fallback: true, title, text, available, fallbackError, statusError, mutating });
     if (fingerprint === lastFingerprint) return;
     lastFingerprint = fingerprint;
 
@@ -259,6 +259,7 @@
         <strong style="font-size:16px">${escapeHtml(title)}</strong>
         <span class="muted" style="font-size:12px">${escapeHtml(text)}</span>
         ${fallbackError ? `<span style="font-size:12px;font-weight:800">${escapeHtml(fallbackError)}</span>` : ""}
+        ${statusError ? `<span style="font-size:12px;font-weight:800">${escapeHtml(statusError)}</span>` : ""}
       </div>
       <button type="button" class="confirm-button" data-scolia-resume ${available && !mutating ? "" : "disabled"}>${escapeHtml(buttonText)}</button>`;
 
@@ -492,7 +493,7 @@
   }
 
   async function poll({ force = false } = {}) {
-    if (polling && !force) return;
+    if (polling) return;
     polling = true;
     try {
       const data = await request("status");
