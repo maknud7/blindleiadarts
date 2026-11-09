@@ -6,7 +6,8 @@
 
   const API_ROOT = "../api/v1";
   const OFFLINE_FALLBACK_GRACE_MS = 30000;
-  const OFFLINE_FALLBACK_RETRY_MS = 5000;
+  const SCOLIA_STATUS_POLL_MS = 3000;
+  const SCOLIA_STATUS_MAX_BACKOFF_MS = 20000;
 
   const surface = document.createElement("section");
   surface.id = "scoliaLiveSurface";
@@ -27,8 +28,9 @@
   let lastFingerprint = "";
   let offlineSince = 0;
   let autoFallbackBusy = false;
-  let autoFallbackRetryAt = 0;
+  let autoFallbackAttempted = false;
   let fallbackError = "";
+  let statusError = "";
 
   function kioskCode() {
     return localStorage.getItem("bd:kioskCode") || "";
@@ -46,6 +48,18 @@
 
   function testLeaseError() {
     return localStorage.getItem("bd:kioskScoliaLeaseError") || "";
+  }
+
+  // The old kiosk ran a Scolia GET every 750ms even on manual boards.
+  // Only poll when a real Scolia mode/TEST lease requires this read.
+  function shouldPollScolia() {
+    if (testLeasePending() || localStorage.getItem("bd:kioskScoliaLeaseActive") === "1") return true;
+    try {
+      return typeof currentKiosk === "function"
+        && String(currentKiosk()?.scoring_mode || "").toLowerCase() === "scolia";
+    } catch {
+      return false;
+    }
   }
 
   function escapeHtml(value) {
@@ -119,17 +133,24 @@
     if (!code || !token) throw new Error("Skiveterminalen mangler pairinginformasjon.");
     const headers = { "X-Kiosk-Pairing-Token": token };
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    const response = await fetch(`${API_ROOT}/kiosks/${encodeURIComponent(code)}/scolia/${encodeURIComponent(action)}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store",
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || `Scolia-feil (${response.status})`);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), method === "GET" ? 8000 : 15000);
+    try {
+      const response = await fetch(`${API_ROOT}/kiosks/${encodeURIComponent(code)}/scolia/${encodeURIComponent(action)}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || `Scolia-feil (${response.status})`);
+      }
+      return payload.data;
+    } finally {
+      window.clearTimeout(timer);
     }
-    return payload.data;
   }
 
   async function runtimeAction(action, body) {
@@ -152,7 +173,7 @@
   function renderTestLeaseTransition() {
     clearManualFallbackUi();
     offlineSince = 0;
-    autoFallbackRetryAt = 0;
+    autoFallbackAttempted = false;
     document.body.classList.add("scolia-live-active");
     surface.classList.remove("hidden");
 
@@ -186,7 +207,9 @@
     const state = isBoardOffline(board) ? "Skiva er offline" : "Scolia-forbindelsen er brutt";
     const detail = autoFallbackBusy
       ? "Aktiverer manuell scoring …"
-      : `Prøver å få kontakt med Scolia. Bytter automatisk til manuell scoring${remaining > 0 ? ` om ${remaining} sek` : ""}.`;
+      : autoFallbackAttempted
+        ? "Kontrollerer om manuell scoring ble aktivert. Du kan prøve på nytt etter kontroll av serverstatus."
+        : `Prøver å få kontakt med Scolia. Bytter automatisk til manuell scoring${remaining > 0 ? ` om ${remaining} sek` : ""}.`;
 
     const fingerprint = JSON.stringify({ transition: true, state, detail, fallbackError });
     if (fingerprint === lastFingerprint) return;
@@ -202,9 +225,15 @@
           <strong style="font-size:clamp(28px,5vw,44px)">${escapeHtml(state)}</strong>
           <span class="muted" style="font-size:clamp(15px,2.5vw,19px)">${escapeHtml(detail)}</span>
           ${fallbackError ? `<span style="font-weight:800">${escapeHtml(fallbackError)}</span>` : ""}
+          ${autoFallbackAttempted && !autoFallbackBusy
+            ? `<button type="button" class="ghost-button" data-scolia-retry-fallback ${mutating ? "disabled" : ""}>Kontroller og prøv manuell scoring</button>`
+            : ""}
         </div>
       </div>
       <div class="scolia-live-footer"><span class="scolia-live-hint">Ikke registrer kast manuelt før fallback er aktiv.</span></div>`;
+    surface.querySelector("[data-scolia-retry-fallback]")?.addEventListener("click", () => {
+      void retryFallbackAfterStatusRead();
+    });
   }
 
   function renderManualFallback(board) {
@@ -219,7 +248,7 @@
       ? "Fortsett manuelt til scoren er kontrollert. Scolia overtar ikke igjen før du bekrefter avstemmingen."
       : "Kampen kan fortsette manuelt. Vi sjekker automatisk om Scolia kommer tilbake.";
     const buttonText = available ? "Score er avstemt · bruk Scolia igjen" : "Venter på Scolia";
-    const fingerprint = JSON.stringify({ fallback: true, title, text, available, fallbackError, mutating });
+    const fingerprint = JSON.stringify({ fallback: true, title, text, available, fallbackError, statusError, mutating });
     if (fingerprint === lastFingerprint) return;
     lastFingerprint = fingerprint;
 
@@ -230,6 +259,7 @@
         <strong style="font-size:16px">${escapeHtml(title)}</strong>
         <span class="muted" style="font-size:12px">${escapeHtml(text)}</span>
         ${fallbackError ? `<span style="font-size:12px;font-weight:800">${escapeHtml(fallbackError)}</span>` : ""}
+        ${statusError ? `<span style="font-size:12px;font-weight:800">${escapeHtml(statusError)}</span>` : ""}
       </div>
       <button type="button" class="confirm-button" data-scolia-resume ${available && !mutating ? "" : "disabled"}>${escapeHtml(buttonText)}</button>`;
 
@@ -244,7 +274,7 @@
   async function maybeAutoFallback(board) {
     if (!shouldAutoFallback(board)) {
       offlineSince = 0;
-      autoFallbackRetryAt = 0;
+      autoFallbackAttempted = false;
       return board;
     }
 
@@ -253,8 +283,11 @@
       offlineSince = now;
       return board;
     }
-    if ((now - offlineSince) < OFFLINE_FALLBACK_GRACE_MS || now < autoFallbackRetryAt || autoFallbackBusy) return board;
+    if ((now - offlineSince) < OFFLINE_FALLBACK_GRACE_MS || autoFallbackAttempted || autoFallbackBusy) return board;
 
+    // Fallback is a canonical mutation. An HTTP error may mean the write DID
+    // commit; one automatic attempt per offline episode, never blind retry.
+    autoFallbackAttempted = true;
     autoFallbackBusy = true;
     lastFingerprint = "";
     try {
@@ -262,19 +295,45 @@
       const nextBoard = data?.board || board;
       if (fallbackActive(nextBoard)) {
         offlineSince = 0;
-        autoFallbackRetryAt = 0;
         fallbackError = "";
       } else {
-        autoFallbackRetryAt = Date.now() + 30000;
+        fallbackError = "Venter på bekreftelse fra serveren.";
       }
       return nextBoard;
     } catch (error) {
       fallbackError = `Automatisk fallback feilet: ${error.message}`;
-      autoFallbackRetryAt = Date.now() + OFFLINE_FALLBACK_RETRY_MS;
+      // Do not re-dispatch when the outcome of the POST is unknown.
       return board;
     } finally {
       autoFallbackBusy = false;
       lastFingerprint = "";
+    }
+  }
+
+  async function retryFallbackAfterStatusRead() {
+    if (mutating || autoFallbackBusy || !shouldPollScolia()) return;
+    mutating = true;
+    try {
+      // Explicit operator action is preceded by a canonical GET: if the
+      // original fallback committed, only apply that state, no second POST.
+      const fresh = await request("status");
+      current = fresh;
+      if (fallbackActive(fresh.board) || !shouldAutoFallback(fresh.board)) {
+        fallbackError = "";
+        render(fresh);
+        return;
+      }
+      const result = await runtimeAction("fallback");
+      if (result?.board) current = { ...fresh, board: result.board };
+      fallbackError = "";
+      render(current);
+    } catch (error) {
+      fallbackError = `Kunne ikke bekrefte manuell scoring: ${error.message}`;
+      if (current) render(current);
+    } finally {
+      mutating = false;
+      lastFingerprint = "";
+      if (current) render(current);
     }
   }
 
@@ -327,7 +386,7 @@
     const playerName = showingBuffer ? activePlayerName() : String(lastVisit?.player_name || "");
     const statusParts = [board?.board_status, board?.board_phase].filter(Boolean);
     const phaseText = statusParts.length ? statusParts.join(" · ") : "Klar";
-    const warning = queueWarning(board);
+    const warning = statusError || queueWarning(board);
     const canUndo = showingBuffer || Boolean(lastVisit);
     const undoText = showingBuffer ? "↶ Angre siste pil" : "↶ Angre siste Scolia-kast";
     const bust = !showingBuffer && Boolean(lastVisit?.is_bust);
@@ -434,18 +493,24 @@
   }
 
   async function poll({ force = false } = {}) {
-    if (polling && !force) return;
+    if (polling) return;
     polling = true;
     try {
       const data = await request("status");
       consecutiveErrors = 0;
+      statusError = "";
       data.board = await maybeAutoFallback(data.board);
       render(data);
     } catch (error) {
       consecutiveErrors += 1;
-      if (consecutiveErrors >= 3) {
-        clearManualFallbackUi();
-        hideLiveSurface();
+      // Never hide the last known Scolia/fallback view on temporary GET
+      // failures. It may be the only visible indication scoring is unconfirmed.
+      if (consecutiveErrors >= 2) {
+        statusError = "Scolia-status er midlertidig utilgjengelig. Siste score er ikke bekreftet oppdatert.";
+        if (current) {
+          lastFingerprint = "";
+          render(current);
+        }
       }
       if (force) throw error;
     } finally {
@@ -455,7 +520,7 @@
 
   window.addEventListener("bd:scolia-test-lease-ready", () => {
     offlineSince = 0;
-    autoFallbackRetryAt = 0;
+    autoFallbackAttempted = false;
     fallbackError = "";
     lastFingerprint = "";
     poll({ force: true }).catch(() => undefined);
@@ -465,6 +530,30 @@
     document.body.classList.remove("scolia-live-active");
     clearManualFallbackUi();
   });
-  window.setInterval(() => poll().catch(() => undefined), 750);
-  poll().catch(() => undefined);
+  // Polling is sequential, gated by actual Scolia mode, and uses capped
+  // exponential backoff. Four manual kiosks create zero Scolia DB polls.
+  async function backgroundPoll() {
+    try {
+      if (shouldPollScolia()) {
+        await poll();
+      } else {
+        consecutiveErrors = 0;
+        statusError = "";
+        if (current) {
+          current = null;
+          offlineSince = 0;
+          autoFallbackAttempted = false;
+          clearManualFallbackUi();
+          hideLiveSurface();
+        }
+      }
+    } finally {
+      const backoff = Math.min(
+        SCOLIA_STATUS_MAX_BACKOFF_MS,
+        SCOLIA_STATUS_POLL_MS * (2 ** Math.min(3, consecutiveErrors)),
+      );
+      window.setTimeout(backgroundPoll, backoff);
+    }
+  }
+  window.setTimeout(backgroundPoll, 100);
 })();

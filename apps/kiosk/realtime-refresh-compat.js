@@ -1,6 +1,4 @@
 (() => {
-  const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
   // The Scolia live surface used to poll every 350 ms. Clamp that legacy timer
   // so one kiosk cannot create nearly three status requests per second when
   // realtime transport falls back to polling.
@@ -47,15 +45,10 @@
 
     if (key) {
       const current = pressure.get(key);
-      if (current?.nextAt > Date.now()) await sleep(current.nextAt - Date.now());
+      if (current?.nextAt > Date.now()) {
+        await new Promise((resolve) => window.setTimeout(resolve, current.nextAt - Date.now()));
+      }
     }
-
-    const isPairingCreate = method === "POST" && (() => {
-      try {
-        const parsed = new URL(url, window.location.href);
-        return parsed.pathname.endsWith("/api/kiosk-pairing.php") && parsed.searchParams.get("action") === "create";
-      } catch { return false; }
-    })();
 
     try {
       const response = await nativeFetch(input, init);
@@ -63,13 +56,10 @@
       return response;
     } catch (error) {
       if (key) registerPressureResult(key, false);
-      if (!isPairingCreate) throw error;
-
-      // Pairing creation is fingerprint/idempotency protected server-side. A
-      // lost network response is therefore safe to retry once with the exact
-      // same token/body instead of moving on with uncertain local state.
-      await sleep(900 + Math.floor(Math.random() * 300));
-      return nativeFetch(input, init);
+      // Pairing creation is a canonical mutation. Its result is unknown after
+      // transport failure; never issue a second POST from the browser.
+      // The user can refresh and reconcile state before requesting a new code.
+      throw error;
     }
   };
 
