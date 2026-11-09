@@ -74,6 +74,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
   const [runtimeError, setRuntimeError] = useState("");
   const [busy, setBusy] = useState("");
   const offlineSince = useRef(0);
+  const fallbackAttempted = useRef(false);
   const leaseBusy = useRef(false);
   const heartbeatBusy = useRef(false);
   const heartbeatFailures = useRef(0);
@@ -90,6 +91,7 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     setLastVisit(null);
     setRuntimeError("");
     offlineSince.current = 0;
+    fallbackAttempted.current = false;
   }, [kioskCode, physicalBoardId, enabled]);
 
   const clearLeaseState = useCallback(() => {
@@ -249,10 +251,31 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     const inFallback = yes(next.fallback_active) || yes(next.needs_reconciliation);
     const disconnected = !isAvailable(next);
     const shouldFallback = next.mode === "live" && next.effective_scoring_mode === "scolia" && !inFallback && yes(next.auto_fallback_to_manual ?? 1) && disconnected;
-    if (!shouldFallback) offlineSince.current = 0;
-    else if (!offlineSince.current) offlineSince.current = Date.now();
-    else if (Date.now() - offlineSince.current >= OFFLINE_FALLBACK_GRACE_MS && !runtimeBusy.current) await runtimeAction("fallback");
+    if (!shouldFallback) {
+      offlineSince.current = 0;
+      fallbackAttempted.current = false;
+    } else if (!offlineSince.current) {
+      offlineSince.current = Date.now();
+    } else if (Date.now() - offlineSince.current >= OFFLINE_FALLBACK_GRACE_MS
+      && !runtimeBusy.current && !fallbackAttempted.current) {
+      // A failed/aborted POST may already have committed on the server. One
+      // automatic attempt per offline episode, then reconcile via GET.
+      fallbackAttempted.current = true;
+      await runtimeAction("fallback");
+    }
   }, [enabled, readStatus, leasePending, runtimeAction]);
+
+  const requestManualFallback = useCallback(async () => {
+    // Explicit operator recovery must first check canonical server state.
+    const fresh = await readStatus();
+    if (!fresh?.board) {
+      setRuntimeError("Kunne ikke bekrefte skivestatus. Prøv Oppdater før du fortsetter.");
+      return;
+    }
+    if (yes(fresh.board.fallback_active) || yes(fresh.board.needs_reconciliation)) return;
+    fallbackAttempted.current = true;
+    await runtimeAction("fallback");
+  }, [readStatus, runtimeAction]);
 
   const undoScolia = useCallback(async () => {
     if (!enabled || !kioskCode || !kioskToken || runtimeBusy.current) return;
@@ -305,10 +328,11 @@ export function useScoliaRuntime({ environment, kioskCode, kioskToken, testMode,
     fallbackActive,
     automatic,
     fallbackRemainingSeconds,
+    fallbackAwaitingConfirmation: fallbackAttempted.current && !fallbackActive && !available,
     effectiveScoringMode: !enabled || leaseFallback || fallbackActive ? "manual" : (board?.effective_scoring_mode || null),
     leaseFallback,
     retryLease,
-    fallback: () => runtimeAction("fallback"),
+    fallback: requestManualFallback,
     resume: () => runtimeAction("resume", { reconciled: true }),
     resetPhase: () => runtimeAction("reset-phase"),
     undo: undoScolia,
