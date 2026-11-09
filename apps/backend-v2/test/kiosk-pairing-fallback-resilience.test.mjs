@@ -156,7 +156,9 @@ test("manual v1 kiosk never issues Scolia status requests; Scolia kiosk polls at
   mode = "scolia";
   await timers.shift().callback();
   assert.equal(fetches, 1);
-  assert.equal(timers[0].ms, 3000);
+  // The request's cancelled 8s AbortController timer can still be present in
+  // this fake clock; assert the next polling timer, not the first array slot.
+  assert.ok(timers.some((timer) => timer.ms === 3000));
 });
 
 test("v1 and v2 never blindly repeat fallback mutations after an unknown server outcome", () => {
