@@ -4,3 +4,4 @@ migration_review_confirmed=YES
 purpose=release_20261110_verified_test
 backup_prefix=bd_backup_20261110_124715_
 migration_review=0088_isolate_test_auth_sessions.php_noop_in_bd_prod
+retry_reason=canonical_host_fix_20261110
