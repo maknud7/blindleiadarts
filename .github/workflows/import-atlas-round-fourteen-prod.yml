@@ -44,6 +44,7 @@ jobs:
           grep -Fxq 'IMPORT_VERIFIED_ATLAS_ROUND_FOURTEEN_TO_PROD=yes' infra/sql/run-import-atlas-round-fourteen-prod.flag
           php -l infra/sql/import_atlas_manifest_test.php
           php -l infra/sql/import_atlas_match_visits_test.php
+          php -l infra/sql/import_atlas_match_visits_batch_test.php
           php -l infra/sql/atlas_history_verify.php
           php -l infra/sql/atlas_history_finalize.php
           php -l infra/sql/atlas_promote_test_history_to_prod.php
@@ -116,15 +117,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$skip=array_fill_keys($m["winner_only_match_ids"]??[],true);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)if(!isset($skip[$id]))echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)if(!isset($skip[$id]))echo $id,"\n";')
-          for id in "${ids[@]}"; do
-            imported=no
-            for attempt in $(seq 1 5); do
-              if php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-fourteen-matches/${id}.json"; then imported=yes; break; fi
-              echo "Retrying TEST write for ${id} after transient database failure (${attempt}/5)"
-              sleep $((attempt * 5))
-            done
-            [[ "$imported" == yes ]] || { echo "TEST write failed permanently for ${id}" >&2; exit 1; }
-          done
+          paths=()
+          for id in "${ids[@]}"; do paths+=("/tmp/round-fourteen-matches/${id}.json"); done
+          php infra/sql/import_atlas_match_visits_batch_test.php "$MANIFEST" "${paths[@]}"
+          echo "ROUND14_BATCH_TEST_IMPORT_OK=yes matches=${#paths[@]} connections=1"
 
       - name: Verify finalize and prove idempotent TEST round fourteen
         env:
@@ -141,7 +137,9 @@ jobs:
           verify
           php infra/sql/import_atlas_manifest_test.php "$MANIFEST" /tmp/round-fourteen-probe.json
           mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$skip=array_fill_keys($m["winner_only_match_ids"]??[],true);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)if(!isset($skip[$id]))echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)if(!isset($skip[$id]))echo $id,"\n";')
-          for id in "${ids[@]}"; do php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/round-fourteen-matches/${id}.json"; done
+          paths=()
+          for id in "${ids[@]}"; do paths+=("/tmp/round-fourteen-matches/${id}.json"); done
+          php infra/sql/import_atlas_match_visits_batch_test.php "$MANIFEST" "${paths[@]}"
           verify
           echo "ROUND14_TEST_IDEMPOTENT_OK=yes"
 
