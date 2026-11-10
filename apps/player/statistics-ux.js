@@ -1,6 +1,6 @@
 const stylesheet = document.createElement("link");
 stylesheet.rel = "stylesheet";
-stylesheet.href = new URL("./statistics-ux.css?v=20260929-ui-system-01", import.meta.url).href;
+stylesheet.href = new URL("./statistics-ux.css?v=20261110-01", import.meta.url).href;
 document.head.appendChild(stylesheet);
 
 const API_ROOT = "../api/v1";
