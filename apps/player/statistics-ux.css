@@ -202,3 +202,46 @@ body #statistics .player-card:focus-visible{outline:none!important;border-color:
     max-width:100%;
   }
 }
+
+
+/* November 2026 player-discovery and overflow safety. Applied after the
+   canonical design-system so mobile and desktop use the same constraints. */
+#statistics{min-width:0;max-width:100%;overflow-x:clip}
+#statistics .statistics-panel,
+#statistics .statistics-panel>*,
+#statistics .statistics-panel .table-card,
+#statistics .statistics-panel .profile-card,
+#statistics .statistics-panel .profile-section,
+#statistics .statistics-panel .profile-more-stats,
+#statistics .statistics-panel .stats-grid,
+#statistics .statistics-panel .stat-card,
+#statistics .statistics-panel .history-row-button,
+#statistics .statistics-panel .match-result-card{min-width:0;max-width:100%;box-sizing:border-box}
+body #statistics .player-card[hidden]{display:none!important}
+#statistics .statistics-player-count{margin:-3px 0 0;color:#657992;font-size:12px;line-height:1.4}
+#statistics [data-statistics-panel="players"].is-profile-view .player-directory-head,
+#statistics [data-statistics-panel="players"].is-profile-view .statistics-player-count,
+#statistics [data-statistics-panel="players"].is-profile-view #playerDirectory{display:none!important}
+#statistics .player-search{display:block}
+#statistics .player-search input{min-height:46px;border-radius:11px;padding:10px 12px;width:100%;max-width:100%;box-sizing:border-box}
+#statistics .statistics-profile-error{display:grid;gap:14px;padding:16px}
+#statistics .statistics-profile-jump{display:flex;gap:7px;flex-wrap:wrap;padding:12px 18px 3px}
+body #statistics .statistics-profile-jump button{flex:1 1 auto;width:auto!important;min-height:42px!important;padding:9px 11px!important;border:1px solid #d8e3ef!important;border-radius:10px!important;background:#f7faff!important;color:#234b7d!important;font-size:12px!important;font-weight:800!important;box-shadow:none!important}
+body #statistics .statistics-profile-jump button:hover,body #statistics .statistics-profile-jump button:focus-visible{background:#eaf2ff!important;border-color:#92b5e3!important;outline:2px solid transparent}
+#statistics #playerEloSection,#statistics #playerMatchesSection,#statistics #playerExtraStats{scroll-margin-top:94px}
+#statistics .profile-match-history,#statistics .profile-match-history>*{min-width:0;max-width:100%;box-sizing:border-box}
+#statistics .profile-section .elo-movement{min-width:0;max-width:100%;flex-wrap:wrap}
+#statistics .profile-section .history-row-button{overflow-wrap:anywhere}
+#statistics .table-scroll{display:block;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
+#statistics .table-scroll .portal-table{width:max-content;max-width:none}
+#statistics .statistics-match-result .match-result-stats>span{min-width:0;max-width:100%;overflow-wrap:anywhere}
+#statistics .profile-stats .stat-card{overflow:hidden}
+#statistics .profile-stats .stat-card strong{overflow-wrap:anywhere;min-width:0}
+@media(max-width:680px){
+  #statistics .statistics-profile-jump{padding:10px 14px 2px;gap:6px}
+  body #statistics .statistics-profile-jump button{font-size:11px!important;padding:8px 7px!important}
+  #statistics .statistics-panel-head{min-width:0}
+  #statistics .statistics-tournament-chooser,#statistics .statistics-season-chooser{min-width:0;width:100%}
+  #statistics .statistics-panel select{min-width:0;max-width:100%;width:100%}
+  #statistics .elo-timeline-row,#statistics .elo-tournament-match{min-width:0;overflow-wrap:anywhere}
+}
