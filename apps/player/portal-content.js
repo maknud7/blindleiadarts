@@ -97,6 +97,7 @@ async function resolveClubId() {
 }
 
 let directoryLoadedClubId = 0;
+let playerProfileRequest = 0;
 
 async function loadPlayerDirectoryData(force = false) {
   const clubId = await resolveClubId();
@@ -127,7 +128,7 @@ async function loadPortalContent() {
   renderTournamentPicker();
   bindTournamentTabs();
 
-  const view = localStorage.getItem("bd:statisticsView") || "season";
+  const view = localStorage.getItem("bd:statisticsView") || "players";
   if (view === "players") await loadPlayerDirectoryData();
   if (view === "tournament") await loadTournamentTable();
   if (view === "mine") await loadMyMatches();
@@ -176,6 +177,22 @@ function bindProfileLinks(root) {
   }));
 }
 
+function showPlayerDirectory() {
+  playerProfileRequest += 1;
+  el.playerProfile.classList.add("hidden");
+  document.querySelector('#statistics [data-statistics-panel="players"]')?.classList.remove("is-profile-view");
+  document.getElementById("playerSearch")?.focus({ preventScroll: true });
+  document.querySelector(".player-directory-head")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+window.BlindleiaPlayerStats = Object.freeze({
+  async openPlayer(playerId) {
+    await loadPlayerDirectoryData();
+    return loadPlayerProfile(Number(playerId));
+  },
+  showDirectory: showPlayerDirectory,
+});
+
 function resultLabel(result) {
   return result === "win" ? "Seier" : result === "draw" ? "Uavgjort" : "Tap";
 }
@@ -192,9 +209,14 @@ function renderHistoryRows(matches) {
 }
 
 async function loadPlayerProfile(playerId) {
+  if (!Number.isSafeInteger(playerId) || playerId <= 0) return;
+  const requestNumber = ++playerProfileRequest;
+  el.playerProfile.dataset.playerId = String(playerId);
   el.playerProfile.classList.remove("hidden");
-  el.playerProfile.innerHTML = `<p class="muted">Henter spillerprofil …</p>`;
+  document.querySelector('#statistics [data-statistics-panel="players"]')?.classList.add("is-profile-view");
+  el.playerProfile.innerHTML = `<div class="statistics-loading"><span></span>Henter spillerprofil …</div>`;
   const data = await api(`/players/${playerId}/profile`);
+  if (requestNumber !== playerProfileRequest) return;
   const player = data.player || {};
   const stats = data.stats || {};
   const elo = data.elo || {};
@@ -215,7 +237,12 @@ async function loadPlayerProfile(playerId) {
         ${player.nickname ? `<p class="profile-darts-nickname">«${esc(player.nickname)}»</p>` : ""}
         ${form ? `<div class="profile-form"><small>Siste form</small><span>${form}</span></div>` : ""}
       </div>
-      <button type="button" class="profile-close ghost">Lukk</button>
+      <button type="button" class="profile-close ghost" data-player-back>← Alle spillere</button>
+    </div>
+    <div class="statistics-profile-jump" role="group" aria-label="Gå til spillerstatistikk">
+      <button type="button" data-stats-jump="playerEloSection">ELO-graf</button>
+      <button type="button" data-stats-jump="playerMatchesSection">Kamper</button>
+      <button type="button" data-stats-jump="playerExtraStats">Flere tall</button>
     </div>
     <div class="stats-grid profile-stats profile-primary-stats">
       <div class="stat-card"><small>ELO</small><strong>${Number(elo.rating || 1000).toFixed(1)}</strong></div>
@@ -223,7 +250,11 @@ async function loadPlayerProfile(playerId) {
       <div class="stat-card"><small>Høy checkout</small><strong>${Number(stats.highest_checkout || 0) || "—"}</strong></div>
       <div class="stat-card"><small>180</small><strong>${Number(stats.visits_180 || 0)}</strong></div>
     </div>
-    <details class="profile-more-stats">
+    <div class="profile-section" id="playerEloSection">
+      <h3>ELO-historikk</h3>
+      ${history.length ? history.slice(0, 8).map((entry) => `<div class="history-row"><div><strong>${Number(entry.rating).toFixed(1)}</strong><small>${esc(entry.tournament_name || entry.scope_type)}</small></div><span>${esc(formatDate(entry.calculated_at))}</span></div>`).join("") : `<p class="muted">Ingen ELO-historikk registrert ennå.</p>`}
+    </div>
+    <details id="playerExtraStats" class="profile-more-stats">
       <summary>Flere tall</summary>
       <div class="stats-grid profile-secondary-stats">
         <div class="stat-card"><small>Kamper</small><strong>${Number(stats.matches_played || 0)}</strong></div>
@@ -234,16 +265,18 @@ async function loadPlayerProfile(playerId) {
         <div class="stat-card"><small>100+</small><strong>${Number(stats.visits_100_plus || 0)}</strong></div>
       </div>
     </details>
-    <div class="profile-section">
+    <div class="profile-section" id="playerMatchesSection">
       <div class="section-head"><h3>Siste kamper</h3>${recent.length ? `<button type="button" class="ghost profile-all-matches" data-player="${Number(player.id)}">Se alle</button>` : ""}</div>
       <div class="profile-match-history">${recent.length ? renderHistoryRows(recent) : `<p class="muted">Ingen fullførte kamper registrert.</p>`}</div>
     </div>
-    <div class="profile-section">
-      <h3>ELO-historikk</h3>
-      ${history.length ? history.slice(0, 8).map((entry) => `<div class="history-row"><div><strong>${Number(entry.rating).toFixed(1)}</strong><small>${esc(entry.tournament_name || entry.scope_type)}</small></div><span>${esc(formatDate(entry.calculated_at))}</span></div>`).join("") : `<p class="muted">Ingen ELO-historikk registrert ennå.</p>`}
-    </div>`;
+`;
 
-  el.playerProfile.querySelector(".profile-close")?.addEventListener("click", () => el.playerProfile.classList.add("hidden"));
+  el.playerProfile.querySelector(".profile-close")?.addEventListener("click", showPlayerDirectory);
+  el.playerProfile.querySelectorAll("[data-stats-jump]").forEach((button) => button.addEventListener("click", () => {
+    const target = el.playerProfile.querySelector(`#${button.dataset.statsJump}`);
+    if (target?.tagName === "DETAILS") target.open = true;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
   bindMatchDetailLinks(el.playerProfile);
   el.playerProfile.querySelector(".profile-all-matches")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -264,7 +297,8 @@ async function loadPlayerProfile(playerId) {
 
 function renderProfileError(message) {
   el.playerProfile.classList.remove("hidden");
-  el.playerProfile.innerHTML = `<p class="muted">${esc(message)}</p>`;
+  el.playerProfile.innerHTML = `<div class="statistics-profile-error"><p class="muted">${esc(message)}</p><button type="button" class="ghost" data-player-back>← Tilbake til spillerlisten</button></div>`;
+  el.playerProfile.querySelector("[data-player-back]")?.addEventListener("click", showPlayerDirectory);
 }
 
 function renderSummaries() {
@@ -502,12 +536,13 @@ document.querySelector('[data-statistics-view="mine"]')?.addEventListener("click
 el.clubSelect?.addEventListener("change", () => {
   state.clubId = Number(el.clubSelect.value || 0);
   directoryLoadedClubId = 0;
+  showPlayerDirectory();
   setTimeout(() => loadPortalContent().catch(renderPortalLoadError), 0);
 });
 el.refreshButton?.addEventListener("click", () => setTimeout(() => {
   directoryLoadedClubId = 0;
   loadPortalContent().catch(renderPortalLoadError);
-  const view = localStorage.getItem("bd:statisticsView") || "season";
+  const view = localStorage.getItem("bd:statisticsView") || "players";
   if (view === "players") loadPlayerDirectoryData(true).catch(renderPortalLoadError);
   if (view === "tournament") loadTournamentTable().catch(renderPortalLoadError);
   if (view === "mine") loadMyMatches().catch(() => {});

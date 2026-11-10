@@ -133,22 +133,53 @@ try {
         }
     }
 
-    $items = array_values($grouped);
-    usort($items, static function (array $a, array $b): int {
-        $date = strcmp((string) ($a['start_at'] ?? ''), (string) ($b['start_at'] ?? ''));
-        return $date !== 0 ? $date : ((int) $a['tournament_id'] <=> (int) $b['tournament_id']);
-    });
-    foreach ($items as &$item) {
-        unset($item['_first_matches'], $item['_last_matches']);
-        $item['delta'] = $item['rating_after'] !== null
-            ? (float) $item['rating_after'] - (float) $item['rating_before']
-            : null;
-        $item['tournament_matches'] = $item['matches_after'] !== null
-            ? max(0, (int) $item['matches_after'] - (int) $item['matches_before'])
-            : null;
-        $item['completed'] = $item['rating_after'] !== null;
+    // Timeline uses the tournament calendar, not player attendance. An ELO-
+    // enabled completed tournament contributes a point even when this player
+    // did not play; its rating remains unchanged. Separate baselines per season.
+    $eligibleSql = sprintf(
+        'SELECT id,season_id,name,status,start_at,end_at
+           FROM `%1$stournaments`
+          WHERE club_id=? AND elo_enabled=1 AND status="completed" AND season_id IS NOT NULL
+          ORDER BY start_at ASC,id ASC',
+        $prefix
+    );
+    $eligibleStmt = $connection->prepare($eligibleSql);
+    $eligibleStmt->bind_param('i', $clubId);
+    $eligibleStmt->execute();
+    $eligibleRows = $eligibleStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $eligibleStmt->close();
+
+    $items = [];
+    $lastBySeason = [];
+    foreach ($eligibleRows as $tournament) {
+        $id = (int) $tournament['id'];
+        $season = (int) $tournament['season_id'];
+        $snapshot = $grouped[$id] ?? null;
+        $carried = $lastBySeason[$season] ?? 1000.0;
+        $confirmed = $snapshot !== null && $snapshot['rating_after'] !== null;
+        $before = $confirmed ? (float) $snapshot['rating_before'] : $carried;
+        $after = $confirmed ? (float) $snapshot['rating_after'] : $carried;
+        $matches = $snapshot !== null && $snapshot['matches_after'] !== null
+            ? max(0, (int) $snapshot['matches_after'] - (int) $snapshot['matches_before']) : 0;
+        $lastBySeason[$season] = $after;
+        $items[] = [
+            'tournament_id' => $id,
+            'season_id' => $season,
+            'tournament_name' => (string) $tournament['name'],
+            'tournament_status' => (string) $tournament['status'],
+            'start_at' => $tournament['start_at'],
+            'end_at' => $tournament['end_at'],
+            'rating_before' => $before,
+            'rating_after' => $after,
+            'matches_before' => $snapshot['matches_before'] ?? null,
+            'matches_after' => $snapshot['matches_after'] ?? null,
+            'delta' => $after - $before,
+            'tournament_matches' => $matches,
+            'completed' => true,
+            'played_elo' => $matches > 0,
+            'has_snapshot' => $snapshot !== null,
+        ];
     }
-    unset($item);
 
     echo json_encode([
         'ok' => true,
