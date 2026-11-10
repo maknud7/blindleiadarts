@@ -1,0 +1,190 @@
+name: Grand Prix DiDo TEST import (no ELO)
+
+on:
+  push:
+    branches: [codex/grandprix-dido-no-elo-probe]
+    paths:
+      - infra/atlas/run-grandprix-dido-test.flag
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grandprix-dido-test-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      TEST_BASE_URL: https://test.blindleiadarts.ingenting.org
+      EXTERNAL_ID: UBKzQpfMMwyB
+      MANIFEST: infra/atlas/manifests/grandprix-dido-2026-10-24.json
+      DB_TABLE_PREFIX: bd_test_
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli,mbstring
+          coverage: none
+
+      - name: Validate migration source and strict no-ELO contract
+        run: |
+          set -Eeuo pipefail
+          php -l infra/sql/import_atlas_grandprix_dido_test.php
+          php -l infra/sql/import_atlas_match_visits_test.php
+          php -l infra/sql/atlas_history_verify.php
+          php -l infra/sql/atlas_finalize_grandprix_dido_no_elo.php
+          php -r '
+            $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
+            if(($m["tournament_external_id"]??"")!=="UBKzQpfMMwyB" || ($m["standalone"]??false)!==true || ($m["elo_enabled"]??true)!==false || ($m["ranking_points_enabled"]??true)!==false || ($m["season_external_id"]??"x")!=="")
+               throw new RuntimeException("Standalone no-ELO contract not satisfied");
+            if(($m["expected_players"]??0)!==18 || ($m["expected_matches"]??0)!==79 || ($m["expected_legs"]??0)!==88 || count($m["groups"]??[])!==2 || count($m["playoff"]["match_ids"]??[])!==7)
+               throw new RuntimeException("Frozen DiDo counts changed");
+            $ids=[]; foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;
+            foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
+            if(count($ids)!==79 || count(array_unique($ids))!==79 || count($m["players"])!==18 || ($m["ranking_points"]??[])!==[] || ($m["winner_only_match_ids"]??[])!==[])
+               throw new RuntimeException("Manifest contains duplicates/rankings or missing IDs");
+            echo "DIDO_NO_ELO_CONTRACT_OK=yes\n";
+          '
+
+      - name: Download source snapshot and verify frozen IDs
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/dido
+          curl -fsSL --connect-timeout 10 --max-time 180 "${TEST_BASE_URL%/}/api/atlas-tournament-probe.php?tournament=${EXTERNAL_ID}" -o /tmp/dido/source.json
+          php <<'PHP'
+          <?php
+          $d=json_decode(file_get_contents('/tmp/dido/source.json'),true,512,JSON_THROW_ON_ERROR);
+          $m=json_decode(file_get_contents(getenv('MANIFEST')),true,512,JSON_THROW_ON_ERROR);
+          if(($d['ok']??false)!==true || ($d['tournament_external_id']??'')!==getenv('EXTERNAL_ID'))throw new RuntimeException('Source unavailable/wrong tournament');
+          $p=$d['pages']??[];
+          foreach(['root','groups','group-1','group-2','results'] as $key){
+            if(($p[$key]['status']??0)!==200)throw new RuntimeException('Missing source page '.$key);
+          }
+          $players=$p['groups']['players']??[];
+          if(count($players)!==18 || $players!==$m['players'])throw new RuntimeException('Source player mapping drift');
+          foreach($m['groups'] as $g){
+            $key='group-'.$g['number'];
+            if(array_keys($p[$key]['matches']??[])!==$g['match_ids'] || array_keys($p[$key]['players']??[])!==$g['players'])throw new RuntimeException('Group source drift '.$key);
+          }
+          if(array_keys($p['results']['matches']??[])!==$m['playoff']['match_ids'])throw new RuntimeException('Playoff source drift');
+          $final=$p['results']['matches'][$m['playoff']['match_ids'][0]]??'';
+          if(!str_contains($final,'Bjørn Jarle Jahnsen') || !str_contains($final,'Arild Eidesund'))throw new RuntimeException('Final verification failed');
+          echo "DIDO_SOURCE_FROZEN_OK=yes players=18 matches=79\n";
+          PHP
+
+      - name: Fetch and validate complete match detail before DB writes
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/dido/matches
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          n=0
+          for id in "${ids[@]}"; do
+            found=no
+            for attempt in 1 2 3 4; do
+              status="$(curl -sS -L --connect-timeout 8 --max-time 100 -o "/tmp/dido/matches/${id}.json" -w '%{http_code}' "${TEST_BASE_URL%/}/api/atlas-match-visits.php?match=${id}" || true)"
+              if [[ "$status" == 200 ]] && php -r '$d=json_decode(file_get_contents($argv[1]),true);exit(($d["ok"]??false)===true && ($d["external_id"]??"")===$argv[2] && ($d["leg_count"]??0)>0 && ($d["visit_count"]??0)>0 ? 0:1);' "/tmp/dido/matches/${id}.json" "$id"; then
+                found=yes
+                break
+              fi
+              echo "Match ${id} HTTP ${status}, retry ${attempt} - allowing source recovery"
+              sleep $((30+attempt*20))
+            done
+            [[ "$found" == yes ]] || { echo "SOURCE_MATCH_UNAVAILABLE=${id}" >&2; exit 1; }
+            n=$((n+1))
+            echo "FETCHED_MATCH ${n}/79 id=${id}"
+            sleep 12
+          done
+          php <<'PHP'
+          <?php
+          $m=json_decode(file_get_contents(getenv('MANIFEST')),true,512,JSON_THROW_ON_ERROR);
+          $ids=[];foreach($m['groups'] as $g)foreach($g['match_ids'] as $id)$ids[]=$id;
+          foreach($m['playoff']['match_ids'] as $id)$ids[]=$id;
+          $legs=0;$visits=0;$darts=0;
+          foreach($ids as $id){
+            $d=json_decode(file_get_contents("/tmp/dido/matches/{$id}.json"),true,512,JSON_THROW_ON_ERROR);
+            $legs+=(int)$d['leg_count'];$visits+=(int)$d['visit_count'];$darts+=(int)$d['darts_count'];
+          }
+          if($legs!==88 || $visits < $legs*2) throw new RuntimeException("Source detail counts incomplete: legs={$legs} visits={$visits}");
+          echo "DIDO_MATCH_DETAILS_VERIFIED=yes matches=".count($ids)." legs={$legs} visits={$visits} darts={$darts}\n";
+          PHP
+
+      - name: Snapshot current TEST ELO state
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));
+          $names=['elo_current_ratings','elo_match_events','tournament_elo_snapshots'];
+          $items=[];
+          foreach($names as $name){
+            $table='bd_test_'.$name;
+            $rows=$db->query("SELECT * FROM `{$table}`")->fetch_all(MYSQLI_ASSOC);
+            usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));
+            $items[$name]=$rows;
+          }
+          file_put_contents('/tmp/dido/elo-before.json',json_encode($items,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES));
+          echo "DIDO_TEST_ELO_BASELINE_SAVED=yes\n";
+          PHP
+
+      - name: Import the isolated standalone tournament into TEST
+        run: |
+          php infra/sql/import_atlas_grandprix_dido_test.php "$MANIFEST" /tmp/dido/source.json
+          mapfile -t ids < <(php -r '$m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)echo $id,"\n";foreach($m["playoff"]["match_ids"] as $id)echo $id,"\n";')
+          for id in "${ids[@]}"; do
+            php infra/sql/import_atlas_match_visits_test.php "$MANIFEST" "/tmp/dido/matches/${id}.json"
+          done
+
+      - name: Strict data QA, finalize and lifecycle validation
+        run: |
+          set -Eeuo pipefail
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=data --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_finalize_grandprix_dido_no_elo.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_history_verify.php --external="$EXTERNAL_ID" --expected-matches=79 --expected-players=18 --phase=final --require-visits=1 --require-playoff=1
+          php infra/sql/atlas_history_lifecycle_verify.php --external="$EXTERNAL_ID"
+          php infra/sql/atlas_format_metadata_verify.php --external="$EXTERNAL_ID"
+
+      - name: No ELO or season ranking mutation proof
+        run: |
+          php <<'PHP'
+          <?php
+          mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
+          $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));
+          $x=getenv('EXTERNAL_ID');
+          $s=$db->prepare("SELECT t.id,t.season_id,t.elo_enabled,t.status,t.end_at FROM bd_test_external_references er JOIN bd_test_tournaments t ON t.id=er.internal_id WHERE er.external_system=CONCAT('darts','atlas') AND er.external_entity_type='tournament' AND er.external_id=? LIMIT 1");
+          $s->bind_param('s',$x);$s->execute();$t=$s->get_result()->fetch_assoc();$s->close();
+          if(!$t || $t['season_id']!==null || (int)$t['elo_enabled']!==0 || $t['status']!=='completed' || !$t['end_at']) throw new RuntimeException('Standalone no-ELO tournament state invalid');
+          $id=(int)$t['id'];
+          foreach(['elo_match_events','tournament_elo_snapshots','season_ranking_events'] as $name){
+            $count=(int)$db->query("SELECT COUNT(*) c FROM `bd_test_{$name}` WHERE tournament_id={$id}")->fetch_assoc()['c'];
+            if($count!==0)throw new RuntimeException("ELO/ranking events found: {$name}");
+          }
+          $current=[];
+          foreach(['elo_current_ratings','elo_match_events','tournament_elo_snapshots'] as $name){
+            $rows=$db->query("SELECT * FROM `bd_test_{$name}`")->fetch_all(MYSQLI_ASSOC);
+            usort($rows,static fn($a,$b):int=>strcmp(json_encode($a),json_encode($b)));
+            $current[$name]=$rows;
+          }
+          $before=file_get_contents('/tmp/dido/elo-before.json');
+          if(json_encode($current,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES)!==$before)throw new RuntimeException('Global TEST ELO state was modified');
+          echo "DIDO_TEST_STANDALONE_NO_ELO_OK=yes tournament_id={$id}\n";
+          PHP
+
+      - name: Export verified source and TEST evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grandprix-dido-test-migration-evidence
+          path: |
+            /tmp/dido/source.json
+          retention-days: 5
+          if-no-files-found: ignore
