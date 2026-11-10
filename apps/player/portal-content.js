@@ -128,7 +128,7 @@ async function loadPortalContent() {
   renderTournamentPicker();
   bindTournamentTabs();
 
-  const view = localStorage.getItem("bd:statisticsView") || "season";
+  const view = localStorage.getItem("bd:statisticsView") || "players";
   if (view === "players") await loadPlayerDirectoryData();
   if (view === "tournament") await loadTournamentTable();
   if (view === "mine") await loadMyMatches();
@@ -542,7 +542,7 @@ el.clubSelect?.addEventListener("change", () => {
 el.refreshButton?.addEventListener("click", () => setTimeout(() => {
   directoryLoadedClubId = 0;
   loadPortalContent().catch(renderPortalLoadError);
-  const view = localStorage.getItem("bd:statisticsView") || "season";
+  const view = localStorage.getItem("bd:statisticsView") || "players";
   if (view === "players") loadPlayerDirectoryData(true).catch(renderPortalLoadError);
   if (view === "tournament") loadTournamentTable().catch(renderPortalLoadError);
   if (view === "mine") loadMyMatches().catch(() => {});
