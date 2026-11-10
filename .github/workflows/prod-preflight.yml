@@ -68,7 +68,7 @@ jobs:
       - name: Check canonical production hostname
         if: always()
         env:
-          BASE_URL: https://blindleiadart.ingenting.org
+          BASE_URL: https://blindleiadarts.ingenting.org
         run: |
           set -Eeuo pipefail
           echo "Checking $BASE_URL"
@@ -99,7 +99,7 @@ jobs:
       - name: Check canonical test hostname
         if: always()
         env:
-          BASE_URL: https://test.blindleiadart.ingenting.org
+          BASE_URL: https://test.blindleiadarts.ingenting.org
         run: |
           set -Eeuo pipefail
           echo "Checking $BASE_URL"
