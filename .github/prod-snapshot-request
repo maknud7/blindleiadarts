@@ -1,3 +1,3 @@
 create_fresh_prod_snapshot=YES
-release_sha=596aed5c3ae095197a063352f293ac0e5d2576bf
-purpose=backend_v2_identity_audit_prod_cutover
+release_sha=e365c9e40043f8ce7a7f0bd956234b0544f30d2f
+purpose=release_20261110_verified_test
