@@ -131,7 +131,7 @@ jobs:
 
       - name: Verify release candidate is the exact TEST release
         env:
-          TEST_BASE_URL: https://test.blindleiadart.ingenting.org
+          TEST_BASE_URL: https://test.blindleiadarts.ingenting.org
           EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
         run: |
           set -Eeuo pipefail
@@ -149,7 +149,7 @@ jobs:
 
       - name: Validate production config and shared credentials
         env:
-          PROD_BASE_URL: https://blindleiadart.ingenting.org
+          PROD_BASE_URL: https://blindleiadarts.ingenting.org
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -185,9 +185,9 @@ jobs:
         run: php infra/deploy/generate_api_config.php --output=dist/prod/api/config.php
         env:
           APP_ENV: prod
-          BASE_URL: https://blindleiadart.ingenting.org
-          IDENTITY_BASE_URL: https://blindleiadart.ingenting.org
-          STATIC_BASE_URL: https://blindleiadart.ingenting.org
+          BASE_URL: https://blindleiadarts.ingenting.org
+          IDENTITY_BASE_URL: https://blindleiadarts.ingenting.org
+          STATIC_BASE_URL: https://blindleiadarts.ingenting.org
           SCREEN_DEFAULT_CLUB_SLUG: blindleia-dartklubb
           REALTIME_WEBSOCKET_URL: ${{ vars.PROD_REALTIME_WEBSOCKET_URL }}
           REALTIME_PUBLISH_URL: ${{ vars.PROD_REALTIME_PUBLISH_URL }}
@@ -205,15 +205,15 @@ jobs:
           CHALLONGE_CLIENT_ID: ${{ secrets.CHALLONGE_CLIENT_ID }}
           CHALLONGE_CLIENT_SECRET: ${{ secrets.CHALLONGE_CLIENT_SECRET }}
           CHALLONGE_DEFAULT_SCOPES: ${{ vars.CHALLONGE_DEFAULT_SCOPES }}
-          CHALLONGE_REDIRECT_URI: https://blindleiadart.ingenting.org/api/v1/connectors/challonge/callback
+          CHALLONGE_REDIRECT_URI: https://blindleiadarts.ingenting.org/api/v1/connectors/challonge/callback
 
       - name: Validate canonical production package
         env:
           EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
         run: |
           set -Eeuo pipefail
-          grep -Fq "'base_url' => 'https://blindleiadart.ingenting.org'" dist/prod/api/config.php
-          grep -Fq "'identity_base_url' => 'https://blindleiadart.ingenting.org'" dist/prod/api/config.php
+          grep -Fq "'base_url' => 'https://blindleiadarts.ingenting.org'" dist/prod/api/config.php
+          grep -Fq "'identity_base_url' => 'https://blindleiadarts.ingenting.org'" dist/prod/api/config.php
           grep -Fq "'table_prefix' => 'bd_prod_'" dist/prod/api/config.php
           grep -Fq "'identity_table_prefix' => 'bd_prod_'" dist/prod/api/config.php
           grep -Fq "'hardware_table_prefix' => 'bd_prod_'" dist/prod/api/config.php
@@ -278,7 +278,7 @@ jobs:
 
       - name: Verify exact canonical production release
         env:
-          PROD_BASE_URL: https://blindleiadart.ingenting.org
+          PROD_BASE_URL: https://blindleiadarts.ingenting.org
           EXPECTED_SHA: ${{ steps.request.outputs.release_sha }}
         run: |
           set -Eeuo pipefail
