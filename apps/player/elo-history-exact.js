@@ -280,7 +280,12 @@ async function patchProfile() {
     bindChartSelection(eloSection, tournaments.filter((item) => item.completed && Number.isFinite(Number(item.rating_after))));
   } else {
     const rows = items.map((item) => `<div class="elo-timeline-row"><div class="elo-timeline-context"><strong>${esc(resultLabel(item.result))} mot ${esc(item.opponent_name || "motstander")}</strong><small>${esc(item.tournament_name || "Turnering")} · ${esc(roundLabel(item))}</small></div>${movementHtml(item)}</div>`).join("");
-    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">${tournamentData ? "Ingen ferdige ELO-tellende turneringer å vise ennå." : "Kunne ikke hente ELO-grafen. Oppdater for å prøve igjen."}</p><div class="elo-timeline">${rows}</div>`;
+    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">${tournamentData ? "Ingen ferdige ELO-tellende turneringer å vise ennå." : "Kunne ikke hente ELO-grafen fra serveren."}</p>${!tournamentData ? '<button type="button" class="ghost elo-graph-retry">Prøv å hente grafen igjen</button>' : ""}<div class="elo-timeline">${rows}</div>`;
+    eloSection.querySelector(".elo-graph-retry")?.addEventListener("click", () => {
+      historyCache.delete(playerId);
+      eloSection.dataset.exactEloSignature = "";
+      schedule(0);
+    });
   }
   eloSection.dataset.exactEloSignature = signature;
 }
