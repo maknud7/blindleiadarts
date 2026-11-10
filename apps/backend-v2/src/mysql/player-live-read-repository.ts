@@ -1,3 +1,4 @@
+import { composePlayerEloTournamentTimeline } from "../domain/elo-tournament-timeline.js";
 import type { IdentityUser } from "./identity-auth-repository.js";
 import type { MySqlSessionProvider, QueryResultRow, SqlExecutor, TablePrefix } from "./contracts.js";
 
@@ -250,7 +251,7 @@ export class MySqlPlayerLiveReadRepository {
         }
       }
 
-      const items = [...grouped.values()].sort((a, b) => {
+      const snapshotItems = [...grouped.values()].sort((a, b) => {
         const byDate = String(a.start_at ?? "").localeCompare(String(b.start_at ?? ""));
         if (byDate !== 0) return byDate;
         return compareDecimalIds(String(a.tournament_id ?? "0"), String(b.tournament_id ?? "0"));
@@ -269,6 +270,28 @@ export class MySqlPlayerLiveReadRepository {
           completed: after !== null,
         };
       });
+
+      // The snapshot table contains only players captured at each tournament.
+      // The ELO chart must also contain ELO-enabled completed tournaments that
+      // this particular player skipped, carrying the rating forward unchanged.
+      const eligible = await db.query<QueryResultRow>(
+        `SELECT id,season_id,name,status,start_at,end_at
+           FROM ${this.table("tournaments")}
+          WHERE club_id=? AND elo_enabled=1 AND status='completed' AND season_id IS NOT NULL
+          ORDER BY start_at ASC,id ASC`,
+        [decimalId(player.club_id)],
+      );
+      const items = composePlayerEloTournamentTimeline(
+        eligible.map((row) => ({
+          id: publicId(decimalId(row.id)),
+          season_id: publicId(decimalId(row.season_id)),
+          name: row.name,
+          status: row.status,
+          start_at: row.start_at,
+          end_at: row.end_at,
+        })),
+        snapshotItems,
+      );
 
       return {
         player_id: publicId(playerId),
