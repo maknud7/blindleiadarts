@@ -6,7 +6,7 @@ let rerun = false;
 
 const eloTournamentStyle = document.createElement("link");
 eloTournamentStyle.rel = "stylesheet";
-eloTournamentStyle.href = new URL("./elo-tournament-history.css?v=20260902-01", import.meta.url).href;
+eloTournamentStyle.href = new URL("./elo-tournament-history.css?v=20261110-01", import.meta.url).href;
 document.head.appendChild(eloTournamentStyle);
 
 function esc(value) {
@@ -110,49 +110,89 @@ function currentPlayerId() {
 }
 
 function chartHtml(tournaments) {
+  // Calendar is sourced from ALL completed ELO-enabled tournaments, not only
+  // those with a snapshot for this player. Absent events are flat points.
   const rows = tournaments.filter((item) => item.completed && Number.isFinite(Number(item.rating_after)));
   if (!rows.length) return "";
 
   const width = 760;
-  const height = 190;
+  const height = 200;
   const left = 44;
   const right = 20;
   const top = 22;
-  const bottom = 34;
+  const bottom = 35;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
   const ratings = rows.map((item) => Number(item.rating_after));
   let min = Math.min(...ratings);
   let max = Math.max(...ratings);
-  const rawRange = max - min;
-  const padding = Math.max(6, rawRange * 0.18);
+  const padding = Math.max(8, (max - min) * 0.18);
   min -= padding;
   max += padding;
-  if (Math.abs(max - min) < 0.1) {
-    min -= 5;
-    max += 5;
-  }
   const y = (rating) => top + ((max - rating) / (max - min)) * plotHeight;
   const x = (index) => left + (rows.length === 1 ? plotWidth / 2 : (index / (rows.length - 1)) * plotWidth);
   const points = rows.map((item, index) => ({ item, x: x(index), y: y(Number(item.rating_after)) }));
   const path = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
   const gridValues = [max, (max + min) / 2, min];
   const labelEvery = rows.length <= 7 ? 1 : Math.ceil(rows.length / 6);
+  const selected = rows.at(-1);
+  const attended = rows.filter((row) => Number(row.tournament_matches || 0) > 0).length;
 
-  return `<div class="elo-tournament-chart">
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="ELO etter hver ferdige turnering">
+  return `<div class="elo-tournament-chart" data-elo-interactive-chart>
+    <div class="elo-chart-heading">
+      <strong>ELO etter hver tellende turnering</strong>
+      <span>${rows.length} turneringer · ${attended} med ELO-kamper</span>
+    </div>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="ELO-kurve med ${rows.length} punkter, ett per ELO-tellende turnering, inkludert turneringer uten deltakelse">
       ${gridValues.map((value) => {
         const gy = y(value);
-        return `<line class="elo-chart-grid" x1="${left}" x2="${width - right}" y1="${gy.toFixed(1)}" y2="${gy.toFixed(1)}"></line><text class="elo-chart-axis" x="4" y="${(gy + 3).toFixed(1)}">${value.toFixed(0)}</text>`;
+        return `<line class="elo-chart-grid" x1="${left}" x2="${width - right}" y1="${gy.toFixed(1)}" y2="${gy.toFixed(1)}"></line><text class="elo-chart-axis" x="3" y="${(gy + 3).toFixed(1)}">${value.toFixed(0)}</text>`;
       }).join("")}
       ${points.length > 1 ? `<path class="elo-chart-line" d="${path}"></path>` : ""}
       ${points.map((point, index) => {
         const item = point.item;
         const showLabel = index % labelEvery === 0 || index === points.length - 1;
-        return `<g><circle class="elo-chart-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="5"><title>${esc(item.tournament_name)}: ${Number(item.rating_after).toFixed(1)} (${deltaText(item.delta)})</title></circle>${showLabel ? `<text class="elo-chart-label" x="${point.x.toFixed(1)}" y="${height - 8}">${esc(shortDate(item.start_at))}</text>` : ""}</g>`;
+        const selectedPoint = index === points.length - 1;
+        const played = Number(item.tournament_matches || 0) > 0;
+        return `<g class="elo-chart-event${selectedPoint ? " is-selected" : ""}${played ? "" : " is-idle"}" data-elo-chart-point-index="${index}"><circle class="elo-chart-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${selectedPoint ? "6" : "4.5"}"><title>${esc(item.tournament_name)}: ${Number(item.rating_after).toFixed(1)} ELO${played ? ` (${deltaText(item.delta)})` : " (ingen ELO-kamper)"}</title></circle>${showLabel ? `<text class="elo-chart-label" x="${point.x.toFixed(1)}" y="${height - 9}">${esc(shortDate(item.start_at))}</text>` : ""}</g>`;
       }).join("")}
     </svg>
+    <div class="elo-chart-legend"><span><i class="elo-legend-played"></i> Spilte ELO-kamper</span><span><i class="elo-legend-missed"></i> Uendret rating</span></div>
+    <div class="elo-chart-selection" role="status" aria-live="polite">${selected ? chartSelectionHtml(selected) : ""}</div>
+    <div class="elo-chart-navigation" role="group" aria-label="Velg turnering i ELO-grafen">
+      ${rows.map((item, index) => `<button type="button" data-elo-point-index="${index}" class="${index === rows.length - 1 ? "active" : ""}" aria-pressed="${index === rows.length - 1 ? "true" : "false"}" aria-label="${esc(item.tournament_name)} – ${esc(formatDate(item.start_at))} – ${Number(item.rating_after).toFixed(1)} ELO"><span>${esc(shortDate(item.start_at))}</span><strong>${Number(item.rating_after).toFixed(0)}</strong></button>`).join("")}
+    </div>
   </div>`;
+}
+
+function chartSelectionHtml(item) {
+  const matches = Number(item.tournament_matches || 0);
+  const delta = Number(item.delta || 0);
+  return `<div class="elo-chart-selection-context"><strong>${esc(item.tournament_name || "Turnering")}</strong><small>${esc(formatDate(item.start_at))} · ${matches > 0 ? `${matches} ELO-kamper` : "Ingen ELO-kamper – rating videreført"}</small></div>
+    <div class="elo-chart-selection-rating"><strong>${Number(item.rating_after).toFixed(1)}</strong><span class="${tone(delta)}">${deltaText(delta)}</span></div>`;
+}
+
+function bindChartSelection(section, rows) {
+  const chart = section.querySelector("[data-elo-interactive-chart]");
+  if (!chart) return;
+  const buttons = [...chart.querySelectorAll("[data-elo-point-index]")];
+  buttons.forEach((button) => button.addEventListener("click", () => {
+    const index = Number(button.dataset.eloPointIndex);
+    const item = rows[index];
+    if (!item) return;
+    buttons.forEach((candidate) => {
+      const active = candidate === button;
+      candidate.classList.toggle("active", active);
+      candidate.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    chart.querySelectorAll("[data-elo-chart-point-index]").forEach((point) => {
+      const active = Number(point.dataset.eloChartPointIndex) === index;
+      point.classList.toggle("is-selected", active);
+      point.querySelector("circle")?.setAttribute("r", active ? "6" : "4.5");
+    });
+    const selection = chart.querySelector(".elo-chart-selection");
+    if (selection) selection.innerHTML = chartSelectionHtml(item);
+  }));
 }
 
 function tournamentCardHtml(tournament, matchItems) {
@@ -181,7 +221,8 @@ function tournamentOverviewHtml(tournaments, matchItems) {
   const startRating = Number(first.rating_before);
   const latestRating = Number(last.rating_after);
   const totalDelta = latestRating - startRating;
-  const cards = [...completed].reverse().map((item) => tournamentCardHtml(item, matchItems)).join("");
+  const cards = [...completed].filter((item) => Number(item.tournament_matches || 0) > 0).reverse()
+    .map((item) => tournamentCardHtml(item, matchItems)).join("");
 
   return `<div class="elo-tournament-overview">
     <div class="elo-tournament-summary">
@@ -190,7 +231,11 @@ function tournamentOverviewHtml(tournaments, matchItems) {
       <div class="elo-summary-stat"><small>Total endring</small><strong class="${tone(totalDelta)}">${deltaText(totalDelta)}</strong></div>
     </div>
     ${chartHtml(completed)}
-    <div class="elo-tournament-list">${cards}</div>
+    <div class="elo-tournament-list">
+      <h4>ELO-kamper per turnering</h4>
+      <p class="muted">Turneringer du ikke spilte ELO-kamper i vises som flate punkter i grafen. Velg et punkt for detaljer.</p>
+      ${cards || '<p class="muted">Ingen ELO-kamper i perioden.</p>'}
+    </div>
   </div>`;
 }
 
@@ -199,11 +244,13 @@ async function patchProfile() {
   const playerId = currentPlayerId();
   if (!playerId) return;
   const data = await exactHistory(playerId);
+  if (currentPlayerId() !== playerId || profileRoot.classList.contains("hidden")) return;
   const matchData = data?.matches || null;
   const tournamentData = data?.tournaments || null;
   const items = matchData?.items || [];
   const tournaments = tournamentData?.items || [];
-  if (!items.length && !tournaments.length) return;
+  // Show the full chart even if the player has no personal ELO-match events.
+  // For a truly empty tournament calendar, retain a useful empty state.
 
   const byMatch = new Map(items.map((item) => [Number(item.match_id), item]));
   profileRoot.querySelectorAll(".profile-match-history [data-match-detail]").forEach((row) => {
@@ -229,10 +276,11 @@ async function patchProfile() {
 
   const overview = tournamentOverviewHtml(tournaments, items);
   if (overview) {
-    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">Grafen viser ELO etter hver ferdige turnering. Åpne en turnering for å se kampene som ga pluss og minus.</p>${overview}`;
+    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">Ett punkt for hver ELO-tellende turnering i klubben. Når spilleren ikke har ELO-kamper, går grafen flatt videre.</p>${overview}`;
+    bindChartSelection(eloSection, tournaments.filter((item) => item.completed && Number.isFinite(Number(item.rating_after))));
   } else {
     const rows = items.map((item) => `<div class="elo-timeline-row"><div class="elo-timeline-context"><strong>${esc(resultLabel(item.result))} mot ${esc(item.opponent_name || "motstander")}</strong><small>${esc(item.tournament_name || "Turnering")} · ${esc(roundLabel(item))}</small></div>${movementHtml(item)}</div>`).join("");
-    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">Turneringspunkter kommer når start- og sluttsnapshot er tilgjengelig.</p><div class="elo-timeline">${rows}</div>`;
+    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">${tournamentData ? "Ingen ferdige ELO-tellende turneringer å vise ennå." : "Kunne ikke hente ELO-grafen. Oppdater for å prøve igjen."}</p><div class="elo-timeline">${rows}</div>`;
   }
   eloSection.dataset.exactEloSignature = signature;
 }
