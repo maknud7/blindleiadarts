@@ -156,9 +156,9 @@ try {
         $season = (int) $tournament['season_id'];
         $snapshot = $grouped[$id] ?? null;
         $carried = $lastBySeason[$season] ?? 1000.0;
-        $before = $snapshot !== null ? (float) $snapshot['rating_before'] : $carried;
-        $after = $snapshot !== null && $snapshot['rating_after'] !== null
-            ? (float) $snapshot['rating_after'] : $carried;
+        $confirmed = $snapshot !== null && $snapshot['rating_after'] !== null;
+        $before = $confirmed ? (float) $snapshot['rating_before'] : $carried;
+        $after = $confirmed ? (float) $snapshot['rating_after'] : $carried;
         $matches = $snapshot !== null && $snapshot['matches_after'] !== null
             ? max(0, (int) $snapshot['matches_after'] - (int) $snapshot['matches_before']) : 0;
         $lastBySeason[$season] = $after;
