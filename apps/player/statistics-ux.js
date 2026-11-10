@@ -369,7 +369,7 @@ async function enhanceProfile() {
       profile = await api(`/players/${playerId}/profile`);
       profileCache.set(playerId, profile);
     }
-    renderProfileElo(profile, playerId);
+    if (Number(profileRoot.dataset.playerId || 0) === playerId) renderProfileElo(profile, playerId);
   } catch {}
 }
 
