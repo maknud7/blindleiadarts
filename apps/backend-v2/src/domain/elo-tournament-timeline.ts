@@ -18,11 +18,12 @@ export function composePlayerEloTournamentTimeline(
     const season = String(tournament.season_id ?? "none");
     const snapshot = byTournament.get(tournamentId);
     const current = lastBySeason.get(season) ?? 1000;
-    const before = snapshot && Number.isFinite(Number(snapshot.rating_before))
-      ? Number(snapshot.rating_before) : current;
     const knownAfter = snapshot?.rating_after !== null && snapshot?.rating_after !== undefined
       ? Number(snapshot.rating_after) : null;
-    const after = knownAfter !== null && Number.isFinite(knownAfter) ? knownAfter : current;
+    const hasConfirmedAfter = knownAfter !== null && Number.isFinite(knownAfter);
+    const before = hasConfirmedAfter && snapshot?.rating_before !== null && Number.isFinite(Number(snapshot?.rating_before))
+      ? Number(snapshot?.rating_before) : current;
+    const after = hasConfirmedAfter ? knownAfter : current;
     const matches = Math.max(0, Number(snapshot?.tournament_matches ?? 0) || 0);
     lastBySeason.set(season, after);
     return {
