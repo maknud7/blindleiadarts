@@ -47,3 +47,55 @@
   .tournament-elo-summary-head{display:grid;gap:4px}.tournament-elo-summary-head>span{white-space:normal}
   .tournament-elo-players{grid-template-columns:1fr}
 }
+
+
+/* Accessible event-by-event ELO graph; contained on narrow phones. */
+#statistics .elo-tournament-overview,
+#statistics .elo-tournament-overview>*,
+#statistics .elo-tournament-card,
+#statistics .elo-tournament-list,
+#statistics .elo-tournament-match,
+#statistics .elo-chart-selection{min-width:0;max-width:100%;box-sizing:border-box}
+#statistics .elo-tournament-chart{width:100%;min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box;padding:14px 12px 12px}
+#statistics .elo-tournament-chart svg{width:100%;max-width:100%;height:auto;aspect-ratio:760/200;overflow:hidden}
+.elo-chart-heading{display:flex;align-items:start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.elo-chart-heading strong{font-size:13px;color:#143e6d;font-weight:900}
+.elo-chart-heading span{font-size:11px;color:#60778f}
+.elo-chart-event.is-idle .elo-chart-point{fill:#eef4fc;stroke:#8ca9cd}
+.elo-chart-event.is-selected .elo-chart-point{fill:#2f6fed;stroke:#fff;stroke-width:2.4}
+.elo-chart-legend{display:flex;flex-wrap:wrap;gap:14px;padding:2px 3px 10px;font-size:10px;font-weight:700;color:#58738f}
+.elo-chart-legend>span{display:inline-flex;align-items:center;gap:5px}
+.elo-chart-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid #2f6fed;background:#fff}
+.elo-chart-legend .elo-legend-missed{border-color:#8ca9cd;background:#eef4fc}
+.elo-chart-selection{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px;border:1px solid #cfdff3;border-radius:12px;background:#f6faff}
+.elo-chart-selection-context{min-width:0;display:grid;gap:3px}
+.elo-chart-selection-context strong{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.elo-chart-selection-context small{font-size:11px;color:#60758d;line-height:1.4;overflow-wrap:anywhere}
+.elo-chart-selection-rating{display:flex;gap:7px;align-items:center;white-space:nowrap}
+.elo-chart-selection-rating strong{font-size:20px;color:#173f70;font-variant-numeric:tabular-nums}
+.elo-chart-selection-rating span{font-size:11px;font-weight:850}
+.elo-chart-selection-rating .positive{color:#087348}.elo-chart-selection-rating .negative{color:#ac2337}
+.elo-chart-selection-rating .neutral{color:#61748c}
+.elo-chart-navigation{display:flex;gap:6px;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;padding:10px 1px 4px}
+body #statistics .elo-chart-navigation button{display:grid;gap:3px;place-items:center;flex:0 0 77px;width:77px!important;min-width:77px!important;min-height:47px!important;padding:7px 4px!important;border:1px solid #dbe5f0!important;border-radius:9px!important;background:#fff!important;color:#385572!important;box-shadow:none!important;font-variant-numeric:tabular-nums}
+body #statistics .elo-chart-navigation button span{font-size:10px!important;color:#6b7f95!important}
+body #statistics .elo-chart-navigation button strong{font-size:12px!important;color:#173f70!important}
+body #statistics .elo-chart-navigation button.active{background:#eaf2ff!important;border-color:#2f6fed!important}
+body #statistics .elo-chart-navigation button:focus-visible{outline:3px solid #8fb3f0;outline-offset:1px}
+#statistics .elo-tournament-list h4{margin:6px 0 0;font-size:14px;color:#173f70}
+#statistics .elo-tournament-list>.muted{font-size:11px;line-height:1.45;margin:0 0 3px}
+#statistics .elo-tournament-match strong,#statistics .elo-tournament-title strong{overflow-wrap:anywhere;white-space:normal}
+@media(max-width:680px){
+  #statistics .elo-tournament-chart{padding:10px 8px}
+  #statistics .elo-tournament-chart svg{height:auto;aspect-ratio:760/200}
+  .elo-chart-heading{display:grid;gap:4px}
+  .elo-chart-selection{grid-template-columns:minmax(0,1fr) auto;padding:10px;gap:6px}
+  .elo-chart-selection-rating{display:grid;justify-items:end;gap:0}
+  .elo-chart-selection-rating strong{font-size:18px}
+  .elo-chart-navigation{margin-right:-2px}
+  body #statistics .elo-chart-navigation button{flex-basis:72px;width:72px!important;min-width:72px!important}
+}
+@media(max-width:360px){
+  .elo-chart-selection{grid-template-columns:1fr}
+  .elo-chart-selection-rating{display:flex;justify-content:flex-start}
+}
