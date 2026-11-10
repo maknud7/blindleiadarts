@@ -93,3 +93,38 @@ for (const width of [360, 390, 768, 1365]) {
     expect(requests.every(({ method }) => method === "GET")).toBe(true);
   });
 }
+
+
+for (const width of [360, 390, 768]) {
+  test("wide ranking and tournament tables scroll locally instead of overflowing at " + width + "px", async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const { errors } = await boot(page);
+    const wideTable = '<div class="table-card"><div class="table-scroll">' +
+      '<table class="portal-table combined-season-table"><thead><tr>' +
+      Array.from({ length: 12 }, (_, i) => '<th>Statistikk ' + i + '</th>').join("") +
+      '</tr></thead><tbody><tr>' +
+      Array.from({ length: 12 }, (_, i) => '<td>' + (1000 + i) + '</td>').join("") +
+      '</tr></tbody></table></div></div>';
+
+    await page.locator('[data-statistics-view="season"]').click();
+    await page.locator("#seasonStandings").evaluate((element, markup) => { element.innerHTML = markup; }, wideTable);
+    const season = await page.locator('#seasonStandings .table-scroll').evaluate((element) => ({
+      scrolling: element.scrollWidth > element.clientWidth,
+      rootWidth: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
+    }));
+    expect(season.scrolling).toBe(true);
+    expect(season.rootWidth).toBeLessThanOrEqual(season.viewport + 1);
+
+    await page.locator('[data-statistics-view="tournament"]').click();
+    await page.locator("#groupTables").evaluate((element, markup) => { element.innerHTML = markup; }, wideTable);
+    const tournament = await page.locator('#groupTables .table-scroll').evaluate((element) => ({
+      scrolling: element.scrollWidth > element.clientWidth,
+      rootWidth: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
+    }));
+    expect(tournament.scrolling).toBe(true);
+    expect(tournament.rootWidth).toBeLessThanOrEqual(tournament.viewport + 1);
+    expect(errors).toEqual([]);
+  });
+}
