@@ -12,7 +12,7 @@ const tournamentRoot = document.getElementById("groupTables");
 const tournamentMatchesRoot = document.getElementById("tournamentMatches");
 const myMatchesRoot = document.getElementById("myMatchList");
 const search = document.getElementById("playerSearch");
-let currentView = "season";
+let currentView = "players";
 let seasons = [];
 let selectedSeasonId = 0;
 let seasonLoading = false;
@@ -90,6 +90,10 @@ function filterPlayers() {
       playerRoot.appendChild(empty);
     }
   } else empty?.remove();
+  const counter = document.getElementById("playerSearchCount");
+  if (counter) counter.textContent = query
+    ? `${visible} av ${playerRoot.querySelectorAll(".player-card").length} spillere`
+    : `${visible} spillere · velg en for å se ELO og kamper`;
 }
 
 function sortValue(cell, type) {
@@ -234,9 +238,15 @@ async function renderSeason() {
         <thead><tr><th data-sort-type="number" data-sort-default="ascending">Plass</th><th data-sort-type="text" data-sort-default="ascending">Spiller</th><th data-sort-type="number">Poeng</th><th data-sort-type="number">ELO</th><th data-sort-type="number">K</th><th data-sort-type="number">V</th><th data-sort-type="number">U</th><th data-sort-type="number">T</th><th data-sort-type="number" title="Leg differanse">Leg +/−</th><th data-sort-type="number" title="3-dart snitt for hele den valgte sesongen">3DA sesong</th></tr></thead>
         <tbody>${(data.items || []).map((row) => `<tr data-player-profile="${Number(row.id)}"><td data-sort-value="${Number(row.position)}"><strong>${Number(row.position)}</strong></td><td data-sort-value="${esc(row.display_name)}"><strong>${esc(row.display_name)}</strong>${row.nickname ? `<small>${esc(row.nickname)}</small>` : ""}</td><td data-sort-value="${Number(row.points || 0)}"><strong>${pointsText(row.points)}</strong></td><td data-sort-value="${Number(row.elo_rating || 1000)}"><span class="elo-table-value">${Number(row.elo_rating || 1000).toFixed(1)}</span></td><td data-sort-value="${Number(row.matches_played || 0)}">${Number(row.matches_played || 0)}</td><td data-sort-value="${Number(row.wins || 0)}">${Number(row.wins || 0)}</td><td data-sort-value="${Number(row.draws || 0)}">${Number(row.draws || 0)}</td><td data-sort-value="${Number(row.losses || 0)}">${Number(row.losses || 0)}</td><td data-sort-value="${Number(row.leg_diff || 0)}"><span class="leg-diff ${Number(row.leg_diff || 0) > 0 ? "positive" : Number(row.leg_diff || 0) < 0 ? "negative" : ""}">${Number(row.leg_diff || 0) > 0 ? "+" : ""}${Number(row.leg_diff || 0)}</span></td><td data-sort-value="${Number(row.three_dart_average || 0)}">${Number(row.three_dart_average || 0) > 0 ? Number(row.three_dart_average).toFixed(2) : "—"}</td></tr>`).join("")}</tbody>
       </table></div>`;
-    seasonRoot.querySelectorAll("[data-player-profile]").forEach((row) => row.addEventListener("click", () => {
+    seasonRoot.querySelectorAll("[data-player-profile]").forEach((row) => row.addEventListener("click", async () => {
       activate("players");
-      document.querySelector(`#playerDirectory [data-player-profile="${Number(row.dataset.playerProfile)}"]`)?.click();
+      const playerId = Number(row.dataset.playerProfile);
+      try {
+        if (window.BlindleiaPlayerStats?.openPlayer) await window.BlindleiaPlayerStats.openPlayer(playerId);
+        else document.querySelector(`#playerDirectory [data-player-profile="${playerId}"]`)?.click();
+      } catch (error) {
+        console.warn("Kunne ikke åpne spillerprofil fra ranking", error);
+      }
     }));
     bindSorting();
   } catch (error) {
@@ -344,21 +354,14 @@ function renderProfileElo(profile, playerId) {
     else row.insertAdjacentHTML("beforeend", movementHtml(movement, true));
   });
 
-  const eloSection = [...profileRoot.querySelectorAll(".profile-section")].find((section) => norm(section.querySelector("h3")?.textContent).includes("elo-historikk") || norm(section.querySelector("h3")?.textContent).includes("elo-utvikling"));
-  if (!eloSection || eloSection.dataset.eloTimelinePlayer === String(playerId)) return;
-  eloSection.dataset.eloTimelinePlayer = String(playerId);
-  const usable = movements.filter((item) => item.before !== null).slice(0, 16);
-  eloSection.innerHTML = `<div class="section-head"><div><h3>ELO-utvikling</h3><p class="muted">Startverdi, ny rating og endring etter hver ferdig kamp.</p></div></div><div class="elo-timeline">${usable.length ? usable.map((item) => {
-    const match = item.match;
-    const result = match ? (match.result === "win" ? "Seier" : match.result === "draw" ? "Uavgjort" : "Tap") : "ELO-oppdatering";
-    const context = match ? `${result} mot ${esc(match.opponent_name || "motstander")}` : esc(item.tournament_name || result);
-    return `<div class="elo-timeline-row"><div class="elo-timeline-context"><strong>${context}</strong><small>${esc(item.tournament_name || "")}${item.calculated_at ? ` · ${esc(formatDate(item.calculated_at))}` : ""}</small></div>${movementHtml(item)}</div>`;
-  }).join("") : `<p class="muted">Ingen kampvise ELO-endringer registrert ennå.</p>`}</div>`;
+  // The exact tournament ELO module owns the graph. Never replace its SVG
+  // with an older match-only text timeline after asynchronous profile refresh.
+
 }
 
 async function enhanceProfile() {
   if (!profileRoot || profileRoot.classList.contains("hidden")) return;
-  const playerId = Number(profileRoot.querySelector(".profile-all-matches[data-player]")?.dataset.player || 0);
+  const playerId = Number(profileRoot.dataset.playerId || profileRoot.querySelector(".profile-all-matches[data-player]")?.dataset.player || 0);
   if (!playerId) return;
   try {
     let profile = profileCache.get(playerId);
@@ -420,7 +423,7 @@ function initialize() {
     loadSeasons().catch(() => undefined);
   });
 
-  const rememberedView = localStorage.getItem("bd:statisticsView") || "season";
+  const rememberedView = localStorage.getItem("bd:statisticsView") || "players";
   activate(rememberedView);
   enhance();
   loadSeasons().catch((error) => {
