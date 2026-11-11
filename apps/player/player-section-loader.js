@@ -1,4 +1,4 @@
-const VERSION = "20261110-statistics-elo-ux-01";
+const VERSION = "20261111-personal-calendar-norwegian-01";
 const loaded = new Map();
 const deferredLoaded = new Set();
 
