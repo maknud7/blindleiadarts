@@ -126,3 +126,17 @@ test("Norwegian check-in labels contain no English verb inflections", async () =
 function assertMissing(source, phrase) {
   expect(source.includes(phrase), "Found non-Norwegian text: " + phrase).toBe(false);
 }
+
+
+test("logging out never leaves the previous member's personal calendar visible", async ({ page }) => {
+  const { pageErrors } = await boot(page);
+  await expect(page.locator(".tdx-next")).toContainText("Min neste turnering");
+  await page.evaluate(() => {
+    localStorage.removeItem("bd:token");
+    window.dispatchEvent(new Event("bd:player-state-changed"));
+  });
+  await expect(page.locator(".tdx-list")).toContainText("Logg inn for å se dine turneringer");
+  await expect(page.locator(".tdx-next")).toHaveCount(0);
+  await expect(page.locator(".tdx-list .tdx-row")).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
