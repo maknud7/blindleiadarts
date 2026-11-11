@@ -2,8 +2,8 @@
 // global mobile consolidation module, which made every player page pay the cost.
 await import("./remove-checkout-percentage.js?v=20260830-1835");
 await import("./tournament-sidebar-nav-failsafe.js?v=20260831-1055");
-await import("./tournament-discovery-ux.js?v=20261104-player-journey-01");
-await import("./tournament-calendar-polish.js?v=20260829-1945");
+await import("./tournament-discovery-ux.js?v=20261111-personal-calendar-01");
+await import("./tournament-calendar-polish.js?v=20261111-personal-calendar-01");
 await import("./tournament-prestart-detail.js?v=20260831-0905");
 await import("./tournament-groups-detail.js?v=20260831-1025");
 await import("./shared-match-card-adapter.js?v=20260831-1035");
