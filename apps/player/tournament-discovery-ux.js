@@ -1,3 +1,5 @@
+import { belongsInMyCalendar, participationBadge } from "./player-calendar-model.js";
+
 const TD_API_ROOT = "../api/v1";
 const tournamentList = document.getElementById("tournamentList");
 const registrationList = document.getElementById("registrationList");
@@ -10,7 +12,15 @@ let allTournaments = [];
 let registrations = [];
 let eligibility = null;
 let activeFilter = "upcoming";
+let calendarScope = "mine";
 let loading = false;
+let reloadQueued = false;
+let accountReadError = "";
+let personalHistoryError = "";
+let personalPlayerId = 0;
+let confirmedPlayedIds = new Set();
+let historyCacheKey = "";
+let historyRequest = null;
 
 function token(){ return localStorage.getItem("bd:token") || ""; }
 function clubId(){ return Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:playerClubId") || 0); }
@@ -34,7 +44,16 @@ function publicStatus(t){
 function regFor(t){ return registrations.find(r=>Number(r.tournament_id)===Number(t.id)) || null; }
 function isFinished(t){ return ["completed","archived","cancelled","canceled"].includes(String(t?.status||"").toLowerCase()) || (!!t?.end_at && parseDate(t.end_at)?.getTime() < Date.now()); }
 function isUpcoming(t){ return !isFinished(t); }
-function isMine(t){ const r=regFor(t); return !!r && !["withdrawn","no_show"].includes(String(r.status||"")); }
+function isMine(t){
+  const tournamentId=String(t?.id||"");
+  const played=confirmedPlayedIds.has(tournamentId);
+  if(["cancelled","canceled"].includes(String(t?.status||"").toLowerCase())&&!played) return false;
+  return belongsInMyCalendar({
+    finished:isFinished(t),
+    registrationStatus:regFor(t)?.status,
+    hasCompletedMatch:played,
+  });
+}
 
 async function api(path,{method="GET",auth=false}={}){
   const headers={};
@@ -50,7 +69,11 @@ style.textContent=`
   .tdx-root{display:grid;gap:18px}
   .tdx-head{display:flex;align-items:end;justify-content:space-between;gap:12px}
   .tdx-head h2{margin:2px 0 0;font-size:30px;line-height:1.05;color:#0b2b50}
-  .tdx-tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px;border-radius:14px;background:#e9eff5}
+  .tdx-scope-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:5px;border-radius:14px;background:#e9eff5}
+  .tdx-scope-tabs button{min-width:0;min-height:46px;border:0;border-radius:11px;background:transparent;color:#526b84;font-weight:850;font-size:14px;padding:8px 6px;box-shadow:none}
+  .tdx-scope-tabs button.active{background:#fff;color:#0b2b50;box-shadow:0 1px 5px rgba(10,35,64,.1)}
+  .tdx-head .tdx-intro{font-size:13px;color:#647991;line-height:1.5;margin-top:7px}
+  .tdx-tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:4px;border-radius:14px;background:#f1f5f9}
   .tdx-tabs button{min-height:42px;border:0;border-radius:11px;background:transparent;color:#61758b;font-weight:800;font-size:14px;padding:0 8px}
   .tdx-tabs button.active{background:#fff;color:#0b2b50;box-shadow:0 1px 5px rgba(10,35,64,.1)}
   .tdx-next{border-radius:18px;padding:16px;background:linear-gradient(135deg,#edf5ff,#f7fbff);border:1px solid #c8dcf5;display:grid;gap:10px;text-align:left}
@@ -67,7 +90,14 @@ style.textContent=`
   .tdx-row-sub{font-size:14px;color:#70839a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tdx-row-side{display:flex;align-items:center;gap:8px;flex-shrink:0}
   .tdx-chevron{font-size:30px;line-height:1;color:#2f75e8;font-weight:700}
-  .tdx-empty{padding:24px 16px;text-align:center;color:#70839a}
+  .tdx-empty{display:grid;gap:9px;justify-items:center;padding:24px 16px;text-align:center;color:#70839a;line-height:1.5}
+  .tdx-empty strong{color:#24466a}
+  .tdx-empty button{width:auto;min-height:42px;padding:9px 13px;border-radius:10px}
+  .tdx-calendar-note{padding:10px 13px;border-radius:11px;border:1px solid #dbe7f3;background:#f5f9fe;color:#42607e;font-size:12px;line-height:1.5}
+  .tdx-root .tdx-row[hidden]{display:none!important}
+  .tdx-root,.tdx-root>*{min-width:0;max-width:100%;box-sizing:border-box}
+  .tdx-row-side{min-width:0}
+  @media(max-width:400px){.tdx-scope-tabs button{font-size:12px}.tdx-pill{white-space:normal;font-size:11px}}
   .tdx-detail{border:0;padding:0;width:100%;max-width:760px;height:100%;max-height:none;margin:0 0 0 auto;background:#f4f7fa}
   .tdx-detail::backdrop{background:rgba(7,26,48,.48)}
   .tdx-page{min-height:100%;display:flex;flex-direction:column}
@@ -104,24 +134,59 @@ dialog.className="tdx-detail";
 document.body.appendChild(dialog);
 
 function filtered(){
-  if(activeFilter==="past") return allTournaments.filter(isFinished).sort((a,b)=>(parseDate(b.start_at)?.getTime()||0)-(parseDate(a.start_at)?.getTime()||0));
-  return allTournaments.filter(isUpcoming).sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity));
+  const own=(calendarScope==="mine");
+  const source=own?allTournaments.filter(isMine):allTournaments;
+  if(activeFilter==="past") return source.filter(isFinished).sort((a,b)=>(parseDate(b.start_at)?.getTime()||0)-(parseDate(a.start_at)?.getTime()||0));
+  return source.filter(isUpcoming).sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity));
 }
-function nextForMe(){ return allTournaments.filter(t=>isMine(t)&&!isFinished(t)).sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity))[0] || null; }
-
+function nextForMe(){
+  return allTournaments.filter(t=>isMine(t)&&!isFinished(t))
+    .sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity))[0] || null;
+}
+function emptyCalendar(){
+  if(calendarScope==="mine"&&!token()) return '<div class="tdx-empty"><strong>Logg inn for å se dine turneringer</strong><span>Du kan fortsatt se alle kommende turneringer i klubbkalenderen.</span><button type="button" data-calendar-login>Gå til innlogging</button></div>';
+  if(calendarScope==="mine"&&accountReadError) return `<div class="tdx-empty"><strong>Kunne ikke hente dine turneringer</strong><span>${esc(accountReadError)}</span><button type="button" data-calendar-retry>Prøv igjen</button></div>`;
+  if(calendarScope==="mine"&&activeFilter==="past") return '<div class="tdx-empty"><strong>Ingen tidligere turneringer funnet</strong><span>Her vises turneringer med registrert innsjekking eller fullførte kamper – ikke turneringer du bare var påmeldt i.</span></div>';
+  if(calendarScope==="mine") return '<div class="tdx-empty"><strong>Du har ingen kommende påmeldinger</strong><span>Finn en turnering i klubbkalenderen.</span><button type="button" data-calendar-explore>Se klubbkalenderen</button></div>';
+  return activeFilter==="past"?'<div class="tdx-empty">Ingen tidligere klubbturneringer.</div>':'<div class="tdx-empty">Ingen kommende klubbturneringer akkurat nå.</div>';
+}
 function render(){
-  const items=filtered(); const next=nextForMe();
-  root.innerHTML=`<div class="tdx-head"><div><p class="eyebrow">Turneringer</p><h2>Din dartkalender</h2></div></div>
-    <div class="tdx-tabs" role="tablist"><button class="${activeFilter==="upcoming"?"active":""}" data-filter="upcoming">Kommende</button><button class="${activeFilter==="past"?"active":""}" data-filter="past">Tidligere</button></div>
-    ${activeFilter==="upcoming"&&next?`<button class="tdx-next" data-open="${Number(next.id)}"><div class="tdx-next-top"><span class="tdx-kicker">Neste for deg</span><span class="tdx-pill">${esc(statusLabel(regFor(next)?.status))}</span></div><h3>${esc(next.name)}</h3><div class="tdx-meta">${esc(fmtDate(next.start_at))}${fmtTime(next.start_at)?` · ${esc(fmtTime(next.start_at))}`:""}</div></button>`:""}
-    <div class="tdx-list">${items.length?items.map(rowHtml).join(""):`<div class="tdx-empty">${activeFilter==="past"?"Ingen tidligere turneringer ennå.":"Ingen kommende turneringer akkurat nå."}</div>`}</div>`;
-  root.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{activeFilter=b.dataset.filter;render();}));
+  const items=calendarScope==="mine"&&!token()?[]:filtered();
+  const next=calendarScope==="mine"&&activeFilter==="upcoming"?nextForMe():null;
+  const personalTitle=calendarScope==="mine";
+  root.innerHTML=`<div class="tdx-head"><div><p class="eyebrow">${personalTitle?"For deg":"For alle"}</p><h2>${personalTitle?"Mine turneringer":"Klubbkalender"}</h2><p class="tdx-intro">${personalTitle?"Påmeldinger og turneringer du faktisk har deltatt i.":"Se alle turneringer i klubben, finn nye og meld deg på."}</p></div></div>
+    <div class="tdx-scope-tabs" role="group" aria-label="Velg kalender">
+      <button type="button" class="${personalTitle?"active":""}" data-calendar-scope="mine" aria-pressed="${personalTitle}">Mine turneringer</button>
+      <button type="button" class="${!personalTitle?"active":""}" data-calendar-scope="club" aria-pressed="${!personalTitle}">Klubbkalender</button>
+    </div>
+    <div class="tdx-tabs" role="group" aria-label="Velg periode">
+      <button type="button" class="${activeFilter==="upcoming"?"active":""}" data-filter="upcoming" aria-pressed="${activeFilter==="upcoming"}">Kommende</button>
+      <button type="button" class="${activeFilter==="past"?"active":""}" data-filter="past" aria-pressed="${activeFilter==="past"}">Tidligere</button>
+    </div>
+    ${next?`<button class="tdx-next" data-open="${Number(next.id)}"><div class="tdx-next-top"><span class="tdx-kicker">Din neste turnering</span><span class="tdx-pill">${esc(statusLabel(regFor(next)?.status))}</span></div><h3>${esc(next.name)}</h3><div class="tdx-meta">${esc(fmtDate(next.start_at))}${fmtTime(next.start_at)?` · ${esc(fmtTime(next.start_at))}`:""}</div></button>`:""}
+    ${calendarScope==="mine"&&activeFilter==="past"&&personalHistoryError?`<p class="tdx-calendar-note" role="status">${esc(personalHistoryError)}</p>`:""}
+    <div class="tdx-list">${items.length?items.map(rowHtml).join(""):emptyCalendar()}</div>`;
+  root.querySelectorAll("[data-calendar-scope]").forEach(b=>b.addEventListener("click",()=>{
+    calendarScope=b.dataset.calendarScope;render();
+    if(calendarScope==="mine"&&activeFilter==="past") void ensurePersonalHistory();
+  }));
+  root.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{
+    activeFilter=b.dataset.filter;render();
+    if(calendarScope==="mine"&&activeFilter==="past") void ensurePersonalHistory();
+  }));
   root.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openDetail(Number(b.dataset.open))));
+  root.querySelector("[data-calendar-explore]")?.addEventListener("click",()=>{calendarScope="club";activeFilter="upcoming";render();});
+  root.querySelector("[data-calendar-login]")?.addEventListener("click",()=>{window.location.hash="#profile";});
+  root.querySelector("[data-calendar-retry]")?.addEventListener("click",()=>{void loadData();});
 }
 function rowHtml(t){
-  const reg=regFor(t); const count=Number(t.registration_count||0); const mine=reg&&!['withdrawn','no_show'].includes(String(reg.status||'')); const finished=isFinished(t);
-  const side=finished?`<span class="tdx-pill">Resultater</span>`:mine?`<span class="tdx-pill">${esc(statusLabel(reg.status))}</span>`:`<span class="tdx-pill">${count} ${count===1?"deltaker":"deltakere"}</span>`;
-  return `<button class="tdx-row" data-open="${Number(t.id)}"><span class="tdx-row-main"><span class="tdx-row-title">${esc(t.name)}</span><span class="tdx-row-sub">${esc(fmtDate(t.start_at))}${fmtTime(t.start_at)?` · ${esc(fmtTime(t.start_at))}`:""} · ${esc(publicStatus(t))}</span></span><span class="tdx-row-side">${side}<span class="tdx-chevron">›</span></span></button>`;
+  const reg=regFor(t);
+  const count=Number(t.registration_count||0);
+  const mine=isMine(t),finished=isFinished(t);
+  const played=confirmedPlayedIds.has(String(t.id));
+  const badge=finished?(calendarScope==="mine"?participationBadge({finished:true,registrationStatus:reg?.status,hasCompletedMatch:played}):"Resultater")
+    :mine?statusLabel(reg?.status):`${count} ${count===1?"deltaker":"deltakere"}`;
+  return `<button class="tdx-row" type="button" data-open="${Number(t.id)}"><span class="tdx-row-main"><span class="tdx-row-title">${esc(t.name)}</span><span class="tdx-row-sub">${esc(fmtDate(t.start_at))}${fmtTime(t.start_at)?` · ${esc(fmtTime(t.start_at))}`:""} · ${esc(publicStatus(t))}</span></span><span class="tdx-row-side"><span class="tdx-pill">${esc(badge)}</span><span class="tdx-chevron" aria-hidden="true">›</span></span></button>`;
 }
 
 async function openDetail(id){
