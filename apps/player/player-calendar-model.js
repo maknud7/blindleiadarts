@@ -4,7 +4,7 @@ export function belongsInMyCalendar({ finished, registrationStatus, hasCompleted
   const status = String(registrationStatus || "").toLowerCase();
   if (hasCompletedMatch) return true;
   if (finished) return ["checked_in", "eliminated", "paused", "completed"].includes(status);
-  return ["registered", "checked_in", "waitlisted", "paused"].includes(status);
+  return ["registered", "checked_in", "waitlisted", "paused", "eliminated", "completed"].includes(status);
 }
 
 export function participationBadge({ finished, registrationStatus, hasCompletedMatch = false }) {
@@ -14,5 +14,7 @@ export function participationBadge({ finished, registrationStatus, hasCompletedM
     checked_in: "Sjekket inn",
     waitlisted: "På venteliste",
     paused: "Midlertidig pause",
+    eliminated: "Utslått",
+    completed: "Deltok",
   })[String(registrationStatus || "")] || "Min turnering";
 }
