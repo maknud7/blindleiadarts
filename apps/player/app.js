@@ -105,7 +105,7 @@ function registrationLabel(status) {
     checked_in: "Sjekket inn",
     withdrawn: "Meldt av",
     no_show: "Ikke møtt",
-    eliminated: "Ute",
+    eliminated: "Utslått",
   }[status] || status || "Ukjent";
 }
 
