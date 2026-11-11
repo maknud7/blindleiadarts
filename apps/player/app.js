@@ -102,7 +102,7 @@ function registrationLabel(status) {
   return {
     registered: "Påmeldt",
     waitlisted: "Venteliste",
-    checked_in: "Checket inn",
+    checked_in: "Sjekket inn",
     withdrawn: "Meldt av",
     no_show: "Ikke møtt",
     eliminated: "Ute",
@@ -248,7 +248,7 @@ function renderDashboard() {
       <div class="stat-card"><small>Legs vunnet</small><strong>-</strong></div>
       <div class="stat-card"><small>Visits logget</small><strong>-</strong></div>
     `;
-    elements.rankingList.innerHTML = `<div class="mini-card"><p class="muted">Logg inn for å se ranking og personlige tall.</p></div>`;
+    elements.rankingList.innerHTML = `<div class="mini-card"><p class="muted">Logg inn for å se rangering og personlige tall.</p></div>`;
     elements.registrationList.innerHTML = `<div class="mini-card"><p class="muted">Logg inn for å se egne påmeldinger.</p></div>`;
     return;
   }
@@ -271,18 +271,18 @@ function renderDashboard() {
           <p class="muted">${escapeHtml(ranking.scope_type)} · ${escapeHtml(ranking.points)} poeng${ranking.position ? ` · plass ${escapeHtml(ranking.position)}` : ""}</p>
         </div>
       `).join("")
-    : `<div class="mini-card"><p class="muted">Ingen ranking snapshots ennå.</p></div>`;
+    : `<div class="mini-card"><p class="muted">Ingen rangeringer registrert ennå.</p></div>`;
 
   elements.registrationList.innerHTML = registrations.length
     ? registrations.map((registration) => {
         const status = String(registration.status || "");
         const tournamentId = Number(registration.tournament_id);
         const actions = status === "registered"
-          ? `<div class="stack"><button data-checkin="${tournamentId}">Check inn på arena</button><button class="ghost" data-withdraw="${tournamentId}">Meld av</button></div>`
+          ? `<div class="stack"><button data-checkin="${tournamentId}">Sjekk inn</button><button class="ghost" data-withdraw="${tournamentId}">Meld av</button></div>`
           : status === "waitlisted"
             ? `<div class="stack"><p class="muted">Du står på venteliste og får automatisk plass når noen melder av.</p><button class="ghost" data-withdraw="${tournamentId}">Fjern meg fra ventelisten</button></div>`
             : status === "checked_in"
-              ? `<p class="muted">Du er klar for board-tildeling når arrangøren kaller opp kampen.</p>`
+              ? `<p class="muted">Du er sjekket inn. Du får beskjed når kampen din er klar på en skive.</p>`
               : "";
         return `
           <div class="list-item">
@@ -328,11 +328,11 @@ function renderTournaments() {
 
         let action = "";
         if (status === "checked_in") {
-          action = `<p class="muted">Du er påmeldt og checket inn på arena.</p>`;
+          action = `<p class="muted">Du er påmeldt og sjekket inn.</p>`;
         } else if (status === "waitlisted") {
           action = `<div class="stack"><p class="muted">Du står på venteliste.</p><button class="ghost" data-withdraw="${tournament.id}">Fjern meg fra ventelisten</button></div>`;
         } else if (status === "registered") {
-          action = `<div class="stack"><p class="muted">Du har plass i turneringen.</p><button data-checkin="${tournament.id}">Check inn på arena</button><button class="ghost" data-withdraw="${tournament.id}">Meld av</button></div>`;
+          action = `<div class="stack"><p class="muted">Du har plass i turneringen.</p><button data-checkin="${tournament.id}">Sjekk inn</button><button class="ghost" data-withdraw="${tournament.id}">Meld av</button></div>`;
         } else if (!state.me) {
           action = `<button disabled>Logg inn for å melde deg på</button>`;
         } else if (registrationState === "open") {
