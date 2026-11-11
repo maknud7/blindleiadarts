@@ -269,9 +269,84 @@ async function performAction(t,action){
   }
 }
 
+
+async function ensurePersonalHistory(){
+  if(!token()||!personalPlayerId) return;
+  const requestKey=String(clubId())+":"+String(personalPlayerId);
+  if(historyCacheKey===requestKey) return;
+  if(historyRequest) return historyRequest;
+  historyRequest=(async()=>{
+    try{
+      // Read only on demand for personal history: legacy tournament records can
+      // still say "registered" after somebody actually played a match.
+      const data=await api("/players/"+personalPlayerId+"/matches");
+      if(requestKey!==String(clubId())+":"+String(personalPlayerId)) return;
+      const rows=Array.isArray(data?.items)?data.items:[];
+      confirmedPlayedIds=new Set(rows
+        .filter(match=>!match.status||String(match.status)==="completed")
+        .map(match=>String(match.tournament_id||""))
+        .filter(id=>/^[1-9][0-9]*$/.test(id)));
+      historyCacheKey=requestKey;
+      personalHistoryError="";
+    }catch(error){
+      if(requestKey===String(clubId())+":"+String(personalPlayerId)){
+        personalHistoryError="Kamphistorikken kunne ikke hentes. Tidligere turneringer kan være ufullstendige. Prøv Oppdater.";
+      }
+    }finally{
+      historyRequest=null;
+      if(calendarScope==="mine"&&activeFilter==="past") render();
+    }
+  })();
+  return historyRequest;
+}
+
 async function loadData(){
-  if(loading) return; loading=true;
-  try{ const cid=clubId(); if(!cid) return; const [regData,allData,dashboard,eligibilityData]=await Promise.all([api(`/clubs/${cid}/registration-tournaments`).catch(()=>({items:[]})),api(`/clubs/${cid}/tournaments`).catch(()=>({items:[]})),token()?api('/me/dashboard',{auth:true}).catch(()=>null):Promise.resolve(null),token()?api('/me/eligibility',{auth:true}).catch(()=>null):Promise.resolve(null)]); eligibility=eligibilityData?.eligibility||null; upcoming=regData?.items||[]; const all=allData?.items||[]; const byId=new Map(); [...all,...upcoming].forEach(t=>byId.set(Number(t.id),{...(byId.get(Number(t.id))||{}),...t})); allTournaments=[...byId.values()]; registrations=dashboard?.dashboard?.registrations||[]; render(); }
-  finally{ loading=false; }
+  if(loading){reloadQueued=true;return;}
+  loading=true;
+  try{
+    const cid=clubId();
+    if(!cid) return;
+    const signedIn=Boolean(token());
+    const [regResult,allResult,dashboardResult,eligibilityResult]=await Promise.all([
+      api("/clubs/"+cid+"/registration-tournaments").then(data=>({data})).catch(error=>({error})),
+      api("/clubs/"+cid+"/tournaments").then(data=>({data})).catch(error=>({error})),
+      signedIn?api("/me/dashboard",{auth:true}).then(data=>({data})).catch(error=>({error})):Promise.resolve({data:null}),
+      signedIn?api("/me/eligibility",{auth:true}).catch(()=>null):Promise.resolve(null),
+    ]);
+    if(cid!==clubId()) return;
+    accountReadError=dashboardResult.error
+      ? "Kunne ikke hente påmeldingene dine. Oppdater og prøv igjen." : "";
+    eligibility=eligibilityResult?.eligibility||null;
+    upcoming=regResult.data?.items||[];
+    const all=allResult.data?.items||[];
+    const byId=new Map();
+    // A detail from the registration endpoint must never turn a club-wide
+    // entry into a personal registration. Only /me/dashboard does that.
+    [...all,...upcoming].forEach(t=>{
+      const id=Number(t.id);
+      if(Number.isSafeInteger(id)&&id>0) byId.set(id,{...(byId.get(id)||{}),...t});
+    });
+    allTournaments=[...byId.values()];
+    const dashboard=dashboardResult.data;
+    registrations=Array.isArray(dashboard?.dashboard?.registrations)
+      ?dashboard.dashboard.registrations.filter(reg=>!reg.club_id||Number(reg.club_id)===cid):[];
+    const nextPlayerId=Number(dashboard?.user?.player?.id||
+      dashboard?.dashboard?.user?.player_id||
+      window.BlindleiaPlayerRuntime?.snapshot?.()?.me?.player?.id||0);
+    if(nextPlayerId!==personalPlayerId||historyCacheKey&&!historyCacheKey.startsWith(String(cid)+":")){
+      confirmedPlayedIds=new Set();
+      historyCacheKey="";
+      personalHistoryError="";
+    }
+    personalPlayerId=nextPlayerId;
+    render();
+    if(calendarScope==="mine"&&activeFilter==="past") void ensurePersonalHistory();
+  }catch(error){
+    accountReadError="Kunne ikke hente kalenderen. Oppdater og prøv igjen.";
+    render();
+  }finally{
+    loading=false;
+    if(reloadQueued){reloadQueued=false;void loadData();}
+  }
 }
 window.addEventListener('bd:portal-view',e=>{if(e.detail?.target==='tournaments')loadData();}); window.addEventListener('bd:player-state-changed',()=>loadData()); document.getElementById('clubSelect')?.addEventListener('change',()=>loadData()); window.setTimeout(loadData,350);
