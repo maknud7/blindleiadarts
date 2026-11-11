@@ -151,8 +151,9 @@ function emptyCalendar(){
   return activeFilter==="past"?'<div class="tdx-empty">Ingen tidligere klubbturneringer.</div>':'<div class="tdx-empty">Ingen kommende klubbturneringer akkurat nå.</div>';
 }
 function render(){
-  const items=calendarScope==="mine"&&!token()?[]:filtered();
-  const next=calendarScope==="mine"&&activeFilter==="upcoming"?nextForMe():null;
+  const personalReady=Boolean(token())&&!accountReadError;
+  const items=calendarScope==="mine"&&!personalReady?[]:filtered();
+  const next=calendarScope==="mine"&&personalReady&&activeFilter==="upcoming"?nextForMe():null;
   const personalTitle=calendarScope==="mine";
   root.innerHTML=`<div class="tdx-head"><div><p class="eyebrow">${personalTitle?"For deg":"For alle"}</p><h2>${personalTitle?"Mine turneringer":"Klubbkalender"}</h2><p class="tdx-intro">${personalTitle?"Påmeldinger og turneringer du faktisk har deltatt i.":"Se alle turneringer i klubben, finn nye og meld deg på."}</p></div></div>
     <div class="tdx-scope-tabs" role="group" aria-label="Velg kalender">
@@ -330,9 +331,11 @@ async function loadData(){
     const dashboard=dashboardResult.data;
     registrations=Array.isArray(dashboard?.dashboard?.registrations)
       ?dashboard.dashboard.registrations.filter(reg=>!reg.club_id||Number(reg.club_id)===cid):[];
-    const nextPlayerId=Number(dashboard?.user?.player?.id||
+    const nextPlayerId=signedIn&&!accountReadError?Number(
+      dashboard?.user?.player?.id||
       dashboard?.dashboard?.user?.player_id||
-      window.BlindleiaPlayerRuntime?.snapshot?.()?.me?.player?.id||0);
+      window.BlindleiaPlayerRuntime?.snapshot?.()?.me?.player?.id||0
+    ):0;
     if(nextPlayerId!==personalPlayerId||historyCacheKey&&!historyCacheKey.startsWith(String(cid)+":")){
       confirmedPlayedIds=new Set();
       historyCacheKey="";
