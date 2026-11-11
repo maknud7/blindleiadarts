@@ -1,5 +1,3 @@
-const POLISH_API_ROOT = "../api/v1";
-
 const polishStyle = document.createElement("style");
 polishStyle.id = "tournamentCalendarPolishStyles";
 polishStyle.textContent = `
@@ -30,80 +28,32 @@ polishStyle.textContent = `
 `;
 document.head.appendChild(polishStyle);
 
-function tournamentPolishDate(value){
-  if(!value) return null;
-  const date = new Date(String(value).replace(" ","T"));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function tournamentPolishFinished(t){
-  const status = String(t?.status || "").toLowerCase();
-  if(["completed","archived","cancelled","canceled"].includes(status)) return true;
-  const end = tournamentPolishDate(t?.end_at);
-  return !!end && end.getTime() < Date.now();
-}
-
-let tournamentPolishFinishedIds = new Set();
-let tournamentPolishLoading = false;
-
-async function refreshTournamentPolishState(){
-  if(tournamentPolishLoading) return;
-  const clubId = Number(document.getElementById("clubSelect")?.value || localStorage.getItem("bd:playerClubId") || 0);
-  if(!clubId) return;
-  tournamentPolishLoading = true;
-  try{
-    const response = await fetch(`${POLISH_API_ROOT}/clubs/${clubId}/tournaments`,{cache:"no-store"});
-    const payload = await response.json().catch(()=>null);
-    const items = payload?.ok && Array.isArray(payload?.data?.items) ? payload.data.items : [];
-    tournamentPolishFinishedIds = new Set(items.filter(tournamentPolishFinished).map(t=>Number(t.id)));
-  }catch(_error){
-    // The calendar still works without the extra relevance pass.
-  }finally{
-    tournamentPolishLoading = false;
-    polishTournamentCalendar();
-  }
-}
-
+// This is a visual-only enhancement. The personal-vs-club membership filter
+// is owned by tournament-discovery-ux.js; do not fetch the entire club calendar
+// a second time or infer a player's registrations from public tournament data.
 function polishTournamentCalendar(){
-  const root = document.querySelector(".tdx-root");
+  const root=document.querySelector(".tdx-root");
   if(!root) return;
-
-  const active = root.querySelector(".tdx-tabs button.active")?.dataset?.filter || "upcoming";
-  const next = active === "upcoming" ? root.querySelector(".tdx-next[data-open]") : null;
-  const nextId = next ? Number(next.dataset.open) : 0;
+  const period=root.querySelector(".tdx-tabs button.active")?.dataset?.filter||"upcoming";
+  const personal=Boolean(root.querySelector('.tdx-scope-tabs [data-calendar-scope="mine"].active'));
+  const featured=personal&&period==="upcoming"?root.querySelector(".tdx-next[data-open]"):null;
+  const featuredId=featured?Number(featured.dataset.open):0;
 
   root.querySelectorAll(".tdx-list .tdx-row[data-open]").forEach(row=>{
-    const id = Number(row.dataset.open);
-    const duplicateNext = active === "upcoming" && nextId > 0 && id === nextId;
-    const staleMine = active === "mine" && tournamentPolishFinishedIds.has(id);
-    row.hidden = duplicateNext || staleMine;
-    row.style.display = row.hidden ? "none" : "";
+    const isFeatured=featuredId>0&&Number(row.dataset.open)===featuredId;
+    row.hidden=isFeatured;
+    row.style.display=isFeatured?"none":"";
   });
-
-  const list = root.querySelector(".tdx-list");
-  if(list){
-    const visibleRows = [...list.querySelectorAll(".tdx-row")].filter(row=>!row.hidden);
-    let empty = list.querySelector(".tdx-polish-empty");
-    if(active === "mine" && visibleRows.length === 0){
-      if(!empty){
-        empty = document.createElement("div");
-        empty.className = "tdx-empty tdx-polish-empty";
-        empty.textContent = "Ingen aktuelle turneringer du er påmeldt i akkurat nå.";
-        list.appendChild(empty);
-      }
-    }else{
-      empty?.remove();
-    }
-  }
 }
 
-const tournamentPolishObserver = new MutationObserver(()=>polishTournamentCalendar());
-tournamentPolishObserver.observe(document.body,{childList:true,subtree:true});
-
+const calendarRoot=document.querySelector(".tdx-root");
+if(calendarRoot){
+  // Observe only this component, rather than every mutation on the entire
+  // player portal. Rendering replaces root children, so childList is enough.
+  const observer=new MutationObserver(polishTournamentCalendar);
+  observer.observe(calendarRoot,{childList:true});
+}
 window.addEventListener("bd:portal-view",event=>{
-  if(event.detail?.target === "tournaments") refreshTournamentPolishState();
+  if(event.detail?.target==="tournaments") polishTournamentCalendar();
 });
-window.addEventListener("bd:player-state-changed",refreshTournamentPolishState);
-document.getElementById("clubSelect")?.addEventListener("change",refreshTournamentPolishState);
-window.setTimeout(refreshTournamentPolishState,700);
-window.setTimeout(polishTournamentCalendar,900);
+window.setTimeout(polishTournamentCalendar,150);
