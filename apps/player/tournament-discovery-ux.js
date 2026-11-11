@@ -29,7 +29,7 @@ function parseDate(value){ if(!value) return null; const d=new Date(String(value
 function fmtDate(value){ const d=parseDate(value); return d ? new Intl.DateTimeFormat("nb-NO",{weekday:"short",day:"numeric",month:"short"}).format(d) : "Dato ikke satt"; }
 function fmtTime(value){ const d=parseDate(value); return d ? new Intl.DateTimeFormat("nb-NO",{hour:"2-digit",minute:"2-digit"}).format(d) : ""; }
 function fmtLong(value){ const d=parseDate(value); return d ? new Intl.DateTimeFormat("nb-NO",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}).format(d) : "Ikke satt"; }
-function statusLabel(status){ return {registered:"Påmeldt",waitlisted:"Venteliste",checked_in:"Sjekket inn",withdrawn:"Meldt av",no_show:"Ikke møtt",eliminated:"Ute"}[String(status||"")] || "Ikke påmeldt"; }
+function statusLabel(status){ return {registered:"Påmeldt",waitlisted:"På venteliste",checked_in:"Sjekket inn",withdrawn:"Meldt av",no_show:"Ikke møtt",eliminated:"Utslått",paused:"Pause",completed:"Deltok"}[String(status||"")] || "Ikke påmeldt"; }
 function publicStatus(t){
   const s=String(t?.status||"").toLowerCase();
   if(s==="in_progress") return "Pågår";
@@ -140,7 +140,7 @@ function filtered(){
   return source.filter(isUpcoming).sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity));
 }
 function nextForMe(){
-  return allTournaments.filter(t=>isMine(t)&&!isFinished(t))
+  return allTournaments.filter(t=>isMine(t)&&!isFinished(t)&&!["eliminated","completed"].includes(String(regFor(t)?.status||"")))
     .sort((a,b)=>(parseDate(a.start_at)?.getTime()||Infinity)-(parseDate(b.start_at)?.getTime()||Infinity))[0] || null;
 }
 function emptyCalendar(){
