@@ -228,7 +228,13 @@ async function loadPlayerProfile(playerId) {
   if (requestNumber !== playerProfileRequest) return;
   const player = data.player || {};
   const stats = data.stats || {};
-  const elo = data.elo || {};
+  const clubEloRow = state.elo.find((row) => Number(row.id) === playerId)
+    || state.elo.find((row) =>
+      String(row.display_name || "").trim().toLocaleLowerCase("nb-NO") ===
+      String(player.display_name || "").trim().toLocaleLowerCase("nb-NO"));
+  // The player profile and ELO graph must use the same independent club ELO.
+  // Legacy season ELO from /profile is retained only as historical metadata.
+  const elo = { rating: clubEloRow ? Number(clubEloRow.elo_rating) : 1000 };
   const recent = data.recent_matches || [];
   const history = data.elo_history || [];
   const form = recent.slice(0, 5).map((match) => {
