@@ -95,7 +95,7 @@ final class ClubEloReadRepository
                 $period = $all[0] ?? null;
             }
         }
-        if ($period === null) return ['period' => [], 'items' => [], 'player_id' => $playerId];
+        if ($period === null) return ['period' => [], 'items' => [], 'matches' => [], 'player_id' => $playerId];
         $memberId = (int) ($player['effective_member_id'] ?? 0);
         $replay = $this->replay($clubId, $period);
         $snapshots = $replay['tournaments'][$memberId] ?? [];
@@ -128,7 +128,7 @@ final class ClubEloReadRepository
                 'has_snapshot' => $snapshot !== null,
             ];
         }
-        return ['period' => $period, 'items' => $events, 'player_id' => $playerId];
+        return ['period' => $period, 'items' => $events, 'matches' => $replay['match_events'][$memberId] ?? [], 'player_id' => $playerId];
     }
 
     /** @return array{ratings:array<int,array{rating:float,played:int}>,tournaments:array<int,array<int,array{before:float,after:float,matches:int}>>} */
@@ -139,6 +139,8 @@ final class ClubEloReadRepository
         $sql = sprintf(
             'SELECT m.id,m.player_a_id,m.player_b_id,m.winner_player_id,m.tournament_id,
                     t.start_at,t.name AS tournament_name,
+                    pa.display_name AS player_a_name,pb.display_name AS player_b_name,
+                    m.round_label,m.bracket_label,
                     COALESCE(pa.member_id,(
                         SELECT CASE WHEN COUNT(DISTINCT pa2.member_id)=1 THEN MIN(pa2.member_id) ELSE NULL END
                           FROM `%1$splayers` pa2
@@ -185,6 +187,7 @@ final class ClubEloReadRepository
 
         $ratings = [];
         $tournaments = [];
+        $matchEvents = [];
         foreach ($rows as $m) {
             $a = (int) ($m['member_a_id'] ?? 0);
             $b = (int) ($m['member_b_id'] ?? 0);
@@ -199,6 +202,28 @@ final class ClubEloReadRepository
             $ratings[$a] = ['rating' => $calc['rating_a_after'], 'played' => $calc['matches_after_a']];
             $ratings[$b] = ['rating' => $calc['rating_b_after'], 'played' => $calc['matches_after_b']];
             $tournamentId = (int) $m['tournament_id'];
+            foreach ([
+                [$a, (float) $aBefore['rating'], (float) $calc['rating_a_after'], (float) $calc['delta_a'],
+                    (string) $m['player_b_name'], $scoreA],
+                [$b, (float) $bBefore['rating'], (float) $calc['rating_b_after'], (float) $calc['delta_b'],
+                    (string) $m['player_a_name'], 1.0 - $scoreA],
+            ] as [$memberId, $before, $after, $delta, $opponent, $score]) {
+                $matchEvents[$memberId][] = [
+                    'match_id' => (int) $m['id'],
+                    'tournament_id' => $tournamentId,
+                    'tournament_name' => (string) $m['tournament_name'],
+                    'rating_before' => $before,
+                    'rating_after' => $after,
+                    'delta' => $delta,
+                    'result' => $score === 1.0 ? 'win' : ($score === 0.0 ? 'loss' : 'draw'),
+                    'opponent_name' => $opponent,
+                    'phase' => (int) $m['phase_order'] === 0 ? 'group'
+                        : ((int) $m['phase_order'] === 2 ? 'playoff' : 'match'),
+                    'logical_round' => (int) $m['logical_round'],
+                    'round_label' => $m['round_label'] ?? '',
+                    'bracket_label' => $m['bracket_label'] ?? '',
+                ];
+            }
             foreach ([[$a, $aBefore['rating'], $calc['rating_a_after']],
                       [$b, $bBefore['rating'], $calc['rating_b_after']]] as [$memberId, $before, $after]) {
                 if (!isset($tournaments[$memberId][$tournamentId])) {
@@ -208,7 +233,7 @@ final class ClubEloReadRepository
                 ++$tournaments[$memberId][$tournamentId]['matches'];
             }
         }
-        return ['ratings' => $ratings, 'tournaments' => $tournaments];
+        return ['ratings' => $ratings, 'tournaments' => $tournaments, 'match_events' => $matchEvents];
     }
 
     /** @return list<array<string,mixed>> */
