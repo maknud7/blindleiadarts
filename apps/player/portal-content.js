@@ -104,10 +104,19 @@ async function loadPlayerDirectoryData(force = false) {
   if (!clubId || (!force && directoryLoadedClubId === clubId)) return;
   const [players, elo] = await Promise.all([
     api(`/clubs/${clubId}/player-directory`),
-    api(`/clubs/${clubId}/elo`),
+    api(`/clubs/${clubId}/club-elo`),
   ]);
-  state.players = (players.items || []).filter(hasRecordedStats);
-  state.elo = (elo.items || []).filter(hasRecordedStats);
+  const canonicalElo = Array.isArray(elo.items) ? elo.items : [];
+  const eloById = new Map(canonicalElo.map((row) => [Number(row.id), row]));
+  const eloByName = new Map(canonicalElo.map((row) => [String(row.display_name || "").trim().toLocaleLowerCase("nb-NO"), row]));
+  state.players = (players.items || []).map((player) => {
+    const rating = eloById.get(Number(player.id))
+      || eloByName.get(String(player.display_name || "").trim().toLocaleLowerCase("nb-NO"));
+    return { ...player, elo_rating: rating ? Number(rating.elo_rating) : 1000,
+      elo_matches_played: rating ? Number(rating.elo_matches_played) : 0 };
+  }).filter(hasRecordedStats);
+  const statsById = new Map(state.players.map((row) => [Number(row.id), row]));
+  state.elo = canonicalElo.map((row) => ({ ...(statsById.get(Number(row.id)) || {}), ...row }));
   directoryLoadedClubId = clubId;
   renderElo();
   renderPlayers();
