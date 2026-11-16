@@ -194,7 +194,7 @@ function sparkline(tournaments) {
 
   return `<div class="home-elo-chart-wrap" data-tournament-point-count="${completed.length}" data-chart-point-count="${chartItems.length}">
     <div class="home-elo-range"><span>${formatNumber(max, 1)}</span><span>${formatNumber(min, 1)}</span></div>
-    <svg class="home-elo-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="ELO ved sesongstart og etter hver ferdige turnering">
+    <svg class="home-elo-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="ELO ved periodestart og etter hver ferdige turnering">
       ${area ? `<polygon points="${area}" class="home-elo-area"></polygon>` : ""}
       ${points.length > 1 ? `<polyline points="${pointString}" class="home-elo-line"></polyline>` : ""}
       ${points.map((point, index) => {
@@ -202,7 +202,7 @@ function sparkline(tournaments) {
         const before = number(point.item.rating_before, point.value);
         const baselinePoint = point.item.is_baseline === true;
         const title = baselinePoint
-          ? `Sesongstart: ${formatNumber(point.value, 1)} ELO`
+          ? `ELO-periodestart: ${formatNumber(point.value, 1)} ELO`
           : `${point.item.tournament_name || "Turnering"}: ${formatNumber(before, 1)} → ${formatNumber(point.value, 1)} (${delta > 0 ? "+" : ""}${formatNumber(delta, 1)})`;
         const latest = index === points.length - 1 && !baselinePoint;
         return `<circle class="home-elo-point${baselinePoint ? " baseline" : ""}${latest ? " latest" : ""}" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4.3" tabindex="0" role="button" aria-label="${esc(title)}" data-baseline="${baselinePoint ? "1" : "0"}" data-title="${esc(point.item.tournament_name || "Turnering")}" data-before="${before.toFixed(1)}" data-after="${point.value.toFixed(1)}" data-delta="${delta.toFixed(1)}"><title>${esc(title)}</title></circle>`;
@@ -239,7 +239,7 @@ function bindEloChartInteractions(root = rankingList) {
     const delta = number(point.dataset.delta, 0);
     const tone = delta > 0.05 ? "positive" : delta < -0.05 ? "negative" : "neutral";
     tooltip.innerHTML = baselinePoint
-      ? `<strong>Sesongstart</strong><span>Utgangspunkt</span><b>${formatNumber(after, 1)} ELO</b>`
+      ? `<strong>ELO-periodestart</strong><span>Utgangspunkt</span><b>${formatNumber(after, 1)} ELO</b>`
       : `<strong>${esc(point.dataset.title || "Turnering")}</strong><span>${formatNumber(before, 1)} → ${formatNumber(after, 1)}</span><b class="${tone}">${delta > 0 ? "+" : ""}${formatNumber(delta, 1)} ELO</b>`;
     tooltip.classList.remove("hidden", "below");
 
@@ -292,14 +292,15 @@ async function loadModel() {
   const playerId = number(me?.player?.id);
   if (!playerId) return { clubId, me, dashboard, profile: null, season: null, seasonRow: null, totalPlayers: 0, tournamentElo: [] };
 
-  const [profile, seasonsData, tournamentEloData] = await Promise.all([
+  const [profile, seasonsData, tournamentEloData, clubEloData] = await Promise.all([
     api(`/players/${playerId}/profile`).catch(() => null),
     api(`/clubs/${clubId}/seasons`).catch(() => ({ items: [] })),
-    directApi(`../api/player-elo-tournaments.php?player_id=${encodeURIComponent(playerId)}`).catch(() => ({ items: [] })),
+    api(`/players/${playerId}/club-elo-tournaments`).catch(() => ({ items: [] })),
+    api(`/clubs/${clubId}/club-elo`).catch(() => ({ items: [] })),
   ]);
   const seasons = seasonsData?.items || [];
   const season = seasons.find((item) => item.is_active || item.status === "active") || seasons[0] || null;
-  const tournamentElo = (tournamentEloData?.items || []).filter((item) => !season?.id || number(item.season_id) === number(season.id));
+  const tournamentElo = tournamentEloData?.items || [];
   let seasonRow = null;
   let totalPlayers = 0;
   if (season?.id) {
@@ -311,7 +312,12 @@ async function loadModel() {
       || rows.find((row) => normalizeName(row.display_name) === normalizeName(profile?.player?.display_name || me?.player?.display_name))
       || null;
   }
-  return { clubId, me, dashboard, profile, season, seasonRow, totalPlayers, tournamentElo };
+  const aliases = new Set((profile?.player?.alias_player_ids || [playerId]).map(number));
+  const clubEloRow = (clubEloData?.items || []).find((row) => aliases.has(number(row.id)))
+    || (clubEloData?.items || []).find((row) => normalizeName(row.display_name) === normalizeName(profile?.player?.display_name || me?.player?.display_name))
+    || null;
+  return { clubId, me, dashboard, profile, season, seasonRow, totalPlayers, tournamentElo,
+    clubEloRow, eloPeriod: tournamentEloData?.period || clubEloData?.period || null };
 }
 
 function statCard(icon, label, value, note, extra = "", className = "") {
@@ -335,7 +341,7 @@ function renderStats(model) {
   const wins = row.wins ?? stats.matches_won ?? 0;
   const winPct = number(matches) > 0 ? (number(wins) / number(matches)) * 100 : number(profileStats.win_percentage);
   const threeDa = number(row.three_dart_average || profileStats.three_dart_average, 0);
-  const elo = number(row.elo_rating || model.profile?.elo?.rating, 1000);
+  const elo = number(model.clubEloRow?.elo_rating ?? latestTournament?.rating_after ?? 1000, 1000);
   const position = number(row.position, 0);
   const eloDelta = latestTournament?.delta;
   const eloExtra = eloDelta === null || eloDelta === undefined
@@ -395,7 +401,7 @@ function renderSeasonOverview(model) {
   const profile = model.profile || {};
   const tournaments = completedTournamentElo(model);
   const latestTournament = tournaments.at(-1) || null;
-  const currentElo = number(row.elo_rating || profile.elo?.rating, 1000);
+  const currentElo = number(model.clubEloRow?.elo_rating ?? latestTournament?.rating_after ?? 1000, 1000);
   const points = number(row.points, 0);
   const position = number(row.position, 0);
   const total = number(model.totalPlayers, 0);
@@ -406,7 +412,7 @@ function renderSeasonOverview(model) {
   rankingList.className = "home-season-overview";
   rankingList.innerHTML = `
     <div class="home-season-overview-head">
-      <div><h3>Sesongoversikt</h3><p class="muted">${esc(model.season?.name || "Ranking og ELO-utvikling")}</p></div>
+      <div><h3>Sesong og ELO</h3><p class="muted">${esc(model.season?.name || "Sesong")} · Klubb-ELO er uavhengig av sesongen</p></div>
       ${model.season ? `<span class="pill">${model.season.is_active || model.season.status === "active" ? "Aktiv sesong" : "Sesong"}</span>` : ""}
     </div>
     <div class="home-season-overview-body">
@@ -422,11 +428,11 @@ function renderSeasonOverview(model) {
         <article><span>Sesongpoeng</span><strong>${formatNumber(points, points % 1 ? 1 : 0)}</strong><small>Totalt opptjent</small></article>
       </div>
       <section class="home-elo-panel">
-        <div class="home-elo-panel-head"><div><span>ELO-utvikling</span><small>Start + én måling per ferdig turnering</small></div><strong>${formatNumber(currentElo, 1)}</strong></div>
+        <div class="home-elo-panel-head"><div><span>${esc(model.eloPeriod?.name || "Klubbens ELO")}</span><small>Start + én måling per ferdig turnering</small></div><strong>${formatNumber(currentElo, 1)}</strong></div>
         ${sparkline(tournaments)}
       </section>
     </div>
-    <div class="home-season-note">Grafen starter på sesongens ELO-utgangspunkt og viser sluttverdien etter hver ferdige turnering. Hold over eller trykk på et punkt for detaljer.</div>`;
+    <div class="home-season-note">Grafen viser klubbens ELO fra starten av gjeldende ratingperiode, uavhengig av sesongbytter. Hold over eller trykk på et punkt for detaljer.</div>`;
   bindEloChartInteractions(rankingList);
 }
 
