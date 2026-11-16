@@ -78,6 +78,7 @@ final class SeasonRepository
             throw new InvalidArgumentException('Sluttdato kan ikke være før startdato.');
         }
         $ranking = $this->rankingMethod($payload['ranking_method'] ?? 'match_points');
+        if ($ranking === 'elo') throw new InvalidArgumentException('ELO administreres nå separat fra sesonger. Velg poeng eller lineær sesongtabell.');
         $win = $this->points($payload['points_win'] ?? 2);
         $draw = $this->points($payload['points_draw'] ?? 1);
         $loss = $this->points($payload['points_loss'] ?? 0);
