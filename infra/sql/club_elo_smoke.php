@@ -4,15 +4,24 @@ declare(strict_types=1);
 
 use Blindleia\Dartkiosk\Api\Repository\ClubEloPeriodRepository;
 use Blindleia\Dartkiosk\Api\Repository\ClubEloReadRepository;
-use Blindleia\Dartkiosk\Api\Support\Config;
 use Blindleia\Dartkiosk\Api\Support\Database;
 
 require dirname(__DIR__, 2) . '/apps/api/bootstrap.php';
 
-$config = Config::load(dirname(__DIR__, 2) . '/apps/api');
-$db = new Database($config);
-$connection = $db->connection();
-$prefix = $db->tablePrefix();
+$prefix = (string) getenv('DB_TABLE_PREFIX');
+if (!preg_match('/^[A-Za-z0-9_]+$/', $prefix)) {
+    throw new RuntimeException('Invalid table prefix for ELO smoke.');
+}
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+$connection = new mysqli(
+    (string) getenv('DB_HOST'),
+    (string) getenv('DB_USERNAME'),
+    (string) getenv('DB_PASSWORD'),
+    (string) getenv('DB_NAME'),
+    (int) (getenv('DB_PORT') ?: 3306)
+);
+$connection->set_charset('utf8mb4');
+$db = Database::fromConnection($connection, $prefix);
 
 // Read-only smoke; never opens a transaction that could alter a real match.
 $periods = new ClubEloPeriodRepository($db);
