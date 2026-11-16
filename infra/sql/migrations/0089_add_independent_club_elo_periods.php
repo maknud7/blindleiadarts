@@ -41,14 +41,14 @@ return static function (mysqli $mysqli, string $prefix): void {
     $mysqli->query(
         "INSERT INTO `{$periods}` (club_id,name,starts_on,ends_on,open_slot)
          SELECT c.id,CONCAT(c.name,' ELO'),
-                COALESCE(
+                LEAST(COALESCE(
                     (SELECT s.starts_on FROM `{$seasons}` s
                       WHERE s.club_id=c.id AND s.is_active=1 AND s.starts_on IS NOT NULL
                       ORDER BY s.starts_on DESC,s.id DESC LIMIT 1),
                     (SELECT DATE(MIN(t.start_at)) FROM `{$tournaments}` t
                       WHERE t.club_id=c.id AND t.elo_enabled=1 AND t.start_at IS NOT NULL),
                     CURRENT_DATE
-                ),
+                ), CURRENT_DATE),
                 NULL,1
            FROM `{$clubs}` c
           WHERE NOT EXISTS (SELECT 1 FROM `{$periods}` ep WHERE ep.club_id=c.id)"
