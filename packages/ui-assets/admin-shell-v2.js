@@ -170,7 +170,7 @@ if (isAdminSurface) {
 
   async function loadSeasonAdmin() {
     try {
-      await import(new URL("../../apps/admin/season-admin.js?v=20260827-1238", import.meta.url).href);
+      await import(new URL("../../admin/season-admin.js?v=20261116-season-nav-01", import.meta.url).href);
       addLinearSeasonOption();
     } catch (error) {
       console.warn("Season admin unavailable", error);
