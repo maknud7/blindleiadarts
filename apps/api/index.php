@@ -14,6 +14,7 @@ use Blindleia\Dartkiosk\Api\BackendV2PlayerLiveProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2ScoliaProxyApplication;
 use Blindleia\Dartkiosk\Api\BackendV2TournamentProxyApplication;
 use Blindleia\Dartkiosk\Api\EloApplication;
+use Blindleia\Dartkiosk\Api\ClubEloPeriodApplication;
 use Blindleia\Dartkiosk\Api\EmailAuthApplication;
 use Blindleia\Dartkiosk\Api\EquipmentApplication;
 use Blindleia\Dartkiosk\Api\Http\JsonResponse;
@@ -230,6 +231,11 @@ if ($operations->run()) {
 
 $seasons = new SeasonApplication(__DIR__);
 if ($seasons->run()) {
+    return;
+}
+
+$clubElo = new ClubEloPeriodApplication(__DIR__);
+if ($clubElo->run()) {
     return;
 }
 
