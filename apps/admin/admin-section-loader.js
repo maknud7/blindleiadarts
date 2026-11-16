@@ -48,6 +48,7 @@ const canonicalToLocal = Object.freeze({
   club: "overview",
   "tournament-admin": "tournaments",
   seasons: "seasons",
+  elo: "elo",
   playerbase: "playerbase",
   members: "players",
   equipment: "kiosks",
