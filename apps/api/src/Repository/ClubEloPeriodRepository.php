@@ -6,6 +6,7 @@ namespace Blindleia\Dartkiosk\Api\Repository;
 
 use Blindleia\Dartkiosk\Api\Support\Database;
 use DateTimeImmutable;
+use DateTimeZone;
 use mysqli;
 
 /**
@@ -56,7 +57,7 @@ final class ClubEloPeriodRepository
     /** @return array<string,mixed>|null */
     public function current(int $clubId): ?array
     {
-        $today = date('Y-m-d');
+        $today = $this->today();
         foreach ($this->listForClub($clubId) as $row) {
             if ($row['starts_on'] <= $today && ($row['ends_on'] === null || $row['ends_on'] >= $today)) {
                 return $row;
@@ -69,7 +70,7 @@ final class ClubEloPeriodRepository
     public function createFirst(int $clubId, array $body): array
     {
         $name = $this->name($body['name'] ?? 'Klubbens ELO');
-        $starts = $this->date($body['starts_on'] ?? date('Y-m-d'));
+        $starts = $this->date($body['starts_on'] ?? $this->today());
         $this->lockClub($clubId);
         try {
             if ($this->listForClub($clubId) !== []) {
@@ -96,7 +97,7 @@ final class ClubEloPeriodRepository
     public function rollover(int $clubId, array $body): array
     {
         $ends = $this->date($body['ends_on'] ?? null);
-        if ($ends < date('Y-m-d')) {
+        if ($ends < $this->today()) {
             throw new ValidationException('elo_period_historical_lock',
                 'ELO kan ikke avsluttes med tilbakevirkende dato. Tidligere ratinger skal være uendret.', 409);
         }
@@ -185,11 +186,16 @@ final class ClubEloPeriodRepository
         }
     }
 
+    private function today(): string
+    {
+        return (new DateTimeImmutable('now', new DateTimeZone('Europe/Oslo')))->format('Y-m-d');
+    }
+
     private function formatPeriod(array $row): array
     {
         $row['id'] = (int) $row['id'];
         $row['club_id'] = (int) $row['club_id'];
-        $today = date('Y-m-d');
+        $today = $this->today();
         $row['status'] = $row['starts_on'] > $today ? 'scheduled'
             : (($row['ends_on'] !== null && $row['ends_on'] < $today) ? 'completed' : 'active');
         $row['is_active'] = $row['status'] === 'active';
