@@ -71,6 +71,10 @@ final class ClubEloPeriodRepository
     {
         $name = $this->name($body['name'] ?? 'Klubbens ELO');
         $starts = $this->date($body['starts_on'] ?? $this->today());
+        if ($starts > $this->today()) {
+            throw new ValidationException('elo_period_future_start',
+                'Første ELO-periode må starte senest i dag, så klubben alltid har en aktiv rating.', 422);
+        }
         $this->lockClub($clubId);
         try {
             if ($this->listForClub($clubId) !== []) {
