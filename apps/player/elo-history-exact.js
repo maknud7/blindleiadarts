@@ -60,9 +60,8 @@ function exactHistory(playerId) {
   if (!playerId) return Promise.resolve(null);
   if (!historyCache.has(playerId)) {
     historyCache.set(playerId, Promise.all([
-      json(`../api/player-elo-history.php?player_id=${playerId}`).catch(() => null),
-      json(`../api/player-elo-tournaments.php?player_id=${playerId}`).catch(() => null),
-    ]).then(([matches, tournaments]) => ({ matches, tournaments })));
+      json(`../api/v1/players/${playerId}/club-elo-tournaments`).catch(() => null),
+    ]).then(([tournaments]) => ({ matches: tournaments ? { items: tournaments.matches || [], continuity_ok: true } : null, tournaments })));
   }
   return historyCache.get(playerId);
 }
@@ -276,7 +275,7 @@ async function patchProfile() {
 
   const overview = tournamentOverviewHtml(tournaments, items);
   if (overview) {
-    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">Ett punkt for hver ELO-tellende turnering i klubben. Når spilleren ikke har ELO-kamper, går grafen flatt videre.</p>${overview}`;
+    eloSection.innerHTML = `<h3>ELO-utvikling</h3><p class="muted">${esc(tournamentData?.period?.name || "Klubbens ELO")} · Ett punkt for hver ELO-tellende turnering innen ratingperioden. Når spilleren ikke har ELO-kamper, går grafen flatt videre.</p>${overview}`;
     bindChartSelection(eloSection, tournaments.filter((item) => item.completed && Number.isFinite(Number(item.rating_after))));
   } else {
     const rows = items.map((item) => `<div class="elo-timeline-row"><div class="elo-timeline-context"><strong>${esc(resultLabel(item.result))} mot ${esc(item.opponent_name || "motstander")}</strong><small>${esc(item.tournament_name || "Turnering")} · ${esc(roundLabel(item))}</small></div>${movementHtml(item)}</div>`).join("");
