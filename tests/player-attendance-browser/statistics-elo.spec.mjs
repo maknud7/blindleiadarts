@@ -22,7 +22,7 @@ const history = [
 
 function data(url) {
   const p = url.pathname;
-  if (p === "/api/v1/clubs/7/player-directory" || p === "/api/v1/clubs/7/elo") {
+  if (p === "/api/v1/clubs/7/player-directory" || p === "/api/v1/clubs/7/club-elo") {
     return { items: [
       { id: 12, display_name: "Bjørn Jarle", nickname: "Bullseye", elo_rating: 1014,
         matches_played: 5, three_dart_average: 54.7 },
@@ -37,7 +37,7 @@ function data(url) {
       stats: { matches_played: 5, matches_won: 3, three_dart_average: 54.7, visits_180: 1,
         highest_checkout: 116 }, elo: { rating: 1014 }, elo_history: [], recent_matches: [] };
   }
-  if (p === "/api/player-elo-tournaments.php") return { player_id: Number(url.searchParams.get("player_id")), items: history };
+  if (/^\/api\/v1\/players\/(12|13)\/club-elo-tournaments$/.test(p)) return { player_id: Number(p.split("/")[4]), period: { id: 1, name: "Blindleia ELO" }, items: history, matches: [] };
   if (p === "/api/player-elo-history.php") return { player_id: Number(url.searchParams.get("player_id")), items: [] };
   return {};
 }

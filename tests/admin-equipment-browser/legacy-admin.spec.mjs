@@ -185,3 +185,56 @@ test('Sesonger remains available when moving from player portal into Klubbadmin'
     await context.close();
   }
 });
+
+
+for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+  test('ELO has its own clubadmin section and does not change the season menu at '+size.width+'px', async ({ browser }) => {
+    const { context, page, errors, mutations } = await loadCanonicalAdmin(browser, size);
+    try {
+      if (size.width < 760) await page.locator('#unifiedMobileMore').click();
+      const elo = page.locator('.section-nav.portal-menu > a[href="#elo"]');
+      await expect(elo).toHaveCount(1);
+      await expect(elo).toBeVisible();
+      await elo.click();
+      await expect(page).toHaveURL(/\/#elo$/);
+      await expect(page.locator('#elo')).toBeVisible();
+      await expect(page.locator('#elo h2')).toContainText('ELO');
+      await expect(page.locator('#clubEloCurrent')).toContainText('Ingen ELO-ordning');
+      await expect(page.locator('#eloFirstForm input[name="starts_on"]')).toBeVisible();
+      await expect(page.locator('.club-elo-history')).toContainText('bare være én aktiv ELO');
+      if (size.width < 760) await page.locator('#unifiedMobileMore').click();
+      await page.locator('.section-nav.portal-menu > a[href="#seasons"]').click();
+      await expect(page).toHaveURL(/\/#seasons$/);
+      await expect(page.locator('#seasons')).toBeVisible();
+      expect(errors).toEqual([]);
+      expect(mutations).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('ELO rollover preview is Norwegian, starts the day after and can be cancelled read-only', async ({ browser }) => {
+  const { context, page, errors, mutations } = await loadCanonicalAdmin(browser, { width: 390, height: 844 });
+  try {
+    await page.route('**/api/v1/clubs/7/elo-periods', async route => {
+      const current = { id: 31, club_id: 7, name: 'Blindleia ELO', starts_on: '2026-08-10', ends_on: null, status: 'active', is_active: true };
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data: { items: [current], current } }) });
+    });
+    await page.locator('#unifiedMobileMore').click();
+    await page.locator('.section-nav.portal-menu > a[href="#elo"]').click();
+    await expect(page.locator('#eloNewPeriodButton')).toBeVisible();
+    await page.locator('#eloNewPeriodButton').click();
+    const form = page.locator('#eloRolloverForm');
+    await expect(form).toBeVisible();
+    await expect(form).toContainText('starter på 1000');
+    await form.locator('input[name="ends_on"]').fill('2026-12-31');
+    await expect(page.locator('#eloNextStart')).toContainText('1. jan. 2027');
+    await form.locator('[data-elo-cancel]').click();
+    await expect(form).toBeHidden();
+    expect(errors).toEqual([]);
+    expect(mutations).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});

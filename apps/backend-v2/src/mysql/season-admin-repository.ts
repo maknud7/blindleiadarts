@@ -184,7 +184,7 @@ function createValues(payload: Record<string, unknown>): {
     name,
     startsOn,
     endsOn,
-    rankingMethod: ranking(payload.ranking_method ?? "match_points"),
+    rankingMethod: rankingForNewSeason(payload.ranking_method ?? "match_points"),
     pointsWin: points(payload.points_win ?? 2),
     pointsDraw: points(payload.points_draw ?? 1),
     pointsLoss: points(payload.points_loss ?? 0),
@@ -195,6 +195,12 @@ function requiredName(value: unknown): string {
   const name = String(value ?? "").trim();
   if (name === "") validation("Sesongen må ha et navn.");
   return name;
+}
+
+function rankingForNewSeason(value: unknown): string {
+  const method = ranking(value);
+  if (method === "elo") validation("ELO administreres separat fra sesonger. Velg sesongpoeng eller lineær tabell.");
+  return method;
 }
 
 function ranking(value: unknown): string {
