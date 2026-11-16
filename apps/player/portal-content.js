@@ -236,7 +236,7 @@ async function loadPlayerProfile(playerId) {
   // Legacy season ELO from /profile is retained only as historical metadata.
   const elo = { rating: clubEloRow ? Number(clubEloRow.elo_rating) : 1000 };
   const recent = data.recent_matches || [];
-  const history = data.elo_history || [];
+  const history = []; // Legacy season ELO must not be shown as club ELO during chart load.
   const form = recent.slice(0, 5).map((match) => {
     const result = String(match.result || "").toLowerCase();
     const tone = result === "win" ? "win" : result === "draw" ? "draw" : "loss";
@@ -267,7 +267,7 @@ async function loadPlayerProfile(playerId) {
     </div>
     <div class="profile-section" id="playerEloSection">
       <h3>ELO-historikk</h3>
-      ${history.length ? history.slice(0, 8).map((entry) => `<div class="history-row"><div><strong>${Number(entry.rating).toFixed(1)}</strong><small>${esc(entry.tournament_name || entry.scope_type)}</small></div><span>${esc(formatDate(entry.calculated_at))}</span></div>`).join("") : `<p class="muted">Ingen ELO-historikk registrert ennå.</p>`}
+      ${history.length ? history.slice(0, 8).map((entry) => `<div class="history-row"><div><strong>${Number(entry.rating).toFixed(1)}</strong><small>${esc(entry.tournament_name || entry.scope_type)}</small></div><span>${esc(formatDate(entry.calculated_at))}</span></div>`).join("") : `<p class="muted">Henter klubbens ELO-historikk …</p>`}
     </div>
     <details id="playerExtraStats" class="profile-more-stats">
       <summary>Flere tall</summary>
