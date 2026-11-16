@@ -116,3 +116,72 @@ test("Temporary 502 on admin login check stays in Clubadmin and offers retry, ne
     await context.close();
   }
 });
+
+
+for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+  test('Sesonger stays visible and usable in canonical Klubbadmin at ' + size.width + 'px', async ({ browser }) => {
+    const { context, page, errors, mutations } = await loadCanonicalAdmin(browser, size);
+    try {
+      if (size.width < 760) {
+        await page.locator('#unifiedMobileMore').click();
+      }
+      const seasonsLink = page.locator('.section-nav.portal-menu > a[href="#seasons"]');
+      await expect(seasonsLink).toHaveCount(1);
+      await expect(seasonsLink).toBeVisible();
+      await expect(seasonsLink).toContainText('Sesonger');
+      await seasonsLink.click();
+      await expect(page).toHaveURL(/\/#seasons$/);
+      await expect(page.locator('#seasons')).toBeVisible();
+      await expect(page.locator('#seasons h2').first()).toHaveText('Sesonger');
+      await expect(page.locator('#seasonCurrent')).toContainText(/Ingen sesong|Laster sesonger|Aktiv sesong/);
+
+      if (size.width < 760) await page.locator('#unifiedMobileMore').click();
+      await page.locator('.section-nav.portal-menu > a[href="#tournaments"]').click();
+      await expect(page).toHaveURL(/\/#tournament-admin$/);
+      if (size.width < 760) await page.locator('#unifiedMobileMore').click();
+      await expect(seasonsLink).toBeVisible();
+      await seasonsLink.click();
+      await expect(page.locator('#seasons')).toBeVisible();
+      await expect(seasonsLink).toHaveCount(1);
+      expect(errors).toEqual([]);
+      expect(mutations).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('Sesonger remains available when moving from player portal into Klubbadmin', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem('bd:token', 'qa-logged-in-club-admin');
+      localStorage.setItem('bd:selectedClubId', '7');
+      localStorage.setItem('bd:playerClubId', '7');
+    });
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const data = path.endsWith('/auth/me')
+        ? { user: { id: '10', role: 'club_admin', player: { club_id: '7', display_name: 'QA testleder' } } }
+        : path.endsWith('/clubs')
+          ? { items: [{ id: '7', name: 'Blindleia Dartklubb' }] }
+          : { items: [], dashboard: { registrations: [] }, progress: {}, queue: { items: [] } };
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data }) });
+    });
+    await page.goto(BASE + '/#home', { waitUntil: 'domcontentloaded' });
+    const playerSeasonsLink = page.locator('.portal-nav.portal-menu .unified-clubadmin-link').filter({ hasText: 'Sesonger' });
+    await expect(playerSeasonsLink).toBeVisible();
+    await playerSeasonsLink.click();
+    await expect(page).toHaveURL(/\/#seasons$/);
+    await expect(page.locator('#adminApp')).toBeVisible();
+    await expect(page.locator('.section-nav.portal-menu > a[href="#seasons"]')).toBeVisible();
+    await expect(page.locator('#seasons')).toBeVisible();
+    await expect(page.locator('#seasons h2').first()).toContainText('Sesonger');
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
