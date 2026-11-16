@@ -1,4 +1,4 @@
-const VERSION = "20261111-personal-calendar-norwegian-01";
+const VERSION = "20261116-independent-club-elo-01";
 const loaded = new Map();
 const deferredLoaded = new Set();
 
