@@ -301,6 +301,7 @@ async function loadModel() {
   const seasons = seasonsData?.items || [];
   const season = seasons.find((item) => item.is_active || item.status === "active") || seasons[0] || null;
   const tournamentElo = tournamentEloData?.items || [];
+  const clubEloMatchEvents = tournamentEloData?.matches || [];
   let seasonRow = null;
   let totalPlayers = 0;
   if (season?.id) {
@@ -317,7 +318,7 @@ async function loadModel() {
     || (clubEloData?.items || []).find((row) => normalizeName(row.display_name) === normalizeName(profile?.player?.display_name || me?.player?.display_name))
     || null;
   return { clubId, me, dashboard, profile, season, seasonRow, totalPlayers, tournamentElo,
-    clubEloRow, eloPeriod: tournamentEloData?.period || clubEloData?.period || null };
+    clubEloRow, clubEloMatchEvents, eloPeriod: tournamentEloData?.period || clubEloData?.period || null };
 }
 
 function statCard(icon, label, value, note, extra = "", className = "") {
@@ -445,7 +446,9 @@ function resultTone(label) {
 
 function decorateMatches(model) {
   if (!matchList || !model?.profile) return;
-  const movements = eloMovements(model.profile).byMatch;
+  const movements = new Map((model.clubEloMatchEvents || []).map((event) => [
+    number(event.match_id), { delta: number(event.delta) },
+  ]));
   matchList.querySelectorAll("button.history-row-button").forEach((button) => {
     if (button.dataset.homeDashboardStyled === "1") return;
     const title = button.querySelector("strong")?.textContent?.trim() || "Kamp";
