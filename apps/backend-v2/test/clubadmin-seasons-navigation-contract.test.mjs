@@ -34,7 +34,7 @@ test("Season module is loaded before canonical menu and resolves to deployed URL
 
 test("Canonical admin routes still enforce role guard and use fresh assets", () => {
   assert.match(rootHtml, /if \(route\.surface === "admin" && !app\.session\.isAdmin\(user\)\)/);
-  assert.match(rootHtml, /const VERSION = "20261116-season-nav-01"/);
+  assert.match(rootHtml, /const VERSION = "20261116-independent-elo-01"/);
   assert.match(portalMenu, /admin-shell-v2\.js\?v=20261116-season-nav-01/);
   assert.match(portalMenu, /seasons: "seasons"/);
 });
