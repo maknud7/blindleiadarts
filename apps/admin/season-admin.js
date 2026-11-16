@@ -144,7 +144,8 @@ function renderHistory() {
 
 function copyPreviousRules() {
   const source = activeSeason() || seasonState.seasons[0]; const form = document.getElementById("seasonForm"); if (!source || !form) { message("Ingen tidligere sesong å kopiere fra.", "warning"); return; }
-  form.querySelector('[name="ranking_method"]').value = source.ranking_method || "linear";
+  form.querySelector('[name="ranking_method"]').value =
+    source.ranking_method === "elo" ? "linear" : source.ranking_method || "linear";
   form.querySelector('[name="points_win"]').value = Number(source.points_win ?? 2);
   form.querySelector('[name="points_draw"]').value = Number(source.points_draw ?? 1);
   form.querySelector('[name="points_loss"]').value = Number(source.points_loss ?? 0);
