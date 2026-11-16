@@ -66,6 +66,7 @@ const ADMIN_CANONICAL_TO_LOCAL = Object.freeze({
   club: "overview",
   "tournament-admin": "tournaments",
   seasons: "seasons",
+  elo: "elo",
   playerbase: "playerbase",
   members: "players",
   equipment: "kiosks",
