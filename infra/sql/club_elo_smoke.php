@@ -50,8 +50,8 @@ foreach ($clubs as $club) {
         }
         if ($period['is_active']) ++$active;
     }
-    if ($unbounded > 1 || $active > 1) {
-        throw new RuntimeException("Club {$clubId} has more than one open or active ELO period.");
+    if ($unbounded !== 1 || $active !== 1) {
+        throw new RuntimeException("Club {$clubId} must have exactly one current active ELO and one open-ended successor/period.");
     }
 
     $ranking = $ratings->clubRanking($clubId);
