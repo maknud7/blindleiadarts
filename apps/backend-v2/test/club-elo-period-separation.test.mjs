@@ -16,7 +16,8 @@ const home=text("apps/player/home-dashboard-ux.js");
 const history=text("apps/player/elo-history-exact.js");
 
 test("schema supports one unbounded ELO per club and immutable seasonal history",()=>{
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS.*club_elo_periods/s);
+  assert.match(migration, /\$periods = \$prefix \. 'club_elo_periods'/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS/);
   assert.match(migration, /UNIQUE KEY .uniq_club_elo_period_open.*club_id.*open_slot/s);
   assert.match(migration, /CHECK.*ends_on.*starts_on/s);
   assert.doesNotMatch(migration, /DELETE\s+FROM.*elo_match_events/i);
