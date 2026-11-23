@@ -51,7 +51,7 @@ jobs:
           php -r '
             $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);
             if(($m["tournament_external_id"]??"")!==getenv("EXTERNAL_ID")||($m["season_external_id"]??"")!=="rFByCgOqI1rq")throw new RuntimeException("Wrong frozen source");
-            if(($m["tournament_date"]??"")!=="2026-11-23"||($m["expected_players"]??0)!==10||($m["expected_matches"]??0)!==48||($m["expected_legs"]??0)!==51)throw new RuntimeException("Wrong frozen counts");
+            if(($m["tournament_date"]??"")!=="2026-11-23"||($m["expected_players"]??0)!==10||($m["expected_matches"]??0)!==48||($m["expected_legs"]??0)!==52)throw new RuntimeException("Wrong frozen counts");
             $ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)$ids[]=$id;
             if(count($ids)!==48||count(array_unique($ids))!==48||count($m["players"]??[])!==10||($m["winner_only_match_ids"]??[])!==[])throw new RuntimeException("Frozen manifest is incomplete");
             if(($m["playoff"]["champion_external_id"]??"")!=="6dLds5Na0PsZ")throw new RuntimeException("Wrong champion");
@@ -107,7 +107,7 @@ jobs:
           php -r '
             $m=json_decode(file_get_contents(getenv("MANIFEST")),true,512,JSON_THROW_ON_ERROR);$skip=array_fill_keys($m["winner_only_match_ids"]??[],true);$ids=[];foreach($m["groups"] as $g)foreach($g["match_ids"] as $id)if(!isset($skip[$id]))$ids[]=$id;foreach($m["playoff"]["match_ids"] as $id)if(!isset($skip[$id]))$ids[]=$id;
             $legs=$visits=$darts=0;foreach($ids as $id){$d=json_decode(file_get_contents("/tmp/round-sixteen-matches/{$id}.json"),true,512,JSON_THROW_ON_ERROR);$legs+=(int)$d["leg_count"];$visits+=(int)$d["visit_count"];$darts+=(int)$d["darts_count"];}
-            if(count($ids)!==48||$legs!==51||$visits<102)throw new RuntimeException("Round-sixteen detail drift: matches=".count($ids)." legs={$legs} visits={$visits}");
+            if(count($ids)!==48||$legs!==52||$visits<102)throw new RuntimeException("Round-sixteen detail drift: matches=".count($ids)." legs={$legs} visits={$visits}");
             echo "ROUND16_FETCH_OK=yes matches_with_visits=48 winner_only=0 legs={$legs} visits={$visits} darts={$darts}\n";
           '
 
@@ -153,7 +153,7 @@ jobs:
           $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));$p='bd_test_';$x=getenv('EXTERNAL_ID');
           $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=? LIMIT 1");$s->bind_param('s',$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()['internal_id']??0);if($tid<1)throw new RuntimeException('Round sixteen TEST ref missing');
           $players=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_players` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];$visits=(int)$db->query("SELECT COUNT(*) c FROM `{$p}visits` v JOIN `{$p}matches` m ON m.id=v.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];
-          if($players!==10||$matches!==48||$legs!==51||$visits<102)throw new RuntimeException('Final TEST count drift');
+          if($players!==10||$matches!==48||$legs!==52||$visits<102)throw new RuntimeException('Final TEST count drift');
           $promotion=['mode'=>'incremental_existing_season','source_prefix'=>'bd_test_','target_prefix'=>'bd_prod_','club_slug'=>'blindleia-dartklubb','season_external_id'=>'rFByCgOqI1rq','tournaments'=>[['external_id'=>$x,'name'=>'Mandagsserien #16','expected_players'=>$players,'expected_matches'=>$matches,'expected_legs'=>$legs,'expected_visits'=>$visits]],'expected_totals'=>['tournaments'=>1,'matches'=>$matches,'legs'=>$legs,'visits'=>$visits,'atlas_player_references'=>10]];
           file_put_contents('/tmp/round-sixteen-promotion.json',json_encode($promotion,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));echo "ROUND16_TEST_FROZEN=yes tournament_id={$tid} players={$players} matches={$matches} legs={$legs} visits={$visits}\n";
           PHP
@@ -212,7 +212,7 @@ jobs:
           $db=new mysqli(getenv('DB_HOST'),getenv('DB_USERNAME'),getenv('DB_PASSWORD'),getenv('DB_NAME'),(int)getenv('DB_PORT'));$p='bd_prod_';$x=getenv('EXTERNAL_ID');
           $s=$db->prepare("SELECT internal_id FROM `{$p}external_references` WHERE external_system='dartsatlas' AND external_entity_type='tournament' AND external_id=? LIMIT 1");$s->bind_param('s',$x);$s->execute();$tid=(int)($s->get_result()->fetch_assoc()['internal_id']??0);if($tid<1)throw new RuntimeException('Round sixteen PROD ref missing');
           $matches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches`")->fetch_assoc()['c'];$roundMatches=(int)$db->query("SELECT COUNT(*) c FROM `{$p}matches` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$legs=(int)$db->query("SELECT COUNT(*) c FROM `{$p}legs` l JOIN `{$p}matches` m ON m.id=l.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];$elo=(int)$db->query("SELECT COUNT(*) c FROM `{$p}elo_match_events` e JOIN `{$p}matches` m ON m.id=e.match_id WHERE m.tournament_id={$tid}")->fetch_assoc()['c'];$snapshots=(int)$db->query("SELECT COUNT(*) c FROM `{$p}tournament_elo_snapshots` WHERE tournament_id={$tid}")->fetch_assoc()['c'];$dups=(int)$db->query("SELECT COUNT(*) c FROM (SELECT club_id,LOWER(TRIM(display_name)) n FROM `{$p}players` WHERE is_active=1 AND merged_into_player_id IS NULL GROUP BY club_id,n HAVING COUNT(*)>1)x")->fetch_assoc()['c'];
-          if($matches!==756||$roundMatches!==48||$legs!==51||$elo!==48||$snapshots!==10||$dups!==0)throw new RuntimeException('Final PROD integrity failed: '.json_encode(compact('matches','roundMatches','legs','elo','snapshots','dups')));
+          if($matches!==756||$roundMatches!==48||$legs!==52||$elo!==48||$snapshots!==10||$dups!==0)throw new RuntimeException('Final PROD integrity failed: '.json_encode(compact('matches','roundMatches','legs','elo','snapshots','dups')));
           echo "ROUND16_PROD_FINAL_OK=yes tournament_id={$tid} matches={$roundMatches} legs={$legs} elo_events={$elo} elo_snapshots={$snapshots} backup=".getenv('PROD_BACKUP_PREFIX')."\n";
           PHP
 
